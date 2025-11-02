@@ -1,3 +1,6 @@
-language = "nodejs"
-entrypoint = "package.json"
-run = "bash -lc './scripts/start.sh'"
+modules = ["nodejs-20", "swift-5.8", "web"]
+[agent]
+expertMode = true
+
+[nix]
+channel = "stable-25_05"
