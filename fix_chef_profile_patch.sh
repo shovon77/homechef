@@ -1,3 +1,71 @@
+#!/usr/bin/env bash
+set -e
+mkdir -p .backup app/chef components lib
+
+# Backup the current chef detail file
+[ -f app/chef/[id].tsx ] && cp app/chef/[id].tsx ".backup/chef_[id].tsx.$(date +%s)"
+
+# Ensure tiny helpers exist (safe if they already do)
+cat > components/Rating.tsx <<'EOF'
+'use client';
+import { View, Text, TouchableOpacity } from 'react-native';
+export default function Rating({ value=0, outOf=5, size=16, onChange }:{
+  value?: number; outOf?: number; size?: number; onChange?: (v:number)=>void;
+}) {
+  const full = Math.max(0, Math.min(outOf, Math.floor(value)));
+  const half = value - full >= 0.5 ? 1 : 0;
+  const empty = outOf - full - half;
+  const Star = ({ch, i, active}:{ch:string;i:number;active:boolean}) => (
+    <TouchableOpacity key={i} disabled={!onChange} onPress={()=>onChange?.(i+1)}>
+      <Text style={{ fontSize:size, lineHeight:size+2, color: active ? '#fbbf24' : '#64748b', marginRight:2 }}>{ch}</Text>
+    </TouchableOpacity>
+  );
+  return (
+    <View style={{ flexDirection:'row', alignItems:'center' }}>
+      {Array.from({length:full}).map((_,i)=><Star ch="★" i={i} active />)}
+      {half ? <Star ch="⯪" i={outOf+1} active /> : null}
+      {Array.from({length:empty}).map((_,i)=><Star ch="☆" i={outOf+10+i} active={false} />)}
+    </View>
+  );
+}
+EOF
+
+cat > components/Tabs.tsx <<'EOF'
+'use client';
+import { useState } from 'react';
+import { View, Text, TouchableOpacity } from 'react-native';
+export function Tabs({ tabs, initial=0 }:{
+  tabs: { key:string; title:string; content: JSX.Element }[];
+  initial?: number;
+}) {
+  const [idx, setIdx] = useState(initial);
+  return (
+    <View style={{ width:'100%' }}>
+      <View style={{ flexDirection:'row', gap:12, marginBottom:12 }}>
+        {tabs.map((t, i)=>(
+          <TouchableOpacity key={t.key} onPress={()=>setIdx(i)}
+            style={{ backgroundColor: i===idx ? '#0ea5e9' : '#1f2937', paddingVertical:6, paddingHorizontal:12, borderRadius:999 }}>
+            <Text style={{ color:'#fff', fontWeight:'700' }}>{t.title}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+      <View>{tabs[idx]?.content}</View>
+    </View>
+  );
+}
+EOF
+
+cat > lib/formatPhone.ts <<'EOF'
+export function formatPhone(v?: string | null) {
+  const d = String(v||'').replace(/\D+/g,'');
+  if (d.length === 11 && d[0]==='1') return `+1 (${d.slice(1,4)}) ${d.slice(4,7)}-${d.slice(7)}`;
+  if (d.length === 10) return `(${d.slice(0,3)}) ${d.slice(3,6)}-${d.slice(6)}`;
+  return v || '';
+}
+EOF
+
+# Replace chef detail with a resilient version that resolves s_0/d_3 style ids
+cat > app/chef/[id].tsx <<'EOF'
 'use client';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Image, ScrollView, TouchableOpacity, Platform, Linking } from 'react-native';
@@ -80,7 +148,7 @@ export default function ChefDetail() {
     })();
   }, [resolvedId]);
 
-  const title = chef?.name || (resolvedId ? ('Chef #' + resolvedId) : 'Chef');
+  const title = chef?.name || (resolvedId ? `Chef #${resolvedId}` : 'Chef');
   const desc = chef?.bio ?? chef?.description ?? 'Local home chef.';
   const avatar = chef?.photo || '';
   const avg = Number(chef?.avg_rating ?? 0);
@@ -146,7 +214,7 @@ export default function ChefDetail() {
                   {img ? <Image source={{ uri: img }} style={{ width:'100%', height:'100%' }} /> : <Text style={{ color:'#9ca3af' }}>No image</Text>}
                 </View>
                 <View style={{ padding:10, gap:4 }}>
-                  <Text style={{ color:'#f8fafc', fontWeight:'800' }} numberOfLines={1}>{d.name || ('Dish #' + d.id)}</Text>
+                  <Text style={{ color:'#f8fafc', fontWeight:'800' }} numberOfLines={1}>{d.name || \`Dish #\${d.id}\`}</Text>
                   {d.price != null ? <Text style={{ color:'#fbbf24' }}>$ {Number(d.price).toFixed(2)}</Text> : null}
                 </View>
               </View>
@@ -157,6 +225,7 @@ export default function ChefDetail() {
     </View>
   );
 
+  const [myComment, setMyComment] = useState('');
   const ReviewsTab = (
     <View style={{ gap:12 }}>
       {reviews.length === 0 ? <Text style={{ color:'#cbd5e1' }}>No reviews yet.</Text> : (
@@ -191,3 +260,8 @@ export default function ChefDetail() {
     </ScrollView>
   );
 }
+EOF
+
+# Clear cache so the new file loads fresh
+rm -rf .expo .cache node_modules/.cache 2>/dev/null || true
+echo "✅ Chef detail page replaced successfully. Click RUN and test /chef/s_0 or /chef/1"

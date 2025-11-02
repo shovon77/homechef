@@ -157,6 +157,7 @@ export default function ChefDetail() {
     </View>
   );
 
+  const [myComment, setMyComment] = useState('');
   const ReviewsTab = (
     <View style={{ gap:12 }}>
       {reviews.length === 0 ? <Text style={{ color:'#cbd5e1' }}>No reviews yet.</Text> : (
