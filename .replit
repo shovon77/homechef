@@ -1,6 +1,7 @@
-modules = ["nodejs-20", "swift-5.8", "web"]
-[agent]
-expertMode = true
+language = "bash"
+run = "bash -lc './scripts/start.sh'"
+modules = ["nodejs-20"]
 
-[nix]
-channel = "stable-25_05"
+[[ports]]
+localPort = 3000
+externalPort = 80

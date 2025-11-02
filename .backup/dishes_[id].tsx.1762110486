@@ -1,0 +1,61 @@
+'use client';
+import { View, Text, Image, ScrollView } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { normalizeId } from '../../lib/ids';
+import { supabase } from '../../lib/supabase';
+
+export default function DishDetail() {
+  const { id } = useLocalSearchParams();
+  const dishId = normalizeId(id as string);
+
+  
+  type Dish = { id:number; name:string; description:string; price:number; image_url?:string; };
+  const [dish, setDish] = useState<Dish|null>(null);
+  const [error, setError] = useState<string|null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data, error } = await supabase
+          .from('dishes')
+          .select('*')
+          .eq('id', Number(dishId))
+          .single();
+        if (error) throw error;
+        setDish(data);
+      } catch (e:any) {
+        setError(e.message || String(e));
+      }
+    })();
+  }, [dishId]);
+// OPTIONAL: fetch your dish record by numeric id (uncomment when table is ready)
+  // const { data, error } = await supabase.from('dishes').select('*').eq('id', Number(dishId)).single();
+
+  
+  if (error) {
+    return (
+      <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:16}}>
+        <Text style={{color:'red'}}>Error: {error}</Text>
+      </View>
+    );
+  }
+
+  if (!dish) {
+    return (
+      <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:16}}>
+        <Text>Loading dish...</Text>
+      </View>
+    );
+  }
+
+  return (
+    <ScrollView contentContainerStyle={{alignItems:'center',padding:20}}>
+      {dish.image_url ? (
+        <Image source={{ uri: dish.image_url }} style={{ width:300, height:200, borderRadius:12, marginBottom:16 }} />
+      ) : null}
+      <Text style={{fontSize:24,fontWeight:'bold',marginBottom:8}}>{dish.name}</Text>
+      <Text style={{fontSize:16,opacity:0.8,marginBottom:8}}>{dish.description}</Text>
+      <Text style={{fontSize:18,fontWeight:'600'}}>Price: $ {Number(dish.price).toFixed(2)}</Text>
+    </ScrollView>
+  );
+}

@@ -1,7 +1,10 @@
-import { createClient } from "@supabase/supabase-js";
-
-// Replace with your actual project credentials
-const SUPABASE_URL = "https://hjdbfodukvkqkvmwhafc.supabase.co";
-const SUPABASE_ANON_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImhqZGJmb2R1a3ZrcWt2bXdoYWZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjE5NDI0NDIsImV4cCI6MjA3NzUxODQ0Mn0.fcYXBcmjF9NBYWrv_yTUgtgkm-NiM1Ax3yeY9AL_zME";
-
-export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+import { createClient, SupabaseClient } from '@supabase/supabase-js';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../app/env';
+function notConfigured(): SupabaseClient {
+  const msg = 'Supabase not configured. Add EXPO_PUBLIC_SUPABASE_URL and EXPO_PUBLIC_SUPABASE_ANON_KEY in Replit → Tools → Secrets, then click Run.';
+  // @ts-ignore
+  return new Proxy({}, { get() { throw new Error(msg); } }) as SupabaseClient;
+}
+export const supabase: SupabaseClient =
+  (SUPABASE_URL && SUPABASE_ANON_KEY) ? createClient(SUPABASE_URL, SUPABASE_ANON_KEY) : notConfigured();
+export default supabase;

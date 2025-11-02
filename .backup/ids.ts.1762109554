@@ -1,0 +1,4 @@
+export function normalizeId(v: string | number) {
+  // keep numbers only; "S_123" -> "123", "D-456" -> "456"
+  return String(v).replace(/\D+/g, '');
+}
