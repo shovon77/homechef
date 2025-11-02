@@ -1,4 +1,12 @@
 {
-  "name": "homechef",
-  "slug": "homechef"
+  "expo": {
+    "name": "homechef",
+    "slug": "homechef",
+    "web": {
+      "bundler": "metro"
+    },
+    "plugins": [
+      "expo-router"
+    ]
+  }
 }
