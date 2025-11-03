@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { router } from 'expo-router';
 
 export default function AuthStart() {
@@ -50,11 +50,3 @@ export default function AuthStart() {
     </View>
   );
 }
-
-/* ---------- Magic link hint ---------- */
-{(typeof window !== 'undefined') ? (
-  // @ts-ignore
-  <a href="/auth/magic" style={{ color:'#0ea5e9', marginTop:12, display:'inline-block' }}>
-    Use email link instead (no password)
-  </a>
-) : null}

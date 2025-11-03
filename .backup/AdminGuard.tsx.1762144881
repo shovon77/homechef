@@ -1,0 +1,36 @@
+'use client';
+import { useEffect, useState } from 'react';
+import { View, Text } from 'react-native';
+import { supabase } from '../lib/supabase';
+import { ADMIN_EMAILS } from '../constants/admin';
+
+export default function AdminGuard({ children }:{ children: JSX.Element }) {
+  const [allowed, setAllowed] = useState<boolean | null>(null);
+  const [err, setErr] = useState<string | null>(null);
+
+  useEffect(() => {
+    (async () => {
+      try {
+        const { data } = await supabase.auth.getUser();
+        const email = data?.user?.email || '';
+        setAllowed(ADMIN_EMAILS.includes(email));
+      } catch (e:any) {
+        setErr(e.message || String(e));
+        setAllowed(false);
+      }
+    })();
+  }, []);
+
+  if (allowed === null) {
+    return <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:16}}>
+      <Text style={{ color:'#cbd5e1' }}>Checking admin access…</Text>
+    </View>;
+  }
+  if (!allowed) {
+    return <View style={{flex:1,alignItems:'center',justifyContent:'center',padding:16}}>
+      <Text style={{ color:'red', fontWeight:'700' }}>Admin access required</Text>
+      {err ? <Text style={{ color:'#cbd5e1', marginTop:8 }}>{err}</Text> : null}
+    </View>;
+  }
+  return children;
+}
