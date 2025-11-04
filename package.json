@@ -74,7 +74,7 @@
     "@expo/metro-runtime": "^6.1.2",
     "@react-navigation/drawer": "^7.5.0",
     "@testing-library/react-native": ">= 12.0.0",
-    "expo": "^54.0.21",
+    "expo": "^54.0.22",
     "expo-constants": "^18.0.10",
     "expo-linking": "^8.0.8",
     "react": "^19.2.0",
@@ -155,7 +155,8 @@
     "sf-symbols-typescript": "^2.1.0",
     "shallowequal": "^1.1.0",
     "use-latest-callback": "^0.2.1",
-    "vaul": "^1.1.2"
+    "vaul": "^1.1.2",
+    "y": "^0.3.2"
   },
   "gitHead": "f1475b7bd0e8fdec0c0027be89c4c8d650d10805",
   "private": true
