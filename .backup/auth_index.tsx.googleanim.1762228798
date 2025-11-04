@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
@@ -32,25 +32,15 @@ export default function AuthPage() {
     } catch { return undefined as any; }
   })();
 
-  // Entrance animation
+  // Subtle fade/slide animation
   const cardSlide = useRef(new Animated.Value(15)).current;
   const cardOp = useRef(new Animated.Value(0)).current;
 
-  // Gentle bounce for Google button
-  const bounce = useRef(new Animated.Value(1)).current;
   useEffect(() => {
     Animated.parallel([
       Animated.timing(cardSlide, { toValue: 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
       Animated.timing(cardOp, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
     ]).start();
-
-    const pulse = () => {
-      Animated.sequence([
-        Animated.timing(bounce, { toValue: 1.05, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-        Animated.timing(bounce, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-      ]).start(() => pulse());
-    };
-    pulse();
   }, []);
 
   async function doGoogle() {
@@ -115,26 +105,18 @@ export default function AuthPage() {
             : 'Create an account to order or become a chef and start selling.'}
         </Text>
 
-        {/* Google Button with real icon + bounce */}
-        <Animated.View style={{ transform:[{ scale: bounce }] }}>
-          <TouchableOpacity
-            onPress={doGoogle}
-            activeOpacity={0.8}
-            style={{
-              backgroundColor:'#FFFFFF',
-              borderWidth:1, borderColor:C.border,
-              paddingVertical:12, paddingHorizontal:16,
-              borderRadius:12, alignItems:'center',
-              flexDirection:'row', justifyContent:'center', gap:10,
-              shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2}
-            }}>
-            <Image
-              source={{ uri:'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
-              style={{ width:18, height:18 }}
-            />
-            <Text style={{ color:C.text, fontWeight:'800' }}>Continue with Google</Text>
-          </TouchableOpacity>
-        </Animated.View>
+        {/* Google */}
+        <TouchableOpacity
+          onPress={doGoogle}
+          style={{
+            backgroundColor:'#F7F9F8',
+            borderWidth:1, borderColor:C.border,
+            paddingVertical:12, paddingHorizontal:16,
+            borderRadius:12, alignItems:'center', flexDirection:'row', justifyContent:'center', gap:10
+          }}>
+          <Text style={{ fontSize:16 }}>🟢</Text>
+          <Text style={{ color:C.text, fontWeight:'800' }}>Continue with Google</Text>
+        </TouchableOpacity>
 
         <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
           <View style={{ flex:1, height:1, backgroundColor:C.border }} />

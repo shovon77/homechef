@@ -1,3 +1,11 @@
+set -e
+mkdir -p .backup app/dish lib
+
+# Backup the current file
+[ -f app/dish/[id].tsx ] && cp app/dish/[id].tsx ".backup/dish_[id].tsx.$(date +%s)"
+
+# Write a fresh, validated version
+cat > app/dish/[id].tsx <<'EOF'
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { View, Text, Image, ScrollView, TouchableOpacity } from 'react-native';
@@ -178,3 +186,9 @@ export default function DishDetail() {
     </ScrollView>
   );
 }
+EOF
+
+# Clear caches so Metro rebuilds fresh
+rm -rf .expo .cache node_modules/.cache 2>/dev/null || true
+
+echo "✅ Rewrote /app/dish/[id].tsx with proper try/catch and dish_ratings. Click RUN and open a dish."

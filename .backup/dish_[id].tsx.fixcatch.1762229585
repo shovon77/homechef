@@ -31,6 +31,7 @@ type Dish = {
   chef_id?:number|null;
   chef?:string|null;
 };
+type rating = { id:number; rating:number; comment?:string|null };
 
 function StarRow({ value=0, size=18 }:{ value?:number; size?:number }) {
   const full = Math.max(0, Math.min(5, Math.floor(value)));
@@ -65,12 +66,12 @@ export default function DishDetail() {
     if (!Number.isFinite(dishId)) { setError('Invalid dish id'); return; }
     (async () => {
       try {
-        // load dish
         const dres = await supabase.from('dishes').select('*').eq('id', dishId).maybeSingle();
         if (dres.error) throw dres.error;
         setDish(dres.data as any);
 
-        // ratings from dish_ratings (support rating/stars/value)
+        // Try to compute average rating from dish_ratings if it exists
+        
         const rres = await supabase
           .from('dish_ratings')
           .select('id,rating,stars,value')
@@ -80,19 +81,19 @@ export default function DishDetail() {
         if (!rres.error && Array.isArray(rres.data) && rres.data.length) {
           const vals = rres.data
             .map((r:any) => Number(r.rating ?? r.stars ?? r.value ?? 0))
-            .filter((n:number) => Number.isFinite(n));
+            .filter((n:number) => !Number.isNaN(n) && Number.isFinite(n));
           cnt = vals.length;
           avgVal = cnt ? vals.reduce((a:number,b:number)=>a+b,0) / cnt : 0;
         } else {
-          // fallback: dish.avg_rating if exists
+          // fallback: use dish.avg_rating if present
           const anyAvg = (dres.data as any)?.avg_rating;
           if (anyAvg != null) { avgVal = Number(anyAvg); cnt = (dres.data as any)?.rating_count ?? 0; }
         }
         setCount(cnt);
         setAvg(avgVal);
+  }
       } catch (e:any) {
-        console.error('Dish load error:', e?.message || e);
-        setError(e?.message || String(e));
+        setError(e.message || String(e));
       }
     })();
   }, [raw]);
@@ -112,6 +113,7 @@ export default function DishDetail() {
   function handleAddToCart() {
     if (!dish) return;
     cart.add({ id: dish.id, name: dish.name, price: dish.price ?? 0, image: img, qty: 1 });
+    if (typeof window !== 'undefined') console.log('Added to cart:', dish.id);
   }
 
   if (error) {
