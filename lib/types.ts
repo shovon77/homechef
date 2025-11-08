@@ -17,6 +17,7 @@ export type Profile = {
   is_chef: boolean; // default false
   created_at: string | null; // timestamptz
   is_admin: boolean; // default false
+  photo_url?: string | null; // Avatar URL (stored in Supabase Storage)
 };
 
 // ============================================================================

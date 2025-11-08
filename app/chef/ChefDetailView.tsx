@@ -1,12 +1,14 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, ScrollView, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, Image, ScrollView, TouchableOpacity, Platform, TextInput, Alert } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { formatPhone } from '../../lib/formatPhone';
 import { Tabs } from '../../components/Tabs';
 import { useCart } from '../../context/CartContext';
 import { getChefById, getDishesByChefId, getChefReviews } from '../../lib/db';
+import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../lib/reviews';
+import { useRole } from '../../hooks/useRole';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
 
 /** Color tokens aligned with homepage */
@@ -50,7 +52,11 @@ export default function ChefDetailView() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [reviews, setReviews] = useState<ChefReview[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
   const { addToCart } = useCart();
+  const { user } = useRole();
 
   useEffect(() => {
     setError(null);
@@ -78,8 +84,8 @@ export default function ChefDetailView() {
         const dishesData = await getDishesByChefId(chefId);
         setDishes(dishesData);
 
-        // Get reviews using db helper
-        const reviewsData = await getChefReviews(chefId);
+        // Get reviews using reviews helper
+        const reviewsData = await getChefReviewsHelper(chefId);
         setReviews(reviewsData);
       } catch (e:any) {
         setError(e.message || String(e));
@@ -204,9 +210,99 @@ export default function ChefDetailView() {
     </View>
   );
 
+  async function handleSubmitReview() {
+    if (!chefId || !user) {
+      Alert.alert("Authentication required", "Please sign in to submit reviews.");
+      return;
+    }
+
+    if (reviewRating < 1 || reviewRating > 5) {
+      Alert.alert("Rating required", "Please select 1–5 stars.");
+      return;
+    }
+
+    try {
+      setSubmittingReview(true);
+      await submitChefReview({
+        chefId,
+        rating: reviewRating,
+        comment: reviewComment.trim() || undefined,
+      });
+
+      // Refresh reviews list
+      const updatedReviews = await getChefReviewsHelper(chefId);
+      setReviews(updatedReviews);
+
+      // Reset form
+      setReviewRating(5);
+      setReviewComment("");
+      Alert.alert("Success", "Review submitted successfully!");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Failed to submit review.");
+    } finally {
+      setSubmittingReview(false);
+    }
+  }
+
   const ReviewsTab = (
-    <View style={{ gap:12 }}>
-      {reviews.length === 0 ? <Text style={{ color:C.subtext }}>No reviews yet.</Text> : (
+    <View style={{ gap:16 }}>
+      {/* Review form for signed-in users */}
+      {user && (
+        <View style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, padding:14, gap:12 }}>
+          <Text style={{ color:C.text, fontWeight:'800', fontSize:16 }}>Leave a Review</Text>
+          <View style={{ gap:8 }}>
+            <Text style={{ color:C.subtext, fontSize:14 }}>Rating</Text>
+            <View style={{ flexDirection:'row', gap:8 }}>
+              {[1, 2, 3, 4, 5].map(star => (
+                <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                  <Text style={{ fontSize:24, color: star <= reviewRating ? C.accent : '#5b7b6e' }}>★</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+          <View style={{ gap:8 }}>
+            <Text style={{ color:C.subtext, fontSize:14 }}>Comment (optional)</Text>
+            <TextInput
+              value={reviewComment}
+              onChangeText={setReviewComment}
+              placeholder="Share your experience..."
+              placeholderTextColor={C.subtext}
+              multiline
+              numberOfLines={3}
+              style={{
+                backgroundColor:'rgba(255,255,255,0.05)',
+                borderWidth:1,
+                borderColor:C.border,
+                borderRadius:8,
+                padding:10,
+                color:C.text,
+                fontSize:14,
+                minHeight:80,
+                textAlignVertical:'top',
+              }}
+            />
+          </View>
+          <TouchableOpacity
+            onPress={handleSubmitReview}
+            disabled={submittingReview}
+            style={{
+              backgroundColor:submittingReview ? 'rgba(229, 57, 53, 0.5)' : '#0ea5e9',
+              paddingVertical:12,
+              borderRadius:8,
+              opacity: submittingReview ? 0.7 : 1,
+            }}
+          >
+            <Text style={{ color:'#fff', fontWeight:'800', textAlign:'center' }}>
+              {submittingReview ? 'Submitting...' : 'Submit Review'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      )}
+
+      {/* Reviews list */}
+      {reviews.length === 0 ? (
+        <Text style={{ color:C.subtext }}>No reviews yet.</Text>
+      ) : (
         <View style={{ gap:10 }}>
           {reviews.map(r => (
             <View key={r.id} style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, padding:10 }}>
@@ -268,8 +364,12 @@ export default function ChefDetailView() {
   }
 
   return (
-    <ScrollView contentContainerStyle={{ flexGrow:1, alignItems:'center', padding:20, backgroundColor:C.pageBg }}>
-      <View style={{ width:'100%', maxWidth:1024, backgroundColor:C.panelBg, borderRadius:16, padding:16, gap:16, borderWidth:1, borderColor:C.border, marginBottom:20 }}>
+    <ScrollView 
+      style={{ flex: 1, backgroundColor: C.pageBg }}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
+      <View style={{ width:'100%', maxWidth:1024, alignSelf: 'center', backgroundColor:C.panelBg, borderRadius:16, padding:16, gap:16, borderWidth:1, borderColor:C.border, margin:20 }}>
         {/* Header stays visible regardless of active tab */}
         {Header}
 

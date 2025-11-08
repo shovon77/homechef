@@ -4,6 +4,7 @@ import { Link } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
 import { useResponsiveColumns } from "../utils/responsive";
+import { Screen } from "../components/Screen";
 
 type Chef = Record<string, any>;
 type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null };
@@ -42,19 +43,23 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+    <Screen useScrollView contentStyle={{ paddingBottom: 24 }}>
       <View style={{ width: "100%", maxWidth: 1200, alignSelf: "center", padding: 12 }}>
+        {/* Hero section */}
         <View style={{ width: "100%", height: 180, backgroundColor: theme.colors.surface, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", marginTop: 8, marginBottom: 16, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 20 }}>Welcome to HomeChef</Text>
         </View>
 
+        {/* Top Chefs section */}
         <View style={{ marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 22 }}>Top Chefs</Text>
           <Link href="/chefs" asChild>
@@ -63,13 +68,14 @@ export default function HomePage() {
             </TouchableOpacity>
           </Link>
         </View>
-
-        <FlatList
-          contentContainerStyle={{ alignItems: "center" }}
-          data={chefs}
-          keyExtractor={(c, i) => `${normalizeId(c.id)}-${i}`}
-          renderItem={({ item }) => (
-            <Link href={{ pathname: "/chef/[id]", params: { id: normalizeId(item.id) } }} asChild>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+          contentContainerStyle={{ paddingBottom: 8 }}
+        >
+          {chefs.map((chef, i) => (
+            <Link key={`${normalizeId(chef.id)}-${i}`} href={{ pathname: "/chef/[id]", params: { id: normalizeId(chef.id) } }} asChild>
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={{
@@ -79,27 +85,26 @@ export default function HomePage() {
                   borderColor: "rgba(255,255,255,0.10)",
                   borderRadius: 16,
                   padding: 12,
-                  margin: 8,
+                  marginRight: 8,
                 }}
               >
                 <Image
-                  source={{ uri: getAvatar(item) }}
+                  source={{ uri: getAvatar(chef) }}
                   style={{ width: "100%", height: 120, borderRadius: 12, marginBottom: 10 }}
                 />
-                <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 18 }}>{item.name}</Text>
-                {!!item.location && <Text style={{ color: "#a8b3cf", marginTop: 4 }}>{item.location}</Text>}
-                {!!item.rating && (
+                <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 18 }}>{chef.name}</Text>
+                {!!chef.location && <Text style={{ color: "#a8b3cf", marginTop: 4 }}>{chef.location}</Text>}
+                {!!chef.rating && (
                   <Text style={{ color: theme.colors.primary, marginTop: 8, fontWeight: "900" }}>
-                    ★ {Number(item.rating).toFixed(1)}
+                    ★ {Number(chef.rating).toFixed(1)}
                   </Text>
                 )}
               </TouchableOpacity>
             </Link>
-          )}
-          numColumns={chefColumns}
-          showsVerticalScrollIndicator={false}
-        />
+          ))}
+        </ScrollView>
 
+        {/* Fresh Dishes section */}
         <View style={{ marginTop: 12, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
           <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 22 }}>Fresh Dishes</Text>
           <Link href="/dishes" asChild>
@@ -108,13 +113,13 @@ export default function HomePage() {
             </TouchableOpacity>
           </Link>
         </View>
-
-        <FlatList
-          contentContainerStyle={{ alignItems: "center", paddingBottom: 24 }}
-          data={dishes}
-          keyExtractor={(d) => String(d.id)}
-          renderItem={({ item }) => (
-            <Link href={{ pathname: "/dish/[id]", params: { id: String(item.id) } }} asChild>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          nestedScrollEnabled
+        >
+          {dishes.map((dish) => (
+            <Link key={String(dish.id)} href={{ pathname: "/dish/[id]", params: { id: String(dish.id) } }} asChild>
               <TouchableOpacity
                 activeOpacity={0.9}
                 style={{
@@ -124,24 +129,22 @@ export default function HomePage() {
                   borderColor: "rgba(255,255,255,0.10)",
                   borderRadius: 16,
                   padding: 12,
-                  margin: 8,
+                  marginRight: 8,
                 }}
               >
                 <Image
-                  source={{ uri: item.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
+                  source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
                   style={{ width: "100%", height: 110, borderRadius: 12, marginBottom: 10 }}
                 />
-                <Text style={{ color: theme.colors.white, fontWeight: "900" }}>{item.name}</Text>
+                <Text style={{ color: theme.colors.white, fontWeight: "900" }}>{dish.name}</Text>
                 <Text style={{ color: theme.colors.primary, fontWeight: "900", marginTop: 6 }}>
-                  ${Number(item.price || 0).toFixed(2)}
+                  ${Number(dish.price || 0).toFixed(2)}
                 </Text>
               </TouchableOpacity>
             </Link>
-          )}
-          numColumns={dishColumns}
-          showsVerticalScrollIndicator={false}
-        />
+          ))}
+        </ScrollView>
       </View>
-    </ScrollView>
+    </Screen>
   );
 }

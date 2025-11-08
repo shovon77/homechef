@@ -4,6 +4,7 @@ import { Link } from "expo-router";
 import { theme } from "../constants/theme";
 import { useResponsiveColumns } from "../utils/responsive";
 import { getChefsPaginated } from "../lib/db";
+import { Screen } from "../components/Screen";
 import type { Chef } from "../lib/types";
 
 const getAvatar = (c: Chef) => c.photo || "https://i.pravatar.cc/200?img=12";
@@ -68,55 +69,67 @@ export default function ChefsPage() {
     );
   };
 
-  if (loading) {
+  if (loading && chefs.length === 0) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: "center", justifyContent: "center" }}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-      </View>
+      <Screen>
+        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.surface, paddingTop: 16 }}>
-      <View style={{ width: "100%", maxWidth: 1200, alignSelf: "center", paddingHorizontal: 12 }}>
-        <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 24, marginBottom: 12 }}>Top Chefs</Text>
-        <TextInput
-          value={search}
-          onChangeText={(text) => { setSearch(text); setPage(1); }}
-          placeholder="Search chefs by name or location..."
-          placeholderTextColor={theme.colors.textMuted}
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: "rgba(255,255,255,0.15)",
-            borderRadius: 8,
-            padding: 12,
-            color: theme.colors.text,
-            fontSize: 14,
-            marginBottom: 12,
-          }}
-        />
-        {loading && chefs.length === 0 ? (
+    <Screen>
+      <View style={{ flex: 1, width: "100%", maxWidth: 1200, alignSelf: "center" }}>
+        {/* Fixed header */}
+        <View style={{ padding: 16, paddingBottom: 12 }}>
+          <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 24, marginBottom: 12 }}>Top Chefs</Text>
+          <TextInput
+            value={search}
+            onChangeText={(text) => { setSearch(text); setPage(1); }}
+            placeholder="Search chefs by name or location..."
+            placeholderTextColor={theme.colors.textMuted}
+            style={{
+              backgroundColor: theme.colors.surface,
+              borderWidth: 1,
+              borderColor: "rgba(255,255,255,0.15)",
+              borderRadius: 8,
+              padding: 12,
+              color: theme.colors.text,
+              fontSize: 14,
+            }}
+          />
+        </View>
+
+        {/* Scrollable list */}
+        {chefs.length === 0 && !loading ? (
           <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
-            <ActivityIndicator size="large" color={theme.colors.primary} />
+            <Text style={{ color: theme.colors.textMuted }}>
+              {search ? "No chefs found matching your search." : "No chefs available."}
+            </Text>
           </View>
         ) : (
-        <FlatList
-          contentContainerStyle={{ alignItems: "center" }}
-          data={chefs}
+          <FlatList
+            style={{ flex: 1 }}
+            contentContainerStyle={{ alignItems: "center", padding: 16, paddingBottom: 32 }}
+            data={chefs}
             keyExtractor={(c) => String(c.id)}
-          renderItem={renderCard}
+            renderItem={renderCard}
             numColumns={columns}
-          showsVerticalScrollIndicator={false}
+            showsVerticalScrollIndicator={false}
+            keyboardShouldPersistTaps="handled"
+            nestedScrollEnabled
             onEndReached={() => {
               if (!loading && chefs.length >= LIMIT * page) {
                 setPage(p => p + 1);
               }
             }}
             onEndReachedThreshold={0.5}
-        />
+            ListFooterComponent={loading ? <ActivityIndicator size="small" color={theme.colors.primary} style={{ marginVertical: 20 }} /> : null}
+          />
         )}
       </View>
-    </View>
+    </Screen>
   );
 }

@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image } from "react-native";
 import { useRouter } from "expo-router";
+import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../../lib/supabase";
 import { theme } from "../../../constants/theme";
 import { useRole } from "../../../hooks/useRole";
 import { getProfile } from "../../../lib/db";
+import { uploadAvatar } from "../../../lib/storage";
 import type { Profile } from "../../../lib/types";
 
 export default function AdminProfilePage() {
@@ -13,8 +15,10 @@ export default function AdminProfilePage() {
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
 
   useEffect(() => {
     if (!roleLoading && !isAdmin) {
@@ -36,6 +40,7 @@ export default function AdminProfilePage() {
         setProfile(prof);
         setName(prof.name || "");
         setEmail(prof.email || "");
+        setPhotoUrl(prof.photo_url || null);
       }
     } catch (e: any) {
       console.error("Error loading profile:", e);
@@ -53,9 +58,17 @@ export default function AdminProfilePage() {
 
     setSaving(true);
     try {
+      const updateData: { name: string; photo_url?: string | null } = {
+        name: name.trim(),
+      };
+      
+      if (photoUrl !== profile?.photo_url) {
+        updateData.photo_url = photoUrl;
+      }
+
       const { error } = await supabase
         .from("profiles")
-        .update({ name: name.trim() })
+        .update(updateData)
         .eq("id", user.id);
 
       if (error) throw error;
@@ -66,6 +79,41 @@ export default function AdminProfilePage() {
       Alert.alert("Error", e?.message || "Failed to update profile");
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleUploadAvatar() {
+    if (!user) return;
+
+    try {
+      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+      if (status !== 'granted') {
+        Alert.alert("Permission required", "Please grant camera roll permissions to upload photos.");
+        return;
+      }
+
+      const result = await ImagePicker.launchImageLibraryAsync({
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [1, 1],
+        quality: 0.8,
+      });
+
+      if (result.canceled || !result.assets[0]) {
+        return;
+      }
+
+      setUploadingAvatar(true);
+      const asset = result.assets[0];
+      const response = await fetch(asset.uri);
+      const blob = await response.blob();
+      const url = await uploadAvatar(blob, user.id);
+      setPhotoUrl(url);
+      Alert.alert("Success", "Avatar uploaded successfully. Click 'Save Changes' to update your profile.");
+    } catch (e: any) {
+      Alert.alert("Error", e?.message || "Failed to upload avatar");
+    } finally {
+      setUploadingAvatar(false);
     }
   }
 
@@ -109,18 +157,46 @@ export default function AdminProfilePage() {
         >
           {/* Avatar */}
           <View style={{ alignItems: "center", marginBottom: 8 }}>
-            <View
+            {photoUrl ? (
+              <Image
+                source={{ uri: photoUrl }}
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 40,
+                  backgroundColor: theme.colors.primary,
+                }}
+              />
+            ) : (
+              <View
+                style={{
+                  width: 80,
+                  height: 80,
+                  borderRadius: 40,
+                  backgroundColor: theme.colors.primary,
+                  alignItems: "center",
+                  justifyContent: "center",
+                }}
+              >
+                <Text style={{ color: theme.colors.white, fontSize: 32, fontWeight: "900" }}>{initials}</Text>
+              </View>
+            )}
+            <TouchableOpacity
+              onPress={handleUploadAvatar}
+              disabled={uploadingAvatar}
               style={{
-                width: 80,
-                height: 80,
-                borderRadius: 40,
+                marginTop: 8,
+                paddingVertical: 8,
+                paddingHorizontal: 16,
+                borderRadius: 8,
                 backgroundColor: theme.colors.primary,
-                alignItems: "center",
-                justifyContent: "center",
+                opacity: uploadingAvatar ? 0.7 : 1,
               }}
             >
-              <Text style={{ color: theme.colors.white, fontSize: 32, fontWeight: "900" }}>{initials}</Text>
-            </View>
+              <Text style={{ color: theme.colors.white, fontWeight: "800", fontSize: 12 }}>
+                {uploadingAvatar ? "Uploading..." : "Upload Photo"}
+              </Text>
+            </TouchableOpacity>
           </View>
 
           {/* Admin badge */}

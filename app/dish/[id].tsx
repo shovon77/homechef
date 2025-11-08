@@ -6,9 +6,11 @@ import { supabase } from "../../lib/supabase";
 import { theme } from "../../constants/theme";
 import StarRating from "../components/StarRating";
 import { useResponsiveColumns } from "../../utils/responsive";
-import { getDishById, getDishRatings } from "../../lib/db";
+import { getDishById, getDishRatings, getChefById } from "../../lib/db";
+import { submitDishRating, getDishRatingSummary } from "../../lib/reviews";
 import type { Dish } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
+import { useRole } from "../../hooks/useRole";
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 
@@ -31,7 +33,9 @@ export default function DishDetail() {
   const [userRating, setUserRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
+  const [isDishOwner, setIsDishOwner] = useState(false);
   const { addToCart } = useCart();
+  const { isAdmin, user } = useRole();
   const { width } = useResponsiveColumns();
   const isMobile = width < 768;
 
@@ -55,13 +59,27 @@ export default function DishDetail() {
       }
       setDish(dishData);
       
+      // Check if current user owns this dish (for upload button visibility)
+      if (dishData.chef_id && user) {
+        const chef = await getChefById(dishData.chef_id);
+        if (chef) {
+          // Check ownership: prefer chefs.user_id if exists, else match by email
+          let ownsDish = false;
+          if ((chef as any).user_id) {
+            ownsDish = (chef as any).user_id === user.id;
+          } else if (chef.email && user.email) {
+            ownsDish = chef.email.toLowerCase() === user.email.toLowerCase();
+          }
+          setIsDishOwner(ownsDish);
+        }
+      }
+      
       // Load ratings using db helper
       const ratingStats = await getDishRatings(dishId);
       setRatingCount(ratingStats.count);
       setAvgRating(ratingStats.average);
       
       // Check if user has already rated
-      const { data: { user } } = await supabase.auth.getUser();
       if (user) {
         const { data: userRatingData } = await supabase
           .from("dish_ratings")
@@ -130,7 +148,11 @@ export default function DishDetail() {
   const chefId = dish.chef_id != null ? Number(dish.chef_id) : null;
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface }}>
+    <ScrollView 
+      style={{ flex: 1, backgroundColor: theme.colors.surface }}
+      keyboardShouldPersistTaps="handled"
+      contentContainerStyle={{ paddingBottom: 32 }}
+    >
       <View style={{ maxWidth: 1100, width: "100%", alignSelf: "center", padding: isMobile ? 12 : 16 }}>
         <Image
           source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=1200&q=80&auto=format&fit=crop" }}
@@ -163,23 +185,26 @@ export default function DishDetail() {
               <Text style={{ color: theme.colors.white, fontWeight: "800" }}>Add to cart</Text>
             </TouchableOpacity>
 
-            <TouchableOpacity
-              onPress={onUploadPhoto}
-              disabled={uploading}
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: "rgba(255,255,255,0.15)",
-                paddingVertical: 12,
-                paddingHorizontal: 16,
-                borderRadius: 10,
-                opacity: uploading ? 0.7 : 1,
-              }}
-            >
-              <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>
-                {uploading ? "Uploading…" : "Upload photo"}
-              </Text>
-            </TouchableOpacity>
+            {/* Upload photo button: only show for admin or dish owner */}
+            {(isAdmin || isDishOwner) && (
+              <TouchableOpacity
+                onPress={onUploadPhoto}
+                disabled={uploading}
+                style={{
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.15)",
+                  paddingVertical: 12,
+                  paddingHorizontal: 16,
+                  borderRadius: 10,
+                  opacity: uploading ? 0.7 : 1,
+                }}
+              >
+                <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>
+                  {uploading ? "Uploading…" : "Upload photo"}
+                </Text>
+              </TouchableOpacity>
+            )}
 
             {chefId ? (
               <Link href={{ pathname: "/chef/[id]", params: { id: String(chefId) } }} asChild>
@@ -276,42 +301,26 @@ export default function DishDetail() {
                   return;
                 }
 
+                if (!user) {
+                  Alert.alert("Authentication required", "Please sign in to rate dishes.");
+                  return;
+                }
+
                 try {
                   setSubmitting(true);
                   
-                  // Check authentication
-                  const { data: { user }, error: authError } = await supabase.auth.getUser();
-                  if (authError || !user) {
-                    Alert.alert("Authentication required", "Please sign in to rate dishes.");
-                    setSubmitting(false);
-                    return;
-                  }
+                  // Submit rating using reviews helper
+                  const summary = await submitDishRating({
+                    dishId,
+                    stars: userRating,
+                    comment: comment.trim() || undefined,
+                  });
 
-                  // Upsert rating (use both rating and stars for compatibility)
-                  const { error: upsertError } = await supabase
-                    .from("dish_ratings")
-                    .upsert({
-                      dish_id: dishId,
-                      user_id: user.id,
-                      rating: userRating,
-                      stars: userRating, // Also set stars for compatibility
-                      comment: comment.trim() || null,
-                    }, {
-                      onConflict: "dish_id,user_id"
-                    });
-
-                  if (upsertError) {
-                    Alert.alert("Error", upsertError.message);
-                    setSubmitting(false);
-                    return;
-                  }
-
-                  // Reload ratings to update average using db helper
-                  const ratingStats = await getDishRatings(dishId);
-                  setRatingCount(ratingStats.count);
-                  setAvgRating(ratingStats.average);
+                  // Update UI with new summary
+                  setRatingCount(summary.count);
+                  setAvgRating(summary.avg);
                   
-                  // Update user's rating and comment
+                  // Reload user's rating to show it's saved
                   const { data: userRatingData } = await supabase
                     .from("dish_ratings")
                     .select("rating, stars, comment")
@@ -325,7 +334,7 @@ export default function DishDetail() {
                     setComment(userRatingData.comment || "");
                   }
 
-                  Alert.alert("Thanks!", "Your rating has been submitted.");
+                  Alert.alert("Success", "Rating submitted successfully!");
                 } catch (e: any) {
                   Alert.alert("Error", e?.message || "Failed to submit rating.");
                 } finally {
