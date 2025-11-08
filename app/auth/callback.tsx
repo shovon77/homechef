@@ -1,9 +1,15 @@
 'use client';
 import { useEffect, useState } from 'react';
+<<<<<<< HEAD
 import { View, Text, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../constants/theme';
+=======
+import { View, Text } from 'react-native';
+import { useRouter } from 'expo-router';
+import { supabase } from '../../lib/supabase';
+>>>>>>> origin/main
 
 export default function AuthCallback() {
   const router = useRouter();
@@ -15,6 +21,7 @@ export default function AuthCallback() {
       const { data } = await supabase.auth.getSession();
       if (data?.session) {
         setMsg('Signed in! Redirecting…');
+<<<<<<< HEAD
         router.replace('/');
       } else {
         setMsg('No active session. Try the email link again or sign in.');
@@ -32,3 +39,19 @@ export default function AuthCallback() {
   );
 }
 
+=======
+        router.replace('/admin');
+      } else {
+        setMsg('No active session. Try the email link again or sign in.');
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, []);
+
+  return (
+    <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16}}>
+      <Text style={{color:'#f8fafc'}}>{msg}</Text>
+    </View>
+  );
+}
+>>>>>>> origin/main

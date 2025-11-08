@@ -1,0 +1,41 @@
+import { supabase } from './supabase';
+
+/**
+ * Upsert the logged-in user into the public "users" table so Admin can see them.
+ * Expects a table "users" with:
+ *   id (uuid primary key, = auth user id), email text, name text, is_chef boolean default false
+ */
+export async function ensureUser() {
+  const { data } = await supabase.auth.getUser();
+  const u = data?.user;
+  if (!u) return;
+
+  // Try to derive a display name
+  const name =
+    (u.user_metadata?.name as string) ||
+    (u.user_metadata?.full_name as string) ||
+    (u.user_metadata?.display_name as string) ||
+    (u.email?.split('@')[0]) ||
+    null;
+
+  // Upsert on id
+  const payload = {
+    id: u.id,
+    email: u.email,
+    name,
+    is_chef: false,
+  };
+
+  // Prefer upsert if table has a unique key on id; otherwise insert…on conflict is fine too
+  const { error } = await supabase
+    .from('users')
+    .upsert(payload, { onConflict: 'id' });
+
+  if (error) {
+    // Fallback: ignore if duplicate
+    if (!/duplicate|conflict/i.test(error.message)) {
+      // eslint-disable-next-line no-console
+      console.warn('ensureUser upsert error:', error.message);
+    }
+  }
+}

@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useEffect, useState } from "react";
 import { View, Text, Image, ActivityIndicator, TouchableOpacity, ScrollView } from "react-native";
 import { useLocalSearchParams, Link } from "expo-router";
@@ -78,3 +79,6 @@ export default function ChefDetailPage() {
     </ScrollView>
   );
 }
+=======
+export { default } from './ChefDetailView';
+>>>>>>> origin/main

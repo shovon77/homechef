@@ -1,0 +1,23 @@
+import { supabase } from './supabase';
+
+/** Sync the logged-in user into app tables so Admin can see them. */
+export async function ensureUser() {
+  const { data } = await supabase.auth.getUser();
+  const u = data?.user;
+  if (!u) return;
+
+  const name =
+    (u.user_metadata?.name as string) ||
+    (u.user_metadata?.full_name as string) ||
+    (u.user_metadata?.display_name as string) ||
+    (u.email?.split('@')[0]) ||
+    null;
+
+  const base = { id: u.id, email: u.email, name, is_chef: false };
+
+  // Upsert into users
+  await supabase.from('users').upsert(base, { onConflict: 'id' });
+
+  // Upsert into profiles (if present in your app)
+  await supabase.from('profiles').upsert({ ...base, role: 'user' }, { onConflict: 'id' });
+}

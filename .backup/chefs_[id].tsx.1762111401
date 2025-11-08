@@ -1,0 +1,21 @@
+'use client';
+import { View, Text } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { normalizeId } from '../../lib/ids';
+import { supabase } from '../../lib/supabase';
+
+export default function ChefDetail() {
+  const { id } = useLocalSearchParams();
+  const chefId = normalizeId(id as string);
+
+  // OPTIONAL: fetch your chef record by numeric id (uncomment when table is ready)
+  // const { data, error } = await supabase.from('chefs').select('*').eq('id', Number(chefId)).single();
+
+  return (
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center', gap:8, padding:16 }}>
+      <Text style={{ fontSize:22, fontWeight:'bold' }}>Chef</Text>
+      <Text>ID: {chefId}</Text>
+      {/* Render your fetched data here when ready */}
+    </View>
+  );
+}

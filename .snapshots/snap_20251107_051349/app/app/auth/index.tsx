@@ -1,0 +1,215 @@
+'use client';
+import React, { useEffect, useRef, useState } from 'react';
+import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image } from 'react-native';
+import { useRouter } from 'expo-router';
+import { supabase } from '../../lib/supabase';
+import { ensureUser } from '../../lib/ensureUser';
+
+/** Light brand palette */
+const C = {
+  bg: '#F4F8F5',
+  panel: '#FFFFFF',
+  border: '#E3EEE8',
+  text: '#0B1F17',
+  subtext: '#4A6B5D',
+  primary: '#2DA97B',
+  primaryHi: '#27C08A',
+  link: '#0EA5E9',
+};
+
+export default function AuthPage() {
+  const router = useRouter();
+  const [mode, setMode] = useState<'signin'|'signup'>('signin');
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string|null>(null);
+
+  const redirectTo = (() => {
+    try {
+      if (Platform.OS !== 'web') return undefined as any;
+      return `${window.location.origin}/auth/callback`;
+    } catch { return undefined as any; }
+  })();
+
+  // Entrance animation
+  const cardSlide = useRef(new Animated.Value(15)).current;
+  const cardOp = useRef(new Animated.Value(0)).current;
+
+  // Gentle bounce for Google button
+  const bounce = useRef(new Animated.Value(1)).current;
+  useEffect(() => {
+    Animated.parallel([
+      Animated.timing(cardSlide, { toValue: 0, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+      Animated.timing(cardOp, { toValue: 1, duration: 380, easing: Easing.out(Easing.cubic), useNativeDriver: true }),
+    ]).start();
+
+    const pulse = () => {
+      Animated.sequence([
+        Animated.timing(bounce, { toValue: 1.05, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        Animated.timing(bounce, { toValue: 1, duration: 800, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+      ]).start(() => pulse());
+    };
+    pulse();
+  }, []);
+
+  async function doGoogle() {
+    setErr(null);
+    await supabase.auth.signInWithOAuth({
+      provider: 'google',
+      options: { redirectTo }
+    });
+  }
+
+  async function doEmailPassword() {
+    setErr(null); setBusy(true);
+    try {
+      if (mode === 'signup') {
+        const { error } = await supabase.auth.signUp({ email, password });
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        if (error) throw error;
+      }
+      const res = await ensureUser();
+      if (res?.error) console.warn('ensureUser:', res.error);
+      router.replace('/');
+    } catch (e:any) {
+      setErr(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <View style={{ flex:1, backgroundColor:C.bg, alignItems:'center', justifyContent:'center', padding:16 }}>
+      <Animated.View style={{
+        transform:[{ translateY: cardSlide }],
+        opacity: cardOp,
+        width:'100%', maxWidth:480,
+        backgroundColor:C.panel,
+        borderWidth:1, borderColor:C.border,
+        borderRadius:18, padding:24,
+        shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8},
+        elevation:2, gap:16
+      }}>
+        {/* Brand */}
+        <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
+          <View style={{ width:32, height:32, borderRadius:16, backgroundColor:C.primary, alignItems:'center', justifyContent:'center' }}>
+            <Text style={{ color:'#fff', fontWeight:'900' }}>🍲</Text>
+          </View>
+          <Text style={{ color:C.text, fontWeight:'900', fontSize:20 }}>HomeChef</Text>
+        </View>
+
+        <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
+          <View style={{ width:10, height:10, borderRadius:5, backgroundColor:'#22c55e' }} />
+          <Text style={{ color:C.subtext, fontWeight:'700' }}>{mode === 'signin' ? 'Sign in' : 'Create account'}</Text>
+        </View>
+
+        <Text style={{ color:C.text, fontSize:28, fontWeight:'900' }}>
+          {mode === 'signin' ? 'Welcome back 👋' : 'Join HomeChef 🍽️'}
+        </Text>
+        <Text style={{ color:C.subtext }}>
+          {mode === 'signin'
+            ? 'Log in to order homemade meals or list your own dishes.'
+            : 'Create an account to order or become a chef and start selling.'}
+        </Text>
+
+        {/* Google Button with real icon + bounce */}
+        <Animated.View style={{ transform:[{ scale: bounce }] }}>
+          <TouchableOpacity
+            onPress={doGoogle}
+            activeOpacity={0.8}
+            style={{
+              backgroundColor:'#FFFFFF',
+              borderWidth:1, borderColor:C.border,
+              paddingVertical:12, paddingHorizontal:16,
+              borderRadius:12, alignItems:'center',
+              flexDirection:'row', justifyContent:'center', gap:10,
+              shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2}
+            }}>
+            <Image
+              source={{ uri:'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+              style={{ width:18, height:18 }}
+            />
+            <Text style={{ color:C.text, fontWeight:'800' }}>Continue with Google</Text>
+          </TouchableOpacity>
+        </Animated.View>
+
+        <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
+          <View style={{ flex:1, height:1, backgroundColor:C.border }} />
+          <Text style={{ color:C.subtext, fontWeight:'700' }}>OR</Text>
+          <View style={{ flex:1, height:1, backgroundColor:C.border }} />
+        </View>
+
+        {/* Email / Password */}
+        <View style={{ gap:10 }}>
+          <View style={{ gap:6 }}>
+            <Text style={{ color:C.subtext, fontWeight:'700' }}>Email</Text>
+            <TextInput
+              value={email}
+              onChangeText={setEmail}
+              placeholder="you@example.com"
+              autoCapitalize="none"
+              keyboardType="email-address"
+              style={{
+                backgroundColor:'#FAFCFB',
+                borderWidth:1, borderColor:C.border,
+                color:C.text, padding:12, borderRadius:12
+              }}
+            />
+          </View>
+
+          <View style={{ gap:6 }}>
+            <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
+              <Text style={{ color:C.subtext, fontWeight:'700' }}>Password</Text>
+              {Platform.OS === 'web' ? (
+                // @ts-ignore
+                <a href="/auth/magic" style={{ color:C.link, fontWeight:'700' }}>Use magic link instead</a>
+              ) : null}
+            </View>
+            <TextInput
+              value={password}
+              onChangeText={setPassword}
+              placeholder="••••••••"
+              secureTextEntry
+              style={{
+                backgroundColor:'#FAFCFB',
+                borderWidth:1, borderColor:C.border,
+                color:C.text, padding:12, borderRadius:12
+              }}
+            />
+          </View>
+
+          <TouchableOpacity
+            onPress={doEmailPassword}
+            disabled={busy}
+            style={{
+              backgroundColor: busy ? '#9cdcc4' : C.primary,
+              paddingVertical:13, borderRadius:12, alignItems:'center'
+            }}>
+            <Text style={{ color:'#0b1511', fontWeight:'900' }}>
+              {busy ? 'Please wait…' : (mode === 'signin' ? 'Sign in' : 'Create account')}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Toggle sign-in / sign-up */}
+          <TouchableOpacity onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
+            <Text style={{ color:C.link, textAlign:'center', marginTop:6 }}>
+              {mode === 'signin' ? 'New to HomeChef? Create an account' : 'Already have an account? Sign in'}
+            </Text>
+          </TouchableOpacity>
+
+          {/* Chef sign-up */}
+          <TouchableOpacity onPress={() => router.push('/auth/chef')} style={{ marginTop:6 }}>
+            <Text style={{ color:C.text, textAlign:'center' }}>
+              Want to sell dishes? <Text style={{ color:C.primaryHi, fontWeight:'900' }}>Sign up as a Chef</Text>
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        {err ? <Text style={{ color:'tomato', marginTop:4 }}>{err}</Text> : null}
+      </Animated.View>
+    </View>
+  );
+}

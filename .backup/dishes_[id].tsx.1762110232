@@ -1,0 +1,21 @@
+'use client';
+import { View, Text } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
+import { normalizeId } from '../../lib/ids';
+import { supabase } from '../../lib/supabase';
+
+export default function DishDetail() {
+  const { id } = useLocalSearchParams();
+  const dishId = normalizeId(id as string);
+
+  // OPTIONAL: fetch your dish record by numeric id (uncomment when table is ready)
+  // const { data, error } = await supabase.from('dishes').select('*').eq('id', Number(dishId)).single();
+
+  return (
+    <View style={{ flex:1, alignItems:'center', justifyContent:'center', gap:8, padding:16 }}>
+      <Text style={{ fontSize:22, fontWeight:'bold' }}>Dish</Text>
+      <Text>ID: {dishId}</Text>
+      {/* Render your fetched data here when ready */}
+    </View>
+  );
+}

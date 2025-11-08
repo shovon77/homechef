@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import React, { useEffect, useState } from "react";
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput } from "react-native";
 import { useLocalSearchParams, Link } from "expo-router";
@@ -23,11 +24,68 @@ type Dish = {
 };
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
+=======
+'use client';
+import { useEffect, useMemo, useState } from 'react';
+import { View, Text, Image, ScrollView, TouchableOpacity } from 'react-native';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { supabase } from '../../lib/supabase';
+import { cart } from '../../lib/cart';
+
+const C = {
+  pageBg:    '#08150E',
+  panelBg:   '#0F2418',
+  cardBg:    '#12301F',
+  border:    '#1d4d35',
+  text:      '#e7f3ec',
+  subtext:   '#b8d2c6',
+  accent:    '#fbbf24',
+  link:      '#0ea5e9',
+};
+
+type Dish = {
+  id:number;
+  name?:string|null;
+  price?:number|null;
+  description?:string|null;
+  details?:string|null;
+  image_url?:string|null;
+  image?:string|null;
+  thumbnail?:string|null;
+  photo_url?:string|null;
+  photo?:string|null;
+  picture?:string|null;
+  chef_id?:number|null;
+  chef?:string|null;
+};
+
+function StarRow({ value=0, size=18 }:{ value?:number; size?:number }) {
+  const full = Math.max(0, Math.min(5, Math.floor(value)));
+  const half = value - full >= 0.5 ? 1 : 0;
+  const empty = 5 - full - half;
+  return (
+    <View style={{ flexDirection:'row', alignItems:'center' }}>
+      {Array.from({length:full}).map((_,i)=><Text key={'f'+i} style={{color: C.accent, fontSize:size, marginRight:2}}>★</Text>)}
+      {half ? <Text style={{color: C.accent, fontSize:size, marginRight:2}}>⯪</Text> : null}
+      {Array.from({length:empty}).map((_,i)=><Text key={'e'+i} style={{color:'#5b7b6e', fontSize:size, marginRight:2}}>☆</Text>)}
+    </View>
+  );
+}
+>>>>>>> origin/main
 
 export default function DishDetail() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const dishId = Number(id);
+  const router = useRouter();
+  const { id } = useLocalSearchParams();
+  const raw = String(Array.isArray(id) ? id[0] : id || '');
+  const dishId = (() => {
+    const m = raw.match(/(\d+)/);
+    if (m) return Number(m[1]);
+    const tail = raw.replace(/[^0-9]+/g,'');
+    return tail ? Number(tail) : NaN;
+  })();
+
   const [dish, setDish] = useState<Dish | null>(null);
+<<<<<<< HEAD
   const [loading, setLoading] = useState(true);
   const [uploading, setUploading] = useState(false);
   const [avgRating, setAvgRating] = useState(0);
@@ -40,9 +98,16 @@ export default function DishDetail() {
   const isMobile = width < 768;
 
   // Load dish and ratings
+=======
+  const [avg, setAvg] = useState<number>(0);
+  const [count, setCount] = useState<number>(0);
+  const [error, setError] = useState<string|null>(null);
+
+>>>>>>> origin/main
   useEffect(() => {
-    let mounted = true;
+    if (!Number.isFinite(dishId)) { setError('Invalid dish id'); return; }
     (async () => {
+<<<<<<< HEAD
       setLoading(true);
       const { data, error } = await supabase.from("dishes")
         .select("id,name,image,price,chef,chef_id,description,category")
@@ -74,10 +139,42 @@ export default function DishDetail() {
       }
       
       setLoading(false);
-    })();
-    return () => { mounted = false; };
-  }, [dishId]);
+=======
+      try {
+        // load dish
+        const dres = await supabase.from('dishes').select('*').eq('id', dishId).maybeSingle();
+        if (dres.error) throw dres.error;
+        setDish(dres.data as any);
 
+        // ratings from dish_ratings (support rating/stars/value)
+        const rres = await supabase
+          .from('dish_ratings')
+          .select('id,rating,stars,value')
+          .eq('dish_id', dishId);
+
+        let avgVal = 0, cnt = 0;
+        if (!rres.error && Array.isArray(rres.data) && rres.data.length) {
+          const vals = rres.data
+            .map((r:any) => Number(r.rating ?? r.stars ?? r.value ?? 0))
+            .filter((n:number) => Number.isFinite(n));
+          cnt = vals.length;
+          avgVal = cnt ? vals.reduce((a:number,b:number)=>a+b,0) / cnt : 0;
+        } else {
+          // fallback: dish.avg_rating if exists
+          const anyAvg = (dres.data as any)?.avg_rating;
+          if (anyAvg != null) { avgVal = Number(anyAvg); cnt = (dres.data as any)?.rating_count ?? 0; }
+        }
+        setCount(cnt);
+        setAvg(avgVal);
+      } catch (e:any) {
+        console.error('Dish load error:', e?.message || e);
+        setError(e?.message || String(e));
+      }
+>>>>>>> origin/main
+    })();
+  }, [raw]);
+
+<<<<<<< HEAD
   const onUploadPhoto = async () => {
     try {
       if (!dish) return;
@@ -115,10 +212,34 @@ export default function DishDetail() {
     return (
       <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" }}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
+=======
+  const img = useMemo(() => {
+    if (!dish) return '';
+    const d:any = dish;
+    return d.image_url || d.image || d.thumbnail || d.photo_url || d.photo || d.picture || '';
+  }, [dish]);
+
+  function handleBackToChef() {
+    const cid = (dish as any)?.chef_id;
+    if (cid) router.push(`/chef/${cid}`);
+    else router.push('/browse');
+  }
+
+  function handleAddToCart() {
+    if (!dish) return;
+    cart.add({ id: dish.id, name: dish.name, price: dish.price ?? 0, image: img, qty: 1 });
+  }
+
+  if (error) {
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+        <Text style={{ color:'tomato' }}>Error: {error}</Text>
+>>>>>>> origin/main
       </View>
     );
   }
   if (!dish) {
+<<<<<<< HEAD
     return <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" }}><Text style={{ color: theme.colors.white }}>Dish not found.</Text></View>;
   }
 
@@ -132,12 +253,35 @@ export default function DishDetail() {
           onError={(e) => console.log("Detail image error:", dish?.image, e?.nativeEvent?.error)}
           style={{ width: "100%", height: isMobile ? 200 : 260, borderRadius: 14 }}
         />
+=======
+    return (
+      <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+        <Text style={{ color:C.subtext }}>Loading dish…</Text>
+      </View>
+    );
+  }
 
-        <View style={{ marginTop: 14, gap: 8 }}>
-          <Text style={{ color: theme.colors.white, fontSize: 24, fontWeight: "900" }}>{dish.name}</Text>
-          {!!dish.chef && <Text style={{ color: "#cbd5e1" }}>by {dish.chef}</Text>}
-          <Text style={{ color: theme.colors.primary, fontSize: 18, fontWeight: "900" }}>${Number(dish.price || 0).toFixed(2)}</Text>
+  return (
+    <ScrollView contentContainerStyle={{ flexGrow:1, alignItems:'center', padding:20, backgroundColor:C.pageBg }}>
+      <View style={{ width:'100%', maxWidth:920, backgroundColor:C.panelBg, borderRadius:16, padding:16, gap:16, borderWidth:1, borderColor:C.border }}>
+        {/* Back to chef */}
+        <View style={{ flexDirection:'row', justifyContent:'space-between', alignItems:'center' }}>
+          <TouchableOpacity onPress={handleBackToChef} style={{ paddingVertical:6, paddingHorizontal:10, borderRadius:8, backgroundColor:'#12301F', borderWidth:1, borderColor:C.border }}>
+            <Text style={{ color:'#fff', fontWeight:'800' }}>← View Chef</Text>
+          </TouchableOpacity>
+        </View>
+>>>>>>> origin/main
 
+        {/* Image */}
+        <View style={{ width:'100%', height:380, backgroundColor:'#0a1a13', borderRadius:12, overflow:'hidden', borderWidth:1, borderColor:C.border }}>
+          {img ? <Image source={{ uri: img }} style={{ width:'100%', height:'100%' }} /> : (
+            <View style={{ flex:1, alignItems:'center', justifyContent:'center' }}>
+              <Text style={{ color:'#6c8f81' }}>No image</Text>
+            </View>
+          )}
+        </View>
+
+<<<<<<< HEAD
           <View style={{ flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
             <TouchableOpacity
               onPress={() => (useCart()?.addToCart
@@ -313,6 +457,33 @@ export default function DishDetail() {
               </Text>
             </TouchableOpacity>
           </View>
+=======
+        {/* Title / Price / Rating / Actions */}
+        <View style={{ gap:8 }}>
+          <Text style={{ color:C.text, fontSize:26, fontWeight:'900' }}>{dish.name || `Dish #${dish.id}`}</Text>
+          <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
+            <StarRow value={Number(avg || 0)} />
+            <Text style={{ color:C.subtext }}>{count ? `${avg.toFixed(1)} • ${count} rating${count>1?'s':''}` : 'No ratings yet'}</Text>
+          </View>
+
+          <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', marginTop:6 }}>
+            <Text style={{ color:C.accent, fontSize:20, fontWeight:'900' }}>
+              {dish.price != null ? `$ ${Number(dish.price).toFixed(2)}` : ''}
+            </Text>
+            <TouchableOpacity
+              onPress={handleAddToCart}
+              style={{ backgroundColor:'#0ea5e9', paddingVertical:10, paddingHorizontal:14, borderRadius:10 }}>
+              <Text style={{ color:'#fff', fontWeight:'900' }}>Add to cart</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        {/* Description */}
+        <View style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, padding:12 }}>
+          <Text style={{ color:C.text, lineHeight:20 }}>
+            {dish.description || dish.details || 'No description provided.'}
+          </Text>
+>>>>>>> origin/main
         </View>
       </View>
     </ScrollView>
