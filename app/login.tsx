@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from "react-native";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
 import { Link } from "expo-router";
@@ -9,7 +9,16 @@ export default function Login() {
 
   const sendMagicLink = async () => {
     if (!email.includes("@")) return Alert.alert("Enter a valid email");
-    const { error } = await supabase.auth.signInWithOtp({ email });
+    
+    const redirectTo = Platform.select({
+      web: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
+      default: "homechef://auth/callback",
+    });
+    
+    const { error } = await supabase.auth.signInWithOtp({ 
+      email,
+      options: { emailRedirectTo: redirectTo }
+    });
     if (error) Alert.alert("Error", error.message);
     else Alert.alert("Check your email", "We sent you a sign-in link.");
   };

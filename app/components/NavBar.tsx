@@ -1,17 +1,21 @@
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TouchableOpacity, Platform } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { theme } from "../../constants/theme";
-
-// Optional CartContext (won't crash if missing)
-let useCart: any = () => ({ items: [] });
-try { useCart = require("../../context/CartContext").useCart; } catch {}
+import { cart } from "../../lib/cart";
 
 const CONTAINER_MAX_WIDTH = 1200;
 
 export default function NavBar() {
   const router = useRouter();
-  const { items } = useCart();
+  const [itemCount, setItemCount] = useState(0);
+
+  useEffect(() => {
+    const updateCount = () => setItemCount(cart.get().length);
+    updateCount();
+    const interval = setInterval(updateCount, 500);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <View style={{
@@ -59,7 +63,7 @@ export default function NavBar() {
                 <Text style={linkTextStyle()}>Home</Text>
               </TouchableOpacity>
             </Link>
-            <Link href="/browse" asChild>
+            <Link href="/dishes" asChild>
               <TouchableOpacity style={linkBtnStyle()}>
                 <Text style={linkTextStyle()}>Browse</Text>
               </TouchableOpacity>
@@ -69,15 +73,22 @@ export default function NavBar() {
                 <Text style={linkTextStyle()}>Chefs</Text>
               </TouchableOpacity>
             </Link>
-            <Link href="/dishes" asChild>
-              <TouchableOpacity style={linkBtnStyle()}>
-                <Text style={linkTextStyle()}>Dishes</Text>
-              </TouchableOpacity>
-            </Link>
           </View>
 
           {/* Right: Auth + Cart */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 8 }}>
+            <Link href="/login" asChild>
+              <TouchableOpacity style={{
+                paddingVertical: 8,
+                paddingHorizontal: 12,
+                borderRadius: 10,
+                backgroundColor: "rgba(255,255,255,0.06)",
+                borderWidth: 1,
+                borderColor: "rgba(255,255,255,0.15)",
+              }}>
+                <Text style={{ color: theme.colors.white, fontWeight: "800" }}>Login</Text>
+              </TouchableOpacity>
+            </Link>
             <Link href="/signup" asChild>
               <TouchableOpacity style={{
                 paddingVertical: 8,
@@ -90,6 +101,7 @@ export default function NavBar() {
             </Link>
             <Link href="/cart" asChild>
               <TouchableOpacity style={{
+                position: "relative",
                 paddingVertical: 8,
                 paddingHorizontal: 12,
                 borderRadius: 10,
@@ -97,9 +109,25 @@ export default function NavBar() {
                 borderColor: "rgba(255,255,255,0.15)",
                 backgroundColor: "rgba(255,255,255,0.06)",
               }}>
-                <Text style={{ color: theme.colors.white, fontWeight: "800" }}>
-                  Cart{items?.length ? ` (${items.length})` : ""}
-                </Text>
+                <Text style={{ color: theme.colors.white, fontWeight: "800", fontSize: 16 }}>🛒</Text>
+                {itemCount > 0 && (
+                  <View style={{
+                    position: "absolute",
+                    top: -4,
+                    right: -4,
+                    backgroundColor: theme.colors.primary,
+                    borderRadius: 10,
+                    minWidth: 20,
+                    height: 20,
+                    alignItems: "center",
+                    justifyContent: "center",
+                    paddingHorizontal: 4,
+                  }}>
+                    <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 11 }}>
+                      {itemCount > 99 ? "99+" : itemCount}
+                    </Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </Link>
           </View>

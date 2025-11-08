@@ -52,7 +52,7 @@ export default function HorizontalCarousel({ title, items, kind, seeAllHref }: P
 
           const image = kind === "dish"
             ? (item?.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80")
-            : (item?.avatar || getChefAvatar(titleText, 96)); // 👈 unique avatar per chef
+            : (item?.photo || item?.avatar || getChefAvatar(titleText, 96)); // 👈 unique avatar per chef
 
           return (
             <Link asChild href={href}>

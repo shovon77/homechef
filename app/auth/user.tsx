@@ -4,10 +4,14 @@ import * as Linking from "expo-linking";
 import { supabase } from "../../lib/supabase";
 import { theme } from "../../constants/theme";
 
+// Supabase allowed redirect URLs needed:
+// - Web: ${window.location.origin}/auth/callback (e.g., http://localhost:8081/auth/callback, https://yourdomain.com/auth/callback)
+// - Native: homechef://auth/callback
+
 export default function UserAuth() {
   const redirectTo = Platform.select({
-    web: window.location.origin,
-    default: Linking.createURL("/"),
+    web: `${window.location.origin}/auth/callback`,
+    default: "homechef://auth/callback",
   });
 
   const signIn = async (provider: "google" | "facebook") => {

@@ -1,197 +1,147 @@
-import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, Image, TouchableOpacity, TextInput } from "react-native";
+import React, { useEffect, useState } from "react";
+import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, ScrollView } from "react-native";
 import { Link } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
-import Banner from "./components/Banner";
-import HorizontalCarousel from "./components/HorizontalCarousel";
-import { getChefAvatar } from "../lib/avatars";
+import { useResponsiveColumns } from "../utils/responsive";
 
-type Dish = { id: number; name: string; chef: string; price: number; category?: string; rating?: number; image?: string; };
-type Chef = { id: number | string; name: string; location?: string; avatar?: string; rating?: number; bio?: string; };
+type Chef = Record<string, any>;
+type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null };
 
-const BROWSE_LIMIT = 20;
+const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
+const getAvatar = (c: Chef) =>
+  c.photo || c.photo || c.avatar || c.photo || c.photo || c.photo || c.avatar || c.image || "https://i.pravatar.cc/200?img=5";
 
-export default function Home() {
+export default function HomePage() {
+  const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [filtered, setFiltered] = useState<Dish[]>([]);
-  const [popularDishes, setPopularDishes] = useState<Dish[]>([]);
-  const [popularChefs, setPopularChefs] = useState<Chef[]>([]);
-  const [search, setSearch] = useState("");
+  const [loading, setLoading] = useState(true);
+  const { width, getColumns } = useResponsiveColumns();
+  
+  const chefColumns = getColumns(3);
+  const dishColumns = getColumns(4);
 
   useEffect(() => {
+    let mounted = true;
     (async () => {
-      const { data: allDishes } = await supabase.from("dishes").select("*").limit(120);
-      const list = (allDishes as Dish[] | null) ?? [];
-      const sorted = [...list].sort((a, b) => (Number(b.rating || 0) - Number(a.rating || 0)));
-      setDishes(sorted);
-      setFiltered(sorted);
-      setPopularDishes(sorted.slice(0, 12));
-
-      const { data: topChefs, error: chefsErr } = await supabase
-        .from("chefs")
-        .select("id,name,location,avatar,rating,bio")
-        .limit(50);
-
-      if (!chefsErr && topChefs && topChefs.length) {
-        const c = (topChefs as Chef[])
-          .map((chef) => ({ ...chef, avatar: chef.avatar || getChefAvatar(chef.name, 128) }))
-          .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0))
-          .slice(0, 12);
-        setPopularChefs(c);
-      } else {
-        const byChef: Record<string, { n: number; r: number; img?: string }> = {};
-        sorted.forEach((d) => {
-          const key = d.chef || "Unknown Chef";
-          if (!byChef[key]) byChef[key] = { n: 0, r: 0, img: d.image };
-          byChef[key].n += 1; byChef[key].r += Number(d.rating || 0);
-        });
-        const synth: Chef[] = Object.entries(byChef)
-          .map(([name, v], i) => ({
-            id: `s_${i}`,
-            name,
-            location: "Toronto, ON",
-            avatar: v.img || getChefAvatar(name, 128),
-            rating: v.n ? v.r / v.n : 0,
-            bio: "Community chef on HomeChef.",
-          }))
-          .sort((a, b) => Number(b.rating || 0) - Number(a.rating || 0))
-          .slice(0, 12);
-        setPopularChefs(synth);
-      }
+      setLoading(true);
+      const [{ data: c }, { data: d }] = await Promise.all([
+        supabase.from("chefs").select("*").order("rating", { ascending: false }).limit(6),
+        supabase.from("dishes").select("id,name,image,price,chef_id").order("id", { ascending: false }).limit(8),
+      ]);
+      if (!mounted) return;
+      setChefs((c || []) as Chef[]);
+      setDishes((d || []) as Dish[]);
+      setLoading(false);
     })();
+    return () => { mounted = false; };
   }, []);
 
-  const onSearch = (txt: string) => {
-    setSearch(txt);
-    const q = txt.toLowerCase();
-    setFiltered(
-      dishes.filter(
-        (d) =>
-          (d.name || "").toLowerCase().includes(q) ||
-          (d.chef || "").toLowerCase().includes(q) ||
-          (d.category || "").toLowerCase().includes(q)
-      )
-    );
-  };
+  const chefCardW = width < 768 ? width - 48 : width < 1024 ? (width - 64) / 2 : Math.min(360, (width - 96) / chefColumns);
+  const dishCardW = width < 768 ? width - 48 : width < 1024 ? (width - 64) / 2 : Math.min(320, (width - 96) / dishColumns);
 
-  const DishCard = ({ item }: { item: Dish }) => (
-    <Link href={`/dish/${item.id}`} asChild>
-      <TouchableOpacity
-        style={{
-          width: "100%",
-          backgroundColor: theme.colors.surface,
-          borderRadius: 16,
-          paddingBottom: 12,
-          overflow: "hidden",
-          borderWidth: 1,
-          borderColor: "#1f4f3f",
-        }}
-        activeOpacity={0.9}
-      >
-        <Image
-          source={{ uri: item.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80" }}
-          style={{ width: "100%", height: 130 }}
-        />
-        <View style={{ paddingHorizontal: 10, paddingTop: 8 }}>
-          <Text style={{ fontWeight: "800", fontSize: 14, color: theme.colors.white }} numberOfLines={1}>
-            {item.name}
-          </Text>
-          <Text style={{ color: theme.colors.muted, fontSize: 12 }} numberOfLines={1}>
-            by {item.chef}
-          </Text>
-          <View style={{ flexDirection: "row", alignItems: "center", marginTop: 4 }}>
-            <Text style={{ color: "#FFD54F", fontWeight: "900" }}>★</Text>
-            <Text style={{ color: theme.colors.white, fontWeight: "700", marginLeft: 4, fontSize: 12 }}>
-              {(item.rating ?? 0).toFixed(1)}
-            </Text>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Link>
-  );
-
-  const Header = useMemo(() => (
-    <View>
-      <Banner />
-      <View style={{
-        backgroundColor: theme.colors.surface,
-        borderRadius: 14,
-        paddingHorizontal: 14,
-        paddingVertical: 10,
-        borderWidth: 1,
-        borderColor: "#1f4f3f",
-        marginBottom: 14
-      }}>
-        <TextInput
-          value={search}
-          onChangeText={onSearch}
-          placeholder="Search dishes, chefs, categories..."
-          placeholderTextColor={theme.colors.muted}
-          style={{ color: theme.colors.white, fontSize: 16 }}
-        />
-      </View>
-
-      <HorizontalCarousel title="Popular Dishes" items={popularDishes} kind="dish" seeAllHref="/dishes" />
-      <HorizontalCarousel title="Top Chefs" items={popularChefs} kind="chef" seeAllHref="/chefs" />
-
-      <Text style={{ color: theme.colors.white, fontSize: 18, fontWeight: "800", marginBottom: 8, marginTop: 6 }}>
-        Browse All
-      </Text>
-    </View>
-  ), [search, popularDishes, popularChefs]);
-
-  const showMoreFooter = (count: number) => {
-    if (count <= BROWSE_LIMIT) return null;
+  if (loading) {
     return (
-      <View style={{ marginTop: 8, marginBottom: 24, alignItems: "center" }}>
-        <Link href="/dishes" asChild>
-          <TouchableOpacity
-            activeOpacity={0.9}
-            style={{
-              paddingHorizontal: 16,
-              paddingVertical: 10,
-              borderRadius: 12,
-              backgroundColor: theme.colors.primary,
-              borderWidth: 1,
-              borderColor: theme.colors.primary,
-            }}
-          >
-            <Text style={{ color: theme.colors.white, fontWeight: "800" }}>
-              Show more dishes →
-            </Text>
-          </TouchableOpacity>
-        </Link>
+      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );
-  };
-
-  const visible = filtered.slice(0, BROWSE_LIMIT);
+  }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
-      <View style={{ flex: 1, width: "100%", maxWidth: 1280, alignSelf: "center", paddingHorizontal: 12, paddingTop: 18 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
+      <View style={{ width: "100%", maxWidth: 1200, alignSelf: "center", padding: 12 }}>
+        <View style={{ width: "100%", height: 180, backgroundColor: theme.colors.surface, borderRadius: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", marginTop: 8, marginBottom: 16, alignItems: "center", justifyContent: "center" }}>
+          <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 20 }}>Welcome to HomeChef</Text>
+        </View>
+
+        <View style={{ marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 22 }}>Top Chefs</Text>
+          <Link href="/chefs" asChild>
+            <TouchableOpacity style={{ paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
+              <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>View all</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+
         <FlatList
-          data={visible}
-          keyExtractor={(it) => String(it.id)}
+          contentContainerStyle={{ alignItems: "center" }}
+          data={chefs}
+          keyExtractor={(c, i) => `${normalizeId(c.id)}-${i}`}
           renderItem={({ item }) => (
-            <View style={{ flex: 1, marginHorizontal: 4, marginBottom: 10 }}>
-              <DishCard item={item} />
-            </View>
+            <Link href={{ pathname: "/chef/[id]", params: { id: normalizeId(item.id) } }} asChild>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={{
+                  width: chefCardW,
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.10)",
+                  borderRadius: 16,
+                  padding: 12,
+                  margin: 8,
+                }}
+              >
+                <Image
+                  source={{ uri: getAvatar(item) }}
+                  style={{ width: "100%", height: 120, borderRadius: 12, marginBottom: 10 }}
+                />
+                <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 18 }}>{item.name}</Text>
+                {!!item.location && <Text style={{ color: "#a8b3cf", marginTop: 4 }}>{item.location}</Text>}
+                {!!item.rating && (
+                  <Text style={{ color: theme.colors.primary, marginTop: 8, fontWeight: "900" }}>
+                    ★ {Number(item.rating).toFixed(1)}
+                  </Text>
+                )}
+              </TouchableOpacity>
+            </Link>
           )}
-          numColumns={4}  // 👈 Four columns per row
-          columnWrapperStyle={{ justifyContent: "space-between" }}
-          contentContainerStyle={{ paddingBottom: 16 }}
-          ListHeaderComponent={Header}
-          ListEmptyComponent={
-            <Text style={{ color: theme.colors.muted, textAlign: "center", marginTop: 24 }}>
-              No results
-            </Text>
-          }
-          ListFooterComponent={showMoreFooter(filtered.length)}
-          removeClippedSubviews={false}
+          numColumns={chefColumns}
+          showsVerticalScrollIndicator={false}
+        />
+
+        <View style={{ marginTop: 12, marginBottom: 8, flexDirection: "row", alignItems: "center", justifyContent: "space-between" }}>
+          <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 22 }}>Fresh Dishes</Text>
+          <Link href="/dishes" asChild>
+            <TouchableOpacity style={{ paddingHorizontal: 10, paddingVertical: 8, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
+              <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>View all</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+
+        <FlatList
+          contentContainerStyle={{ alignItems: "center", paddingBottom: 24 }}
+          data={dishes}
+          keyExtractor={(d) => String(d.id)}
+          renderItem={({ item }) => (
+            <Link href={{ pathname: "/dish/[id]", params: { id: String(item.id) } }} asChild>
+              <TouchableOpacity
+                activeOpacity={0.9}
+                style={{
+                  width: dishCardW,
+                  backgroundColor: theme.colors.surface,
+                  borderWidth: 1,
+                  borderColor: "rgba(255,255,255,0.10)",
+                  borderRadius: 16,
+                  padding: 12,
+                  margin: 8,
+                }}
+              >
+                <Image
+                  source={{ uri: item.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
+                  style={{ width: "100%", height: 110, borderRadius: 12, marginBottom: 10 }}
+                />
+                <Text style={{ color: theme.colors.white, fontWeight: "900" }}>{item.name}</Text>
+                <Text style={{ color: theme.colors.primary, fontWeight: "900", marginTop: 6 }}>
+                  ${Number(item.price || 0).toFixed(2)}
+                </Text>
+              </TouchableOpacity>
+            </Link>
+          )}
+          numColumns={dishColumns}
+          showsVerticalScrollIndicator={false}
         />
       </View>
-    </View>
+    </ScrollView>
   );
 }

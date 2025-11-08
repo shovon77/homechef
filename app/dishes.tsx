@@ -1,24 +1,29 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, FlatList, Image, TouchableOpacity, TextInput } from "react-native";
+import { View, Text, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator } from "react-native";
 import { Link } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
+import { useResponsiveColumns } from "../utils/responsive";
 
 type Dish = { id: number; name: string; chef: string; price: number; category?: string; rating?: number; image?: string; };
-
-const PAGE_SIZE = 15; // 3 cols × 5 rows
 
 export default function DishesPage() {
   const [all, setAll] = useState<Dish[]>([]);
   const [query, setQuery] = useState("");
   const [page, setPage] = useState(1);
+  const [loading, setLoading] = useState(true);
+  const { getColumns } = useResponsiveColumns();
+  const columns = getColumns(3);
+  const PAGE_SIZE = columns * 5; // 5 rows
 
   useEffect(() => {
     (async () => {
+      setLoading(true);
       const { data } = await supabase.from("dishes").select("*").limit(500);
       const list = (data as Dish[] | null) ?? [];
       // Sort by rating desc
       setAll([...list].sort((a, b) => Number(b.rating||0) - Number(a.rating||0)));
+      setLoading(false);
     })();
   }, []);
 
@@ -67,6 +72,14 @@ export default function DishesPage() {
     </Link>
   );
 
+  if (loading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.background, alignItems: "center", justifyContent: "center" }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <View style={{ flex: 1, width: "100%", maxWidth: 1280, alignSelf: "center", paddingHorizontal: 12, paddingTop: 18 }}>
@@ -92,8 +105,8 @@ export default function DishesPage() {
               <DishCard item={item}/>
             </View>
           )}
-          numColumns={3}
-          columnWrapperStyle={{}}
+          numColumns={columns}
+          columnWrapperStyle={columns > 1 ? {} : undefined}
           contentContainerStyle={{ paddingBottom: 24 }}
           ListEmptyComponent={<Text style={{ color: theme.colors.muted, textAlign: "center", marginTop: 24 }}>No dishes found</Text>}
         />
