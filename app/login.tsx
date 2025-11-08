@@ -1,8 +1,9 @@
 import React, { useState } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, Platform } from "react-native";
+import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
 import { Link } from "expo-router";
+import { getEmailRedirect } from "../lib/authRedirect";
 
 export default function Login() {
   const [email, setEmail] = useState("");
@@ -10,28 +11,23 @@ export default function Login() {
   const sendMagicLink = async () => {
     if (!email.includes("@")) return Alert.alert("Enter a valid email");
     
-    const redirectTo = Platform.select({
-      web: typeof window !== 'undefined' ? `${window.location.origin}/auth/callback` : undefined,
-      default: "homechef://auth/callback",
-    });
-    
     const { error } = await supabase.auth.signInWithOtp({ 
       email,
-      options: { emailRedirectTo: redirectTo }
+      options: { emailRedirectTo: getEmailRedirect() }
     });
     if (error) Alert.alert("Error", error.message);
     else Alert.alert("Check your email", "We sent you a sign-in link.");
   };
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.background, padding: 20, paddingTop: 60 }}>
+    <View style={{ flex: 1, backgroundColor: theme.colors.surface, padding: 20, paddingTop: 60 }}>
       <Text style={{ fontSize: 28, fontWeight: "900", color: theme.colors.text, marginBottom: 12 }}>Log in</Text>
-      <Text style={{ color: theme.colors.secondary, marginBottom: 20 }}>Use your email to receive a magic link.</Text>
+      <Text style={{ color: theme.colors.textMuted, marginBottom: 20 }}>Use your email to receive a magic link.</Text>
 
       <View style={{ backgroundColor: "#fff", borderRadius: 14, paddingHorizontal: 12, paddingVertical: 10, borderWidth: 1, borderColor: "#EEF2F6" }}>
         <TextInput
           placeholder="your@email.com"
-          placeholderTextColor={theme.colors.muted}
+          placeholderTextColor={theme.colors.textMuted}
           style={{ fontSize: 16, color: theme.colors.text }}
           autoCapitalize="none"
           keyboardType="email-address"
@@ -46,7 +42,7 @@ export default function Login() {
 
       <Link href="/" asChild>
         <TouchableOpacity style={{ marginTop: 16, alignSelf: "center" }}>
-          <Text style={{ color: theme.colors.secondary }}>← Back to home</Text>
+          <Text style={{ color: theme.colors.textMuted }}>← Back to home</Text>
         </TouchableOpacity>
       </Link>
     </View>

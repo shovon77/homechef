@@ -1,4 +1,5 @@
-import React, { createContext, useContext, useMemo, useState } from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import { Alert } from "react-native";
 
 export type CartItem = {
   id: string | number;
@@ -6,11 +7,13 @@ export type CartItem = {
   price: number;
   quantity: number;
   image?: string;
+  chef_id?: number | null; // Store chef_id for single-chef constraint
 };
 
 type CartContextType = {
   items: CartItem[];
-  addToCart: (item: CartItem) => void;
+  cartChefId: number | null; // Current chef ID for the cart (single-chef constraint)
+  addToCart: (item: CartItem) => { success: boolean; error?: string };
   removeFromCart: (id: string | number) => void;
   clearCart: () => void;
   setQuantity: (id: string | number, qty: number) => void;
@@ -18,7 +21,7 @@ type CartContextType = {
   getQty: (id: string | number) => number;
 
   // Legacy aliases (to avoid breaking older calls):
-  add?: (item: CartItem) => void;
+  add?: (item: CartItem) => { success: boolean; error?: string };
   remove?: (id: string | number) => void;
   clear?: () => void;
 };
@@ -27,8 +30,35 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  
+  // Derive cartChefId from first item's chef_id (single-chef constraint)
+  const cartChefId = useMemo(() => {
+    const firstItem = items[0];
+    return firstItem?.chef_id ?? null;
+  }, [items]);
 
-  const addToCart = (item: CartItem) => {
+  // Single-chef constraint: block adding dishes from different chefs
+  const addToCart = (item: CartItem): { success: boolean; error?: string } => {
+    // If cart is empty, allow adding and set chef_id
+    if (items.length === 0) {
+      setItems([{ ...item, quantity: item.quantity || 1 }]);
+      return { success: true };
+    }
+
+    // Get current chef_id from first item
+    const currentChefId = items[0]?.chef_id ?? null;
+    const itemChefId = item.chef_id ?? null;
+
+    // If chef_id doesn't match, block the addition
+    if (currentChefId !== null && itemChefId !== null && currentChefId !== itemChefId) {
+      Alert.alert(
+        "Single Chef Order",
+        "You can only add dishes from one chef per order. Please clear your cart or complete your current order first."
+      );
+      return { success: false, error: "Different chef" };
+    }
+
+    // If chef_id matches (or both are null), allow adding
     setItems(prev => {
       const found = prev.find(p => p.id === item.id);
       if (found) {
@@ -38,6 +68,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       }
       return [...prev, { ...item, quantity: item.quantity || 1 }];
     });
+    return { success: true };
   };
 
   const removeFromCart = (id: string | number) => {
@@ -63,7 +94,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <CartContext.Provider
-      value={{ items, addToCart, removeFromCart, clearCart, setQuantity, total, getQty, add, remove, clear }}
+      value={{ items, cartChefId, addToCart, removeFromCart, clearCart, setQuantity, total, getQty, add, remove, clear }}
     >
       {children}
     </CartContext.Provider>

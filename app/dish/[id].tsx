@@ -6,21 +6,9 @@ import { supabase } from "../../lib/supabase";
 import { theme } from "../../constants/theme";
 import StarRating from "../components/StarRating";
 import { useResponsiveColumns } from "../../utils/responsive";
-
-// Optional cart hook (won't crash if missing)
-let useCart: any = () => ({ addToCart: () => {} });
-try { useCart = require("../../context/CartContext").useCart; } catch {}
-
-type Dish = {
-  id: number;
-  name: string;
-  image?: string | null;
-  price?: number | null;
-  chef?: string | null;
-  chef_id?: number | string | null;
-  description?: string | null;
-  category?: string | null;
-};
+import { getDishById, getDishRatings } from "../../lib/db";
+import type { Dish } from "../../lib/types";
+import { useCart } from "../../context/CartContext";
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 
@@ -56,32 +44,37 @@ export default function DishDetail() {
     let mounted = true;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("dishes")
-        .select("id,name,image,price,chef,chef_id,description,category")
-        .eq("id", dishId).single();
+      
+      // Load dish using db helper
+      const dishData = await getDishById(dishId);
       if (!mounted) return;
-      if (error) console.log("dish fetch error", error);
-      setDish(data as Dish);
+      if (!dishData) {
+        console.log("Dish not found");
+        setLoading(false);
+        return;
+      }
+      setDish(dishData);
       
-      // Load ratings
-      const { data: ratingsData, error: ratingsError } = await supabase
-        .from("dish_ratings")
-        .select("rating, user_id, comment")
-        .eq("dish_id", dishId);
+      // Load ratings using db helper
+      const ratingStats = await getDishRatings(dishId);
+      setRatingCount(ratingStats.count);
+      setAvgRating(ratingStats.average);
       
-      if (!ratingsError && ratingsData) {
-        const ratings = ratingsData.map(r => Number(r.rating || 0)).filter(n => n > 0);
-        setRatingCount(ratings.length);
-        setAvgRating(ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0);
+      // Check if user has already rated
+      const { data: { user } } = await supabase.auth.getUser();
+      if (user) {
+        const { data: userRatingData } = await supabase
+          .from("dish_ratings")
+          .select("rating, stars, comment")
+          .eq("dish_id", dishId)
+          .eq("user_id", user.id)
+          .maybeSingle();
         
-        // Check if user has already rated
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-          const userRatingData = ratingsData.find(r => r.user_id === user.id);
-          if (userRatingData) {
-            setUserRating(Number(userRatingData.rating || 0));
-            setComment(userRatingData.comment || "");
-          }
+        if (userRatingData) {
+          // Use rating if available, otherwise use stars
+          const rating = userRatingData.rating ?? userRatingData.stars ?? 0;
+          setUserRating(Number(rating));
+          setComment(userRatingData.comment || "");
         }
       }
       
@@ -134,7 +127,7 @@ export default function DishDetail() {
     return <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: "center", justifyContent: "center" }}><Text style={{ color: theme.colors.white }}>Dish not found.</Text></View>;
   }
 
-  const chefId = dish.chef_id != null ? normalizeId(dish.chef_id) : null;
+  const chefId = dish.chef_id != null ? Number(dish.chef_id) : null;
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface }}>
@@ -148,13 +141,23 @@ export default function DishDetail() {
         <View style={{ marginTop: 14, gap: 8 }}>
           <Text style={{ color: theme.colors.white, fontSize: 24, fontWeight: "900" }}>{dish.name}</Text>
           {!!dish.chef && <Text style={{ color: "#cbd5e1" }}>by {dish.chef}</Text>}
-          <Text style={{ color: theme.colors.primary, fontSize: 18, fontWeight: "900" }}>${Number(dish.price || 0).toFixed(2)}</Text>
+          <Text style={{ color: theme.colors.primary, fontSize: 18, fontWeight: "900" }}>${(dish.price || 0).toFixed(2)}</Text>
 
           <View style={{ flexDirection: "row", gap: 10, marginTop: 6, flexWrap: "wrap" }}>
             <TouchableOpacity
-              onPress={() => (useCart()?.addToCart
-                ? useCart().addToCart({ id: dish.id, name: dish.name, price: Number(dish.price || 0), quantity: 1, image: dish.image || undefined })
-                : null)}
+              onPress={() => {
+                const result = addToCart({ 
+                  id: dish.id, 
+                  name: dish.name, 
+                  price: Number(dish.price || 0), 
+                  quantity: 1, 
+                  image: dish.image || undefined,
+                  chef_id: dish.chef_id || null, // Include chef_id for single-chef constraint
+                });
+                if (!result.success) {
+                  // Alert already shown by CartContext
+                }
+              }}
               style={{ backgroundColor: theme.colors.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10 }}
             >
               <Text style={{ color: theme.colors.white, fontWeight: "800" }}>Add to cart</Text>
@@ -178,8 +181,8 @@ export default function DishDetail() {
               </Text>
             </TouchableOpacity>
 
-            {chefId && (
-              <Link href={{ pathname: "/chef/[id]", params: { id: chefId } }} asChild>
+            {chefId ? (
+              <Link href={{ pathname: "/chef/[id]", params: { id: String(chefId) } }} asChild>
                 <TouchableOpacity
                   style={{
                     backgroundColor: "rgba(255,255,255,0.06)",
@@ -191,7 +194,24 @@ export default function DishDetail() {
                   }}
                 >
                   <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>
-                    View Chef
+                    Back to Chef
+                  </Text>
+                </TouchableOpacity>
+              </Link>
+            ) : (
+              <Link href="/browse" asChild>
+                <TouchableOpacity
+                  style={{
+                    backgroundColor: "rgba(255,255,255,0.06)",
+                    borderWidth: 1,
+                    borderColor: "rgba(255,255,255,0.15)",
+                    paddingVertical: 12,
+                    paddingHorizontal: 16,
+                    borderRadius: 10,
+                  }}
+                >
+                  <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>
+                    Back to Browse
                   </Text>
                 </TouchableOpacity>
               </Link>
@@ -267,13 +287,14 @@ export default function DishDetail() {
                     return;
                   }
 
-                  // Upsert rating
+                  // Upsert rating (use both rating and stars for compatibility)
                   const { error: upsertError } = await supabase
                     .from("dish_ratings")
                     .upsert({
                       dish_id: dishId,
                       user_id: user.id,
                       rating: userRating,
+                      stars: userRating, // Also set stars for compatibility
                       comment: comment.trim() || null,
                     }, {
                       onConflict: "dish_id,user_id"
@@ -285,23 +306,23 @@ export default function DishDetail() {
                     return;
                   }
 
-                  // Reload ratings to update average
-                  const { data: ratingsData, error: ratingsError } = await supabase
+                  // Reload ratings to update average using db helper
+                  const ratingStats = await getDishRatings(dishId);
+                  setRatingCount(ratingStats.count);
+                  setAvgRating(ratingStats.average);
+                  
+                  // Update user's rating and comment
+                  const { data: userRatingData } = await supabase
                     .from("dish_ratings")
-                    .select("rating, user_id, comment")
-                    .eq("dish_id", dishId);
-
-                  if (!ratingsError && ratingsData) {
-                    const ratings = ratingsData.map(r => Number(r.rating || 0)).filter(n => n > 0);
-                    setRatingCount(ratings.length);
-                    setAvgRating(ratings.length ? ratings.reduce((a, b) => a + b, 0) / ratings.length : 0);
-                    
-                    // Update user's rating and comment
-                    const userRatingData = ratingsData.find(r => r.user_id === user.id);
-                    if (userRatingData) {
-                      setUserRating(Number(userRatingData.rating || 0));
-                      setComment(userRatingData.comment || "");
-                    }
+                    .select("rating, stars, comment")
+                    .eq("dish_id", dishId)
+                    .eq("user_id", user.id)
+                    .maybeSingle();
+                  
+                  if (userRatingData) {
+                    const rating = userRatingData.rating ?? userRatingData.stars ?? 0;
+                    setUserRating(Number(rating));
+                    setComment(userRatingData.comment || "");
                   }
 
                   Alert.alert("Thanks!", "Your rating has been submitted.");

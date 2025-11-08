@@ -1,0 +1,35 @@
+import { Platform } from 'react-native';
+import * as Linking from 'expo-linking';
+
+/**
+ * Get the auth redirect URL for OAuth flows (Google, Facebook, etc.)
+ * 
+ * Verification:
+ * - Web: Returns `${window.location.origin}/auth/callback` (e.g., http://localhost:8081/auth/callback)
+ * - Native: Returns `homechef://auth/callback` using the app scheme
+ */
+export function getAuthRedirect(): string {
+  if (Platform.OS === 'web') {
+    if (typeof window === 'undefined') {
+      // SSR fallback
+      return '/auth/callback';
+    }
+    return `${window.location.origin}/auth/callback`;
+  }
+  
+  // Native: use expo-linking to create URL with app scheme
+  return Linking.createURL('/auth/callback');
+}
+
+/**
+ * Get the email redirect URL for magic link / OTP flows
+ * Same as getAuthRedirect() - both OAuth and email links use the same callback
+ * 
+ * Verification:
+ * - Web: Returns `${window.location.origin}/auth/callback`
+ * - Native: Returns `homechef://auth/callback`
+ */
+export function getEmailRedirect(): string {
+  return getAuthRedirect();
+}
+

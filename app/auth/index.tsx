@@ -4,6 +4,7 @@ import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Im
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
+import { getAuthRedirect } from '../../lib/authRedirect';
 
 /** Light brand palette */
 const C = {
@@ -24,13 +25,6 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
-
-  const redirectTo = (() => {
-    try {
-      if (Platform.OS !== 'web') return undefined as any;
-      return `${window.location.origin}/auth/callback`;
-    } catch { return undefined as any; }
-  })();
 
   // Entrance animation
   const cardSlide = useRef(new Animated.Value(15)).current;
@@ -57,7 +51,7 @@ export default function AuthPage() {
     setErr(null);
     await supabase.auth.signInWithOAuth({
       provider: 'google',
-      options: { redirectTo }
+      options: { redirectTo: getAuthRedirect() }
     });
   }
 

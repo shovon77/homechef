@@ -5,7 +5,9 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { formatPhone } from '../../lib/formatPhone';
 import { Tabs } from '../../components/Tabs';
-import { cart } from '../../lib/cart';
+import { useCart } from '../../context/CartContext';
+import { getChefById, getDishesByChefId, getChefReviews } from '../../lib/db';
+import type { Chef, Dish, ChefReview } from '../../lib/types';
 
 /** Color tokens aligned with homepage */
 const C = {
@@ -17,41 +19,6 @@ const C = {
   subtext:   '#b8d2c6',
   accent:    '#fbbf24',  // gold
   link:      '#0ea5e9',
-};
-
-type Chef = {
-  id: number;
-  name?: string | null;
-  location?: string | null;
-  phone?: string | null;
-  bio?: string | null;
-  description?: string | null;
-  photo?: string | null;
-  facebook?: string | null;
-  instagram?: string | null;
-  reels?: string | null;
-  reels_json?: string | null;
-  youtube_url?: string | null;
-  avg_rating?: number | null;
-};
-
-type Dish = {
-  id: number;
-  name?: string | null;
-  price?: number | null;
-  image_url?: string | null;
-  image?: string | null;
-  thumbnail?: string | null;
-  chef_id?: number | null;
-  chef?: string | null;
-};
-
-type Review = {
-  id:number;
-  rating:number;
-  comment?:string|null;
-  user_name?:string|null;
-  created_at?:string|null;
 };
 
 function StarRow({ value=0 }:{ value?: number }) {
@@ -81,8 +48,9 @@ export default function ChefDetailView() {
   const [chefId, setChefId] = useState<number | null>(null);
   const [chef, setChef] = useState<Chef | null>(null);
   const [dishes, setDishes] = useState<Dish[]>([]);
-  const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviews, setReviews] = useState<ChefReview[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const { addToCart } = useCart();
 
   useEffect(() => {
     setError(null);
@@ -98,25 +66,21 @@ export default function ChefDetailView() {
     if (!chefId) return;
     (async () => {
       try {
-        const chefQ = supabase.from('chefs').select('*').eq('id', chefId).maybeSingle();
-        // main: by fk
-        const dishQ = supabase.from('dishes').select('*').eq('chef_id', chefId).order('id', { ascending:true }).limit(200);
-        const revQ  = supabase.from('chef_reviews').select('id,rating,comment,user_name,created_at').eq('chef_id', chefId).order('created_at', { ascending:false }).limit(100);
-
-        const [chefRes, dishRes, revRes] = await Promise.all([chefQ, dishQ, revQ]);
-        if (chefRes.error) throw chefRes.error;
-        setChef(chefRes.data ?? { id: chefId } as any);
-
-        let dishesData = Array.isArray(dishRes.data) ? dishRes.data : [];
-        // fallback by chef name if fk not set
-        if ((!dishesData || dishesData.length === 0) && (chefRes.data?.name)) {
-          const byName = await supabase.from('dishes').select('*').ilike('chef', chefRes.data.name);
-          if (!byName.error && Array.isArray(byName.data) && byName.data.length > 0) {
-            dishesData = byName.data;
-          }
+        // Use db helpers
+        const chefData = await getChefById(chefId);
+        if (!chefData) {
+          setError('Chef not found');
+          return;
         }
+        setChef(chefData);
+
+        // Get dishes using db helper (handles chef_id fallback automatically)
+        const dishesData = await getDishesByChefId(chefId);
         setDishes(dishesData);
-        setReviews(Array.isArray(revRes.data) ? revRes.data : []);
+
+        // Get reviews using db helper
+        const reviewsData = await getChefReviews(chefId);
+        setReviews(reviewsData);
       } catch (e:any) {
         setError(e.message || String(e));
       }
@@ -184,13 +148,20 @@ export default function ChefDetailView() {
     </View>
   );
 
-  function addToCart(d: Dish) {
-    const img = (d as any).image_url || (d as any).image || (d as any).thumbnail || (d as any).photo_url || (d as any).photo || (d as any).picture || '';
-    cart.add({ id: d.id, name: d.name, price: d.price ?? 0, image: img, qty: 1 });
-    if (typeof window !== 'undefined') {
-      // lightweight feedback
+  function handleAddToCart(d: Dish) {
+    const img = d.image || d.thumbnail || '';
+    const result = addToCart({ 
+      id: d.id, 
+      name: d.name || '', 
+      price: d.price ?? 0, 
+      quantity: 1, 
+      image: img,
+      chef_id: chefId, // Use current chef's ID for single-chef constraint
+    });
+    if (result.success) {
       console.log('Added to cart:', { id: d.id, name: d.name });
     }
+    // Alert already shown by CartContext if blocked
   }
 
   const DishesTab = (
@@ -200,7 +171,7 @@ export default function ChefDetailView() {
       ) : (
         <View style={{ flexDirection:'row', flexWrap:'wrap', gap:12 }}>
           {dishes.map(d => {
-            const img = (d as any).image_url || (d as any).image || (d as any).thumbnail || (d as any).photo_url || (d as any).photo || (d as any).picture || '';
+            const img = d.image || d.thumbnail || '';
             return (
               <View key={d.id} style={{
                 width:220, backgroundColor:C.cardBg,
@@ -217,9 +188,9 @@ export default function ChefDetailView() {
                 <View style={{ padding:10, gap:6 }}>
                   <Text style={{ color:C.text, fontWeight:'800' }} numberOfLines={1}>{d.name || ('Dish #' + d.id)}</Text>
                   <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
-                    <Text style={{ color:C.accent }}>{d.price != null ? `$ ${Number(d.price).toFixed(2)}` : ''}</Text>
+                    <Text style={{ color:C.accent }}>{d.price != null ? `$${Number(d.price).toFixed(2)}` : ''}</Text>
                     <TouchableOpacity
-                      onPress={() => addToCart(d)}
+                      onPress={() => handleAddToCart(d)}
                       style={{ backgroundColor:'#0ea5e9', paddingVertical:6, paddingHorizontal:10, borderRadius:8 }}>
                       <Text style={{ color:'#fff', fontWeight:'800' }}>Add to cart</Text>
                     </TouchableOpacity>

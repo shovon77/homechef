@@ -5,39 +5,17 @@ import { View, Text, TouchableOpacity, Platform } from 'react-native'
 import { Link, useRouter } from 'expo-router'
 import { theme } from '../constants/theme'     // components -> ../constants
 import { supabase } from '../lib/supabase'     // components -> ../lib
+import { useRole } from '../hooks/useRole'
+import { useCart } from '../context/CartContext'
 
 const MAXW = 1200
 
 export default function NavBar() {
   const router = useRouter()
-  const [email, setEmail] = useState<string | null>(null)
-  const [role, setRole] = useState<string | null>(null)
-
-  useEffect(() => {
-    let alive = true
-    const refresh = async () => {
-      const { data } = await supabase.auth.getSession()
-      if (!alive) return
-      const em = data.session?.user?.email ?? null
-      setEmail(em)
-
-      if (em && data.session?.user?.id) {
-        const prof = await supabase
-          .from('profiles')
-          .select('role')
-          .eq('id', data.session.user.id)
-          .maybeSingle()
-        setRole(prof.data?.role ?? null)
-      } else {
-        setRole(null)
-      }
-    }
-    refresh()
-    const { data: sub } = supabase.auth.onAuthStateChange(() => refresh())
-    return () => { alive = false; sub.subscription.unsubscribe() }
-  }, [])
-
-  const loggedIn = !!email
+  const { role, isAdmin, isChef, user } = useRole()
+  const { items } = useCart()
+  const loggedIn = !!user
+  const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
 
   return (
     <View style={{ width:'100%', backgroundColor: theme.colors.surface, borderBottomWidth:1, borderBottomColor: theme.colors.border }}>
@@ -66,9 +44,15 @@ export default function NavBar() {
                 </TouchableOpacity>
               </Link>
             ))}
-            <TouchableOpacity onPress={() => router.push('/chef/dashboard')} style={{ paddingVertical:8, paddingHorizontal:10, borderRadius:8 }}>
-              <Text style={{ color: theme.colors.textMuted, fontWeight:'700' }}>Dashboard</Text>
-            </TouchableOpacity>
+            {/* Dashboard button: only show for admin or chef */}
+            {(isAdmin || isChef) && (
+              <TouchableOpacity 
+                onPress={() => router.push(isAdmin ? '/admin' : '/chef')} 
+                style={{ paddingVertical:8, paddingHorizontal:10, borderRadius:8 }}
+              >
+                <Text style={{ color: theme.colors.textMuted, fontWeight:'700' }}>Dashboard</Text>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Right */}
@@ -76,11 +60,20 @@ export default function NavBar() {
             {loggedIn ? (
               <>
                 <TouchableOpacity
-                  onPress={() => router.push(role === 'admin' ? '/admin' : '/chef/dashboard')}
+                  onPress={() => {
+                    // Role-aware profile routing
+                    if (isAdmin) {
+                      router.push('/admin/profile');
+                    } else if (isChef) {
+                      router.push('/chef/profile');
+                    } else {
+                      router.push('/profile');
+                    }
+                  }}
                   style={{ paddingVertical:8, paddingHorizontal:12, borderRadius:10, backgroundColor: theme.colors.primary }}
                 >
                   <Text style={{ color: theme.colors.onPrimary, fontWeight:'800' }}>
-                    {role === 'admin' ? 'Admin' : 'Profile'}
+                    Profile
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
@@ -106,8 +99,32 @@ export default function NavBar() {
             )}
 
             <Link href="/cart" asChild>
-              <TouchableOpacity style={{ paddingVertical:8, paddingHorizontal:12, borderRadius:10, borderWidth:1, borderColor: theme.colors.border, backgroundColor: theme.colors.surfaceAlt }}>
+              <TouchableOpacity style={{ 
+                paddingVertical:8, 
+                paddingHorizontal:12, 
+                borderRadius:10, 
+                borderWidth:1, 
+                borderColor: theme.colors.border, 
+                backgroundColor: theme.colors.surfaceAlt,
+                position: 'relative',
+              }}>
                 <Text style={{ color: theme.colors.text, fontWeight:'800' }}>Cart</Text>
+                {cartQty > 0 && (
+                  <View style={{
+                    position: 'absolute',
+                    top: -4,
+                    right: -4,
+                    backgroundColor: theme.colors.primary,
+                    borderRadius: 10,
+                    minWidth: 20,
+                    height: 20,
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    paddingHorizontal: 4,
+                  }}>
+                    <Text style={{ color: '#fff', fontSize: 12, fontWeight: '900' }}>{cartQty}</Text>
+                  </View>
+                )}
               </TouchableOpacity>
             </Link>
           </View>

@@ -1,21 +1,21 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator } from "react-native";
+import { View, Text, FlatList, TouchableOpacity, Image, ActivityIndicator, TextInput } from "react-native";
 import { Link } from "expo-router";
-import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
 import { useResponsiveColumns } from "../utils/responsive";
+import { getChefsPaginated } from "../lib/db";
+import type { Chef } from "../lib/types";
 
-type Chef = Record<string, any>;
-
-const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
-const getAvatar = (c: Chef) =>
-  c.photo || c.photo || c.avatar || c.photo || c.photo || c.photo || c.avatar || c.image || "https://i.pravatar.cc/200?img=12";
+const getAvatar = (c: Chef) => c.photo || "https://i.pravatar.cc/200?img=12";
 
 export default function ChefsPage() {
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const { width, getColumns } = useResponsiveColumns();
   const columns = getColumns(3);
+  const LIMIT = 24;
   
   const cardW = width < 768 ? width - 48 : width < 1024 ? (width - 64) / 2 : Math.min(360, (width - 96) / columns);
 
@@ -23,17 +23,21 @@ export default function ChefsPage() {
     let mounted = true;
     (async () => {
       setLoading(true);
-      const { data, error } = await supabase.from("chefs").select("*").order("rating", { ascending: false });
+      const offset = (page - 1) * LIMIT;
+      const data = await getChefsPaginated({ search: search.trim() || undefined, limit: LIMIT, offset });
       if (!mounted) return;
-      if (error) console.log("chefs error", error);
-      setChefs((data || []) as Chef[]);
+      if (page === 1) {
+        setChefs(data);
+      } else {
+        setChefs(prev => [...prev, ...data]);
+      }
       setLoading(false);
     })();
     return () => { mounted = false; };
-  }, []);
+  }, [page, search]);
 
   const renderCard = ({ item }: { item: Chef }) => {
-    const href = { pathname: "/chef/[id]", params: { id: normalizeId(item.id) } };
+    const href = { pathname: "/chef/[id]", params: { id: String(item.id) } };
     return (
       <Link href={href} asChild>
         <TouchableOpacity
@@ -76,14 +80,42 @@ export default function ChefsPage() {
     <View style={{ flex: 1, backgroundColor: theme.colors.surface, paddingTop: 16 }}>
       <View style={{ width: "100%", maxWidth: 1200, alignSelf: "center", paddingHorizontal: 12 }}>
         <Text style={{ color: theme.colors.white, fontWeight: "900", fontSize: 24, marginBottom: 12 }}>Top Chefs</Text>
+        <TextInput
+          value={search}
+          onChangeText={(text) => { setSearch(text); setPage(1); }}
+          placeholder="Search chefs by name or location..."
+          placeholderTextColor={theme.colors.textMuted}
+          style={{
+            backgroundColor: theme.colors.surface,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.15)",
+            borderRadius: 8,
+            padding: 12,
+            color: theme.colors.text,
+            fontSize: 14,
+            marginBottom: 12,
+          }}
+        />
+        {loading && chefs.length === 0 ? (
+          <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 32 }}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : (
         <FlatList
           contentContainerStyle={{ alignItems: "center" }}
           data={chefs}
-          keyExtractor={(c, i) => `${normalizeId(c.id)}-${i}`}
+            keyExtractor={(c) => String(c.id)}
           renderItem={renderCard}
-          numColumns={columns}
+            numColumns={columns}
           showsVerticalScrollIndicator={false}
+            onEndReached={() => {
+              if (!loading && chefs.length >= LIMIT * page) {
+                setPage(p => p + 1);
+              }
+            }}
+            onEndReachedThreshold={0.5}
         />
+        )}
       </View>
     </View>
   );

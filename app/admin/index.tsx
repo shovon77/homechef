@@ -1,37 +1,49 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator } from 'react-native';
+import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import AdminGuard from '../../components/AdminGuard';
+import { useRole } from '../../hooks/useRole';
+import { toggleChefActive, updateOrderStatus } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
 import { theme } from '../../constants/theme';
+import { getChefsPaginated, getOrders } from '../../lib/db';
+import type { Chef, OrderWithItems, Profile } from '../../lib/types';
 
-type Chef = { id: number; name?: string | null; location?: string | null; active?: boolean | null; phone?: string | null; };
-type Order = { id: number; user_id?: string | null; chef_id?: number | null; status?: string | null; total?: number | null; created_at?: string | null; };
-type AppUser = { id: string; email?: string | null; name?: string | null; is_chef?: boolean | null; };
-
-const ITEMS_PER_PAGE = 20;
+const ITEMS_PER_PAGE = 25;
 
 export default function AdminPage() {
+  const router = useRouter();
+  const { isAdmin, loading: adminLoading, user, profile } = useRole();
   const [chefs, setChefs] = useState<Chef[]>([]);
-  const [orders, setOrders] = useState<Order[]>([]);
-  const [users, setUsers] = useState<AppUser[]>([]);
+  const [orders, setOrders] = useState<OrderWithItems[]>([]);
+  const [users, setUsers] = useState<Profile[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState('');
   const [userPage, setUserPage] = useState(1);
+  const [chefPage, setChefPage] = useState(1);
+  const [orderSearch, setOrderSearch] = useState('');
+  const [orderPage, setOrderPage] = useState(1);
 
   async function loadAll() {
     setLoading(true);
     setErr(null);
     try {
-      const [{ data: chefRows }, { data: orderRows }, { data: userRows }] = await Promise.all([
-        supabase.from('chefs').select('id,name,location,phone,active').order('id', { ascending: true }).limit(500),
-        supabase.from('orders').select('id,user_id,chef_id,status,total,created_at').order('created_at', { ascending: false }).limit(500),
-        supabase.from('users').select('id,email,name,is_chef').limit(1000),
-      ]);
-      setChefs((chefRows as any[]) || []);
-      setOrders((orderRows as any[]) || []);
+      // Load chefs using db helper
+      const chefRows = await getChefsPaginated({ limit: 1000 });
+      
+      // Load orders using db helper (includes order_items and user_email)
+      const orderRows = await getOrders({ limit: 1000 });
+      
+      // Load users from profiles table
+      const { data: userRows } = await supabase
+        .from('profiles')
+        .select('id,email,is_chef')
+        .order('id', { ascending: true });
+      
+      setChefs(chefRows);
+      setOrders(orderRows);
       setUsers((userRows as any[]) || []);
     } catch (e: any) {
       setErr(e.message || String(e));
@@ -42,35 +54,24 @@ export default function AdminPage() {
 
   useEffect(() => { loadAll(); }, []);
 
-  async function toggleChefActive(id: number, next: boolean) {
-    try {
-      const { error } = await supabase.from('chefs').update({ active: next }).eq('id', id);
-      if (error) throw error;
+  async function handleToggleChefActive(id: number, next: boolean) {
+    const result = await toggleChefActive(id, next);
+    if (result.ok) {
       setChefs(cs => cs.map(c => c.id === id ? { ...c, active: next } : c));
-    } catch (e: any) {
-      setErr(e.message || String(e));
+    } else {
+      setErr(result.error || 'Failed to update chef');
     }
   }
 
-  async function updateOrderStatus(id: number, newStatus: string) {
-    try {
-      const { error } = await supabase.from('orders').update({ status: newStatus }).eq('id', id);
-      if (error) throw error;
+  async function handleUpdateOrderStatus(id: number, newStatus: string) {
+    const result = await updateOrderStatus(id, newStatus);
+    if (result.ok) {
       setOrders(os => os.map(o => o.id === id ? { ...o, status: newStatus } : o));
-    } catch (e: any) {
-      setErr(e.message || String(e));
+    } else {
+      setErr(result.error || 'Failed to update order');
     }
   }
 
-  const currentOrders = useMemo(() => orders.filter(o => {
-    const s = (o.status || '').toLowerCase();
-    return s === 'current' || s === 'in_progress' || s === 'pending';
-  }), [orders]);
-  const completedOrders = useMemo(() => orders.filter(o => (o.status || '').toLowerCase() === 'completed'), [orders]);
-  const cancelledOrders = useMemo(() => orders.filter(o => {
-    const s = (o.status || '').toLowerCase();
-    return s === 'cancelled' || s === 'canceled';
-  }), [orders]);
   const nonChefs = useMemo(() => users.filter(u => !u.is_chef), [users]);
   
   const filteredUsers = useMemo(() => {
@@ -83,6 +84,11 @@ export default function AdminPage() {
     );
   }, [nonChefs, userSearch]);
 
+  // Reset pagination when search changes
+  useEffect(() => {
+    setUserPage(1);
+  }, [userSearch]);
+
   const paginatedUsers = useMemo(() => {
     const start = (userPage - 1) * ITEMS_PER_PAGE;
     return filteredUsers.slice(start, start + ITEMS_PER_PAGE);
@@ -90,65 +96,133 @@ export default function AdminPage() {
 
   const totalUserPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
 
+  const filteredOrders = useMemo(() => {
+    if (!orderSearch.trim()) return orders;
+    const search = orderSearch.toLowerCase();
+    return orders.filter(o => 
+      (o.status || '').toLowerCase().includes(search) ||
+      (o.user_email || '').toLowerCase().includes(search) ||
+      String(o.id).includes(search)
+    );
+  }, [orders, orderSearch]);
+
+  // Reset pagination when search changes
+  useEffect(() => {
+    setOrderPage(1);
+  }, [orderSearch]);
+
+  const paginatedOrders = useMemo(() => {
+    const start = (orderPage - 1) * ITEMS_PER_PAGE;
+    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredOrders, orderPage]);
+
+  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+
+  const paginatedChefs = useMemo(() => {
+    const start = (chefPage - 1) * ITEMS_PER_PAGE;
+    return chefs.slice(start, start + ITEMS_PER_PAGE);
+  }, [chefs, chefPage]);
+
+  const totalChefPages = Math.ceil(chefs.length / ITEMS_PER_PAGE);
+
   const ChefsTab = (
     <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Chefs</Text>
+      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Chefs ({chefs.length} total)</Text>
       {loading && chefs.length === 0 ? (
         <View style={{ padding: 32, alignItems: 'center' }}>
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
-      ) : chefs.length === 0 ? (
-        <Text style={{ color: theme.colors.muted }}>No chefs found.</Text>
+      ) : paginatedChefs.length === 0 ? (
+        <Text style={{ color: theme.colors.textMuted }}>No chefs found.</Text>
       ) : (
-        chefs.map(c => (
-          <View
-            key={c.id}
-            style={{
-              backgroundColor: theme.colors.surface,
-              borderWidth: 1,
-              borderColor: 'rgba(255,255,255,0.10)',
-              borderRadius: 12,
-              padding: 16,
-            }}
-          >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
-                  {c.name || `Chef #${c.id}`}
-                </Text>
-                <Text style={{ color: theme.colors.muted, fontSize: 14 }}>
-                  {c.location || 'No location'}
-                  {c.phone ? ` · ${c.phone}` : ''}
-                </Text>
-              </View>
-              <View style={{
-                backgroundColor: c.active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(107, 114, 128, 0.2)',
-                paddingHorizontal: 8,
-                paddingVertical: 4,
-                borderRadius: 6,
-              }}>
-                <Text style={{ color: c.active ? '#22c55e' : '#6b7280', fontWeight: '700', fontSize: 12 }}>
-                  {c.active ? 'Active' : 'Inactive'}
-                </Text>
-              </View>
-            </View>
-            <TouchableOpacity
-              onPress={() => toggleChefActive(c.id, !c.active)}
+        <>
+          {paginatedChefs.map(c => (
+            <View
+              key={c.id}
               style={{
-                backgroundColor: c.active ? 'rgba(239, 68, 68, 0.2)' : theme.colors.primary,
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 8,
+                backgroundColor: theme.colors.surface,
                 borderWidth: 1,
-                borderColor: c.active ? 'rgba(239, 68, 68, 0.3)' : theme.colors.primary,
+                borderColor: 'rgba(255,255,255,0.10)',
+                borderRadius: 12,
+                padding: 16,
               }}
             >
-              <Text style={{ color: theme.colors.white, fontWeight: '800', textAlign: 'center' }}>
-                {c.active ? 'Deactivate' : 'Activate'}
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
+                    {c.name || `Chef #${c.id}`}
+                  </Text>
+                  <Text style={{ color: theme.colors.textMuted, fontSize: 14 }}>
+                    {c.location || 'No location'}
+                    {c.phone ? ` · ${c.phone}` : ''}
+                  </Text>
+                </View>
+                <View style={{
+                  backgroundColor: c.active ? 'rgba(34, 197, 94, 0.2)' : 'rgba(107, 114, 128, 0.2)',
+                  paddingHorizontal: 8,
+                  paddingVertical: 4,
+                  borderRadius: 6,
+                }}>
+                  <Text style={{ color: c.active ? '#22c55e' : '#6b7280', fontWeight: '700', fontSize: 12 }}>
+                    {c.active ? 'Active' : 'Inactive'}
+                  </Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => handleToggleChefActive(c.id, !c.active)}
+                style={{
+                  backgroundColor: c.active ? 'rgba(239, 68, 68, 0.2)' : theme.colors.primary,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: c.active ? 'rgba(239, 68, 68, 0.3)' : theme.colors.primary,
+                }}
+              >
+                <Text style={{ color: theme.colors.white, fontWeight: '800', textAlign: 'center' }}>
+                  {c.active ? 'Deactivate' : 'Activate'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          ))}
+          {totalChefPages > 1 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+              <TouchableOpacity
+                onPress={() => setChefPage(p => Math.max(1, p - 1))}
+                disabled={chefPage === 1}
+                style={{
+                  backgroundColor: chefPage === 1 ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  opacity: chefPage === 1 ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
+              </TouchableOpacity>
+              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
+                Page {chefPage} of {totalChefPages}
               </Text>
-            </TouchableOpacity>
-          </View>
-        ))
+              <TouchableOpacity
+                onPress={() => setChefPage(p => Math.min(totalChefPages, p + 1))}
+                disabled={chefPage === totalChefPages}
+                style={{
+                  backgroundColor: chefPage === totalChefPages ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  opacity: chefPage === totalChefPages ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
       )}
     </ScrollView>
   );
@@ -162,7 +236,7 @@ export default function AdminPage() {
           value={userSearch}
           onChangeText={setUserSearch}
           placeholder="Search by email, name, or ID..."
-          placeholderTextColor={theme.colors.muted}
+          placeholderTextColor={theme.colors.textMuted}
           style={{
             backgroundColor: theme.colors.surface,
             borderWidth: 1,
@@ -180,7 +254,7 @@ export default function AdminPage() {
           <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       ) : paginatedUsers.length === 0 ? (
-        <Text style={{ color: theme.colors.muted }}>
+        <Text style={{ color: theme.colors.textMuted }}>
           {userSearch ? 'No users found matching your search.' : 'No non-chef users found.'}
         </Text>
       ) : (
@@ -199,8 +273,8 @@ export default function AdminPage() {
               <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 16, marginBottom: 4 }}>
                 {u.name || u.email || u.id}
               </Text>
-              <Text style={{ color: theme.colors.muted, fontSize: 14 }}>{u.email || 'No email'}</Text>
-              <Text style={{ color: theme.colors.muted, fontSize: 12, marginTop: 4 }}>ID: {u.id}</Text>
+              <Text style={{ color: theme.colors.textMuted, fontSize: 14 }}>{u.email || 'No email'}</Text>
+              <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>ID: {u.id}</Text>
             </View>
           ))}
 
@@ -221,7 +295,7 @@ export default function AdminPage() {
               >
                 <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
               </TouchableOpacity>
-              <Text style={{ color: theme.colors.muted, fontWeight: '700' }}>
+              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
                 Page {userPage} of {totalUserPages} ({filteredUsers.length} total)
               </Text>
               <TouchableOpacity
@@ -247,47 +321,86 @@ export default function AdminPage() {
   );
 
   const OrdersTab = (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 20 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Orders</Text>
+    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
+      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Orders ({filteredOrders.length} total)</Text>
       
-      <View>
-        <Text style={{ color: '#eab308', fontWeight: '800', fontSize: 18, marginBottom: 12 }}>Current</Text>
-        {currentOrders.length === 0 ? (
-          <Text style={{ color: theme.colors.muted }}>No current orders.</Text>
-        ) : (
-          currentOrders.map(o => (
-            <OrderCard key={`cur_${o.id}`} order={o} onStatusUpdate={updateOrderStatus} />
-          ))
-        )}
+      <View style={{ marginBottom: 8 }}>
+        <TextInput
+          value={orderSearch}
+          onChangeText={setOrderSearch}
+          placeholder="Search by status, email, or order ID..."
+          placeholderTextColor={theme.colors.textMuted}
+          style={{
+            backgroundColor: theme.colors.surface,
+            borderWidth: 1,
+            borderColor: 'rgba(255,255,255,0.15)',
+            borderRadius: 8,
+            padding: 12,
+            color: theme.colors.text,
+            fontSize: 14,
+          }}
+        />
       </View>
 
-      <View>
-        <Text style={{ color: '#22c55e', fontWeight: '800', fontSize: 18, marginBottom: 12 }}>Completed</Text>
-        {completedOrders.length === 0 ? (
-          <Text style={{ color: theme.colors.muted }}>No completed orders.</Text>
-        ) : (
-          completedOrders.map(o => (
-            <OrderCard key={`cmp_${o.id}`} order={o} onStatusUpdate={updateOrderStatus} />
-          ))
-        )}
-      </View>
-
-      <View>
-        <Text style={{ color: '#ef4444', fontWeight: '800', fontSize: 18, marginBottom: 12 }}>Cancelled</Text>
-        {cancelledOrders.length === 0 ? (
-          <Text style={{ color: theme.colors.muted }}>No cancelled orders.</Text>
-        ) : (
-          cancelledOrders.map(o => (
-            <OrderCard key={`can_${o.id}`} order={o} onStatusUpdate={updateOrderStatus} />
-          ))
-        )}
-      </View>
+      {loading && orders.length === 0 ? (
+        <View style={{ padding: 32, alignItems: 'center' }}>
+          <ActivityIndicator size="large" color={theme.colors.primary} />
+        </View>
+      ) : paginatedOrders.length === 0 ? (
+        <Text style={{ color: theme.colors.textMuted }}>
+          {orderSearch ? 'No orders found matching your search.' : 'No orders found.'}
+        </Text>
+      ) : (
+        <>
+          {paginatedOrders.map(o => (
+            <OrderCard key={o.id} order={o} onStatusUpdate={handleUpdateOrderStatus} />
+          ))}
+          {totalOrderPages > 1 && (
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+              <TouchableOpacity
+                onPress={() => setOrderPage(p => Math.max(1, p - 1))}
+                disabled={orderPage === 1}
+                style={{
+                  backgroundColor: orderPage === 1 ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  opacity: orderPage === 1 ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
+              </TouchableOpacity>
+              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
+                Page {orderPage} of {totalOrderPages} ({filteredOrders.length} total)
+              </Text>
+              <TouchableOpacity
+                onPress={() => setOrderPage(p => Math.min(totalOrderPages, p + 1))}
+                disabled={orderPage === totalOrderPages}
+                style={{
+                  backgroundColor: orderPage === totalOrderPages ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
+                  paddingVertical: 10,
+                  paddingHorizontal: 16,
+                  borderRadius: 8,
+                  borderWidth: 1,
+                  borderColor: 'rgba(255,255,255,0.15)',
+                  opacity: orderPage === totalOrderPages ? 0.5 : 1,
+                }}
+              >
+                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
     </ScrollView>
   );
 
-  function OrderCard({ order, onStatusUpdate }: { order: Order; onStatusUpdate: (id: number, status: string) => void }) {
-    const statusOptions = ['current', 'in_progress', 'completed', 'cancelled'];
+  function OrderCard({ order, onStatusUpdate }: { order: OrderWithItems; onStatusUpdate: (id: number, status: string) => void }) {
+    const statusOptions = ['pending', 'paid', 'completed', 'cancelled'];
     const currentStatus = (order.status || '').toLowerCase();
+    const totalDollars = ((order.total_cents || 0) / 100).toFixed(2);
 
     return (
       <View
@@ -305,21 +418,22 @@ export default function AdminPage() {
             <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
               Order #{order.id}
             </Text>
-            <Text style={{ color: theme.colors.muted, fontSize: 14 }}>
-              Chef: {order.chef_id ?? '—'} · User: {order.user_id ? order.user_id.substring(0, 8) + '...' : '—'}
+            <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
+              User: {order.user_email || (order.user_id ? order.user_id.substring(0, 8) + '...' : '—')}
             </Text>
             <Text style={{ color: theme.colors.primary, fontWeight: '900', fontSize: 16, marginTop: 4 }}>
-              ${(order.total || 0).toFixed(2)}
+              ${totalDollars}
             </Text>
             {order.created_at && (
-              <Text style={{ color: theme.colors.muted, fontSize: 12, marginTop: 4 }}>
+              <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
                 {new Date(order.created_at).toLocaleString()}
               </Text>
             )}
           </View>
           <View style={{
             backgroundColor: currentStatus === 'completed' ? 'rgba(34, 197, 94, 0.2)' :
-                           currentStatus === 'cancelled' || currentStatus === 'canceled' ? 'rgba(239, 68, 68, 0.2)' :
+                           currentStatus === 'cancelled' ? 'rgba(239, 68, 68, 0.2)' :
+                           currentStatus === 'paid' ? 'rgba(59, 130, 246, 0.2)' :
                            'rgba(234, 179, 8, 0.2)',
             paddingHorizontal: 8,
             paddingVertical: 4,
@@ -327,7 +441,8 @@ export default function AdminPage() {
           }}>
             <Text style={{
               color: currentStatus === 'completed' ? '#22c55e' :
-                     currentStatus === 'cancelled' || currentStatus === 'canceled' ? '#ef4444' :
+                     currentStatus === 'cancelled' ? '#ef4444' :
+                     currentStatus === 'paid' ? '#3b82f6' :
                      '#eab308',
               fontWeight: '700',
               fontSize: 12,
@@ -336,6 +451,30 @@ export default function AdminPage() {
             </Text>
           </View>
         </View>
+
+        {order.order_items && order.order_items.length > 0 && (
+          <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
+            <Text style={{ color: theme.colors.text, fontWeight: '800', fontSize: 14, marginBottom: 8 }}>Items:</Text>
+            {order.order_items.map(item => {
+              const itemTotal = ((item.unit_price_cents * item.quantity) / 100).toFixed(2);
+              return (
+                <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: '700' }}>
+                      {item.dish_name || `Dish #${item.dish_id}`}
+                    </Text>
+                    <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
+                      Qty: {item.quantity} × ${((item.unit_price_cents || 0) / 100).toFixed(2)}
+                    </Text>
+                  </View>
+                  <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: '800' }}>
+                    ${itemTotal}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
 
         <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
           {statusOptions.map(status => (
@@ -358,11 +497,56 @@ export default function AdminPage() {
                 fontWeight: currentStatus === status ? '900' : '700',
                 fontSize: 12,
               }}>
-                {status.charAt(0).toUpperCase() + status.slice(1).replace('_', ' ')}
+                {status.charAt(0).toUpperCase() + status.slice(1)}
               </Text>
             </TouchableOpacity>
           ))}
         </View>
+      </View>
+    );
+  }
+
+  // Gate admin access with timeout
+  useEffect(() => {
+    if (adminLoading) {
+      const timeout = setTimeout(() => {
+        // If still loading after 10s, show error
+        if (adminLoading) {
+          console.error('Admin check timeout');
+        }
+      }, 10000);
+      return () => clearTimeout(timeout);
+    }
+  }, [adminLoading]);
+
+  if (adminLoading) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+        <Text style={{ color: theme.colors.text, marginTop: 16 }}>Checking admin access…</Text>
+      </View>
+    );
+  }
+
+  if (!isAdmin) {
+    return (
+      <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 12 }}>
+        <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 20 }}>Admin access required</Text>
+        <Text style={{ color: theme.colors.textMuted, textAlign: 'center' }}>
+          Signed in as: {user?.email || '— not signed in —'}
+        </Text>
+        <TouchableOpacity
+          onPress={() => router.replace('/')}
+          style={{
+            backgroundColor: theme.colors.primary,
+            paddingVertical: 12,
+            paddingHorizontal: 24,
+            borderRadius: 10,
+            marginTop: 8,
+          }}
+        >
+          <Text style={{ color: theme.colors.white, fontWeight: '800' }}>Go Home</Text>
+        </TouchableOpacity>
       </View>
     );
   }
@@ -419,8 +603,8 @@ export default function AdminPage() {
   );
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }} contentContainerStyle={{ padding: 20 }}>
-      <AdminGuard>{content}</AdminGuard>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface }} contentContainerStyle={{ padding: 20 }}>
+      {content}
     </ScrollView>
   );
 }

@@ -1,31 +1,32 @@
 import React, { useState, useEffect } from "react";
 import { View, Text, Image, TouchableOpacity, ScrollView, Platform, Alert } from "react-native";
-import { cart } from "../lib/cart";
 import { theme } from "../constants/theme";
 import { Link } from "expo-router";
 import { useResponsiveColumns } from "../utils/responsive";
+import { useCart } from "../context/CartContext";
+import { getChefById } from "../lib/db";
 
 export default function CartScreen() {
-  const [items, setItems] = useState(cart.get());
+  const { items, setQuantity, removeFromCart, clearCart, total, cartChefId } = useCart();
   const [loading, setLoading] = useState(false);
+  const [chefName, setChefName] = useState<string | null>(null);
   const { width } = useResponsiveColumns();
   const isMobile = width < 768;
-  
+
+  const subtotal = total;
+
+  // Load chef name if cartChefId exists
   useEffect(() => {
-    // Refresh items when component mounts or when storage might have changed
-    const refresh = () => setItems(cart.get());
-    refresh();
-    // Poll for changes (simple approach for localStorage)
-    const interval = setInterval(refresh, 500);
-    return () => clearInterval(interval);
-  }, []);
-
-  const updateItems = (fn: () => void) => {
-    fn();
-    setItems(cart.get());
-  };
-
-  const subtotal = items.reduce((sum, it) => sum + (it.price || 0) * it.qty, 0);
+    if (cartChefId) {
+      getChefById(cartChefId).then(chef => {
+        if (chef) {
+          setChefName(chef.name);
+        }
+      });
+    } else {
+      setChefName(null);
+    }
+  }, [cartChefId]);
 
   const handleCheckout = async () => {
     if (items.length === 0) {
@@ -35,13 +36,22 @@ export default function CartScreen() {
 
     setLoading(true);
     try {
+      // Transform items to match API format (qty instead of quantity)
+      const apiItems = items.map(item => ({
+        id: item.id,
+        name: item.name,
+        price: item.price,
+        qty: item.quantity,
+        image: item.image,
+      }));
+
       // Call the API to create a checkout session
       const response = await fetch('/api/create-checkout-session', {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
         },
-        body: JSON.stringify({ items }),
+        body: JSON.stringify({ items: apiItems }),
       });
 
       const data = await response.json();
@@ -69,9 +79,35 @@ export default function CartScreen() {
   };
 
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }} contentContainerStyle={{ padding: 16 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface }} contentContainerStyle={{ padding: 16 }}>
       <View style={{ width: "100%", maxWidth: 1200, alignSelf: "center" }}>
         <Text style={{ fontSize: 28, fontWeight: "900", color: theme.colors.text, marginBottom: 24 }}>Your Cart</Text>
+
+        {/* Show chef name if cart has items from a chef */}
+        {items.length > 0 && cartChefId && chefName && (
+          <View style={{
+            backgroundColor: theme.colors.surface,
+            borderRadius: 12,
+            borderWidth: 1,
+            borderColor: "rgba(255,255,255,0.10)",
+            padding: 12,
+            marginBottom: 16,
+            flexDirection: 'row',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+          }}>
+            <Text style={{ color: theme.colors.textMuted, fontSize: 14, fontWeight: '700' }}>
+              Order from:
+            </Text>
+            <Link href={{ pathname: "/chef/[id]", params: { id: String(cartChefId) } }} asChild>
+              <TouchableOpacity>
+                <Text style={{ color: theme.colors.primary, fontSize: 16, fontWeight: '900' }}>
+                  {chefName}
+                </Text>
+              </TouchableOpacity>
+            </Link>
+          </View>
+        )}
 
         {items.length === 0 ? (
           <View style={{ 
@@ -86,7 +122,7 @@ export default function CartScreen() {
             <Text style={{ fontSize: 48 }}>🛒</Text>
             <Text style={{ color: theme.colors.text, fontSize: 18, fontWeight: "700" }}>Your cart is empty</Text>
             <Text style={{ color: theme.colors.muted, textAlign: "center" }}>Add some delicious dishes to get started!</Text>
-            <Link href="/" asChild>
+          <Link href="/" asChild>
               <TouchableOpacity style={{ 
                 marginTop: 8, 
                 backgroundColor: theme.colors.primary, 
@@ -100,14 +136,14 @@ export default function CartScreen() {
                 elevation: 5,
               }}>
                 <Text style={{ color: "#fff", fontWeight: "900", fontSize: 16 }}>Browse Dishes</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
-        ) : (
+            </TouchableOpacity>
+          </Link>
+        </View>
+      ) : (
           <>
             <View style={{ gap: 16, marginBottom: 24 }}>
               {items.map((it) => {
-                const itemTotal = (it.price || 0) * it.qty;
+                const itemTotal = (it.price || 0) * it.quantity;
                 return (
                   <View 
                     key={String(it.id)} 
@@ -132,16 +168,16 @@ export default function CartScreen() {
                     />
                     <View style={{ flex: 1, gap: 8 }}>
                       <View style={{ flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "flex-start", gap: isMobile ? 8 : 0 }}>
-                        <View style={{ flex: 1 }}>
+            <View style={{ flex: 1 }}>
                           <Text style={{ fontWeight: "900", color: theme.colors.text, fontSize: isMobile ? 16 : 18, marginBottom: 4 }}>
                             {it.name || "Item"}
                           </Text>
-                          <Text style={{ color: theme.colors.secondary, fontSize: isMobile ? 14 : 16, fontWeight: "700" }}>
+                          <Text style={{ color: theme.colors.textMuted, fontSize: isMobile ? 14 : 16, fontWeight: "700" }}>
                             ${typeof it.price === "number" ? it.price.toFixed(2) : "0.00"} each
                           </Text>
                         </View>
                         <TouchableOpacity 
-                          onPress={() => updateItems(() => cart.remove(it.id))} 
+                          onPress={() => removeFromCart(it.id)} 
                           style={{ 
                             backgroundColor: "rgba(229, 62, 62, 0.15)", 
                             paddingHorizontal: 12, 
@@ -158,10 +194,10 @@ export default function CartScreen() {
                       
                       <View style={{ flexDirection: isMobile ? "column" : "row", justifyContent: "space-between", alignItems: isMobile ? "flex-start" : "center", marginTop: 8, gap: isMobile ? 12 : 0 }}>
                         <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-                          <Text style={{ color: theme.colors.muted, fontSize: 14, fontWeight: "700" }}>Quantity:</Text>
+                          <Text style={{ color: theme.colors.textMuted, fontSize: 14, fontWeight: "700" }}>Quantity:</Text>
                           <View style={{ flexDirection: "row", gap: 8, alignItems: "center" }}>
                             <TouchableOpacity 
-                              onPress={() => updateItems(() => cart.setQty(it.id, Math.max(0, it.qty - 1)))} 
+                              onPress={() => setQuantity(it.id, Math.max(0, it.quantity - 1))} 
                               style={{ 
                                 backgroundColor: "rgba(255,255,255,0.1)", 
                                 width: 36, 
@@ -182,10 +218,10 @@ export default function CartScreen() {
                               fontWeight: "900",
                               fontSize: 16 
                             }}>
-                              {it.qty}
+                              {it.quantity}
                             </Text>
                             <TouchableOpacity 
-                              onPress={() => updateItems(() => cart.setQty(it.id, it.qty + 1))} 
+                              onPress={() => setQuantity(it.id, it.quantity + 1)} 
                               style={{ 
                                 backgroundColor: "rgba(255,255,255,0.1)", 
                                 width: 36, 
@@ -232,7 +268,7 @@ export default function CartScreen() {
                 borderBottomWidth: 1,
                 borderBottomColor: "rgba(255,255,255,0.10)",
               }}>
-                <Text style={{ color: theme.colors.muted, fontSize: 16, fontWeight: "700" }}>Subtotal</Text>
+                <Text style={{ color: theme.colors.textMuted, fontSize: 16, fontWeight: "700" }}>Subtotal</Text>
                 <Text style={{ fontWeight: "900", color: theme.colors.text, fontSize: 24 }}>
                   ${subtotal.toFixed(2)}
                 </Text>
@@ -260,7 +296,7 @@ export default function CartScreen() {
                 </TouchableOpacity>
                 
                 <TouchableOpacity 
-                  onPress={() => updateItems(() => cart.clear())} 
+                  onPress={() => clearCart()} 
                   style={{ 
                     backgroundColor: "rgba(255,255,255,0.05)", 
                     paddingVertical: 12, 
@@ -269,7 +305,7 @@ export default function CartScreen() {
                     borderColor: "rgba(255,255,255,0.15)",
                   }}
                 >
-                  <Text style={{ color: theme.colors.muted, fontWeight: "800", textAlign: "center", fontSize: 14 }}>
+                  <Text style={{ color: theme.colors.textMuted, fontWeight: "800", textAlign: "center", fontSize: 14 }}>
                     Clear Cart
                   </Text>
                 </TouchableOpacity>
@@ -278,7 +314,7 @@ export default function CartScreen() {
           </>
         )}
         <View style={{ height: 32 }} />
-      </View>
+        </View>
     </ScrollView>
   );
 }

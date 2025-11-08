@@ -60,6 +60,7 @@
     "build": "bash -c 'if [ -z \"$1\" ]; then expo-module build -p tsconfig.json; else expo-module build \"$1\"; fi' --",
     "clean": "expo-module clean",
     "lint": "expo-module lint",
+    "lint:routes": "node scripts/check-routes.js",
     "test": "expo-module test",
     "test:rsc": "jest --config jest-rsc.config.js",
     "test:tsd": "EXPORT_ROUTER_JEST_TSD=true expo-module test",

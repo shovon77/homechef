@@ -1,10 +1,12 @@
 import { ensureUser } from '../lib/ensureUser';
+import { ensureProfile } from '../lib/ensureProfile';
 import { supabase } from '../lib/supabase';
 import { useEffect } from 'react';
 'use client';
 import { Stack } from 'expo-router';
 import { View, Platform } from 'react-native';
 import NavBar from '../components/NavBar';
+import { CartProvider } from '../context/CartContext';
 
 export default function RootLayout() {
 // __ensureUserEffect: keep users/profiles synced with auth
@@ -16,16 +18,22 @@ useEffect(() => {
       if (data?.session) {
         const res = await ensureUser();
         if (!res.ok) console.warn('ensureUser on load:', res.error);
+        // Also ensure profile exists (one-shot for returning users)
+        const profileRes = await ensureProfile();
+        if (!profileRes.ok) console.warn('ensureProfile on load:', profileRes.error);
       }
       const sub = supabase.auth.onAuthStateChange(async (_evt, sess) => {
         if (sess?.user) {
           const res = await ensureUser();
           if (!res.ok) console.warn('ensureUser on change:', res.error);
+          // Ensure profile on auth state change
+          const profileRes = await ensureProfile();
+          if (!profileRes.ok) console.warn('ensureProfile on change:', profileRes.error);
         }
       });
       unsub = sub?.data?.subscription?.unsubscribe?.bind(sub?.data?.subscription);
     } catch (e:any) {
-      console.warn('ensureUser effect error:', e?.message || e);
+      console.warn('ensureUser/ensureProfile effect error:', e?.message || e);
     }
   })();
   return () => { try { unsub?.(); } catch {} };
@@ -62,13 +70,15 @@ useEffect(() => {
   }, []);
 
   return (
-    <View style={{ flex: 1 }}>
-      <NavBar />
-      <Stack
-        screenOptions={{
-          headerShown: false, // hide expo-router's default headers
-        }}
-      />
-    </View>
+    <CartProvider>
+      <View style={{ flex: 1 }}>
+        <NavBar />
+        <Stack
+          screenOptions={{
+            headerShown: false, // hide expo-router's default headers
+          }}
+        />
+      </View>
+    </CartProvider>
   );
 }

@@ -1,27 +1,20 @@
 'use client';
 import { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { supabase } from '../../lib/supabase';
+import { getEmailRedirect } from '../../lib/authRedirect';
 
 export default function MagicLogin() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string|null>(null);
 
-  const redirectTo = (() => {
-    try {
-      if (Platform.OS !== 'web') return undefined as any;
-      const origin = window.location.origin;
-      return `${origin}/auth/callback`;
-    } catch { return undefined as any; }
-  })();
-
   async function sendLink() {
     setErr(null);
     try {
       const { error } = await supabase.auth.signInWithOtp({
         email,
-        options: { emailRedirectTo: redirectTo }
+        options: { emailRedirectTo: getEmailRedirect() }
       });
       if (error) throw error;
       setSent(true);
@@ -53,7 +46,7 @@ export default function MagicLogin() {
             <Text style={{color:'#fff', fontWeight:'800'}}>Send login link</Text>
           </TouchableOpacity>
           <Text style={{color:'#94a3b8', fontSize:12, textAlign:'center', maxWidth:360}}>
-            Make sure your Supabase Auth “Redirect URLs” includes {redirectTo || '/auth/callback'}.
+            Make sure your Supabase Auth "Redirect URLs" includes {getEmailRedirect()}.
           </Text>
           {err ? <Text style={{color:'red'}}>{err}</Text> : null}
         </>
