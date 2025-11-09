@@ -5,9 +5,10 @@ import { theme } from "../../lib/theme";
 import { useResponsiveColumns } from "../../utils/responsive";
 import { supabase } from "../../lib/supabase";
 import { Screen } from "../../components/Screen";
-import { getDishRatings, getChefById } from "../../lib/db";
-import type { Dish } from "../../lib/types";
+import { getDishRatings, getChefById, getChefsPaginated } from "../../lib/db";
+import type { Dish, Chef } from "../../lib/types";
 import { safeToFixed, toNumber } from "../../lib/number";
+import ChefCard from "../components/ChefCard";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#17cfa1';
@@ -19,17 +20,20 @@ const BORDER_LIGHT = 'rgba(23, 207, 161, 0.2)';
 
 const LIMIT = 24;
 
-type SortOption = 'rating' | 'alphabetical';
+type TabType = 'dishes' | 'chefs';
 
 export default function BrowsePage() {
   const params = useLocalSearchParams<{ q?: string }>();
+  const [activeTab, setActiveTab] = useState<TabType>('dishes');
   const [dishes, setDishes] = useState<Dish[]>([]);
+  const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishRatings, setDishRatings] = useState<Map<number, { avg: number; count: number }>>(new Map());
   const [chefNames, setChefNames] = useState<Map<number, string>>(new Map());
   const [search, setSearch] = useState(params.q || "");
   const [page, setPage] = useState(1);
+  const [chefsPage, setChefsPage] = useState(1);
   const [loading, setLoading] = useState(true);
-  const [sortBy, setSortBy] = useState<SortOption>('rating');
+  const [chefsLoading, setChefsLoading] = useState(true);
   const { width } = useResponsiveColumns();
   
   // Calculate columns based on width
@@ -43,6 +47,7 @@ export default function BrowsePage() {
 
   // Load dishes
   useEffect(() => {
+    if (activeTab !== 'dishes') return;
     let mounted = true;
     (async () => {
       setLoading(true);
@@ -80,7 +85,7 @@ export default function BrowsePage() {
       const ratingsMap = new Map<number, { avg: number; count: number }>();
       for (const dish of dishesData) {
         const stats = await getDishRatings(dish.id);
-        ratingsMap.set(dish.id, stats);
+        ratingsMap.set(dish.id, { avg: stats.average, count: stats.count });
       }
       setDishRatings(prev => new Map([...prev, ...ratingsMap]));
 
@@ -98,30 +103,63 @@ export default function BrowsePage() {
       setLoading(false);
     })();
     return () => { mounted = false; };
-  }, [page, search]);
+  }, [page, search, activeTab]);
+
+  // Load chefs
+  useEffect(() => {
+    if (activeTab !== 'chefs') return;
+    let mounted = true;
+    (async () => {
+      setChefsLoading(true);
+      const offset = (chefsPage - 1) * LIMIT;
+      
+      const chefsData = await getChefsPaginated({
+        search: search.trim() || undefined,
+        limit: LIMIT,
+        offset,
+      });
+      
+      if (!mounted) return;
+      
+      if (chefsPage === 1) {
+        setChefs(chefsData);
+      } else {
+        setChefs(prev => [...prev, ...chefsData]);
+      }
+
+      setChefsLoading(false);
+    })();
+    return () => { mounted = false; };
+  }, [chefsPage, search, activeTab]);
 
   // Reset page when search changes
   useEffect(() => {
+    if (activeTab === 'dishes') {
+      setPage(1);
+      setDishes([]);
+      setDishRatings(new Map());
+      setChefNames(new Map());
+    } else {
+      setChefsPage(1);
+      setChefs([]);
+    }
+  }, [search, activeTab]);
+
+  // Reset when tab changes
+  useEffect(() => {
     setPage(1);
+    setChefsPage(1);
     setDishes([]);
+    setChefs([]);
     setDishRatings(new Map());
     setChefNames(new Map());
-  }, [search]);
-
-  // Sort dishes
-  const sortedDishes = React.useMemo(() => {
-    const sorted = [...dishes];
-    if (sortBy === 'rating') {
-      sorted.sort((a, b) => {
-        const aRating = toNumber(dishRatings.get(a.id)?.avg, 0);
-        const bRating = toNumber(dishRatings.get(b.id)?.avg, 0);
-        return bRating - aRating;
-      });
-    } else if (sortBy === 'alphabetical') {
-      sorted.sort((a, b) => (a.name || '').localeCompare(b.name || ''));
+    // Trigger loading state for the active tab
+    if (activeTab === 'dishes') {
+      setLoading(true);
+    } else {
+      setChefsLoading(true);
     }
-    return sorted;
-  }, [dishes, sortBy, dishRatings]);
+  }, [activeTab]);
 
   const cardW = width < 640 
     ? width - 48 
@@ -146,7 +184,7 @@ export default function BrowsePage() {
         >
           <Image
             source={{ uri: item.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80" }}
-            style={styles.dishImage}
+            style={StyleSheet.flatten([styles.dishImage])}
             resizeMode="cover"
           />
           <View style={styles.dishCardContent}>
@@ -183,6 +221,26 @@ export default function BrowsePage() {
             </View>
             <Text style={styles.headerSubtitle}>Find your next favorite homemade dish</Text>
 
+          {/* Tabs */}
+          <View style={styles.tabsContainer}>
+            <TouchableOpacity
+              style={StyleSheet.flatten([styles.tab, activeTab === 'dishes' && styles.tabActive])}
+              onPress={() => setActiveTab('dishes')}
+            >
+              <Text style={StyleSheet.flatten([styles.tabText, activeTab === 'dishes' && styles.tabTextActive])}>
+                Dishes
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={StyleSheet.flatten([styles.tab, activeTab === 'chefs' && styles.tabActive])}
+              onPress={() => setActiveTab('chefs')}
+            >
+              <Text style={StyleSheet.flatten([styles.tabText, activeTab === 'chefs' && styles.tabTextActive])}>
+                Chefs
+              </Text>
+            </TouchableOpacity>
+          </View>
+
           {/* Search Bar */}
           <View style={styles.searchContainer}>
             <View style={styles.searchIconContainer}>
@@ -191,117 +249,188 @@ export default function BrowsePage() {
             <TextInput
               value={search}
               onChangeText={setSearch}
-              placeholder="Search for dishes, chefs, or cuisines..."
+              placeholder={activeTab === 'dishes' ? "Search for dishes, chefs, or cuisines..." : "Search for chefs..."}
               placeholderTextColor={TEXT_MUTED}
               style={styles.searchInput}
             />
           </View>
-
-          {/* Sort Buttons */}
-          <View style={styles.sortContainer}>
-            <Text style={StyleSheet.flatten([styles.sortLabel, { marginRight: theme.spacing.sm }])}>Sort by:</Text>
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.sortButton, { marginRight: theme.spacing.sm }, sortBy === 'rating' && styles.sortButtonActive])}
-              onPress={() => setSortBy('rating')}
-            >
-              <Text style={StyleSheet.flatten([styles.sortButtonText, sortBy === 'rating' && styles.sortButtonTextActive])}>
-                Rating (High to Low)
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.sortButton, sortBy === 'alphabetical' && styles.sortButtonActive])}
-              onPress={() => setSortBy('alphabetical')}
-            >
-              <Text style={StyleSheet.flatten([styles.sortButtonText, sortBy === 'alphabetical' && styles.sortButtonTextActive])}>
-                Alphabetically (A-Z)
-              </Text>
-            </TouchableOpacity>
-          </View>
         </View>
 
-        {/* Dishes Grid */}
-        {loading && dishes.length === 0 ? (
-          <View style={styles.loadingContainer}>
-            <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          </View>
-        ) : sortedDishes.length === 0 ? (
-          <View style={styles.emptyContainer}>
-            <Text style={styles.emptyText}>
-              {search ? "No dishes found matching your search." : "No dishes available."}
-            </Text>
-          </View>
+        {/* Content based on active tab */}
+        {activeTab === 'dishes' ? (
+          <>
+            {/* Dishes Grid */}
+            {loading && dishes.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+              </View>
+            ) : dishes.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {search ? "No dishes found matching your search." : "No dishes available."}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                data={dishes}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => <DishCard item={item} />}
+                numColumns={columns}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                onEndReached={() => {
+                  if (!loading && dishes.length >= LIMIT * page) {
+                    setPage(p => p + 1);
+                  }
+                }}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={loading && dishes.length > 0 ? (
+                  <ActivityIndicator size="small" color={PRIMARY_COLOR} style={{ marginVertical: 20 }} />
+                ) : null}
+              />
+            )}
+
+            {/* Pagination for dishes */}
+            {dishes.length > 0 && (
+              <View style={styles.pagination}>
+                <TouchableOpacity
+                  style={StyleSheet.flatten([styles.paginationButton, { marginRight: theme.spacing.xs }])}
+                  onPress={() => setPage(p => Math.max(1, p - 1))}
+                  disabled={page === 1}
+                >
+                  <Text style={styles.paginationIcon}>←</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, page === 1 && styles.paginationPageActive])}
+                  onPress={() => setPage(1)}
+                >
+                  <Text style={StyleSheet.flatten([styles.paginationPageText, page === 1 && styles.paginationPageTextActive])}>1</Text>
+                </TouchableOpacity>
+                {page > 1 && page < 10 && (
+                  <>
+                    <TouchableOpacity
+                      style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, page === 2 && styles.paginationPageActive])}
+                      onPress={() => setPage(2)}
+                    >
+                      <Text style={StyleSheet.flatten([styles.paginationPageText, page === 2 && styles.paginationPageTextActive])}>2</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, page === 3 && styles.paginationPageActive])}
+                      onPress={() => setPage(3)}
+                    >
+                      <Text style={StyleSheet.flatten([styles.paginationPageText, page === 3 && styles.paginationPageTextActive])}>3</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {page < 10 && (
+                  <TouchableOpacity
+                    style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }])}
+                    onPress={() => setPage(10)}
+                  >
+                    <Text style={styles.paginationPageText}>10</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.paginationButton}
+                  onPress={() => setPage(p => p + 1)}
+                  disabled={loading || dishes.length < LIMIT * page}
+                >
+                  <Text style={styles.paginationIcon}>→</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         ) : (
-          <FlatList
-            style={styles.list}
-            contentContainerStyle={styles.listContent}
-            data={sortedDishes}
-            keyExtractor={(item) => String(item.id)}
-            renderItem={({ item }) => <DishCard item={item} />}
-            numColumns={columns}
-            showsVerticalScrollIndicator={false}
-            keyboardShouldPersistTaps="handled"
-            nestedScrollEnabled
-            onEndReached={() => {
-              if (!loading && dishes.length >= LIMIT * page) {
-                setPage(p => p + 1);
-              }
-            }}
-            onEndReachedThreshold={0.5}
-            ListFooterComponent={loading ? (
-              <ActivityIndicator size="small" color={PRIMARY_COLOR} style={{ marginVertical: 20 }} />
-            ) : null}
-          />
+          <>
+            {/* Chefs Grid */}
+            {chefsLoading && chefs.length === 0 ? (
+              <View style={styles.loadingContainer}>
+                <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+              </View>
+            ) : chefs.length === 0 ? (
+              <View style={styles.emptyContainer}>
+                <Text style={styles.emptyText}>
+                  {search ? "No chefs found matching your search." : "No chefs available."}
+                </Text>
+              </View>
+            ) : (
+              <FlatList
+                style={styles.list}
+                contentContainerStyle={styles.listContent}
+                data={chefs}
+                keyExtractor={(item) => String(item.id)}
+                renderItem={({ item }) => <ChefCard chef={item} />}
+                numColumns={columns}
+                showsVerticalScrollIndicator={false}
+                keyboardShouldPersistTaps="handled"
+                nestedScrollEnabled
+                onEndReached={() => {
+                  if (!chefsLoading && chefs.length >= LIMIT * chefsPage) {
+                    setChefsPage(p => p + 1);
+                  }
+                }}
+                onEndReachedThreshold={0.5}
+                ListFooterComponent={chefsLoading ? (
+                  <ActivityIndicator size="small" color={PRIMARY_COLOR} style={{ marginVertical: 20 }} />
+                ) : null}
+              />
+            )}
+
+            {/* Pagination for chefs */}
+            {chefs.length > 0 && (
+              <View style={styles.pagination}>
+                <TouchableOpacity
+                  style={StyleSheet.flatten([styles.paginationButton, { marginRight: theme.spacing.xs }])}
+                  onPress={() => setChefsPage(p => Math.max(1, p - 1))}
+                  disabled={chefsPage === 1}
+                >
+                  <Text style={styles.paginationIcon}>←</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, chefsPage === 1 && styles.paginationPageActive])}
+                  onPress={() => setChefsPage(1)}
+                >
+                  <Text style={StyleSheet.flatten([styles.paginationPageText, chefsPage === 1 && styles.paginationPageTextActive])}>1</Text>
+                </TouchableOpacity>
+                {chefsPage > 1 && chefsPage < 10 && (
+                  <>
+                    <TouchableOpacity
+                      style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, chefsPage === 2 && styles.paginationPageActive])}
+                      onPress={() => setChefsPage(2)}
+                    >
+                      <Text style={StyleSheet.flatten([styles.paginationPageText, chefsPage === 2 && styles.paginationPageTextActive])}>2</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, chefsPage === 3 && styles.paginationPageActive])}
+                      onPress={() => setChefsPage(3)}
+                    >
+                      <Text style={StyleSheet.flatten([styles.paginationPageText, chefsPage === 3 && styles.paginationPageTextActive])}>3</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+                {chefsPage < 10 && (
+                  <TouchableOpacity
+                    style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }])}
+                    onPress={() => setChefsPage(10)}
+                  >
+                    <Text style={styles.paginationPageText}>10</Text>
+                  </TouchableOpacity>
+                )}
+                <TouchableOpacity
+                  style={styles.paginationButton}
+                  onPress={() => setChefsPage(p => p + 1)}
+                  disabled={chefsLoading || chefs.length < LIMIT * chefsPage}
+                >
+                  <Text style={styles.paginationIcon}>→</Text>
+                </TouchableOpacity>
+              </View>
+            )}
+          </>
         )}
 
-        {/* Pagination */}
-        {dishes.length > 0 && (
-          <View style={styles.pagination}>
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.paginationButton, { marginRight: theme.spacing.xs }])}
-              onPress={() => setPage(p => Math.max(1, p - 1))}
-              disabled={page === 1}
-            >
-              <Text style={styles.paginationIcon}>←</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, page === 1 && styles.paginationPageActive])}
-              onPress={() => setPage(1)}
-            >
-              <Text style={StyleSheet.flatten([styles.paginationPageText, page === 1 && styles.paginationPageTextActive])}>1</Text>
-            </TouchableOpacity>
-            {page > 1 && page < 10 && (
-              <>
-                <TouchableOpacity
-                  style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, page === 2 && styles.paginationPageActive])}
-                  onPress={() => setPage(2)}
-                >
-                  <Text style={StyleSheet.flatten([styles.paginationPageText, page === 2 && styles.paginationPageTextActive])}>2</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }, page === 3 && styles.paginationPageActive])}
-                  onPress={() => setPage(3)}
-                >
-                  <Text style={StyleSheet.flatten([styles.paginationPageText, page === 3 && styles.paginationPageTextActive])}>3</Text>
-                </TouchableOpacity>
-              </>
-            )}
-            {page < 10 && (
-              <TouchableOpacity
-                style={StyleSheet.flatten([styles.paginationPage, { marginRight: theme.spacing.xs }])}
-                onPress={() => setPage(10)}
-              >
-                <Text style={styles.paginationPageText}>10</Text>
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.paginationButton}
-              onPress={() => setPage(p => p + 1)}
-              disabled={loading || dishes.length < LIMIT * page}
-            >
-              <Text style={styles.paginationIcon}>→</Text>
-            </TouchableOpacity>
-          </View>
-        )}
       </View>
     </Screen>
   );
@@ -331,7 +460,7 @@ const styles = StyleSheet.create({
   headerTitle: {
     color: TEXT_DARK,
     fontSize: 36,
-    fontWeight: theme.typography.fontWeight.black,
+    fontWeight: theme.typography.fontWeight.black as any,
     lineHeight: 36 * 1.2,
     letterSpacing: -0.033,
     textAlign: 'center',
@@ -339,8 +468,37 @@ const styles = StyleSheet.create({
   headerSubtitle: {
     color: TEXT_GRAY,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.normal,
+    fontWeight: theme.typography.fontWeight.normal as any,
     textAlign: 'center',
+  },
+  tabsContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  tab: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    backgroundColor: 'rgba(23, 207, 161, 0.2)',
+    minWidth: 120,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  tabActive: {
+    backgroundColor: PRIMARY_COLOR,
+  },
+  tabText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+  },
+  tabTextActive: {
+    color: TEXT_DARK,
+    fontWeight: theme.typography.fontWeight.extrabold as any,
   },
   searchContainer: {
     width: '100%',
@@ -369,36 +527,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingVertical: theme.spacing.sm,
   },
-  sortContainer: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  sortLabel: {
-    color: TEXT_GRAY,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-  },
-  sortButton: {
-    height: 36,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.radius.lg,
-    backgroundColor: 'rgba(23, 207, 161, 0.2)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  sortButtonActive: {
-    backgroundColor: PRIMARY_COLOR,
-  },
-  sortButtonText: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
-  },
-  sortButtonTextActive: {
-    color: TEXT_DARK,
-  },
   list: {
     flex: 1,
   },
@@ -419,29 +547,21 @@ const styles = StyleSheet.create({
   },
   dishImage: {
     width: '100%',
-    height: undefined,
-    ...Platform.select({
-      web: {
-        aspectRatio: '16/9',
-      },
-      default: {
-        aspectRatio: 16 / 9,
-      },
-    }),
-  },
+    aspectRatio: 16 / 9,
+  } as any,
   dishCardContent: {
     padding: theme.spacing.md,
   },
   dishName: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
     marginBottom: theme.spacing.xs,
   },
   dishInfo: {
     color: TEXT_GRAY,
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.normal,
+    fontWeight: theme.typography.fontWeight.normal as any,
     marginBottom: theme.spacing.xs / 2,
   },
   ratingContainer: {
@@ -505,10 +625,10 @@ const styles = StyleSheet.create({
   paginationPageText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.normal,
+    fontWeight: theme.typography.fontWeight.normal as any,
   },
   paginationPageTextActive: {
     color: TEXT_DARK,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
 });

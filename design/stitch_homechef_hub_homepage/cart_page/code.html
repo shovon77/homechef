@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HomeChef - Your Cart</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Work+Sans:wght@400;500;600;700;800;900&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#17cfa1",
+              "background-light": "#f8fcfb",
+              "background-dark": "#11211d",
+            },
+            fontFamily: {
+              "display": ["Work Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-[#0e1b18] dark:text-gray-200">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<!-- TopNavBar -->
+<header class="sticky top-0 z-50 bg-background-light/80 dark:bg-background-dark/80 backdrop-blur-sm border-b border-solid border-b-[#e7f3f0] dark:border-b-gray-800">
+<div class="container mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex items-center justify-between whitespace-nowrap h-16">
+<div class="flex items-center gap-4 text-[#0e1b18] dark:text-white">
+<div class="text-primary size-7">
+<svg fill="none" viewbox="0 0 48 48" xmlns="http://www.w3.org/2000/svg">
+<path d="M13.8261 30.5736C16.7203 29.8826 20.2244 29.4783 24 29.4783C27.7756 29.4783 31.2797 29.8826 34.1739 30.5736C36.9144 31.2278 39.9967 32.7669 41.3563 33.8352L24.8486 7.36089C24.4571 6.73303 23.5429 6.73303 23.1514 7.36089L6.64374 33.8352C8.00331 32.7669 11.0856 31.2278 13.8261 30.5736Z" fill="currentColor"></path>
+<path clip-rule="evenodd" d="M39.998 35.764C39.9944 35.7463 39.9875 35.7155 39.9748 35.6706C39.9436 35.5601 39.8949 35.4259 39.8346 35.2825C39.8168 35.2403 39.7989 35.1993 39.7813 35.1602C38.5103 34.2887 35.9788 33.0607 33.7095 32.5189C30.9875 31.8691 27.6413 31.4783 24 31.4783C20.3587 31.4783 17.0125 31.8691 14.2905 32.5189C12.0012 33.0654 9.44505 34.3104 8.18538 35.1832C8.17384 35.2075 8.16216 35.233 8.15052 35.2592C8.09919 35.3751 8.05721 35.4886 8.02977 35.589C8.00356 35.6848 8.00039 35.7333 8.00004 35.7388C8.00004 35.739 8 35.7393 8.00004 35.7388C8.00004 35.7641 8.0104 36.0767 8.68485 36.6314C9.34546 37.1746 10.4222 37.7531 11.9291 38.2772C14.9242 39.319 19.1919 40 24 40C28.8081 40 33.0758 39.319 36.0709 38.2772C37.5778 37.7531 38.6545 37.1746 39.3151 36.6314C39.9006 36.1499 39.9857 35.8511 39.998 35.764ZM4.95178 32.7688L21.4543 6.30267C22.6288 4.4191 25.3712 4.41909 26.5457 6.30267L43.0534 32.777C43.0709 32.8052 43.0878 32.8338 43.104 32.8629L41.3563 33.8352C43.104 32.8629 43.1038 32.8626 43.104 32.8629L43.1051 32.865L43.1065 32.8675L43.1101 32.8739L43.1199 32.8918C43.1276 32.906 43.1377 32.9246 43.1497 32.9473C43.1738 32.9925 43.2062 33.0545 43.244 33.1299C43.319 33.2792 43.4196 33.489 43.5217 33.7317C43.6901 34.1321 44 34.9311 44 35.7391C44 37.4427 43.003 38.7775 41.8558 39.7209C40.6947 40.6757 39.1354 41.4464 37.385 42.0552C33.8654 43.2794 29.133 44 24 44C18.867 44 14.1346 43.2794 10.615 42.0552C8.86463 41.4464 7.30529 40.6757 6.14419 39.7209C4.99695 38.7775 3.99999 37.4427 3.99999 35.7391C3.99999 34.8725 4.29264 34.0922 4.49321 33.6393C4.60375 33.3898 4.71348 33.1804 4.79687 33.0311C4.83898 32.9556 4.87547 32.8935 4.9035 32.8471C4.91754 32.8238 4.92954 32.8043 4.93916 32.7889L4.94662 32.777L4.95178 32.7688ZM35.9868 29.004L24 9.77997L12.0131 29.004C12.4661 28.8609 12.9179 28.7342 13.3617 28.6282C16.4281 27.8961 20.0901 27.4783 24 27.4783C27.9099 27.4783 31.5719 27.8961 34.6383 28.6282C35.082 28.7342 35.5339 28.8609 35.9868 29.004Z" fill="currentColor" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h2 class="text-[#0e1b18] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">HomeChef</h2>
+</div>
+<div class="hidden lg:flex items-center gap-9 text-[#0e1b18] dark:text-gray-300">
+<a class="text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary" href="#">Home</a>
+<a class="text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary" href="#">Chefs</a>
+<a class="text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary" href="#">Dishes</a>
+<a class="text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary" href="#">About</a>
+</div>
+<div class="flex flex-1 justify-end gap-2 items-center">
+<button class="flex max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 bg-[#e7f3f0] dark:bg-gray-800 text-[#0e1b18] dark:text-white gap-2 text-sm font-bold leading-normal tracking-[0.015em] min-w-0 px-2.5 relative">
+<span class="material-symbols-outlined">shopping_cart</span>
+<span class="absolute -top-1 -right-1 flex h-4 w-4 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">2</span>
+</button>
+<div class="hidden sm:flex gap-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Sign Up</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-[#e7f3f0] dark:bg-gray-800 text-[#0e1b18] dark:text-white text-sm font-bold leading-normal tracking-[0.015em]">
+<span class="truncate">Log In</span>
+</button>
+</div>
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="User profile picture" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCR-2PovfMMyZXGmKQ8rZfog1o4LYs1sWVxIyTula70mYXQ61iUm7bPGAANFyLDOYShNeFqrd8fMnqUYO5Z7JsfBFm71M8Te6TtKaaB1qNz8nWOQXMV3573di083MQrCyRAyGoWrcy6T2chLrjkaANi7tJl8xjSNtD0TJYoD8aUcpW7S_Ybtxr_vyvv4JQ8RFyebbBwMq84LktveEAqhE1wlHfnYZ7rQPj7U05LXDQh3AnCI7pXuW6l9GbkGysYVUkpbtoY7RR-bSQT");'></div>
+</div>
+</div>
+</div>
+</header>
+<!-- Main Content -->
+<main class="layout-container flex h-full grow flex-col">
+<div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8 md:py-12">
+<div class="layout-content-container flex flex-col flex-1">
+<!-- Breadcrumbs -->
+<div class="flex flex-wrap gap-2 pb-6">
+<a class="text-[#4e9785] dark:text-primary/80 text-sm font-medium leading-normal hover:underline" href="#">Home</a>
+<span class="text-[#4e9785] dark:text-primary/80 text-sm font-medium leading-normal">/</span>
+<span class="text-[#0e1b18] dark:text-white text-sm font-medium leading-normal">Cart</span>
+</div>
+<!-- Page Heading -->
+<div class="flex flex-wrap justify-between gap-3 pb-8">
+<p class="text-[#0e1b18] dark:text-white text-4xl font-black leading-tight tracking-[-0.033em] min-w-72">Your Cart</p>
+</div>
+<div class="grid grid-cols-1 lg:grid-cols-3 gap-8 xl:gap-12 items-start">
+<!-- Cart Items Column -->
+<div class="lg:col-span-2 flex flex-col gap-4">
+<div class="flex flex-col bg-white dark:bg-background-dark/50 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 divide-y divide-gray-200 dark:divide-gray-800">
+<!-- ListItem 1 -->
+<div class="flex flex-col sm:flex-row gap-4 px-5 py-4 justify-between items-start">
+<div class="flex items-start gap-4 w-full">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-24 shrink-0" data-alt="Classic Spaghetti Bolognese" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAQgxi2pOPPMF9wXlnC_ZYLlTAJVds-qigMo-UQMXU-DsN59BQqGHjS8v-EuWh-19WuG-5YNf3lqYHbUAtD7R_DHKWhmpoKubDiQVnzgmfvAVqdWLav_kk0C5afK2cFaP9-DRHRJ6hz77DGkvCBlAGVT_mZb1PTdRekODfcnMSSZ_mJ89iqOHp0K4CjjwtiFyUBv7QY-ijDDJ8xpCTl9ofGsFlk-D8G1dcS9WK-Ayu_CA-oyMFbo8g47SUCG53tCByc5T1NuMmckuXs");'></div>
+<div class="flex flex-1 flex-col justify-center gap-1">
+<p class="text-[#0e1b18] dark:text-white text-base font-medium leading-normal">Classic Spaghetti Bolognese</p>
+<p class="text-[#4e9785] dark:text-gray-400 text-sm font-normal leading-normal">By Chef Anna Rossi</p>
+<p class="text-[#0e1b18] dark:text-white text-sm font-bold leading-normal sm:hidden">$14.99</p>
+</div>
+</div>
+<div class="flex sm:flex-col justify-between items-end w-full sm:w-auto sm:gap-2">
+<p class="text-[#0e1b18] dark:text-white text-base font-bold leading-normal hidden sm:block">$14.99</p>
+<div class="flex items-center gap-2 text-[#0e1b18] dark:text-white">
+<button class="text-base font-medium leading-normal flex h-7 w-7 items-center justify-center rounded-full bg-[#e7f3f0] dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700">-</button>
+<input aria-label="Quantity" class="text-base font-medium leading-normal w-6 p-0 text-center bg-transparent focus:outline-0 focus:ring-0 focus:border-none border-none [appearance:textfield] [&amp;::-webkit-inner-spin-button]:appearance-none [&amp;::-webkit-outer-spin-button]:appearance-none" type="number" value="1"/>
+<button class="text-base font-medium leading-normal flex h-7 w-7 items-center justify-center rounded-full bg-[#e7f3f0] dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700">+</button>
+<button class="text-[#4e9785] dark:text-gray-400 hover:text-red-500 dark:hover:text-red-500 ml-2">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+</div>
+</div>
+<!-- ListItem 2 -->
+<div class="flex flex-col sm:flex-row gap-4 px-5 py-4 justify-between items-start">
+<div class="flex items-start gap-4 w-full">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-lg size-24 shrink-0" data-alt="Garden Fresh Salad" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuB0HJ_Xz7HpzYUaEly4xgvN64qe5hcnvFFFa2HEGTnZpviFDkzTtV0v9i6bvsMyPaDucgxqCqzL7Mtbr8rv9O3lK4k_IvKMros4B6UmFXyec0It5L4z3FUdkzfraM7qrAix8a-DegnuIuB9dB03E-5Lg4N7Q4Xm9Nbvi2CcpK4TY9emTF31CNtIoSHhdTZmcW5iGSfNIqAkohi9DX5T9u2mbVV0fjeI8eVvjvOp8SvRs4MH6QZjqeI3c0gH2Dx1WcICx_pHQybfLiA6");'></div>
+<div class="flex flex-1 flex-col justify-center gap-1">
+<p class="text-[#0e1b18] dark:text-white text-base font-medium leading-normal">Garden Fresh Salad</p>
+<p class="text-[#4e9785] dark:text-gray-400 text-sm font-normal leading-normal">By Chef Marco Bianchi</p>
+<p class="text-[#0e1b18] dark:text-white text-sm font-bold leading-normal sm:hidden">$8.50</p>
+</div>
+</div>
+<div class="flex sm:flex-col justify-between items-end w-full sm:w-auto sm:gap-2">
+<p class="text-[#0e1b18] dark:text-white text-base font-bold leading-normal hidden sm:block">$8.50</p>
+<div class="flex items-center gap-2 text-[#0e1b18] dark:text-white">
+<button class="text-base font-medium leading-normal flex h-7 w-7 items-center justify-center rounded-full bg-[#e7f3f0] dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700">-</button>
+<input aria-label="Quantity" class="text-base font-medium leading-normal w-6 p-0 text-center bg-transparent focus:outline-0 focus:ring-0 focus:border-none border-none [appearance:textfield] [&amp;::-webkit-inner-spin-button]:appearance-none [&amp;::-webkit-outer-spin-button]:appearance-none" type="number" value="2"/>
+<button class="text-base font-medium leading-normal flex h-7 w-7 items-center justify-center rounded-full bg-[#e7f3f0] dark:bg-gray-800 cursor-pointer hover:bg-gray-200 dark:hover:bg-gray-700">+</button>
+<button class="text-[#4e9785] dark:text-gray-400 hover:text-red-500 dark:hover:text-red-500 ml-2">
+<span class="material-symbols-outlined">delete</span>
+</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+<!-- Order Summary Column -->
+<aside class="lg:col-span-1 w-full">
+<div class="sticky top-24">
+<div class="bg-white dark:bg-background-dark/50 p-6 rounded-lg shadow-sm border border-gray-200 dark:border-gray-800 flex flex-col gap-4">
+<h3 class="text-xl font-bold text-[#0e1b18] dark:text-white">Order Summary</h3>
+<div class="flex flex-col gap-3">
+<div class="flex justify-between text-[#4e9785] dark:text-gray-400">
+<span>Subtotal</span>
+<span class="text-[#0e1b18] dark:text-gray-200">$31.99</span>
+</div>
+<div class="flex justify-between text-[#4e9785] dark:text-gray-400">
+<span>Delivery Fee</span>
+<span class="text-[#0e1b18] dark:text-gray-200">$5.00</span>
+</div>
+</div>
+<hr class="border-gray-200 dark:border-gray-800"/>
+<div class="flex justify-between items-center font-bold text-lg text-[#0e1b18] dark:text-white">
+<span>Total</span>
+<span>$36.99</span>
+</div>
+<button class="w-full flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-4 bg-primary text-white text-base font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors">
+<span class="truncate">Proceed to Checkout</span>
+</button>
+</div>
+</div>
+</aside>
+</div>
+<!-- Empty Cart State -->
+<!-- <div class="text-center py-20 border-2 border-dashed border-gray-300 dark:border-gray-700 rounded-lg">
+                        <div class="flex justify-center mb-4">
+                            <div class="bg-[#e7f3f0] dark:bg-gray-800 p-5 rounded-full text-primary">
+                                 <svg xmlns="http://www.w3.org/2000/svg" class="h-16 w-16" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M3 3h2l.4 2M7 13h10l4-8H5.4M7 13L5.4 5M7 13l-2.293 2.293c-.63.63-.184 1.707.707 1.707H17m0 0a2 2 0 100 4 2 2 0 000-4zm-8 2a2 2 0 11-4 0 2 2 0 014 0z" /></svg>
+                            </div>
+                        </div>
+                        <h2 class="text-2xl font-bold text-[#0e1b18] dark:text-white mb-2">Your Cart is Empty</h2>
+                        <p class="text-[#4e9785] dark:text-gray-400 mb-6">Looks like you haven't added any dishes yet. Let's find something delicious!</p>
+                        <button class="flex mx-auto min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-6 bg-primary text-white text-base font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors">
+                            <span class="truncate">Find a Meal</span>
+                        </button>
+                    </div> -->
+</div>
+</div>
+</main>
+</div>
+</body></html>

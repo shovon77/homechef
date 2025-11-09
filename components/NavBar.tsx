@@ -83,9 +83,9 @@ export default function NavBar() {
               </>
             ) : (
               <>
-                <Link href="/signup" asChild>
+                <Link href="/auth/chef" asChild>
                   <TouchableOpacity style={{ paddingVertical:8, paddingHorizontal:12, borderRadius:10, backgroundColor: theme.colors.primary }}>
-                    <Text style={{ color: theme.colors.onPrimary, fontWeight:'800' }}>Sign up</Text>
+                    <Text style={{ color: theme.colors.onPrimary, fontWeight:'800' }}>Sign up as a Chef</Text>
                   </TouchableOpacity>
                 </Link>
                 <Link href="/auth" asChild>
