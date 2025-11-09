@@ -1,6 +1,6 @@
 import React from 'react';
 import { SafeAreaView, View, ScrollView, StyleProp, ViewStyle } from 'react-native';
-import { theme } from '../constants/theme';
+import { theme } from '../lib/theme';
 
 type ScreenProps = {
   children: React.ReactNode;
@@ -24,7 +24,7 @@ export function Screen({
   scrollViewProps = {}
 }: ScreenProps) {
   const containerStyle: StyleProp<ViewStyle> = [
-    { flex: 1, backgroundColor: theme.colors.surface },
+    { flex: 1, backgroundColor: theme.colors.background },
     style,
   ];
 

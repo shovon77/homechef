@@ -1,40 +1,25 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, ScrollView, TouchableOpacity, Platform, TextInput, Alert } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { View, Text, Image, ScrollView, TouchableOpacity, Platform, TextInput, Alert, StyleSheet } from 'react-native';
+import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
-import { formatPhone } from '../../lib/formatPhone';
-import { Tabs } from '../../components/Tabs';
 import { useCart } from '../../context/CartContext';
-import { getChefById, getDishesByChefId, getChefReviews } from '../../lib/db';
+import { getChefById, getDishesByChefId } from '../../lib/db';
 import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../lib/reviews';
 import { useRole } from '../../hooks/useRole';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
+import { Screen } from '../../components/Screen';
+import { theme, elev } from '../../lib/theme';
 
-/** Color tokens aligned with homepage */
-const C = {
-  pageBg:    '#08150E',
-  panelBg:   '#0F2418',
-  cardBg:    '#12301F',
-  border:    '#1d4d35',
-  text:      '#e7f3ec',
-  subtext:   '#b8d2c6',
-  accent:    '#fbbf24',  // gold
-  link:      '#0ea5e9',
-};
-
-function StarRow({ value=0 }:{ value?: number }) {
-  const full = Math.max(0, Math.min(5, Math.floor(value)));
-  const half = value - full >= 0.5 ? 1 : 0;
-  const empty = 5 - full - half;
-  return (
-    <View style={{ flexDirection:'row', alignItems:'center' }}>
-      {Array.from({length:full}).map((_,i)=><Text key={'f'+i} style={{color: C.accent, fontSize:16, marginRight:2}}>★</Text>)}
-      {half ? <Text style={{color: C.accent, fontSize:16, marginRight:2}}>⯪</Text> : null}
-      {Array.from({length:empty}).map((_,i)=><Text key={'e'+i} style={{color: '#5b7b6e', fontSize:16, marginRight:2}}>☆</Text>)}
-    </View>
-  );
-}
+// Colors from HTML design
+const PRIMARY_COLOR = '#19e680';
+const BACKGROUND_LIGHT = '#f6f8f7';
+const TEXT_DARK = '#18181b'; // zinc-900
+const TEXT_MUTED = '#71717a'; // zinc-500
+const TEXT_MUTED_DARK = '#52525b'; // zinc-600
+const BORDER_LIGHT = '#e4e4e7'; // zinc-200
+const BORDER_DARK = '#3f3f46'; // zinc-700
+const STAR_COLOR = '#ffb700'; // yellow-500
 
 export default function ChefDetailView() {
   const router = useRouter();
@@ -52,6 +37,7 @@ export default function ChefDetailView() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [reviews, setReviews] = useState<ChefReview[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<'dishes' | 'reviews'>('dishes');
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
@@ -63,7 +49,6 @@ export default function ChefDetailView() {
     if (Number.isFinite(numericFromAny) && numericFromAny > 0) {
       setChefId(numericFromAny);
     } else {
-      // default to first chef if route was malformed
       setChefId(1);
     }
   }, [raw]);
@@ -72,7 +57,6 @@ export default function ChefDetailView() {
     if (!chefId) return;
     (async () => {
       try {
-        // Use db helpers
         const chefData = await getChefById(chefId);
         if (!chefData) {
           setError('Chef not found');
@@ -80,11 +64,9 @@ export default function ChefDetailView() {
         }
         setChef(chefData);
 
-        // Get dishes using db helper (handles chef_id fallback automatically)
         const dishesData = await getDishesByChefId(chefId);
         setDishes(dishesData);
 
-        // Get reviews using reviews helper
         const reviewsData = await getChefReviewsHelper(chefId);
         setReviews(reviewsData);
       } catch (e:any) {
@@ -93,66 +75,13 @@ export default function ChefDetailView() {
     })();
   }, [chefId]);
 
-  const avatar = chef?.photo || '';
-  const title  = chef?.name || (chefId ? `Chef #${chefId}` : 'Chef');
-  const bio    = chef?.bio ?? chef?.description ?? '';
-
-  const reelUrls = useMemo(() => {
-    try {
-      if (chef?.reels_json) {
-        const parsed = JSON.parse(String(chef.reels_json));
-        if (Array.isArray(parsed)) return parsed.filter(Boolean).slice(0,6);
-      }
-    } catch {}
-    const list = (chef?.reels || '')
-      .split(',')
-      .map(s=>s.trim())
-      .filter(Boolean);
-    if (chef?.youtube_url) list.unshift(chef.youtube_url);
-    return list.slice(0,6);
-  }, [chef?.reels, chef?.reels_json, chef?.youtube_url]);
-
-  const Header = (
-    <View style={{
-      backgroundColor: C.cardBg,
-      borderWidth:1, borderColor: C.border,
-      borderRadius:16, padding:14, gap:12
-    }}>
-      <View style={{ flexDirection:'row', gap:16, alignItems:'center', flexWrap:'wrap' }}>
-        <View style={{ width:140, height:140, borderRadius:12, overflow:'hidden', backgroundColor:'#061009', alignItems:'center', justifyContent:'center' }}>
-          {avatar ? <Image source={{ uri: avatar }} style={{ width:'100%', height:'100%' }} /> : (
-            <Text style={{ color:'#6c8f81' }}>No photo</Text>
-          )}
-        </View>
-        <View style={{ flex:1, minWidth:220, gap:6 }}>
-          <Text style={{ color:C.text, fontSize:24, fontWeight:'900' }}>{title}</Text>
-          {chef?.location ? <Text style={{ color:C.subtext }}>{chef.location}</Text> : null}
-          {chef?.phone ? <Text style={{ color:C.subtext }}>{formatPhone(chef.phone)}</Text> : null}
-          <View style={{ flexDirection:'row', alignItems:'center', gap:8, marginTop:4 }}>
-            <StarRow value={Number(chef?.avg_rating ?? 0)} />
-            <Text style={{ color:C.subtext }}>{Number(chef?.avg_rating ?? 0).toFixed(1)}</Text>
-          </View>
-        </View>
-      </View>
-
-      {bio ? <Text style={{ color:C.text, lineHeight:20 }}>{bio}</Text> : null}
-
-      {/* Social placeholders */}
-      <View style={{ flexDirection:'row', gap:10, flexWrap:'wrap', marginTop:4 }}>
-        <TouchableOpacity
-          onPress={()=>{ try { if (Platform.OS==='web' && chef?.instagram) window.open(chef.instagram,'_blank'); } catch {} }}
-          style={{ backgroundColor:'#1a3d2b', borderWidth:1, borderColor:C.border, paddingVertical:6, paddingHorizontal:10, borderRadius:8 }}>
-          <Text style={{ color:'#fff', fontWeight:'800' }}>Instagram</Text>
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          onPress={()=>{ try { if (Platform.OS==='web' && chef?.facebook) window.open(chef.facebook,'_blank'); } catch {} }}
-          style={{ backgroundColor:'#1a3d2b', borderWidth:1, borderColor:C.border, paddingVertical:6, paddingHorizontal:10, borderRadius:8 }}>
-          <Text style={{ color:'#fff', fontWeight:'800' }}>Facebook</Text>
-        </TouchableOpacity>
-      </View>
-    </View>
-  );
+  const avatar = chef?.photo || chef?.avatar || '';
+  const title = chef?.name || (chefId ? `Chef #${chefId}` : 'Chef');
+  const location = chef?.location || '';
+  const bio = chef?.bio ?? chef?.description ?? '';
+  const avgRating = Number(chef?.avg_rating ?? 0);
+  const reviewCount = reviews.length;
+  const dishCount = dishes.length;
 
   function handleAddToCart(d: Dish) {
     const img = d.image || d.thumbnail || '';
@@ -162,53 +91,12 @@ export default function ChefDetailView() {
       price: d.price ?? 0, 
       quantity: 1, 
       image: img,
-      chef_id: chefId, // Use current chef's ID for single-chef constraint
+      chef_id: chefId,
     });
     if (result.success) {
-      console.log('Added to cart:', { id: d.id, name: d.name });
+      Alert.alert("Success", "Added to cart!");
     }
-    // Alert already shown by CartContext if blocked
   }
-
-  const DishesTab = (
-    <View style={{ gap:12 }}>
-      {dishes.length === 0 ? (
-        <Text style={{ color:C.subtext }}>No dishes yet.</Text>
-      ) : (
-        <View style={{ flexDirection:'row', flexWrap:'wrap', gap:12 }}>
-          {dishes.map(d => {
-            const img = d.image || d.thumbnail || '';
-            return (
-              <View key={d.id} style={{
-                width:220, backgroundColor:C.cardBg,
-                borderWidth:1, borderColor:C.border,
-                borderRadius:12, overflow:'hidden'
-              }}>
-                {/* Clickable area goes to dish detail */}
-                <TouchableOpacity
-                  onPress={() => router.push(`/dish/${d.id}`)}
-                  style={{ width:'100%', height:140, backgroundColor:'#0a1a13', alignItems:'center', justifyContent:'center' }}>
-                  {img ? <Image source={{ uri: img }} style={{ width:'100%', height:'100%' }} /> : <Text style={{ color:'#6c8f81' }}>No image</Text>}
-                </TouchableOpacity>
-
-                <View style={{ padding:10, gap:6 }}>
-                  <Text style={{ color:C.text, fontWeight:'800' }} numberOfLines={1}>{d.name || ('Dish #' + d.id)}</Text>
-                  <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
-                    <Text style={{ color:C.accent }}>{d.price != null ? `$${Number(d.price).toFixed(2)}` : ''}</Text>
-                    <TouchableOpacity
-                      onPress={() => handleAddToCart(d)}
-                      style={{ backgroundColor:'#0ea5e9', paddingVertical:6, paddingHorizontal:10, borderRadius:8 }}>
-                      <Text style={{ color:'#fff', fontWeight:'800' }}>Add to cart</Text>
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </View>
-  );
 
   async function handleSubmitReview() {
     if (!chefId || !user) {
@@ -229,11 +117,9 @@ export default function ChefDetailView() {
         comment: reviewComment.trim() || undefined,
       });
 
-      // Refresh reviews list
       const updatedReviews = await getChefReviewsHelper(chefId);
       setReviews(updatedReviews);
 
-      // Reset form
       setReviewRating(5);
       setReviewComment("");
       Alert.alert("Success", "Review submitted successfully!");
@@ -244,145 +130,701 @@ export default function ChefDetailView() {
     }
   }
 
-  const ReviewsTab = (
-    <View style={{ gap:16 }}>
-      {/* Review form for signed-in users */}
-      {user && (
-        <View style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, padding:14, gap:12 }}>
-          <Text style={{ color:C.text, fontWeight:'800', fontSize:16 }}>Leave a Review</Text>
-          <View style={{ gap:8 }}>
-            <Text style={{ color:C.subtext, fontSize:14 }}>Rating</Text>
-            <View style={{ flexDirection:'row', gap:8 }}>
-              {[1, 2, 3, 4, 5].map(star => (
-                <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
-                  <Text style={{ fontSize:24, color: star <= reviewRating ? C.accent : '#5b7b6e' }}>★</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-          <View style={{ gap:8 }}>
-            <Text style={{ color:C.subtext, fontSize:14 }}>Comment (optional)</Text>
-            <TextInput
-              value={reviewComment}
-              onChangeText={setReviewComment}
-              placeholder="Share your experience..."
-              placeholderTextColor={C.subtext}
-              multiline
-              numberOfLines={3}
-              style={{
-                backgroundColor:'rgba(255,255,255,0.05)',
-                borderWidth:1,
-                borderColor:C.border,
-                borderRadius:8,
-                padding:10,
-                color:C.text,
-                fontSize:14,
-                minHeight:80,
-                textAlignVertical:'top',
-              }}
-            />
-          </View>
-          <TouchableOpacity
-            onPress={handleSubmitReview}
-            disabled={submittingReview}
-            style={{
-              backgroundColor:submittingReview ? 'rgba(229, 57, 53, 0.5)' : '#0ea5e9',
-              paddingVertical:12,
-              borderRadius:8,
-              opacity: submittingReview ? 0.7 : 1,
-            }}
-          >
-            <Text style={{ color:'#fff', fontWeight:'800', textAlign:'center' }}>
-              {submittingReview ? 'Submitting...' : 'Submit Review'}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      {/* Reviews list */}
-      {reviews.length === 0 ? (
-        <Text style={{ color:C.subtext }}>No reviews yet.</Text>
-      ) : (
-        <View style={{ gap:10 }}>
-          {reviews.map(r => (
-            <View key={r.id} style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, padding:10 }}>
-              <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
-                <StarRow value={r.rating} />
-                <Text style={{ color:C.subtext, fontWeight:'700' }}>{r.rating.toFixed(1)}</Text>
-                {r.user_name ? <Text style={{ color:'#88a79a' }}>· {r.user_name}</Text> : null}
-                {r.created_at ? <Text style={{ color:'#6f8d81', marginLeft:6, fontSize:12 }}>{new Date(r.created_at).toLocaleDateString()}</Text> : null}
-              </View>
-              {r.comment ? <Text style={{ color:C.text, marginTop:6 }}>{r.comment}</Text> : null}
-            </View>
-          ))}
-        </View>
-      )}
-    </View>
-  );
-
-  const CookingTab = (
-    <View style={{ gap:12 }}>
-      <Text style={{ color:C.subtext }}>
-        Drop your YouTube URL or Instagram Reel in Supabase fields: <Text style={{ color:C.link }}>youtube_url</Text>, <Text style={{ color:C.link }}>reels</Text> or <Text style={{ color:C.link }}>reels_json</Text>.
-      </Text>
-      {Platform.OS === 'web' ? (
-        <View style={{ gap:12 }}>
-          {reelUrls.length === 0 ? (
-            <View style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, padding:12 }}>
-              <Text style={{ color:'#88a79a' }}>No video yet. Add a URL to show it here.</Text>
-            </View>
-          ) : reelUrls.map((u, i) => (
-            <View key={i} style={{ backgroundColor:C.cardBg, borderWidth:1, borderColor:C.border, borderRadius:12, overflow:'hidden' }}>
-              <iframe
-                src={u}
-                style={{ width:'100%', height:360, border:'0' } as any}
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-                allowFullScreen
-              />
-            </View>
-          ))}
-        </View>
-      ) : (
-        <Text style={{ color:C.subtext }}>Video embed preview is web-only. On native, open links in a WebView.</Text>
-      )}
-    </View>
-  );
-
   if (error) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
-        <Text style={{ color:'tomato' }}>Error: {error}</Text>
-      </View>
+      <Screen>
+        <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+          <Text style={{ color:'tomato' }}>Error: {error}</Text>
+        </View>
+      </Screen>
     );
   }
   if (!chefId || !chef) {
     return (
-      <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
-        <Text style={{ color:C.subtext }}>Loading chef…</Text>
-      </View>
+      <Screen>
+        <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
+          <Text style={{ color:TEXT_MUTED }}>Loading chef…</Text>
+        </View>
+      </Screen>
     );
   }
 
   return (
-    <ScrollView 
-      style={{ flex: 1, backgroundColor: C.pageBg }}
-      keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ paddingBottom: 32 }}
-    >
-      <View style={{ width:'100%', maxWidth:1024, alignSelf: 'center', backgroundColor:C.panelBg, borderRadius:16, padding:16, gap:16, borderWidth:1, borderColor:C.border, margin:20 }}>
-        {/* Header stays visible regardless of active tab */}
-        {Header}
+    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
+      <View style={styles.container}>
+        <View style={styles.layout}>
+          {/* Left Sidebar - Sticky */}
+          <View style={styles.sidebar}>
+            <View style={styles.sidebarCard}>
+              {/* Profile Card */}
+              <View style={styles.profileSection}>
+                <View style={styles.profileHeader}>
+                  <View style={styles.avatarContainer}>
+                    {avatar ? (
+                      <Image source={{ uri: avatar }} style={styles.avatar} />
+                    ) : (
+                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitials}>
+                          {title.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                        </Text>
+                      </View>
+                    )}
+                  </View>
+                  <View style={styles.profileInfo}>
+                    <Text style={styles.profileName}>{title}</Text>
+                    {location ? <Text style={styles.profileLocation}>{location}</Text> : null}
+                  </View>
+                </View>
+              </View>
 
-        {/* Tabs content */}
-        <Tabs
-          tabs={[
-            { key:'dishes',  title:'Dishes',         content: DishesTab },
-            { key:'reviews', title:'Reviews',        content: ReviewsTab },
-            { key:'cooking', title:"What's cooking?", content: CookingTab },
-          ]}
-          initial={0}
-        />
+              {/* Stats */}
+              <View style={styles.statsContainer}>
+                <View style={styles.statCard}>
+                  <View style={styles.statValueRow}>
+                    <Text style={styles.statValue}>{avgRating.toFixed(1)}</Text>
+                    <Text style={styles.starIcon}>★</Text>
+                  </View>
+                  <Text style={styles.statLabel}>Rating</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{reviewCount}</Text>
+                  <Text style={styles.statLabel}>Reviews</Text>
+                </View>
+                <View style={styles.statCard}>
+                  <Text style={styles.statValue}>{dishCount}</Text>
+                  <Text style={styles.statLabel}>Dishes</Text>
+        </View>
       </View>
-    </ScrollView>
+
+              {/* Bio Section */}
+              {bio ? (
+                <View style={styles.bioSection}>
+                  <Text style={styles.bioTitle}>About Me</Text>
+                  <Text style={styles.bioText}>{bio}</Text>
+                </View>
+              ) : null}
+
+              {/* CTA Buttons */}
+              <View style={styles.ctaContainer}>
+                <TouchableOpacity style={styles.primaryButton}>
+                  <Text style={styles.primaryButtonText}>Follow Chef</Text>
+        </TouchableOpacity>
+                <TouchableOpacity style={styles.secondaryButton}>
+                  <Text style={styles.secondaryButtonText}>Message Chef</Text>
+        </TouchableOpacity>
+      </View>
+    </View>
+          </View>
+
+          {/* Main Content Area */}
+          <View style={styles.mainContent}>
+            {/* Tab Navigation */}
+            <View style={styles.tabContainer}>
+                <TouchableOpacity
+                style={[styles.tab, activeTab === 'dishes' && styles.tabActive]}
+                onPress={() => setActiveTab('dishes')}
+              >
+                <Text style={[styles.tabText, activeTab === 'dishes' && styles.tabTextActive]}>
+                  Dishes
+                </Text>
+                </TouchableOpacity>
+                    <TouchableOpacity
+                style={[styles.tab, activeTab === 'reviews' && styles.tabActive]}
+                onPress={() => setActiveTab('reviews')}
+              >
+                <Text style={[styles.tabText, activeTab === 'reviews' && styles.tabTextActive]}>
+                  Reviews
+                </Text>
+                    </TouchableOpacity>
+            </View>
+
+            {/* Filter/Sort Controls - only show for dishes tab */}
+            {activeTab === 'dishes' && (
+              <View style={styles.filterContainer}>
+                <View style={styles.filterRow}>
+                  <Text style={styles.filterLabel}>Sort by:</Text>
+                  <View style={styles.selectPlaceholder}>
+                    <Text style={styles.selectText}>Popularity</Text>
+                  </View>
+                  <Text style={styles.filterLabel}>Category:</Text>
+                  <View style={styles.selectPlaceholder}>
+                    <Text style={styles.selectText}>All Categories</Text>
+                  </View>
+                </View>
+              </View>
+            )}
+
+            {/* Content based on active tab */}
+            <ScrollView 
+              style={styles.contentScroll}
+              contentContainerStyle={styles.contentScrollContent}
+              showsVerticalScrollIndicator={false}
+              nestedScrollEnabled
+            >
+              {activeTab === 'dishes' ? (
+                <View style={styles.dishesGrid}>
+                  {dishes.length === 0 ? (
+                    <Text style={styles.emptyText}>No dishes yet.</Text>
+                  ) : (
+                    dishes.map(d => {
+                      const img = d.image || d.thumbnail || '';
+                      return (
+                        <View key={d.id} style={styles.dishCard}>
+                          <Link href={`/dish/${d.id}`} asChild>
+                            <TouchableOpacity style={styles.dishImageContainer}>
+                              {img ? (
+                                <Image source={{ uri: img }} style={styles.dishImage} resizeMode="cover" />
+                              ) : (
+                                <View style={styles.dishImagePlaceholder}>
+                                  <Text style={styles.dishImagePlaceholderText}>No image</Text>
+        </View>
+      )}
+                            </TouchableOpacity>
+                          </Link>
+                          <View style={styles.dishInfo}>
+                            <View style={styles.dishHeader}>
+                              <Text style={styles.dishName} numberOfLines={1}>
+                                {d.name || `Dish #${d.id}`}
+                              </Text>
+                              <Text style={styles.dishPrice}>
+                                ${d.price != null ? Number(d.price).toFixed(2) : '0.00'}
+                              </Text>
+                            </View>
+                            {d.description ? (
+                              <Text style={styles.dishDescription} numberOfLines={2}>
+                                {d.description}
+                              </Text>
+                            ) : null}
+                            <TouchableOpacity
+                              style={styles.addToCartButton}
+                              onPress={() => handleAddToCart(d)}
+                            >
+                              <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                            </TouchableOpacity>
+                          </View>
+    </View>
+  );
+                    })
+                  )}
+                </View>
+              ) : (
+                <View style={styles.reviewsContent}>
+                  {/* Review form for signed-in users */}
+                  {user && (
+                    <View style={styles.reviewForm}>
+                      <Text style={styles.reviewFormTitle}>Leave a Review</Text>
+                      <View style={styles.ratingSelector}>
+                        <Text style={styles.ratingLabel}>Rating</Text>
+                        <View style={styles.starsRow}>
+                          {[1, 2, 3, 4, 5].map(star => (
+                            <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
+                              <Text style={[
+                                styles.starButton,
+                                { color: star <= reviewRating ? STAR_COLOR : TEXT_MUTED }
+                              ]}>
+                                ★
+                              </Text>
+                            </TouchableOpacity>
+                          ))}
+                        </View>
+                      </View>
+                      <View style={styles.commentInputContainer}>
+                        <Text style={styles.commentLabel}>Comment (optional)</Text>
+                        <TextInput
+                          value={reviewComment}
+                          onChangeText={setReviewComment}
+                          placeholder="Share your experience..."
+                          placeholderTextColor={TEXT_MUTED}
+                          multiline
+                          numberOfLines={3}
+                          style={styles.commentInput}
+                        />
+                      </View>
+                      <TouchableOpacity
+                        onPress={handleSubmitReview}
+                        disabled={submittingReview}
+                        style={[styles.submitButton, submittingReview && styles.submitButtonDisabled]}
+                      >
+                        <Text style={styles.submitButtonText}>
+                          {submittingReview ? 'Submitting...' : 'Submit Review'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+
+                  {/* Reviews list */}
+                  {reviews.length === 0 ? (
+                    <Text style={styles.emptyText}>No reviews yet.</Text>
+                  ) : (
+                    <View style={styles.reviewsList}>
+          {reviews.map(r => (
+                        <View key={r.id} style={styles.reviewCard}>
+                          <View style={styles.reviewHeader}>
+                            <View style={styles.reviewRating}>
+                              <Text style={styles.reviewStar}>★</Text>
+                              <Text style={styles.reviewRatingValue}>{r.rating.toFixed(1)}</Text>
+                            </View>
+                            {r.user_name ? (
+                              <Text style={styles.reviewAuthor}>{r.user_name}</Text>
+                            ) : null}
+                            {r.created_at ? (
+                              <Text style={styles.reviewDate}>
+                                {new Date(r.created_at).toLocaleDateString()}
+                              </Text>
+                            ) : null}
+              </View>
+                          {r.comment ? (
+                            <Text style={styles.reviewComment}>{r.comment}</Text>
+                          ) : null}
+            </View>
+          ))}
+        </View>
+      )}
+    </View>
+              )}
+            </ScrollView>
+            </View>
+        </View>
+      </View>
+    </Screen>
   );
 }
+
+const styles = StyleSheet.create({
+  container: {
+    flex: 1,
+    maxWidth: 1280,
+    alignSelf: 'center',
+    width: '100%',
+    paddingHorizontal: Platform.select({
+      web: theme.spacing['4xl'],
+      default: theme.spacing.md,
+    }),
+    paddingVertical: theme.spacing['2xl'],
+  },
+  layout: {
+    flexDirection: Platform.select({
+      web: 'row',
+      default: 'column',
+    }),
+    gap: theme.spacing['2xl'],
+    alignItems: 'flex-start',
+  },
+  sidebar: {
+    width: Platform.select({
+      web: '33.333%',
+      default: '100%',
+    }),
+    maxWidth: Platform.select({
+      web: 384,
+      default: '100%',
+    }),
+    ...Platform.select({
+      web: {
+        position: 'sticky',
+        top: theme.spacing['2xl'],
+        alignSelf: 'flex-start',
+      },
+    }),
+  },
+  sidebarCard: {
+    flex: 1,
+    gap: theme.spacing['2xl'],
+    padding: theme.spacing['2xl'],
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: theme.radius.xl,
+    backgroundColor: '#FFFFFF',
+    ...elev('sm'),
+  },
+  profileSection: {
+    gap: theme.spacing.md,
+  },
+  profileHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  avatarContainer: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    overflow: 'hidden',
+    backgroundColor: BACKGROUND_LIGHT,
+  },
+  avatar: {
+    width: '100%',
+    height: '100%',
+  },
+  avatarPlaceholder: {
+    backgroundColor: PRIMARY_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  avatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 24,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  profileInfo: {
+    flex: 1,
+    gap: theme.spacing.xs / 2,
+  },
+  profileName: {
+    color: TEXT_DARK,
+    fontSize: 20,
+    fontWeight: theme.typography.fontWeight.bold,
+    lineHeight: 20 * 1.2,
+  },
+  profileLocation: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+  },
+  statsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.md,
+  },
+  statCard: {
+    flex: 1,
+    minWidth: 111,
+    gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: theme.radius.lg,
+    alignItems: 'flex-start',
+  },
+  statValueRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs / 2,
+  },
+  statValue: {
+    color: TEXT_DARK,
+    fontSize: 24,
+    fontWeight: theme.typography.fontWeight.bold,
+    lineHeight: 24 * 1.2,
+  },
+  starIcon: {
+    fontSize: 20,
+    color: STAR_COLOR,
+  },
+  statLabel: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+  },
+  bioSection: {
+    gap: theme.spacing.sm,
+  },
+  bioTitle: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  bioText: {
+    color: TEXT_MUTED_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.6,
+  },
+  ctaContainer: {
+    gap: theme.spacing.md,
+  },
+  primaryButton: {
+    height: 48,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  primaryButtonText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.015,
+  },
+  secondaryButton: {
+    height: 48,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
+    backgroundColor: `${PRIMARY_COLOR}33`, // primary/20
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  secondaryButtonText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.015,
+  },
+  mainContent: {
+    flex: 1,
+    width: Platform.select({
+      web: '66.666%',
+      default: '100%',
+    }),
+  },
+  tabContainer: {
+    flexDirection: 'row',
+    gap: theme.spacing['2xl'],
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  tab: {
+    paddingBottom: theme.spacing.md,
+    paddingTop: theme.spacing.xs,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: PRIMARY_COLOR,
+  },
+  tabText: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.015,
+  },
+  tabTextActive: {
+    color: TEXT_DARK,
+  },
+  filterContainer: {
+    paddingVertical: theme.spacing['2xl'],
+  },
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+    flexWrap: 'wrap',
+    justifyContent: 'flex-end',
+  },
+  filterLabel: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  selectPlaceholder: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+    minWidth: 150,
+  },
+  selectText: {
+    color: TEXT_MUTED_DARK,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  contentScroll: {
+    flex: 1,
+  },
+  contentScrollContent: {
+    paddingBottom: theme.spacing['4xl'],
+  },
+  dishesGrid: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing['2xl'],
+  },
+  dishCard: {
+    flex: 1,
+    minWidth: Platform.select({
+      web: 280,
+      default: '100%',
+    }),
+    maxWidth: Platform.select({
+      web: 'none',
+      default: '100%',
+    }),
+    overflow: 'hidden',
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+    ...elev('sm'),
+  },
+  dishImageContainer: {
+    width: '100%',
+    aspectRatio: 16 / 9,
+    backgroundColor: BACKGROUND_LIGHT,
+  },
+  dishImage: {
+    width: '100%',
+    height: '100%',
+  },
+  dishImagePlaceholder: {
+    width: '100%',
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: BACKGROUND_LIGHT,
+  },
+  dishImagePlaceholderText: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  dishInfo: {
+    padding: theme.spacing.md,
+    flex: 1,
+    gap: theme.spacing.md,
+  },
+  dishHeader: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'space-between',
+    gap: theme.spacing.sm,
+  },
+  dishName: {
+    flex: 1,
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  dishPrice: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  dishDescription: {
+    color: TEXT_MUTED_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    flex: 1,
+    marginBottom: theme.spacing.md,
+  },
+  addToCartButton: {
+    width: '100%',
+    height: 40,
+    borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 'auto',
+  },
+  addToCartButtonText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.015,
+  },
+  reviewsContent: {
+    gap: theme.spacing['2xl'],
+  },
+  reviewForm: {
+    padding: theme.spacing['2xl'],
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: theme.radius.xl,
+    backgroundColor: '#FFFFFF',
+    gap: theme.spacing.md,
+  },
+  reviewFormTitle: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  ratingSelector: {
+    gap: theme.spacing.sm,
+  },
+  ratingLabel: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  starsRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.sm,
+  },
+  starButton: {
+    fontSize: 24,
+  },
+  commentInputContainer: {
+    gap: theme.spacing.sm,
+  },
+  commentLabel: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  commentInput: {
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    minHeight: 80,
+    textAlignVertical: 'top',
+    backgroundColor: '#FFFFFF',
+  },
+  submitButton: {
+    height: 40,
+    borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  submitButtonDisabled: {
+    opacity: 0.7,
+  },
+  submitButtonText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  reviewsList: {
+    gap: theme.spacing.md,
+  },
+  reviewCard: {
+    padding: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: theme.radius.xl,
+    backgroundColor: '#FFFFFF',
+    gap: theme.spacing.sm,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    flexWrap: 'wrap',
+  },
+  reviewRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.xs / 2,
+  },
+  reviewStar: {
+    fontSize: theme.typography.fontSize.sm,
+    color: STAR_COLOR,
+  },
+  reviewRatingValue: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  reviewAuthor: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  reviewDate: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.xs,
+    marginLeft: 'auto',
+  },
+  reviewComment: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+  },
+  emptyText: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.base,
+    textAlign: 'center',
+    paddingVertical: theme.spacing['4xl'],
+  },
+});

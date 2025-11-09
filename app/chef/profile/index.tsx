@@ -3,7 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator,
 import { useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../../lib/supabase";
-import { theme } from "../../../constants/theme";
+import { theme } from "../../../lib/theme";
 import { useRole } from "../../../hooks/useRole";
 import { getProfile } from "../../../lib/db";
 import { uploadAvatar } from "../../../lib/storage";

@@ -16,6 +16,7 @@ import type {
   Order,
   OrderItem,
   OrderWithItems,
+  OrderStatus,
   ChefSearchOptions,
   OrderQueryOptions,
   CreateOrderInput,
@@ -248,6 +249,99 @@ export async function getChefReviews(chefId: number, limit = 100): Promise<ChefR
 // ============================================================================
 // Orders
 // ============================================================================
+
+/**
+ * Get orders for a specific user
+ * Includes order_items and dish information
+ */
+export async function getUserOrders(userId: string, options: { status?: OrderStatus; limit?: number } = {}): Promise<OrderWithItems[]> {
+  const { status, limit = 100 } = options;
+
+  let query = supabase
+    .from('orders')
+    .select('*')
+    .eq('user_id', userId)
+    .order('created_at', { ascending: false });
+
+  if (status) {
+    query = query.eq('status', status);
+  }
+
+  if (limit) {
+    query = query.limit(limit);
+  }
+
+  const { data: orders, error: ordersError } = await query;
+
+  if (ordersError || !orders) {
+    console.error('Error fetching user orders:', ordersError);
+    return [];
+  }
+
+  // Load order_items for all orders
+  const orderIds = orders.map((o: any) => o.id);
+  const { data: orderItems, error: itemsError } = orderIds.length > 0
+    ? await supabase
+        .from('order_items')
+        .select('*')
+        .in('order_id', orderIds)
+    : { data: [], error: null };
+
+  if (itemsError) {
+    console.warn('Error fetching order_items:', itemsError);
+  }
+
+  // Load dishes for order_items (including image and chef info)
+  const dishIds = [...new Set((orderItems || []).map((item: any) => item.dish_id).filter(Boolean))];
+  const { data: dishes, error: dishesError } = dishIds.length > 0
+    ? await supabase
+        .from('dishes')
+        .select('id, name, image, chef, chef_id')
+        .in('id', dishIds)
+    : { data: [], error: null };
+
+  if (dishesError) {
+    console.warn('Error fetching dishes:', dishesError);
+  }
+
+  // Load chefs for chef names
+  const chefIds = [...new Set((dishes || []).map((d: any) => d.chef_id).filter(Boolean))];
+  const { data: chefs, error: chefsError } = chefIds.length > 0
+    ? await supabase
+        .from('chefs')
+        .select('id, name')
+        .in('id', chefIds)
+    : { data: [], error: null };
+
+  if (chefsError) {
+    console.warn('Error fetching chefs:', chefsError);
+  }
+
+  // Create lookup maps
+  const dishMap = new Map((dishes || []).map((d: any) => [d.id, d]));
+  const chefMap = new Map((chefs || []).map((c: any) => [c.id, c.name]));
+  const itemsByOrderId = new Map<number, (OrderItem & { dish_name?: string | null; dish_image?: string | null; chef_name?: string | null })[]>();
+
+  (orderItems || []).forEach((item: any) => {
+    if (!itemsByOrderId.has(item.order_id)) {
+      itemsByOrderId.set(item.order_id, []);
+    }
+    const dish = dishMap.get(item.dish_id);
+    const chefName = dish?.chef_id ? chefMap.get(dish.chef_id) : dish?.chef || null;
+    itemsByOrderId.get(item.order_id)!.push({
+      ...item,
+      dish_name: dish?.name || null,
+      dish_image: dish?.image || null,
+      chef_name: chefName,
+    });
+  });
+
+  // Combine orders with items
+  return orders.map((order: any) => ({
+    ...order,
+    order_items: itemsByOrderId.get(order.id) || [],
+  })) as OrderWithItems[];
+}
 
 /**
  * Get orders with optional status filter and pagination

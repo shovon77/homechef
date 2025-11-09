@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>User Profile - HomeChef</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+        tailwind.config = {
+            darkMode: "class",
+            theme: {
+                extend: {
+                    colors: {
+                        "primary": "#19e680",
+                        "background-light": "#f6f8f7",
+                        "background-dark": "#112119",
+                        "surface-light": "#ffffff",
+                        "surface-dark": "#1a2e24",
+                        "text-light-primary": "#0e1b14",
+                        "text-dark-primary": "#e8f3ee",
+                        "text-light-secondary": "#4e9773",
+                        "text-dark-secondary": "#a2c9b6",
+                        "border-light": "#d0e7db",
+                        "border-dark": "#2a4a3a",
+                    },
+                    fontFamily: {
+                        "display": ["Plus Jakarta Sans", "Noto Sans", "sans-serif"]
+                    },
+                    borderRadius: {
+                        "DEFAULT": "0.25rem",
+                        "lg": "0.5rem",
+                        "xl": "0.75rem",
+                        "full": "9999px"
+                    },
+                },
+            },
+        }
+    </script>
+<style>
+        .material-symbols-outlined {
+            font-variation-settings: 'FILL' 0, 'wght' 400, 'GRAD' 0, 'opsz' 24;
+        }
+    </style>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<div class="px-4 sm:px-8 md:px-12 lg:px-20 xl:px-40 flex flex-1 justify-center py-5">
+<div class="layout-content-container flex flex-col md:flex-row max-w-7xl flex-1 gap-8">
+<!-- Left Sidebar Navigation -->
+<aside class="w-full md:w-64 flex-shrink-0">
+<div class="flex h-full min-h-[700px] flex-col justify-between bg-surface-light dark:bg-surface-dark p-4 rounded-xl shadow-sm">
+<div class="flex flex-col gap-4">
+<div class="flex gap-3 items-center">
+<div class="bg-center bg-no-repeat aspect-square bg-cover rounded-full size-10" data-alt="User's profile picture, a portrait of Alex Chen" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuANu4n0a2LZeI1rIR5x3yi5kilDy-c0WIRb_Y0oAxXLucovw6ID3tReuRCeAit1LFa5EiaKXJKfFSLO-T9Npzlty_wNnB54W6GIjqHBmC_eFV0rVBV58LmEo_jxQiEhHf_-TcoDRNMV03U-FoUplyWnGom4wQKp9uZUsKPJxZ8HTkoiRiNcbkaiV3IzJA3zNx9Kuk2i19jk9uG4UhCTkzElfeN7v3CHwkVjL8uJHrA6xJ0PpuV300sR91u0hPVP6CMqMuMF0ER2UG9V");'></div>
+<div class="flex flex-col">
+<h1 class="text-text-light-primary dark:text-text-dark-primary text-base font-medium leading-normal">Alex Chen</h1>
+<p class="text-text-light-secondary dark:text-text-dark-secondary text-sm font-normal leading-normal">alex.chen@email.com</p>
+</div>
+</div>
+<div class="flex flex-col gap-2 mt-4">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg bg-primary/20" href="#">
+<span class="material-symbols-outlined text-text-light-primary dark:text-text-dark-primary">receipt_long</span>
+<p class="text-text-light-primary dark:text-text-dark-primary text-sm font-medium leading-normal">My Orders</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-text-light-primary dark:text-text-dark-primary">favorite</span>
+<p class="text-text-light-primary dark:text-text-dark-primary text-sm font-medium leading-normal">Favorite Dishes</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-text-light-primary dark:text-text-dark-primary">storefront</span>
+<p class="text-text-light-primary dark:text-text-dark-primary text-sm font-medium leading-normal">Saved Chefs</p>
+</a>
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-primary/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-text-light-primary dark:text-text-dark-primary">settings</span>
+<p class="text-text-light-primary dark:text-text-dark-primary text-sm font-medium leading-normal">Account Settings</p>
+</a>
+</div>
+</div>
+<div class="flex flex-col gap-1">
+<a class="flex items-center gap-3 px-3 py-2 rounded-lg hover:bg-red-500/10 transition-colors duration-200" href="#">
+<span class="material-symbols-outlined text-red-500">logout</span>
+<p class="text-red-500 text-sm font-medium leading-normal">Log Out</p>
+</a>
+</div>
+</div>
+</aside>
+<!-- Right Content Area -->
+<main class="flex-1">
+<div class="flex flex-wrap justify-between gap-3 p-4">
+<h2 class="text-text-light-primary dark:text-text-dark-primary text-4xl font-black leading-tight tracking-[-0.033em] min-w-72">My Orders</h2>
+</div>
+<div class="pb-3">
+<div class="flex border-b border-border-light dark:border-border-dark px-4 gap-8">
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-primary pb-[13px] pt-4" href="#">
+<p class="text-text-light-primary dark:text-text-dark-primary text-sm font-bold leading-normal tracking-[0.015em]">Active Orders</p>
+</a>
+<a class="flex flex-col items-center justify-center border-b-[3px] border-b-transparent text-text-light-secondary dark:text-text-dark-secondary pb-[13px] pt-4 hover:border-b-primary/50 transition-colors duration-200" href="#">
+<p class="text-sm font-bold leading-normal tracking-[0.015em]">Past Orders</p>
+</a>
+</div>
+</div>
+<!-- Orders List -->
+<div class="flex flex-col gap-4 p-4">
+<!-- Order Card 1 -->
+<div class="flex flex-col sm:flex-row items-stretch justify-between gap-4 rounded-lg bg-surface-light dark:bg-surface-dark p-4 shadow-sm">
+<div class="flex flex-[2_2_0px] flex-col gap-4 justify-between">
+<div class="flex flex-col gap-1">
+<p class="text-text-light-secondary dark:text-text-dark-secondary text-sm font-normal leading-normal">Order #HC12345</p>
+<p class="text-text-light-primary dark:text-text-dark-primary text-lg font-bold leading-tight">Authentic Pad Thai</p>
+<p class="text-text-light-secondary dark:text-text-dark-secondary text-sm font-normal leading-normal">Chef Nadiya's Kitchen</p>
+<div class="flex items-center gap-2 mt-2">
+<span class="material-symbols-outlined text-sm text-primary">local_shipping</span>
+<p class="text-primary text-sm font-medium">Out for Delivery</p>
+</div>
+</div>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-text-light-primary text-sm font-medium leading-normal w-fit hover:opacity-90 transition-opacity">
+<span class="truncate">Track Order</span>
+</button>
+</div>
+<div class="w-full sm:w-auto bg-center bg-no-repeat aspect-video sm:aspect-square bg-cover rounded-lg flex-1 min-w-[150px]" data-alt="A delicious-looking plate of Authentic Pad Thai with shrimp and lime wedges." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuC2wODLhLzpEa2SeF-vbAw96DiqdekwkVCA07iUeqfPvkbNmsPmv6Y-7-zFpB6apWlvy3HcFRor8OrQHGdODUKYOegIFxxXNSQSkRS27d0kEg5G1Zy8ZLWKSlEN6uC0IP5DBGB44zQ4P-YjDx1IIPPHbCrDR8i4KwxSoFwEbDmGy7Bz7LjHKjtBD2LXMPCjIkVD85C0L9f_ACFUn-ysuZD9tTj_3zLQfURl24ejhZsWQjfAa9Gv1pyamOLhU7xI-Rc5PcankXZB37oW");'></div>
+</div>
+<!-- Order Card 2 -->
+<div class="flex flex-col sm:flex-row items-stretch justify-between gap-4 rounded-lg bg-surface-light dark:bg-surface-dark p-4 shadow-sm">
+<div class="flex flex-[2_2_0px] flex-col gap-4 justify-between">
+<div class="flex flex-col gap-1">
+<p class="text-text-light-secondary dark:text-text-dark-secondary text-sm font-normal leading-normal">Order #HC12344</p>
+<p class="text-text-light-primary dark:text-text-dark-primary text-lg font-bold leading-tight">Sourdough Pizza Margherita</p>
+<p class="text-text-light-secondary dark:text-text-dark-secondary text-sm font-normal leading-normal">Leo's Artisan Bakes</p>
+<div class="flex items-center gap-2 mt-2">
+<span class="material-symbols-outlined text-sm text-yellow-600 dark:text-yellow-400">soup_kitchen</span>
+<p class="text-yellow-600 dark:text-yellow-400 text-sm font-medium">Preparing</p>
+</div>
+</div>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary/20 text-text-light-primary dark:text-text-dark-primary dark:bg-primary/30 text-sm font-medium leading-normal w-fit hover:bg-primary/30 dark:hover:bg-primary/40 transition-colors">
+<span class="truncate">View Details</span>
+</button>
+</div>
+<div class="w-full sm:w-auto bg-center bg-no-repeat aspect-video sm:aspect-square bg-cover rounded-lg flex-1 min-w-[150px]" data-alt="A freshly baked Sourdough Pizza Margherita with basil leaves on top." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBBKe2xmGpYNtoNjXEzfJzbeHfgB1krh4bK7naNrBD5QoNBF1CIzVe3_arixvMAj6MI5_eFBkRZqRx050CsjwymE83Rhn1mgTueMMUmaSM5xJLIuT2AwgCZrEJHQfoVRUGLbCJ-_CstkiioNFQkEOQzORbV2d7Ou9Qxv7d3b3mvbFQVDqBBXChlPZ_4tJ4hXy5m_9LuKCumpx2Bk1GGBcmpJWRhaMjx8hAdnD_kJfY3_gWgcLfN6ljUqkV9kIxr7o822h_ASgc6Sst3");'></div>
+</div>
+</div>
+</main>
+</div>
+</div>
+</div>
+</div>
+</body></html>

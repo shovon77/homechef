@@ -1,7 +1,9 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
 import { Link } from "expo-router";
-import { theme } from "../../constants/theme";
+import { theme, cardStyle } from "../../lib/theme";
+import { Stars } from "../../components/ui/Stars";
+import { toNumber } from "../../lib/number";
 
 type Chef = {
   id: number | string;
@@ -13,18 +15,6 @@ type Chef = {
   rating?: number | null;
 };
 
-function Stars({ value = 0 }: { value?: number | null }) {
-  const v = Math.max(0, Math.min(5, Math.round(Number(value || 0))));
-  const full = "★".repeat(v);
-  const empty = "☆".repeat(5 - v);
-  return (
-    <Text style={{ color: "#ffd166", fontWeight: "700", letterSpacing: 1 }}>
-      {full}
-      <Text style={{ color: "#94a3b8" }}>{empty}</Text>
-      <Text style={{ color: "#94a3b8", marginLeft: 6 }}> ({Number(value || 0).toFixed(1)})</Text>
-    </Text>
-  );
-}
 
 export default function ChefCard({ chef }: { chef: Chef }) {
   const avatar =
@@ -34,25 +24,18 @@ export default function ChefCard({ chef }: { chef: Chef }) {
 
   return (
     <Link href={`/chef/${chef.id}`} asChild>
-      <TouchableOpacity activeOpacity={0.85}
-        style={{
-          backgroundColor: theme.colors.surface,
-          borderRadius: 16,
-          padding: 14,
-          borderColor: "rgba(255,255,255,0.08)",
-          borderWidth: 1,
-        }}>
-        <View style={{ flexDirection: "row", gap: 12, alignItems: "center" }}>
-          <Image source={{ uri: avatar }} style={{ width: 64, height: 64, borderRadius: 32 }} />
-          <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.colors.white, fontSize: 18, fontWeight: "800" }}>
+      <TouchableOpacity activeOpacity={0.85} style={[styles.card, cardStyle()]}>
+        <View style={styles.container}>
+          <Image source={{ uri: avatar }} style={styles.avatar} />
+          <View style={styles.info}>
+            <Text style={styles.name}>
               {chef.name}
             </Text>
-            <Text numberOfLines={1} style={{ color: "#9fb6a9", marginTop: 2 }}>
+            <Text numberOfLines={1} style={styles.location}>
               {chef.location || "—"}
             </Text>
-            <View style={{ marginTop: 6 }}>
-              <Stars value={chef.rating ?? 0} />
+            <View style={styles.rating}>
+              <Stars value={toNumber(chef?.rating, 0)} size={16} />
             </View>
           </View>
         </View>
@@ -60,3 +43,36 @@ export default function ChefCard({ chef }: { chef: Chef }) {
     </Link>
   );
 }
+
+const styles = StyleSheet.create({
+  card: {
+    padding: theme.spacing.md,
+  },
+  container: {
+    flexDirection: "row",
+    gap: theme.spacing.md,
+    alignItems: "center",
+  },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: 32,
+    backgroundColor: theme.colors.surface,
+  },
+  info: {
+    flex: 1,
+  },
+  name: {
+    color: theme.colors.text,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.extrabold,
+  },
+  location: {
+    color: theme.colors.subtle,
+    marginTop: theme.spacing.xs / 2,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  rating: {
+    marginTop: theme.spacing.sm,
+  },
+});

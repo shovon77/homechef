@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HomeChef - Authentic Homemade Meals, Delivered.</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<style>
+        .material-symbols-outlined {
+          font-variation-settings:
+          'FILL' 0,
+          'wght' 400,
+          'GRAD' 0,
+          'opsz' 24
+        }
+    </style>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#2C4E4B",
+              "background-light": "#FFFFFF",
+              "background-dark": "#1a1a1a",
+              "surface-light": "#F4F4F4",
+              "surface-dark": "#2a2a2a",
+              "text-light": "#333333",
+              "text-dark": "#e0e0e0",
+              "text-muted-light": "#555555",
+              "text-muted-dark": "#b0b0b0",
+              "accent": "#FFA500"
+            },
+            fontFamily: {
+              "display": ["Plus Jakarta Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.5rem", "lg": "0.75rem", "xl": "1rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="bg-background-light dark:bg-background-dark font-display text-text-light dark:text-text-dark">
+<div class="relative flex h-auto min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<div class="px-4 md:px-10 lg:px-20 xl:px-40 flex flex-1 justify-center py-5">
+<div class="layout-content-container flex flex-col max-w-7xl flex-1">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-surface-light dark:border-surface-dark/50 px-6 py-4">
+<div class="flex items-center gap-4">
+<span class="material-symbols-outlined text-primary text-3xl">local_dining</span>
+<h2 class="text-primary text-xl font-bold leading-tight tracking-[-0.015em]">HomeChef</h2>
+</div>
+<div class="hidden lg:flex flex-1 justify-center items-center gap-9">
+<a class="text-text-light dark:text-text-dark text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">Explore</a>
+<a class="text-text-light dark:text-text-dark text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">Chefs</a>
+<a class="text-text-light dark:text-text-dark text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">How it Works</a>
+</div>
+<div class="hidden lg:flex items-center gap-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-transparent text-primary text-sm font-bold leading-normal tracking-[0.015em] border-2 border-primary hover:bg-primary/10 transition-colors">
+<span class="truncate">Sign In</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors">
+<span class="truncate">Sign Up</span>
+</button>
+</div>
+<div class="lg:hidden">
+<button class="p-2">
+<span class="material-symbols-outlined text-3xl">menu</span>
+</button>
+</div>
+</header>
+<main class="flex flex-col gap-12 md:gap-16 lg:gap-20 py-10 md:py-16">
+<section class="@container">
+<div class="px-4">
+<div class="flex min-h-[480px] md:min-h-[550px] flex-col gap-6 bg-cover bg-center bg-no-repeat rounded-xl items-center justify-center p-4 text-center" data-alt="A beautifully plated pasta dish with fresh basil on a dark background, evoking a sense of gourmet homemade cooking." style='background-image: linear-gradient(rgba(0, 0, 0, 0.3) 0%, rgba(0, 0, 0, 0.5) 100%), url("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT");'>
+<div class="flex flex-col gap-4 max-w-2xl">
+<h1 class="text-white text-4xl font-black leading-tight tracking-[-0.033em] @[480px]:text-5xl @[640px]:text-6xl">Authentic Homemade Meals, Delivered.</h1>
+<h2 class="text-white/90 text-sm font-normal leading-normal @[480px]:text-base">Discover and order from the best home chefs in your neighborhood.</h2>
+</div>
+<label class="flex flex-col min-w-40 h-14 w-full max-w-[580px] mt-4 @[480px]:h-16">
+<div class="flex w-full flex-1 items-stretch rounded-full h-full shadow-lg">
+<div class="text-text-muted-light dark:text-text-muted-dark flex bg-background-light dark:bg-surface-dark items-center justify-center pl-5 rounded-l-full">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden text-text-light dark:text-text-dark focus:outline-0 focus:ring-0 border-0 bg-background-light dark:bg-surface-dark h-full placeholder:text-text-muted-light dark:placeholder:text-text-muted-dark px-4 text-sm font-normal leading-normal @[480px]:text-base" placeholder="Search for a dish or cuisine..." value=""/>
+<div class="flex items-center justify-center rounded-r-full bg-background-light dark:bg-surface-dark pr-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-full h-10 px-4 @[480px]:h-12 @[480px]:px-5 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-primary/90 transition-colors">
+<span class="truncate">Find Food</span>
+</button>
+</div>
+</div>
+</label>
+</div>
+</div>
+</section>
+<section class="flex flex-col gap-4">
+<h2 class="text-text-light dark:text-text-dark text-2xl md:text-3xl font-bold leading-tight tracking-[-0.015em] px-4">Trending Dishes Near You</h2>
+<div class="flex overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<div class="flex items-stretch p-4 gap-6">
+<div class="flex flex-col gap-4 rounded-xl bg-background-light dark:bg-surface-dark shadow-md hover:shadow-xl transition-shadow w-72 flex-shrink-0">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-t-xl" data-alt="A juicy classic cheeseburger with lettuce, tomato, and onion on a sesame seed bun." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuDSnwVrotjDOPG29K5FrJe4DzgHw8ZG8hG22NkttX-BSdmp8Xx9xBL-FbS4LUplfhrHOkdyIH_yJkumQqKKM1_YeIpsxJoYv0OaEFM_mptn379TnN5cr9MIPYe5Sr4g_RgPDEKpK_LSyiDN6tuKeCzOB9qPIgM8yswR0rHC7xjM9ZkJfbjCYcFGk1wt5QrggGcYtMP5wdvdllOCeTPWAqMoYP3FbTcyO8Zd0JsAEOu-pHy4cZjCYBuVIit9OzL14bnHsCAucg1KRTem");'></div>
+<div class="flex flex-col flex-1 justify-between p-4 pt-0 gap-4">
+<div>
+<p class="text-text-light dark:text-text-dark text-lg font-bold leading-normal">The Classic Burger</p>
+<div class="flex items-center gap-2 mt-2">
+<img class="w-6 h-6 rounded-full object-cover" data-alt="Avatar of Chef John Doe" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAutUf8CVUtYdQQ676fyjUhjF2NN7-dIZZvfc9S0bbS_uMc4qwolq3pNHyXI8vERGqG1bhaopsi8BxMwZMkGZr9WL6Aak5KB89JBO35dKHmQIh_pTQsYRdAL73wib6oHTr8Kcx9r7xbdo4bDUcPK36NvowKORCI-aAPo2iKpllX7mLM9PqlvmrxV0LaHPrenKY6p0Aj1P6Jat6m8ZxNHMfJPzulkE0UoyFS1q5tkKbFcEsdaecAAlWLXnznniOiNGYfsKGi0vUnnVMk"/>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-normal leading-normal">John Doe</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<p class="text-primary text-base font-bold">$15.00</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-accent text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-medium">4.9</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4 rounded-xl bg-background-light dark:bg-surface-dark shadow-md hover:shadow-xl transition-shadow w-72 flex-shrink-0">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-t-xl" data-alt="A colorful and healthy Rainbow Buddha Bowl with various vegetables and grains." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuA-8v5jSELxarq_N6qTNW3F0Srgq-fUgrbjiJJHRm-9hfaCa_66k57xLIaX9bfU1nSwN0o62PEp3aq945_qCbxQZRqdnKiVK94eVyN_tcdiBLRwVy3sEy9nTCm0y_Oms4n25hL-alP-vSj2SPLLwq6RNzONCoDHJVcahIHhJ0BorKoFwwurldZ6yWxJX-CxQ0t7dvwc9aH-NpVHQOI5t3C5ND1hRO9BOUmMe3E3-jMTWxXLubjrqmZ_JLQ2OIQ5ELVj_cqULXBAeurB");'></div>
+<div class="flex flex-col flex-1 justify-between p-4 pt-0 gap-4">
+<div>
+<p class="text-text-light dark:text-text-dark text-lg font-bold leading-normal">Rainbow Buddha Bowl</p>
+<div class="flex items-center gap-2 mt-2">
+<img class="w-6 h-6 rounded-full object-cover" data-alt="Avatar of Chef Jane Smith" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAZxrPiBUOdgWH29cFft6TxDh_l_sudV3DxTsyMhcjJrFe-ebs5sKGj3X9R81v8b8n95L3_nuqS1McisBYPL5aLK3VPrJ7pcwmeV2RnRTkecDfLGHlrZ5opPLB1msH-dWiXUxcugd_9jQxTbrsiTYyaVoUaPoOIZYZzwDMjrBel9mMC4ICQMni6RbB2oTtmAhBt8dvrGLA-lhK34Be7YWzb8qFqPJcGdsxOqsp1xegpF8iRKaChN-Da6K6nw1Lk8N_ctu0z5KditEd-"/>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-normal leading-normal">Jane Smith</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<p class="text-primary text-base font-bold">$12.50</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-accent text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-medium">4.8</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4 rounded-xl bg-background-light dark:bg-surface-dark shadow-md hover:shadow-xl transition-shadow w-72 flex-shrink-0">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-t-xl" data-alt="A hearty slice of traditional Italian lasagna with rich meat sauce and cheese." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBVDV6DHA7JZxCarwwbxxh31xQDQD7rHoxt4Q7DPnfuh6iRllnTKLvYKrbrvEJEZzgypUF_IgDjb25JJz7g5WAr54uJK3QI44BR3yYm5SYIxjGEIVk5R_j9yrpO1h2ab5RjFiynoRgAYcrsMMod9YQ8oWEZGgHGu4rACEd3X1PCQt3-8W3D7so_bzXGSxEZ-49wmx79HA1yYh-UohHHosoNmfY7P0_OnHINf4kblpRBLkpcXKdV2WpLGVseqcDdnuMnLS4kxoCzgf_U");'></div>
+<div class="flex flex-col flex-1 justify-between p-4 pt-0 gap-4">
+<div>
+<p class="text-text-light dark:text-text-dark text-lg font-bold leading-normal">Nonna's Lasagna</p>
+<div class="flex items-center gap-2 mt-2">
+<img class="w-6 h-6 rounded-full object-cover" data-alt="Avatar of Chef Maria Rossi" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBXwLZXosEUVf7Xt-L7YlAhD8b7uTKsajQmnYRvE5sT8MLT-FcRx-KnFjDv5YlT7iR1kzduEaTxHxNo1YSE7VEPkcNnvbp2Q-WqEQPgCp3nG2tnDJc7qOBGNaDR8nkziBchsnkdjaT34fZkEwmKbTQLdRWBCKnvNudbTCqVeH8BmdM4OHUt2dvW9Gs5m1iOA21WPF99_X_2igs27pRP7KeAQfXewHmfBzyfGvf-K8gVistiEwWAKfKfV4yDkmRlX7MDQrHmL7Jj69kk"/>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-normal leading-normal">Maria Rossi</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<p class="text-primary text-base font-bold">$18.00</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-accent text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-medium">5.0</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+<div class="flex flex-col gap-4 rounded-xl bg-background-light dark:bg-surface-dark shadow-md hover:shadow-xl transition-shadow w-72 flex-shrink-0">
+<div class="w-full bg-center bg-no-repeat aspect-square bg-cover rounded-t-xl" data-alt="A steaming bowl of spicy Thai green curry with chicken and vegetables." style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuAz-V41zUJN8gC5pNmy1DvoELvlpxi4QMm9EagrOa0Eoj1BVeegB9_doZXGLxeYnhEPXdfkVOgV4BoN1JrJ03LCrSTJYTF1hr6mPU5oH6GcEiqMOIAYJugYvCftKpdMdBkHXvVimIr7PwkxWRDWGZIyjfY0EyH1CYpfepTk7cnjVdhF8P8NdvkB9kHNHBNc8YmYusMAYgGUuLh0jyjflCnIZOz9BtjoXzw5on_G5FY2lcmRgwr4w4okgsEazdCUOCypuTj2YcJLLi0s");'></div>
+<div class="flex flex-col flex-1 justify-between p-4 pt-0 gap-4">
+<div>
+<p class="text-text-light dark:text-text-dark text-lg font-bold leading-normal">Spicy Thai Green Curry</p>
+<div class="flex items-center gap-2 mt-2">
+<img class="w-6 h-6 rounded-full object-cover" data-alt="Avatar of Chef Ken Tanaka" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAjaeVrOFCjg3L5SMKviBa2z-TNsEIwZd6Tzlvl3klzA2jLhv-rUwRPuJpPl25k6l6q_Cz8_9cIfaAOPWanfN0UKrhXecwy-D6Ivr6iSg8D3Mfcb8h5vfXo6gAwpO5dOFeAKAGTc7DGu3mseQuw01BV66SmvmoLDXrsnkV2wvzb8cbmtIHQPP82IAqtMpL37pGdAB-sobArQez5KOinZyEQhS1eE4LeZEOctU6eGsV56-9ieh7kXWf2gLn3G5JH8h7xjTGgGUESgBnw"/>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-normal leading-normal">Ken Tanaka</p>
+</div>
+<div class="flex items-center justify-between mt-3">
+<p class="text-primary text-base font-bold">$16.50</p>
+<div class="flex items-center gap-1">
+<span class="material-symbols-outlined text-accent text-lg" style="font-variation-settings: 'FILL' 1;">star</span>
+<p class="text-text-muted-light dark:text-text-muted-dark text-sm font-medium">4.7</p>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section class="flex flex-col gap-8 px-4">
+<h2 class="text-text-light dark:text-text-dark text-2xl md:text-3xl font-bold leading-tight tracking-[-0.015em]">How It Works</h2>
+<div class="grid grid-cols-1 md:grid-cols-3 gap-8 text-center">
+<div class="flex flex-col items-center gap-4 p-6 bg-surface-light dark:bg-surface-dark rounded-xl">
+<div class="flex items-center justify-center bg-primary/20 text-primary w-16 h-16 rounded-full">
+<span class="material-symbols-outlined text-4xl">travel_explore</span>
+</div>
+<h3 class="text-xl font-bold">1. Discover</h3>
+<p class="text-text-muted-light dark:text-text-muted-dark">Browse authentic dishes made by talented home chefs in your local area.</p>
+</div>
+<div class="flex flex-col items-center gap-4 p-6 bg-surface-light dark:bg-surface-dark rounded-xl">
+<div class="flex items-center justify-center bg-primary/20 text-primary w-16 h-16 rounded-full">
+<span class="material-symbols-outlined text-4xl">shopping_cart</span>
+</div>
+<h3 class="text-xl font-bold">2. Order</h3>
+<p class="text-text-muted-light dark:text-text-muted-dark">Select your meal, customize your order, and schedule a delivery time that works for you.</p>
+</div>
+<div class="flex flex-col items-center gap-4 p-6 bg-surface-light dark:bg-surface-dark rounded-xl">
+<div class="flex items-center justify-center bg-primary/20 text-primary w-16 h-16 rounded-full">
+<span class="material-symbols-outlined text-4xl">restaurant</span>
+</div>
+<h3 class="text-xl font-bold">3. Enjoy</h3>
+<p class="text-text-muted-light dark:text-text-muted-dark">Receive your delicious, freshly prepared homemade meal right at your doorstep.</p>
+</div>
+</div>
+</section>
+<section class="flex flex-col gap-4">
+<h2 class="text-text-light dark:text-text-dark text-2xl md:text-3xl font-bold leading-tight tracking-[-0.015em] px-4">Featured Chefs</h2>
+<div class="flex overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<div class="flex items-stretch p-4 gap-6">
+<div class="flex flex-col items-center gap-3 p-6 rounded-xl bg-surface-light dark:bg-surface-dark w-48 flex-shrink-0 text-center">
+<img class="w-24 h-24 rounded-full object-cover border-4 border-primary/50" data-alt="Profile photo of John Doe" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAhGR5_46eJZZ1QzMAmhcaItNuExaKcFUgxvXzm76pTXcM6lrA7a-JEfgXpSnwi-ZoO4OUOZlx7Up0C7CLA_6Ba_-5kA1JfokQO2vqeUi1kDhpp7P9pd9_ZQEHrGxRJpDH3Z3O8xkdR1H9VxouW5GSZlzIta0W3Oy-y-vgtdLb4TTWyVW2gMAFx40KCvFH-mP-IwLqU3qvtU367dFW4wGsle3hwsQ8X5h2EITXt6t2g0udSvHhyMfF3h47Gco9ps4qEpWfI9mYsIxB4"/>
+<p class="font-bold text-text-light dark:text-text-dark">John Doe</p>
+<p class="text-sm text-text-muted-light dark:text-text-muted-dark">American Classics</p>
+</div>
+<div class="flex flex-col items-center gap-3 p-6 rounded-xl bg-surface-light dark:bg-surface-dark w-48 flex-shrink-0 text-center">
+<img class="w-24 h-24 rounded-full object-cover border-4 border-primary/50" data-alt="Profile photo of Jane Smith" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBBNMXNwRrMyqGXoGHsgb0oxFrhoJ8FQRIq019jbkSzk7mFlq96frTtY8B0S34n_gXi8rvCAWgMsMToRopUDwXSermGZiCWFXeyy-cwoTw9WFUyvlPpEfTvCCrxgiHzNAu4RMIYSYO2rUzEz9ZcG35iVFM-lr3xT0kAY6Fjzc5PjbM0n2HK1hfF0fvpUSwgEXFNFKiA9zwKEVDZbJ31tH1U-mfVwKn-EV2fRZlRfOQfFfyFWpGmI4TAmp5d97Q7A94bjiOY3Tvv54W3"/>
+<p class="font-bold text-text-light dark:text-text-dark">Jane Smith</p>
+<p class="text-sm text-text-muted-light dark:text-text-muted-dark">Vegan &amp; Healthy</p>
+</div>
+<div class="flex flex-col items-center gap-3 p-6 rounded-xl bg-surface-light dark:bg-surface-dark w-48 flex-shrink-0 text-center">
+<img class="w-24 h-24 rounded-full object-cover border-4 border-primary/50" data-alt="Profile photo of Maria Rossi" src="https://lh3.googleusercontent.com/aida-public/AB6AXuD2nqACXOUq4-0qgUUPOgBHXQlm8JZL-QHBNsEeh_Msl4lgVmeicHvUmSy0B-jw3yb4x8tQ2y2qt9C7DlsR0PjkBQCPIZU-6gBC80w-d5ApjoMR-YSyr5NJ3hTyhhcW3QYaizRVA4CoWiKI_SGVpEb3vtKV2Mbp4XVeEIMpUAbuo6zzMTCq77gKK64r6bngxLcYCE5FL-XWUPek6Eg2STNxX6PS6T0x2nAUP3zAV3NKc8O93Wx9HExNhMbVXv7B6QJRJqfWOAjrXa7g"/>
+<p class="font-bold text-text-light dark:text-text-dark">Maria Rossi</p>
+<p class="text-sm text-text-muted-light dark:text-text-muted-dark">Authentic Italian</p>
+</div>
+<div class="flex flex-col items-center gap-3 p-6 rounded-xl bg-surface-light dark:bg-surface-dark w-48 flex-shrink-0 text-center">
+<img class="w-24 h-24 rounded-full object-cover border-4 border-primary/50" data-alt="Profile photo of Ken Tanaka" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCBZJsCPJe94I70be51fWkewqQU-6PSf_ploVh9QAySNKmI-zEcpXCvdTL6wjBJMcTAfqyIiTaz6jEvDl0GnoQro57F7fIlD7rk-BTrI5ak9sSYhl9pALGDe4X4Jo5G9G9JjF5OKGwjXIJWXVvKA8o4RuV-gX7YqZ95p1lJdQHlgW8YRJKIkXMEFSQ_AxNYtSkTkIlb_lNm373TLa-dW6Fd_sg9vnrsO88iFEI_R75x8hTXpCDHkgRcvjW-Z4EmPTozEiv-WipH9WAT"/>
+<p class="font-bold text-text-light dark:text-text-dark">Ken Tanaka</p>
+<p class="text-sm text-text-muted-light dark:text-text-muted-dark">Asian Fusion</p>
+</div>
+<div class="flex flex-col items-center gap-3 p-6 rounded-xl bg-surface-light dark:bg-surface-dark w-48 flex-shrink-0 text-center">
+<img class="w-24 h-24 rounded-full object-cover border-4 border-primary/50" data-alt="Profile photo of David Chen" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBRdLVaIzyNLZVpugVm-Gsuu9aEgwb3UhthORUJsPlpB4BDEFCtmVqUARcxeI_3N1aQIqH2t5aaoSu1wA4g0HqL9JJus5mjHQu_1UFKxzrRluWhPiv17mKIE57n51VowLoBSXy-eQvJHfhe1DIHY-DuYOCmmahvn2q8KonjbjZpX8pNqcVFBQamK_u8Klx1uHfYQo_Av8SYKSAMFyyFiRpEGXzftqn7CW0Swhpi55kEUt3CsC8mUHfbhtMXToEpPh6ZQoY-BH97IdqO"/>
+<p class="font-bold text-text-light dark:text-text-dark">David Chen</p>
+<p class="text-sm text-text-muted-light dark:text-text-muted-dark">Sichuan Cuisine</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<footer class="mt-16 border-t border-surface-light dark:border-surface-dark/50 py-10 px-4">
+<div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-5 gap-8">
+<div class="col-span-2 lg:col-span-1">
+<div class="flex items-center gap-2">
+<span class="material-symbols-outlined text-primary text-2xl">local_dining</span>
+<h2 class="text-primary text-lg font-bold">HomeChef</h2>
+</div>
+<p class="mt-4 text-sm text-text-muted-light dark:text-text-muted-dark">Your marketplace for authentic homemade meals.</p>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-text-light dark:text-text-dark">Company</h4>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">About Us</a>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Careers</a>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Press</a>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-text-light dark:text-text-dark">Discover</h4>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Become a Chef</a>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Gift Cards</a>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Help</a>
+</div>
+<div class="flex flex-col gap-3">
+<h4 class="font-bold text-text-light dark:text-text-dark">Legal</h4>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Terms</a>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Privacy</a>
+<a class="text-sm text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">Cookies</a>
+</div>
+<div class="flex flex-col gap-3 col-span-2 md:col-span-1">
+<h4 class="font-bold text-text-light dark:text-text-dark">Follow Us</h4>
+<div class="flex gap-4">
+<a class="text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">
+<svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24"><path d="M22.675 0h-21.35c-.732 0-1.325.593-1.325 1.325v21.351c0 .731.593 1.324 1.325 1.324h11.494v-9.294h-3.128v-3.622h3.128v-2.671c0-3.1 1.893-4.788 4.659-4.788 1.325 0 2.463.099 2.795.143v3.24l-1.918.001c-1.504 0-1.795.715-1.795 1.763v2.313h3.587l-.467 3.622h-3.12v9.293h6.116c.73 0 1.323-.593 1.323-1.325v-21.35c0-.732-.593-1.325-1.323-1.325z"></path></svg>
+</a>
+<a class="text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">
+<svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zm0-2.163c-3.259 0-3.667.014-4.947.072-4.358.2-6.78 2.618-6.98 6.98-.059 1.281-.073 1.689-.073 4.948 0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98 1.281.058 1.689.072 4.948.072 3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98-1.281-.059-1.69-.073-4.949-.073zm0 5.838c-3.403 0-6.162 2.759-6.162 6.162s2.759 6.162 6.162 6.162 6.162-2.759 6.162-6.162-2.759-6.162-6.162-6.162zm0 10.162c-2.209 0-4-1.79-4-4 0-2.209 1.791-4 4-4s4 1.791 4 4c0 2.21-1.791 4-4 4zm6.406-11.845c-.796 0-1.441.645-1.441 1.44s.645 1.441 1.441 1.441 1.441-.645 1.441-1.441c.001-.795-.644-1.44-1.441-1.44z"></path></svg>
+</a>
+<a class="text-text-muted-light dark:text-text-muted-dark hover:text-primary" href="#">
+<svg class="w-6 h-6" fill="currentColor" viewbox="0 0 24 24"><path d="M24 4.557c-.883.392-1.832.656-2.828.775 1.017-.609 1.798-1.574 2.165-2.724-.951.564-2.005.974-3.127 1.195-.897-.957-2.178-1.555-3.594-1.555-3.179 0-5.515 2.966-4.797 6.045-4.091-.205-7.719-2.165-10.148-5.144-1.29 2.213-.669 5.108 1.523 6.574-.806-.026-1.566-.247-2.229-.616v.064c0 2.295 1.634 4.21 3.803 4.65-1.03.28-2.136.22-3.09.117.625 1.956 2.444 3.379 4.6 3.419-2.07 1.623-4.678 2.348-7.29 2.04 2.179 1.397 4.768 2.212 7.548 2.212 9.142 0 14.307-7.721 13.995-14.646.962-.695 1.797-1.562 2.457-2.549z"></path></svg>
+</a>
+</div>
+</div>
+</div>
+<div class="mt-8 text-center text-sm text-text-muted-light dark:text-text-muted-dark border-t border-surface-light dark:border-surface-dark/50 pt-8">
+                            © 2024 HomeChef, Inc. All rights reserved.
+                        </div>
+</footer>
+</div>
+</div>
+</div>
+</div>
+</body></html>

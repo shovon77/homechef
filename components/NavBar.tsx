@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, Platform } from 'react-native'
 import { Link, useRouter } from 'expo-router'
-import { theme } from '../constants/theme'     // components -> ../constants
+import { theme } from '../lib/theme'
 import { supabase } from '../lib/supabase'     // components -> ../lib
 import { useRole } from '../hooks/useRole'
 import { useCart } from '../context/CartContext'
@@ -35,8 +35,6 @@ export default function NavBar() {
             {[
               { href:'/', label:'Home' },
               { href:'/browse', label:'Browse' },
-              { href:'/chefs', label:'Chefs' },
-              { href:'/dishes', label:'Dishes' },
             ].map(i => (
               <Link key={i.href} href={i.href} asChild>
                 <TouchableOpacity style={{ paddingVertical:8, paddingHorizontal:10, borderRadius:8 }}>

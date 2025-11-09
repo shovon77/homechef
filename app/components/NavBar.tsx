@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TouchableOpacity, Platform } from "react-native";
+import { View, Text, TouchableOpacity, Platform, StyleSheet } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { theme } from "../../constants/theme";
 import { cart } from "../../lib/cart";
@@ -19,7 +19,7 @@ export default function NavBar() {
 
   return (
     <View style={{ width:'100%', backgroundColor: theme.colors.surface, borderBottomWidth:1, borderBottomColor: theme.colors.border }}>
-      <View style={{ width:'100%', maxWidth: MAXW, alignSelf:'center', paddingHorizontal:16, paddingVertical:10 }}>
+      <View style={{ width:'100%', maxWidth: CONTAINER_MAX_WIDTH, alignSelf:'center', paddingHorizontal:16, paddingVertical:10 }}>
         <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between', gap:12 }}>
           {/* Brand */}
           <Link href="/" asChild>
@@ -33,18 +33,13 @@ export default function NavBar() {
           {/* Middle: Links */}
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10, flexShrink: 1 }}>
             <Link href="/" asChild>
-              <TouchableOpacity style={linkBtnStyle()}>
-                <Text style={linkTextStyle()}>Home</Text>
+              <TouchableOpacity style={styles.navLink}>
+                <Text style={styles.navLinkText}>Home</Text>
               </TouchableOpacity>
             </Link>
-            <Link href="/dishes" asChild>
-              <TouchableOpacity style={linkBtnStyle()}>
-                <Text style={linkTextStyle()}>Browse</Text>
-              </TouchableOpacity>
-            </Link>
-            <Link href="/chefs" asChild>
-              <TouchableOpacity style={linkBtnStyle()}>
-                <Text style={linkTextStyle()}>Chefs</Text>
+            <Link href="/browse" asChild>
+              <TouchableOpacity style={styles.navLink}>
+                <Text style={styles.navLinkText}>Browse</Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -108,5 +103,17 @@ export default function NavBar() {
         </View>
       </View>
     </View>
-  )
+  );
 }
+
+const styles = StyleSheet.create({
+  navLink: {
+    paddingVertical: 8,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+  },
+  navLinkText: {
+    color: theme.colors.textMuted,
+    fontWeight: '700',
+  },
+});

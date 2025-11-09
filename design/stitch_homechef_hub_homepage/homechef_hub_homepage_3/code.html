@@ -1,0 +1,216 @@
+<!DOCTYPE html>
+<html class="light" lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HomeChef - Authentic Homemade Meals</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com" rel="preconnect"/>
+<link crossorigin="" href="https://fonts.gstatic.com" rel="preconnect"/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:ital,wght@0,200..800;1,200..800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script id="tailwind-config">
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#ee5b2b",
+              "background-light": "#f8f6f6",
+              "background-dark": "#221510",
+              "text-light": "#1b110d",
+              "text-dark": "#f8f6f6",
+              "muted-light": "#9a5f4c",
+              "muted-dark": "#a19996",
+              "surface-light": "#fcf9f8",
+              "surface-dark": "#2a1a14",
+              "border-light": "#f3eae7",
+              "border-dark": "#3f281f",
+            },
+            fontFamily: {
+              "display": ["Plus Jakarta Sans", "Noto Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+<div class="relative flex min-h-screen w-full flex-col group/design-root overflow-x-hidden">
+<div class="layout-container flex h-full grow flex-col">
+<div class="px-4 md:px-10 lg:px-20 xl:px-40 flex flex-1 justify-center py-5">
+<div class="layout-content-container flex flex-col w-full max-w-screen-xl flex-1">
+<header class="flex items-center justify-between whitespace-nowrap border-b border-solid border-border-light dark:border-border-dark px-4 md:px-10 py-3 bg-surface-light dark:bg-surface-dark rounded-xl">
+<div class="flex items-center gap-4">
+<div class="size-6 text-primary">
+<svg fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2v4h-2zm0 6h2v2h-2z" opacity="0"></path>
+<path d="M12 5.5c-3.87 0-7 3.13-7 7s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"></path>
+<path d="M12.75 8.5v4.58l3.15 1.82-.6 1.04-3.55-2.05V8.5h1z" opacity="0"></path>
+<path clip-rule="evenodd" d="M12 4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm4.56 11.23l-4.06-2.35v-5.38h1.5v4.7l3.56 2.06-1 1.73z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h2 class="text-text-light dark:text-text-dark text-lg font-bold leading-tight tracking-[-0.015em]">HomeChef</h2>
+</div>
+<nav class="hidden md:flex flex-1 justify-center gap-9">
+<a class="text-text-light dark:text-text-dark text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">Explore</a>
+<a class="text-text-light dark:text-text-dark text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">How It Works</a>
+<a class="text-text-light dark:text-text-dark text-sm font-medium leading-normal hover:text-primary dark:hover:text-primary transition-colors" href="#">Become a Chef</a>
+</nav>
+<div class="flex items-center gap-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-90 transition-opacity">
+<span class="truncate">Sign Up</span>
+</button>
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 bg-primary/20 dark:bg-primary/30 text-primary dark:text-white text-sm font-bold leading-normal tracking-[0.015em] hover:bg-opacity-80 transition-opacity">
+<span class="truncate">Login</span>
+</button>
+</div>
+</header>
+<main class="flex flex-col gap-10 md:gap-16 mt-8">
+<div class="@container">
+<div class="flex min-h-[480px] flex-col gap-6 bg-cover bg-center bg-no-repeat @[480px]:gap-8 rounded-xl items-center justify-center p-4" data-alt="A vibrant, colorful spread of various homemade dishes on a rustic wooden table." style="background-image: linear-gradient(rgba(0, 0, 0, 0.2) 0%, rgba(0, 0, 0, 0.5) 100%), url('https://lh3.googleusercontent.com/aida-public/AB6AXuAycgGKa3ARno72sXGgwJib3z8YM-05qFPkBVWnwhDUFH8P9QAm4ui0K9WNmXeo11P2r9tb0A4X2OW6I_PJ-F1YdRR9hLdjyxNiR0NFRgawpsBX8nuQ5-ll3DJU85dPPGGV5dhm72Pr2RQQfB5wemUng64bWBD_LV1MhNBTym8fAJUGGQZFamuLkw4pRwGzXLigHqvqdxT3GM7sdCrMneLKeh1mqpMix4z1f4hVZipaNsuZbro94Y2226GOqafBQK6AJiYa6uqTQXLz');">
+<div class="flex flex-col gap-2 text-center max-w-2xl">
+<h1 class="text-white text-4xl font-black leading-tight tracking-[-0.033em] @[480px]:text-5xl @[480px]:font-black @[480px]:leading-tight @[480px]:tracking-[-0.033em]">Authentic Homemade Meals, Made by Your Neighbors.</h1>
+<h2 class="text-white text-sm font-normal leading-normal @[480px]:text-base @[480px]:font-normal @[480px]:leading-normal">Discover talented home chefs and enjoy delicious, handcrafted food.</h2>
+</div>
+<label class="flex flex-col min-w-40 h-14 w-full max-w-[480px] @[480px]:h-16">
+<div class="flex w-full flex-1 items-stretch rounded-lg h-full shadow-lg">
+<div class="text-muted-light dark:text-muted-dark flex bg-surface-light dark:bg-surface-dark items-center justify-center pl-4 rounded-l-lg border-y border-l border-border-light dark:border-border-dark">
+<span class="material-symbols-outlined">search</span>
+</div>
+<input class="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden text-text-light dark:text-text-dark focus:outline-0 focus:ring-2 focus:ring-primary focus:ring-inset border-y border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark h-full placeholder:text-muted-light dark:placeholder:text-muted-dark px-4 text-sm font-normal leading-normal @[480px]:text-base @[480px]:font-normal @[480px]:leading-normal" placeholder="Search for pasta, tacos, or chefs..." value=""/>
+<div class="flex items-center justify-center rounded-r-lg border-y border-r border-border-light dark:border-border-dark bg-surface-light dark:bg-surface-dark pr-2">
+<button class="flex min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-10 px-4 @[480px]:h-12 @[480px]:px-5 bg-primary text-white text-sm font-bold leading-normal tracking-[0.015em] @[480px]:text-base @[480px]:font-bold @[480px]:leading-normal @[480px]:tracking-[0.015em] hover:bg-opacity-90 transition-opacity">
+<span class="truncate">Find Food</span>
+</button>
+</div>
+</div>
+</label>
+</div>
+</div>
+<section>
+<h2 class="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">Chefs in the Spotlight</h2>
+<div class="flex overflow-x-auto [-ms-scrollbar-style:none] [scrollbar-width:none] [&amp;::-webkit-scrollbar]:hidden">
+<div class="flex items-stretch p-4 gap-4 md:gap-6">
+<div class="flex h-full flex-1 flex-col gap-4 rounded-lg min-w-60 group cursor-pointer">
+<div class="w-full relative bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105">
+<div class="absolute inset-0 bg-rose-100 dark:bg-rose-900/50"></div>
+<img alt="Stylized avatar of Maria Garcia, an Italian chef." class="absolute inset-0 w-full h-full object-contain p-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuA5aCkDjksnFBbE590xh2hdbTOelepQbWWiqEdWAsbqbiiQtywwze8uxvwM2Pw07emlqlizmp0-_COgIPLsKkEn_wSM-Daq4Fl0aw54sxMEMB2fzhcHQOPyopPvebb2grT2zPQ4W5qPwlpxX5W1u-A8mVqOBjS7I8eZWK_FTktHRX-dtub40QlyrvfYUQ8z_-7iYJnJ0W3wekTf8__asGLqkE5u7fNdznyFLrlQjCnIYNOKMCaoZhPVIronCFVXEy8TH11QgB8z3rr4"/>
+</div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Maria Garcia</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">Italian Cuisine, ★ 4.9, San Francisco</p>
+</div>
+</div>
+<div class="flex h-full flex-1 flex-col gap-4 rounded-lg min-w-60 group cursor-pointer">
+<div class="w-full relative bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105">
+<div class="absolute inset-0 bg-sky-100 dark:bg-sky-900/50"></div>
+<img alt="Stylized avatar of David Chen, a Sichuan chef." class="absolute inset-0 w-full h-full object-contain p-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAVVTayLvZPgXX8KM8hSP3A9DAWArDIvSYyFqjcIh5_5DJZiSXYl2LjyQJj6FeMCtfDgJQJa6UXh43mLEKAVBU_moxQJsWIII6a0zkaioTjjSS8Ped5cnBxx9H5cjE357ZqUQHN-R9zolhgXd733O7AuLy38dW41FCST54-3N2u6R1aqQpDb_hfYaUPIlqbioeQq4WUrjjOl4RsK4DV5PmRoAD9NfRNW4zT4oVoLzIJuxVcjoUjlK-sDo5dcVB60Re_kpFgztyKF8FM"/>
+</div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">David Chen</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">Sichuan Cuisine, ★ 4.8, New York</p>
+</div>
+</div>
+<div class="flex h-full flex-1 flex-col gap-4 rounded-lg min-w-60 group cursor-pointer">
+<div class="w-full relative bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105">
+<div class="absolute inset-0 bg-amber-100 dark:bg-amber-900/50"></div>
+<img alt="Stylized avatar of Aisha Khan, an Indian fusion chef." class="absolute inset-0 w-full h-full object-contain p-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuAXwYlObe-CEbJuQl7oOeQJ6H8DbzWPTiZpHXEiLQt4K_nfdVfsNB5nK2r0gJFOCjOWx3oCanfm4h6j7_wSBEV8wmLqrN9Rq2-OLu1rx3ydW80mmaqwz7dUtLEhKgcZl71we266NU6shysHjRpZaDD_149vh1BVFrslITVpeZNAzVnESjeaUpri8lC-YD4CqiWpm-7lzUNjfOp9kMTfzQSkUZANcqXtQAig29UtlN_8rNw87MLhZzDuCdxzzT5Or7C_4v-8LTwXUtNe"/>
+</div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Aisha Khan</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">Indian Fusion, ★ 4.9, Chicago</p>
+</div>
+</div>
+<div class="flex h-full flex-1 flex-col gap-4 rounded-lg min-w-60 group cursor-pointer">
+<div class="w-full relative bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105">
+<div class="absolute inset-0 bg-stone-200 dark:bg-stone-900/50"></div>
+<img alt="Stylized avatar of Ben Carter, an American BBQ master." class="absolute inset-0 w-full h-full object-contain p-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuBlb8F0Vc2gWBdo2blHGNLrvLNMDKMEjWMvm8UHGL2Xqhvv2SPuuGCdrl4olvjlDDEcvNr91ZwGJ5YCDrHYMWSdzTVIUHvmVGh2_T58UjUnLlaVv0j6lgzr7-7QYcaC7oX6mqiJxsPJPixcflA7btxqQ3q_xMHMIvAS5DY3rHf5h-EtScODtOLC-I1f6lgvEa9aAKaesVyUADutdjaKBWKH9tHoZsxBRt28G9l3DxmaRYnzFqk0nleNusPhK3doY4JPgZDfqx8ju9mB"/>
+</div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Ben Carter</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">American BBQ, ★ 4.7, Austin</p>
+</div>
+</div>
+<div class="flex h-full flex-1 flex-col gap-4 rounded-lg min-w-60 group cursor-pointer">
+<div class="w-full relative bg-center bg-no-repeat aspect-[3/4] bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105">
+<div class="absolute inset-0 bg-teal-100 dark:bg-teal-900/50"></div>
+<img alt="Stylized avatar of Sofia Reyes, a Mexican chef." class="absolute inset-0 w-full h-full object-contain p-4" src="https://lh3.googleusercontent.com/aida-public/AB6AXuCNNIbLNIXuuDB1SamzrJsRfiC0ZwJxJ_Oaw3m2uPJdWUoux0-lxP0Q3i9X-5D4Zj77iUmLIRcyqe17NBywiOQifW6dT5smwq2qP_SrbVYqUS5kl845sRMQRWjDeJgiF_sbvvpAaXW2rpmDesPHdrKpnnh5CzAjHw2mSzaFliDiyT2FhewY5prYVq_xrPIpYUMNvxsbQaXVchX4oTtVF2tTMCIhYuHPKe5d0m5iSq3fXNUmYs-zUHW0ATUA0brVeB74gV7Zl6PXqLjt"/>
+</div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Sofia Reyes</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">Mexican Cuisine, ★ 4.9, Los Angeles</p>
+</div>
+</div>
+</div>
+</div>
+</section>
+<section>
+<h2 class="text-text-light dark:text-text-dark text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 pb-3 pt-5">What's Popular This Week</h2>
+<div class="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6 p-4">
+<div class="flex flex-col gap-4 group cursor-pointer">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105" data-alt="A delicious looking bowl of homemade spaghetti bolognese." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuAmUqPVOt611Mo_oWeVgdAKy0YxZLc4Jfiq0N-1eqvb0MQ9bTjl9M1TQqxMwdxO9dp3qLX4Sp3bfQMy6mW-vsl9I6SoDVxPmtis6OKpS2nXHSNnElWkfswFrh8ZMkIRVVKbJBc1etkLy_aKcVWwM_A5C8pHSrXGxhGf7N-BJaIJoc4GQi-47yYZbCJdGWRjYn_iaMqtgdgks9vv1Zb9BKPS989Q8wpQOPT_bJEA3_hq5od-1w7b3RR1JdRfOzocF5lnBlyvwysIA-24');"></div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Spaghetti Bolognese</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">by Maria Garcia, ★ 4.9</p>
+</div>
+</div>
+<div class="flex flex-col gap-4 group cursor-pointer">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105" data-alt="Spicy Mapo Tofu in a white bowl with a side of rice." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuB5dHpQxnlG4NbNf38Mxg6-xxIem2JqZPCeUxK8G37i0Kj3JmytsqtgclJ3lMjPBsjbVJQMcZMR_vGTP8M-L7eEDk2NuDC8MbtflX6Ay26O_JUmbxXVMDUtvRBisDi-jSTmevhzSDuvtompRqBzDjmoAyCY3BF4rMiqvm830xENlUDuCcGHC6DhAg3LojqndwZFdBHUhUwrY24cso3SpHm_ZqK_b2nJ2R6wcFJ5D-TFChwUOydchc83T0H92iCvBeLC8s2ghjmC3yZN');"></div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Mapo Tofu</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">by David Chen, ★ 4.8</p>
+</div>
+</div>
+<div class="flex flex-col gap-4 group cursor-pointer">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105" data-alt="Plated biryani with a side of raita." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuCk1MJ_zJsz7KorndZ36Y77FFEsRv40hZS-0nMUnaC6ociUqmah2utPPA_76wlUW3x2xCsKfbJypt55yLcwqRXBXj2tE-woiS3VjmpyW6K98_AiFeDfdRqgtTXVJzOjnWHm0rRz1_ZKRVheVt5lvw1FGJWBvRcrqi70M1k0IJUQMC4df3skcHYeln45lErVUJkASA5eD3HeIJlt3_KZyAiLhPKn87CTq8pyik9lH_Anm4_hyBW1huIsEsyv5EuKjOXuEvyeS7B39Rgi');"></div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Chicken Biryani Fusion</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">by Aisha Khan, ★ 4.9</p>
+</div>
+</div>
+<div class="flex flex-col gap-4 group cursor-pointer">
+<div class="w-full bg-center bg-no-repeat aspect-video bg-cover rounded-xl flex flex-col overflow-hidden transform transition-transform duration-300 group-hover:scale-105" data-alt="A juicy rack of BBQ ribs on a wooden cutting board." style="background-image: url('https://lh3.googleusercontent.com/aida-public/AB6AXuBTuqGewXilTfYb8cC1CeJdveQWdT8IUS-OGBbNvNxM8yU4Y0uZpzpwztlqEv5wz3AG-tU7NiaFPhJM_PawM-wCmCg7tEIBCpi74eOEHLM8oyIdcB1sqC3fkI-39q8gTEYHbzAiS0cHVKQSO3MOGduQsVjXowiX9BCmcRxGrhcaQRa6RpLClLo_i1jPs1cVU91YeUK_gCb2zZGUF8_5HjqBLP2Ml06zIrzI_1zNGA3RXbz50q7xknQDOx0QjzeiPWg2_ELp4VFpMSn3');"></div>
+<div>
+<p class="text-text-light dark:text-text-dark text-base font-medium leading-normal">Smoked BBQ Ribs</p>
+<p class="text-muted-light dark:text-muted-dark text-sm font-normal leading-normal">by Ben Carter, ★ 4.7</p>
+</div>
+</div>
+</div>
+</section>
+</main>
+<footer class="mt-16 border-t border-border-light dark:border-border-dark py-8 px-4">
+<div class="flex flex-col md:flex-row justify-between items-center gap-8">
+<div class="flex items-center gap-4">
+<div class="size-6 text-primary">
+<svg fill="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+<path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zm-1-12h2v4h-2zm0 6h2v2h-2z" opacity="0"></path>
+<path d="M12 5.5c-3.87 0-7 3.13-7 7s3.13 7 7 7 7-3.13 7-7-3.13-7-7-7zm0 12c-2.76 0-5-2.24-5-5s2.24-5 5-5 5 2.24 5 5-2.24 5-5 5z"></path>
+<path d="M12.75 8.5v4.58l3.15 1.82-.6 1.04-3.55-2.05V8.5h1z" opacity="0"></path>
+<path clip-rule="evenodd" d="M12 4c-4.42 0-8 3.58-8 8s3.58 8 8 8 8-3.58 8-8-3.58-8-8-8zm4.56 11.23l-4.06-2.35v-5.38h1.5v4.7l3.56 2.06-1 1.73z" fill-rule="evenodd"></path>
+</svg>
+</div>
+<h2 class="text-text-light dark:text-text-dark text-lg font-bold leading-tight tracking-[-0.015em]">HomeChef</h2>
+</div>
+<nav class="flex flex-wrap justify-center gap-6 text-sm font-medium">
+<a class="text-muted-light dark:text-muted-dark hover:text-primary dark:hover:text-primary transition-colors" href="#">About Us</a>
+<a class="text-muted-light dark:text-muted-dark hover:text-primary dark:hover:text-primary transition-colors" href="#">FAQ</a>
+<a class="text-muted-light dark:text-muted-dark hover:text-primary dark:hover:text-primary transition-colors" href="#">Contact</a>
+<a class="text-muted-light dark:text-muted-dark hover:text-primary dark:hover:text-primary transition-colors" href="#">Terms of Service</a>
+</nav>
+<div class="flex gap-4">
+<a class="text-muted-light dark:text-muted-dark hover:text-primary dark:hover:text-primary transition-colors" data-alt="Link to our Facebook page." href="#">
+<svg aria-hidden="true" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path clip-rule="evenodd" d="M22 12c0-5.523-4.477-10-10-10S2 6.477 2 12c0 4.991 3.657 9.128 8.438 9.878v-6.987h-2.54V12h2.54V9.797c0-2.506 1.492-3.89 3.777-3.89 1.094 0 2.238.195 2.238.195v2.46h-1.26c-1.243 0-1.63.771-1.63 1.562V12h2.773l-.443 2.89h-2.33v6.988C18.343 21.128 22 16.991 22 12z" fill-rule="evenodd"></path></svg>
+</a>
+<a class="text-muted-light dark:text-muted-dark hover:text-primary dark:hover:text-primary transition-colors" data-alt="Link to our Instagram page." href="#">
+<svg aria-hidden="true" class="w-6 h-6" fill="currentColor" viewBox="0 0 24 24"><path clip-rule="evenodd" d="M12.315 2c2.43 0 2.784.013 3.808.06 1.064.049 1.791.218 2.427.465a4.902 4.902 0 011.772 1.153 4.902 4.902 0 011.153 1.772c.247.636.416 1.363.465 2.427.048 1.024.06 1.378.06 3.808s-.012 2.784-.06 3.808c-.049 1.064-.218 1.791-.465 2.427a4.902 4.902 0 01-1.153 1.772 4.902 4.902 0 01-1.772 1.153c-.636.247-1.363.416-2.427.465-1.024.048-1.378.06-3.808.06s-2.784-.012-3.808-.06c-1.064-.049-1.791-.218-2.427-.465a4.902 4.902 0 01-1.772-1.153 4.902 4.902 0 01-1.153-1.772c-.247-.636-.416-1.363-.465-2.427-.048-1.024-.06-1.378-.06-3.808s.012-2.784.06-3.808c.049-1.064.218-1.791.465-2.427a4.902 4.902 0 011.153-1.772A4.902 4.902 0 016.345 2.525c.636-.247 1.363-.416 2.427-.465C9.792 2.013 10.146 2 12.315 2zm-1.163 1.943c-2.43 0-2.758.01-3.728.058-1.01.046-1.625.2-2.096.385a3.007 3.007 0 00-1.15 1.15c-.185.47-.339 1.086-.385 2.096-.048.97-.058 1.299-.058 3.728s.01 2.758.058 3.728c.046 1.01.2 1.625.385 2.096a3.007 3.007 0 001.15 1.15c.47.185 1.086.339 2.096.385.97.048 1.299.058 3.728.058s2.758-.01 3.728-.058c1.01-.046 1.625-.2 2.096-.385a3.007 3.007 0 001.15-1.15c.185-.47.339-1.086.385-2.096.048-.97.058-1.299.058-3.728s-.01-2.758-.058-3.728c-.046-1.01-.2-1.625-.385-2.096a3.007 3.007 0 00-1.15-1.15c-.47-.185-1.086-.339-2.096-.385C15.08 3.953 14.752 3.943 12.315 3.943h-1.163zM12 7.177a4.823 4.823 0 100 9.646 4.823 4.823 0 000-9.646zm0 7.772a2.949 2.949 0 110-5.898 2.949 2.949 0 010 5.898zm6.505-7.828a1.163 1.163 0 100-2.326 1.163 1.163 0 000 2.326z" fill-rule="evenodd"></path></svg>
+</a>
+</div>
+</div>
+<p class="text-center text-xs text-muted-light dark:text-muted-dark mt-8">© 2024 HomeChef. All rights reserved.</p>
+</footer>
+</div>
+</div>
+</div>
+</div>
+</body></html>
