@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Platform } from "react-native";
+import { View, Text, FlatList, Image, TouchableOpacity, TextInput, ActivityIndicator, StyleSheet, Platform, ScrollView } from "react-native";
 import { Link, useLocalSearchParams } from "expo-router";
 import { theme } from "../../lib/theme";
 import { useResponsiveColumns } from "../../utils/responsive";

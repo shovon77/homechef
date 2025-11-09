@@ -3,6 +3,28 @@
 
 'SQL'
 
+-- WARNING: This schema is for context only and is not meant to be run.
+-- Table order and constraints may not be valid for execution.
+
+CREATE TABLE public.chef_applications (
+  id uuid NOT NULL DEFAULT gen_random_uuid(),
+  user_id uuid NOT NULL,
+  name text NOT NULL,
+  email text,
+  phone text,
+  location text,
+  short_bio text,
+  experience text,
+  cuisine_specialty text,
+  status text NOT NULL DEFAULT 'submitted'::text CHECK (status = ANY (ARRAY['submitted'::text, 'approved'::text, 'rejected'::text])),
+  created_at timestamp with time zone NOT NULL DEFAULT now(),
+  reviewed_at timestamp with time zone,
+  reviewed_by uuid,
+  notes text,
+  CONSTRAINT chef_applications_pkey PRIMARY KEY (id),
+  CONSTRAINT chef_applications_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT chef_applications_reviewed_by_fkey FOREIGN KEY (reviewed_by) REFERENCES auth.users(id)
+);
 CREATE TABLE public.chef_ratings (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   chef_id bigint NOT NULL,
@@ -17,8 +39,10 @@ CREATE TABLE public.chef_reviews (
   rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
   comment text,
   created_at timestamp with time zone DEFAULT now(),
+  user_id uuid,
   CONSTRAINT chef_reviews_pkey PRIMARY KEY (id),
-  CONSTRAINT chef_reviews_chef_id_fkey FOREIGN KEY (chef_id) REFERENCES public.chefs(id)
+  CONSTRAINT chef_reviews_chef_id_fkey FOREIGN KEY (chef_id) REFERENCES public.chefs(id),
+  CONSTRAINT chef_reviews_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.chefs (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -40,8 +64,11 @@ CREATE TABLE public.dish_ratings (
   rating integer NOT NULL CHECK (rating >= 1 AND rating <= 5),
   created_at timestamp with time zone DEFAULT now(),
   stars integer NOT NULL CHECK (stars >= 1 AND stars <= 5),
+  user_id uuid,
+  comment text,
   CONSTRAINT dish_ratings_pkey PRIMARY KEY (id),
-  CONSTRAINT dish_ratings_dish_id_fkey FOREIGN KEY (dish_id) REFERENCES public.dishes(id)
+  CONSTRAINT dish_ratings_dish_id_fkey FOREIGN KEY (dish_id) REFERENCES public.dishes(id),
+  CONSTRAINT dish_ratings_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
 );
 CREATE TABLE public.dishes (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
@@ -97,5 +124,4 @@ CREATE TABLE public.users (
   CONSTRAINT users_pkey PRIMARY KEY (id),
   CONSTRAINT users_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
-
 SQL

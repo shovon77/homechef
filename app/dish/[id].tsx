@@ -264,7 +264,12 @@ export default function DishDetail() {
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
-      <View style={styles.container}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={true}
+      >
+        <View style={styles.container}>
         {/* Breadcrumbs */}
         <View style={styles.breadcrumbs}>
           <Link href="/" asChild>
@@ -499,6 +504,7 @@ export default function DishDetail() {
           </View>
         </View>
       </View>
+      </ScrollView>
     </Screen>
   );
 }

@@ -55,3 +55,30 @@ export async function ensureProfile(client?: SupabaseClient): Promise<{ ok: bool
   }
 }
 
+/**
+ * Simple helper for chef sign-up flow
+ * Ensures a profile row exists in public.profiles for the current user.
+ * @param supabaseClient - Supabase client instance
+ * @returns Profile data or null
+ */
+export async function ensureProfileSimple(supabaseClient: typeof supabase) {
+  const { data: { user } } = await supabaseClient.auth.getUser();
+  if (!user) return null;
+
+  // upsert by id
+  const { error } = await supabaseClient
+    .from('profiles')
+    .upsert({ id: user.id, email: user.email }, { onConflict: 'id' });
+
+  if (error) console.warn('ensureProfile upsert error', error);
+
+  // re-read
+  const { data } = await supabaseClient
+    .from('profiles')
+    .select('id,email,is_admin,is_chef,name')
+    .eq('id', user.id)
+    .maybeSingle();
+
+  return data ?? null;
+}
+

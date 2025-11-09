@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { ensureProfile } from '../lib/ensureProfile';
 import { isLocalAdmin } from '../lib/admin';
@@ -16,12 +16,17 @@ type RoleState = {
 };
 
 /**
- * Stable role hook - runs once on mount, no dependency loops
+ * Role hook that listens to auth state changes and refreshes role
  * 
  * Returns role based on:
  * - isAdmin: profile.is_admin OR email in EXPO_PUBLIC_ADMIN_EMAILS
  * - isChef: profile.is_chef === true
  * - role: 'admin' | 'chef' | 'user'
+ * 
+ * Note: This hook refreshes on auth state changes. If a user's profile
+ * changes (e.g., becomes a chef) without an auth state change, the role
+ * may not update immediately. Consider refreshing the page or navigating
+ * to trigger a re-check.
  */
 export function useRole(): RoleState {
   const [state, setState] = useState<RoleState>({
@@ -33,13 +38,7 @@ export function useRole(): RoleState {
     profile: null,
   });
 
-  const hasRun = useRef(false);
-
   useEffect(() => {
-    // Only run once
-    if (hasRun.current) return;
-    hasRun.current = true;
-
     let mounted = true;
 
     async function checkRole() {
@@ -85,8 +84,18 @@ export function useRole(): RoleState {
         const isAdminFromEmail = isLocalAdmin(user);
         const isAdmin = isAdminFromProfile || isAdminFromEmail;
 
-        // Compute isChef: profile.is_chef === true
-        const isChef = profile?.is_chef === true;
+        // Compute isChef: profile.is_chef === true OR user exists in chefs table
+        let isChef = profile?.is_chef === true;
+        
+        // Also check chefs table as fallback (in case profile.is_chef isn't set but chef entry exists)
+        if (!isChef && profile?.email) {
+          const { data: chefData } = await supabase
+            .from('chefs')
+            .select('id')
+            .eq('email', profile.email)
+            .maybeSingle();
+          isChef = !!chefData;
+        }
 
         // Determine role
         let role: Role = 'user';
@@ -124,12 +133,31 @@ export function useRole(): RoleState {
       }
     }
 
+    // Check role on mount
     checkRole();
+
+    // Listen for auth state changes (login, logout, token refresh)
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+      if (mounted) {
+        // Refresh role when auth state changes
+        checkRole();
+      }
+    });
+
+    // Also periodically refresh role (every 30 seconds) to catch profile changes
+    // This handles cases where profile.is_chef is updated without an auth state change
+    const intervalId = setInterval(() => {
+      if (mounted) {
+        checkRole();
+      }
+    }, 30000); // 30 seconds
 
     return () => {
       mounted = false;
+      subscription.unsubscribe();
+      clearInterval(intervalId);
     };
-  }, []); // Empty deps - runs once
+  }, []); // Empty deps - only run on mount/unmount
 
   return state;
 }

@@ -38,6 +38,7 @@ async function requireAdmin(): Promise<boolean> {
 
 /**
  * Toggle chef active status
+ * Sets status to 'active' when activating, 'pending' when deactivating
  */
 export async function toggleChefActive(chefId: number, active: boolean): Promise<{ ok: boolean; error?: string }> {
   if (!(await requireAdmin())) {
@@ -45,9 +46,10 @@ export async function toggleChefActive(chefId: number, active: boolean): Promise
   }
 
   try {
+    // Use status field: 'active' when active=true, 'pending' when active=false
     const { error } = await supabase
       .from('chefs')
-      .update({ active })
+      .update({ status: active ? 'active' : 'pending' })
       .eq('id', chefId);
 
     if (error) throw error;
@@ -94,6 +96,123 @@ export async function updateUserProfile(
       .from('profiles')
       .update(updates)
       .eq('id', userId);
+
+    if (error) throw error;
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
+ * Approve a chef application
+ * Updates application status, sets user as chef, and creates/updates chefs table entry
+ */
+export async function approveChefApplication(
+  applicationId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: 'Admin access required' };
+  }
+
+  try {
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
+    if (!adminUser) {
+      return { ok: false, error: 'Admin user not found' };
+    }
+
+    // Get the application
+    const { data: application, error: fetchError } = await supabase
+      .from('chef_applications')
+      .select('*')
+      .eq('id', applicationId)
+      .single();
+
+    if (fetchError) throw fetchError;
+    if (!application) {
+      return { ok: false, error: 'Application not found' };
+    }
+
+    // Update application status
+    const { error: updateAppError } = await supabase
+      .from('chef_applications')
+      .update({
+        status: 'approved',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: adminUser.id,
+      })
+      .eq('id', applicationId);
+
+    if (updateAppError) throw updateAppError;
+
+    // Set user as chef in profiles
+    const { error: profileError } = await supabase
+      .from('profiles')
+      .update({ is_chef: true, role: 'chef' })
+      .eq('id', application.user_id);
+
+    if (profileError) throw profileError;
+
+    // Create or update chefs table entry
+    const { error: chefError } = await supabase
+      .from('chefs')
+      .upsert({
+        name: application.name,
+        email: application.email,
+        phone: application.phone,
+        location: application.location,
+        bio: application.short_bio,
+        status: 'active',
+      }, {
+        onConflict: 'name',
+      });
+
+    if (chefError) {
+      // If chef already exists, just update it
+      const { error: updateChefError } = await supabase
+        .from('chefs')
+        .update({
+          email: application.email,
+          phone: application.phone,
+          location: application.location,
+          bio: application.short_bio,
+          status: 'active',
+        })
+        .eq('name', application.name);
+
+      if (updateChefError) throw updateChefError;
+    }
+
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
+ * Reject a chef application
+ */
+export async function rejectChefApplication(
+  applicationId: string
+): Promise<{ ok: boolean; error?: string }> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: 'Admin access required' };
+  }
+
+  try {
+    const { data: { user: adminUser } } = await supabase.auth.getUser();
+    if (!adminUser) {
+      return { ok: false, error: 'Admin user not found' };
+    }
+
+    const { error } = await supabase
+      .from('chef_applications')
+      .update({
+        status: 'rejected',
+        reviewed_at: new Date().toISOString(),
+        reviewed_by: adminUser.id,
+      })
+      .eq('id', applicationId);
 
     if (error) throw error;
     return { ok: true };

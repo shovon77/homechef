@@ -151,10 +151,15 @@ export default function ChefDetailView() {
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
-      <View style={styles.container}>
-        <View style={styles.layout}>
-          {/* Left Sidebar - Sticky */}
-          <View style={styles.sidebar}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={{ paddingBottom: 32 }}
+        showsVerticalScrollIndicator={true}
+      >
+        <View style={styles.container}>
+          <View style={styles.layout}>
+            {/* Left Sidebar - Sticky */}
+            <View style={styles.sidebar}>
             <View style={styles.sidebarCard}>
               {/* Profile Card */}
               <View style={styles.profileSection}>
@@ -255,12 +260,7 @@ export default function ChefDetailView() {
             )}
 
             {/* Content based on active tab */}
-            <ScrollView 
-              style={styles.contentScroll}
-              contentContainerStyle={styles.contentScrollContent}
-              showsVerticalScrollIndicator={false}
-              nestedScrollEnabled
-            >
+            <View style={styles.contentScroll}>
               {activeTab === 'dishes' ? (
                 <View style={styles.dishesGrid}>
                   {dishes.length === 0 ? (
@@ -382,10 +382,11 @@ export default function ChefDetailView() {
       )}
     </View>
               )}
-            </ScrollView>
             </View>
+            </View>
+          </View>
         </View>
-      </View>
+      </ScrollView>
     </Screen>
   );
 }
@@ -623,8 +624,6 @@ const styles = StyleSheet.create({
   },
   contentScroll: {
     flex: 1,
-  },
-  contentScrollContent: {
     paddingBottom: theme.spacing['4xl'],
   },
   dishesGrid: {
