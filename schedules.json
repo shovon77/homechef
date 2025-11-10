@@ -1,0 +1,6 @@
+[
+    {
+      "function": "auto-reject-expired",
+      "schedule": "*/5 * * * *"
+    }
+  ]

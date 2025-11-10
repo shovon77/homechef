@@ -1,14 +1,14 @@
 'use client';
 
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, StyleSheet, Linking, Platform } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import Screen from '../../components/Screen';
 import { useCart } from '../../context/CartContext';
-import { supabase } from '../../lib/supabase';
 import { getChefById } from '../../lib/db';
-import { combineLocalDateTime, isValidPickup, toUtcISOString } from '../../lib/datetime';
+import { combineLocalDateTime, isValidPickup } from '../../lib/datetime';
 import { safeToFixed } from '../../lib/number';
+import { callFn } from '../../lib/fn';
 
 const BACKGROUND = '#F8FCFB';
 const BORDER = '#E5E7EB';
@@ -19,7 +19,7 @@ const TEXT_MUTED = '#6B7280';
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, cartChefId, clearCart } = useCart();
+  const { items, cartChefId } = useCart();
   const [chefName, setChefName] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState('');
   const [timeInput, setTimeInput] = useState('');
@@ -66,50 +66,23 @@ export default function CheckoutPage() {
 
     setSubmitting(true);
     try {
-      const { data: auth } = await supabase.auth.getUser();
-      const user = auth?.user;
-      if (!user) {
-        Alert.alert('Sign in required', 'Please sign in before placing an order.');
-        router.replace('/auth');
-        return;
+      const pickupISO = combined.toISOString();
+
+      const payload = {
+        pickupAtISO: pickupISO,
+        items: items.map(item => ({ dishId: Number(item.id), quantity: item.quantity })),
+      };
+
+      const { url } = await callFn<{ url: string }>('create-checkout', payload);
+      if (!url) {
+        throw new Error('Checkout session missing URL');
       }
 
-      const pickupISO = toUtcISOString(combined);
-
-      const orderInsert = await supabase
-        .from('orders')
-        .insert({
-          user_id: user.id,
-          chef_id: cartChefId,
-          status: 'requested',
-          total_cents: totalCents,
-          pickup_at: pickupISO,
-        })
-        .select('id')
-        .single();
-
-      if (orderInsert.error || !orderInsert.data) {
-        throw orderInsert.error || new Error('Order insert failed');
+      if (Platform.OS === 'web') {
+        window.location.href = url;
+      } else {
+        await Linking.openURL(url);
       }
-
-      const orderId = orderInsert.data.id;
-
-      const orderItems = items.map(item => ({
-        order_id: orderId,
-        dish_id: Number(item.id),
-        quantity: item.quantity,
-        unit_price_cents: Math.round(Number(item.price) * 100),
-      }));
-
-      if (orderItems.length > 0) {
-        const oi = await supabase.from('order_items').insert(orderItems);
-        if (oi.error) {
-          throw oi.error;
-        }
-      }
-
-      clearCart();
-      router.replace(`/checkout/submitted?id=${orderId}`);
     } catch (error: any) {
       console.error('Checkout submit error:', error);
       Alert.alert('Checkout Error', error?.message || 'Could not place order. Please try again.');

@@ -98,11 +98,15 @@ CREATE TABLE public.order_items (
 CREATE TABLE public.orders (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   user_id uuid NOT NULL,
-  status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'completed'::text, 'cancelled'::text])),
+  status text NOT NULL DEFAULT 'requested'::text CHECK (status = ANY (ARRAY['pending'::text, 'requested'::text, 'paid'::text, 'ready'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text])),
   total_cents integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   pickup_at timestamp with time zone,
   chef_id bigint,
+  payment_intent_id text,
+  payment_status text,
+  checkout_session_id text,
+  expires_at timestamp with time zone,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
   CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT orders_chef_id_fkey FOREIGN KEY (chef_id) REFERENCES public.chefs(id)

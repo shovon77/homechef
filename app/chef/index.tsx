@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
@@ -10,6 +10,7 @@ import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
 import { formatLocal } from '../../lib/datetime';
 import { updateOrderStatus } from '../../lib/orders';
+import { callFn } from '../../lib/fn';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#2C4E4B';
@@ -22,7 +23,7 @@ const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; created_at: string; pickup_at: string | null; user_email?: string; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }> };
+type OrderRow = { id: number; user_id: string; status: string; total_cents: number; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -38,6 +39,8 @@ export default function ChefDashboard() {
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [photo, setPhoto] = useState<string | undefined>(undefined);
+  const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
+  const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
 
   useEffect(() => {
     (async () => {
@@ -51,6 +54,12 @@ export default function ChefDashboard() {
         }
         const email = auth.user.email;
         if (!email) throw new Error('Missing email on session');
+
+        const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id').eq('id', auth.user.id).maybeSingle();
+        if (!profileRow.error) {
+          setChargesEnabled(profileRow.data?.charges_enabled ?? false);
+          setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
+        }
 
         let me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
         if (!me) {
@@ -152,6 +161,24 @@ export default function ChefDashboard() {
       setTimeout(() => setMsg(null), 3000);
     } catch (e: any) {
       setErr('Create dish failed: ' + (e.message || String(e)));
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function startOnboarding() {
+    try {
+      setSaving(true);
+      const { url } = await callFn<{ url: string }>('create-onboarding-link');
+      if (url) {
+        if (Platform.OS === 'web') {
+          window.location.href = url;
+        } else {
+          await Linking.openURL(url);
+        }
+      }
+    } catch (error: any) {
+      Alert.alert('Stripe onboarding failed', error?.message || 'Unable to start onboarding');
     } finally {
       setSaving(false);
     }
@@ -259,7 +286,7 @@ export default function ChefDashboard() {
     try {
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,created_at,pickup_at,chef_id')
+        .select('id,user_id,status,total_cents,created_at,pickup_at,chef_id,stripe_transfer_id')
         .eq('chef_id', chefId)
         .order('created_at', { ascending: false });
 
@@ -284,7 +311,7 @@ export default function ChefDashboard() {
       const dishMap = new Map((dishesData || []).map((d: any) => [d.id, d.name]));
 
       const { data: profilesData, error: profilesError } = userIds.length > 0
-        ? await supabase.from('profiles').select('id,email').in('id', userIds)
+        ? await supabase.from('profiles').select('id,email,charges_enabled').in('id', userIds)
         : { data: [], error: null };
       if (profilesError) console.warn('profiles fetch error', profilesError);
       const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
@@ -312,6 +339,7 @@ export default function ChefDashboard() {
         pickup_at: order.pickup_at ?? null,
         user_email: emailMap.get(order.user_id) ?? undefined,
         order_items: itemsByOrderId.get(order.id) ?? [],
+        stripe_transfer_id: order.stripe_transfer_id ?? undefined,
       }));
 
       setOrders(mapped);
@@ -630,7 +658,7 @@ export default function ChefDashboard() {
         ))}
       </View>
       {filteredOrders.map(order => (
-        <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 12 }}>
+        <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900' }}>Order #{order.id}</Text>
             <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>${((order.total_cents || 0) / 100).toFixed(2)}</Text>
@@ -644,29 +672,55 @@ export default function ChefDashboard() {
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
             {order.status === 'requested' ? (
               <>
+                {(() => {
+                  const transferSent = Boolean(order.stripe_transfer_id);
+                  const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                  return (
+                    <TouchableOpacity
+                      disabled={!canAccept}
+                      onPress={async () => {
+                        if (!canAccept) {
+                          if (!chargesEnabled || !stripeAccountId) {
+                            Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                          }
+                          return;
+                        }
+                        try {
+                          await callFn('accept-order', { orderId: order.id });
+                          await refreshOrdersForChef(chef.id);
+                        } catch (err: any) {
+                          Alert.alert('Accept failed', err?.message || 'Unable to accept order');
+                        }
+                      }}
+                      style={{
+                        backgroundColor: PRIMARY_COLOR,
+                        paddingVertical: 8,
+                        paddingHorizontal: 16,
+                        borderRadius: 8,
+                        opacity: canAccept ? 1 : 0.5,
+                      }}
+                    >
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                    </TouchableOpacity>
+                  );
+                })()}
                 <TouchableOpacity
-                  onPress={() => handleOrderStatus(order.id, 'pending')}
-                  style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                  onPress={async () => {
+                    try {
+                      await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                      await refreshOrdersForChef(chef.id);
+                    } catch (err: any) {
+                      Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                    }
+                  }}
+                  style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                 >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleOrderStatus(order.id, 'rejected')}
-                  style={{ backgroundColor: '#FEE2E2', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                >
-                  <Text style={{ color: '#B91C1C', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
                 </TouchableOpacity>
               </>
-            ) : null}
-            {order.status === 'pending' ? (
-              <TouchableOpacity
-                onPress={() => handleOrderStatus(order.id, 'ready')}
-                style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark Ready</Text>
-              </TouchableOpacity>
-            ) : null}
-            {order.status === 'ready' ? (
+            ) : order.status === 'pending' ? (
+              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+            ) : order.status === 'ready' ? (
               <View style={{ backgroundColor: '#DCFCE7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
                 <Text style={{ color: '#15803D', fontSize: 12, fontWeight: '700' }}>Ready</Text>
               </View>
