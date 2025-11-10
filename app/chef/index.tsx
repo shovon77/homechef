@@ -8,6 +8,8 @@ import FilePicker from '../../components/FilePicker';
 import { theme } from '../../lib/theme';
 import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
+import { formatLocal } from '../../lib/datetime';
+import { updateOrderStatus } from '../../lib/orders';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#2C4E4B';
@@ -20,7 +22,7 @@ const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; created_at: string; user_email?: string; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }> };
+type OrderRow = { id: number; user_id: string; status: string; total_cents: number; created_at: string; pickup_at: string | null; user_email?: string; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }> };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -30,7 +32,7 @@ export default function ChefDashboard() {
   const [dishes, setDishes] = useState<DishRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts' | 'profile'>('dashboard');
-  const [orderStatusFilter, setOrderStatusFilter] = useState<'pending' | 'paid' | 'completed' | 'cancelled'>('pending');
+  const [orderStatusFilter, setOrderStatusFilter] = useState<'requested' | 'pending' | 'ready' | 'paid' | 'completed' | 'cancelled' | 'rejected'>('requested');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -67,21 +69,8 @@ export default function ChefDashboard() {
         if (d.error) throw d.error;
         setDishes((d.data || []) as DishRow[]);
 
-        // Load orders for this chef
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select('order_id, dish_id, quantity, unit_price_cents, dishes(name)')
-          .in('dish_id', dishes.map(d => d.id).length > 0 ? dishes.map(d => d.id) : [-1]);
+        await refreshOrdersForChef(me.id);
 
-        const orderIds = [...new Set((orderItems || []).map((oi: any) => oi.order_id))];
-        if (orderIds.length > 0) {
-          const { data: ordersData } = await supabase
-            .from('orders')
-            .select('*, order_items(*, dishes(name))')
-            .in('id', orderIds)
-            .order('created_at', { ascending: false });
-          setOrders((ordersData || []) as OrderRow[]);
-        }
       } catch (e: any) {
         setErr(e.message || String(e));
       } finally {
@@ -90,25 +79,9 @@ export default function ChefDashboard() {
     })();
   }, []);
 
-  // Reload orders when dishes change
   useEffect(() => {
     if (dishes.length > 0 && chef) {
-      (async () => {
-        const { data: orderItems } = await supabase
-          .from('order_items')
-          .select('order_id, dish_id')
-          .in('dish_id', dishes.map(d => d.id));
-
-        const orderIds = [...new Set((orderItems || []).map((oi: any) => oi.order_id))];
-        if (orderIds.length > 0) {
-          const { data: ordersData } = await supabase
-            .from('orders')
-            .select('*, order_items(*, dishes(name))')
-            .in('id', orderIds)
-            .order('created_at', { ascending: false });
-          setOrders((ordersData || []) as OrderRow[]);
-        }
-      })();
+      refreshOrdersForChef(chef.id);
     }
   }, [dishes, chef]);
 
@@ -264,6 +237,87 @@ export default function ChefDashboard() {
       setErr('Failed to update order: ' + (e.message || String(e)));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function handleOrderStatus(id: number, status: 'pending' | 'rejected' | 'ready') {
+    if (!chef) return;
+    try {
+      const response = await updateOrderStatus(id, status);
+      if (response && 'error' in response && response.error) {
+        Alert.alert('Update failed', response.error.message);
+        return;
+      }
+    } catch (err: any) {
+      Alert.alert('Update failed', err?.message || 'Unable to update order status');
+      return;
+    }
+    await refreshOrdersForChef(chef.id);
+  }
+
+  async function refreshOrdersForChef(chefId: number) {
+    try {
+      const { data: ordersData, error } = await supabase
+        .from('orders')
+        .select('id,user_id,status,total_cents,created_at,pickup_at,chef_id')
+        .eq('chef_id', chefId)
+        .order('created_at', { ascending: false });
+
+      if (error || !ordersData) {
+        if (error) console.error('load chef orders error', error);
+        setOrders([]);
+        return;
+      }
+
+      const orderIds = ordersData.map(o => o.id);
+      const userIds = [...new Set(ordersData.map(o => o.user_id))];
+
+      const { data: itemsData, error: itemsError } = orderIds.length > 0
+        ? await supabase.from('order_items').select('id,order_id,dish_id,quantity,unit_price_cents').in('order_id', orderIds)
+        : { data: [], error: null };
+      if (itemsError) console.warn('order_items fetch error', itemsError);
+
+      const dishIds = [...new Set((itemsData || []).map(item => item.dish_id).filter(Boolean))];
+      const { data: dishesData } = dishIds.length > 0
+        ? await supabase.from('dishes').select('id,name').in('id', dishIds as number[])
+        : { data: [], error: null };
+      const dishMap = new Map((dishesData || []).map((d: any) => [d.id, d.name]));
+
+      const { data: profilesData, error: profilesError } = userIds.length > 0
+        ? await supabase.from('profiles').select('id,email').in('id', userIds)
+        : { data: [], error: null };
+      if (profilesError) console.warn('profiles fetch error', profilesError);
+      const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
+
+      const itemsByOrderId = new Map<number, OrderRow['order_items']>();
+      (itemsData || []).forEach((item: any) => {
+        if (!itemsByOrderId.has(item.order_id)) {
+          itemsByOrderId.set(item.order_id, []);
+        }
+        itemsByOrderId.get(item.order_id)!.push({
+          id: item.id,
+          dish_id: item.dish_id,
+          dish_name: item.dish_id ? dishMap.get(item.dish_id) ?? 'Dish' : undefined,
+          quantity: item.quantity,
+          unit_price_cents: item.unit_price_cents,
+        });
+      });
+
+      const mapped = ordersData.map(order => ({
+        id: order.id,
+        user_id: order.user_id,
+        status: order.status,
+        total_cents: order.total_cents ?? 0,
+        created_at: order.created_at,
+        pickup_at: order.pickup_at ?? null,
+        user_email: emailMap.get(order.user_id) ?? undefined,
+        order_items: itemsByOrderId.get(order.id) ?? [],
+      }));
+
+      setOrders(mapped);
+    } catch (error) {
+      console.error('refreshOrdersForChef error', error);
+      setOrders([]);
     }
   }
 
@@ -466,7 +520,7 @@ export default function ChefDashboard() {
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Order Management</Text>
         <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16 }}>
-          {(['pending', 'paid', 'completed', 'cancelled'] as const).map(status => (
+          {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
             <TouchableOpacity
               key={status}
               onPress={() => setOrderStatusFilter(status)}
@@ -557,7 +611,7 @@ export default function ChefDashboard() {
     <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 16 }}>
       <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Order History</Text>
       <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
-        {(['pending', 'paid', 'completed', 'cancelled'] as const).map(status => (
+        {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
           <TouchableOpacity
             key={status}
             onPress={() => setOrderStatusFilter(status)}
@@ -576,35 +630,47 @@ export default function ChefDashboard() {
         ))}
       </View>
       {filteredOrders.map(order => (
-        <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+        <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 12 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900' }}>Order #{order.id}</Text>
             <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>${((order.total_cents || 0) / 100).toFixed(2)}</Text>
           </View>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginBottom: 8 }}>Customer: {order.user_email || 'Unknown'}</Text>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginBottom: 8 }}>
-            Items: {order.order_items?.map((item: any) => `${item.quantity}x ${item.dishes?.name || 'Item'}`).join(', ') || 'No items'}
+          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Placed: {formatLocal(order.created_at)}</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+            Items: {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
           </Text>
-          <Text style={{ color: TEXT_MUTED, fontSize: 12, marginBottom: 12 }}>
-            {new Date(order.created_at).toLocaleString()}
-          </Text>
-          <View style={{ flexDirection: 'row', gap: 8 }}>
-            {order.status === 'pending' && (
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+            {order.status === 'requested' ? (
+              <>
+                <TouchableOpacity
+                  onPress={() => handleOrderStatus(order.id, 'pending')}
+                  style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  onPress={() => handleOrderStatus(order.id, 'rejected')}
+                  style={{ backgroundColor: '#FEE2E2', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#B91C1C', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                </TouchableOpacity>
+              </>
+            ) : null}
+            {order.status === 'pending' ? (
               <TouchableOpacity
-                onPress={() => updateOrderStatus(order.id, 'paid')}
+                onPress={() => handleOrderStatus(order.id, 'ready')}
                 style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
               >
-                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Accept Order</Text>
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark Ready</Text>
               </TouchableOpacity>
-            )}
-            {order.status === 'paid' && (
-              <TouchableOpacity
-                onPress={() => updateOrderStatus(order.id, 'completed')}
-                style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark Complete</Text>
-              </TouchableOpacity>
-            )}
+            ) : null}
+            {order.status === 'ready' ? (
+              <View style={{ backgroundColor: '#DCFCE7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+                <Text style={{ color: '#15803D', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+              </View>
+            ) : null}
           </View>
         </View>
       ))}

@@ -1,19 +1,25 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, StyleSheet, Platform } from "react-native";
+import React, { useEffect, useMemo, useState } from "react";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform } from "react-native";
 import { useRouter, Link } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
 import { useRole } from "../../hooks/useRole";
-import { getProfile, getUserOrders } from "../../lib/db";
+import { getProfile } from "../../lib/db";
 import { uploadAvatar } from "../../lib/storage";
-import type { Profile, OrderWithItems, OrderStatus } from "../../lib/types";
-import { Screen } from "../../components/Screen";
+import type { Profile, OrderStatus } from "../../lib/types";
+import Screen from "../../components/Screen";
+import { formatLocal } from "../../lib/datetime";
+import { safeToFixed } from "../../lib/number";
 
-type OrderWithDisplay = OrderWithItems & {
-  firstDishName?: string | null;
-  firstDishImage?: string | null;
-  chefName?: string | null;
+type UserOrderSummary = {
+  id: number;
+  status: string;
+  total_cents: number;
+  created_at: string;
+  pickup_at: string | null;
+  chef_id: number | null;
+  chef_name?: string | null;
 };
 
 export default function ProfilePage() {
@@ -27,8 +33,15 @@ export default function ProfilePage() {
   const [email, setEmail] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
-  const [orders, setOrders] = useState<OrderWithDisplay[]>([]);
+  const [orders, setOrders] = useState<UserOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+
+  const filteredOrders = useMemo(() => {
+    const upcoming = ['requested', 'pending', 'ready', 'paid'];
+    const past = ['completed', 'cancelled', 'rejected'];
+    const allowed = activeTab === 'active' ? upcoming : past;
+    return orders.filter(order => allowed.includes(order.status));
+  }, [orders, activeTab]);
 
   useEffect(() => {
     if (!roleLoading && !user) {
@@ -40,7 +53,7 @@ export default function ProfilePage() {
       loadProfile();
       loadOrders();
     }
-  }, [user, roleLoading, activeTab]);
+  }, [user, roleLoading]);
 
   async function loadProfile() {
     if (!user) return;
@@ -64,34 +77,41 @@ export default function ProfilePage() {
     if (!user) return;
     setOrdersLoading(true);
     try {
-      // Fetch all orders for user, then filter client-side
-      const allUserOrders = await getUserOrders(user.id, { limit: 100 });
-      
-      // Active orders: pending or paid
-      // Past orders: completed or cancelled
-      const statusFilters: OrderStatus[] = activeTab === "active" 
-        ? ['pending', 'paid'] 
-        : ['completed', 'cancelled'];
-      
-      // Filter by status
-      const filtered = allUserOrders.filter(order => 
-        statusFilters.includes(order.status)
-      );
-      
-      // Enrich orders with display info
-      const enriched: OrderWithDisplay[] = filtered.map(order => {
-        const firstItem = order.order_items?.[0];
-        return {
-          ...order,
-          firstDishName: firstItem?.dish_name || null,
-          firstDishImage: firstItem?.dish_image || null,
-          chefName: firstItem?.chef_name || null,
-        };
-      });
-      
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id,status,total_cents,created_at,pickup_at,chef_id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const rows = data || [];
+      const chefIds = [...new Set(rows.map(r => r.chef_id).filter((id): id is number => typeof id === 'number'))];
+      let chefMap = new Map<number, string>();
+
+      if (chefIds.length > 0) {
+        const { data: chefsData, error: chefsError } = await supabase
+          .from('chefs')
+          .select('id,name')
+          .in('id', chefIds);
+        if (!chefsError && chefsData) {
+          chefMap = new Map(chefsData.map((c: any) => [c.id, c.name || `Chef #${c.id}`]));
+        }
+      }
+
+      const enriched: UserOrderSummary[] = rows.map(row => ({
+        id: row.id,
+        status: row.status,
+        total_cents: row.total_cents ?? 0,
+        created_at: row.created_at,
+        pickup_at: row.pickup_at ?? null,
+        chef_id: row.chef_id ?? null,
+        chef_name: row.chef_id ? chefMap.get(row.chef_id) ?? null : null,
+      }));
+
       setOrders(enriched);
     } catch (e: any) {
-      console.error("Error loading orders:", e);
+      console.error('Error loading orders:', e);
     } finally {
       setOrdersLoading(false);
     }
@@ -183,19 +203,30 @@ export default function ProfilePage() {
     );
   }
 
-  function getStatusInfo(status: OrderStatus) {
+  function getStatusInfo(status: OrderStatus | string) {
     switch (status) {
-      case 'paid':
-        return { label: 'Out for Delivery', icon: '🚚', color: '#3E6A55' };
+      case 'requested':
+        return { label: 'Requested', icon: '⏳', color: '#3E6A55' };
       case 'pending':
         return { label: 'Preparing', icon: '👨‍🍳', color: '#D97706' };
+      case 'ready':
+        return { label: 'Ready for Pickup', icon: '🛍️', color: '#2D6966' };
+      case 'paid':
+        return { label: 'Awaiting Pickup', icon: '🚚', color: '#3E6A55' };
       case 'completed':
         return { label: 'Completed', icon: '✓', color: '#3E6A55' };
+      case 'rejected':
+        return { label: 'Rejected', icon: '✕', color: '#EF4444' };
       case 'cancelled':
         return { label: 'Cancelled', icon: '✕', color: '#EF4444' };
       default:
-        return { label: status, icon: '•', color: '#667085' };
+        return { label: String(status), icon: '•', color: '#667085' };
     }
+  }
+
+  function safeToFixed(num: number, precision: number, defaultValue: string): string {
+    const fixed = Number(num).toFixed(precision);
+    return isNaN(Number(fixed)) ? defaultValue : fixed;
   }
 
   // Note: Account Settings functionality moved to separate route
@@ -235,7 +266,7 @@ export default function ProfilePage() {
     .slice(0, 2) || email[0]?.toUpperCase() || "?";
 
   return (
-    <Screen style={{ backgroundColor: '#FFFFFF' }}>
+    <Screen scroll contentPadding={16} style={{ backgroundColor: '#FFFFFF' }}>
       <View style={styles.container}>
         {/* Left Sidebar */}
         <View style={styles.sidebar}>
@@ -318,73 +349,60 @@ export default function ProfilePage() {
             </TouchableOpacity>
           </View>
 
-          {/* Orders List */}
-          <ScrollView 
-            style={styles.ordersList}
-            contentContainerStyle={styles.ordersListContent}
-            showsVerticalScrollIndicator={false}
-          >
+          {/* Orders List - no nested ScrollView, just View */}
+          <View style={styles.ordersList}>
             {ordersLoading ? (
               <View style={styles.loadingContainer}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
               </View>
-            ) : orders.length === 0 ? (
+            ) : filteredOrders.length === 0 ? (
               <View style={styles.emptyContainer}>
                 <Text style={styles.emptyText}>
-                  {activeTab === "active" ? "No active orders" : "No past orders"}
+                  {activeTab === "active" ? "No upcoming orders" : "No past orders"}
                 </Text>
               </View>
             ) : (
-              orders.map((order) => {
-                const statusInfo = getStatusInfo(order.status);
-                const firstItem = order.order_items?.[0];
-                return (
-                  <View key={order.id} style={styles.orderCard}>
-                    <View style={styles.orderContent}>
-                      <View style={styles.orderInfo}>
-                        <Text style={styles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
-                        <Text style={styles.orderDishName}>
-                          {order.firstDishName || firstItem?.dish_name || "Order"}
-                        </Text>
-                        <Text style={styles.orderChef}>
-                          {order.chefName || firstItem?.chef_name || "Chef"}
-                        </Text>
-                        <View style={styles.orderStatus}>
-                          <Text style={styles.statusIcon}>{statusInfo.icon}</Text>
-                          <Text style={[styles.statusText, { color: statusInfo.color }]}>
-                            {statusInfo.label}
-                          </Text>
+              <View style={styles.ordersListContent}>
+                {filteredOrders.map((order) => {
+                  const statusInfo = getStatusInfo(order.status);
+                  return (
+                    <View key={order.id} style={styles.orderCard}>
+                      <View style={styles.orderContent}>
+                        <View style={styles.orderInfo}>
+                          <Text style={styles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
+                          <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                          <Text style={styles.orderChef}>Placed: {formatLocal(order.created_at)}</Text>
+                          <View style={styles.orderStatus}>
+                            <Text style={styles.statusIcon}>{statusInfo.icon}</Text>
+                            <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                              {statusInfo.label}
+                            </Text>
+                          </View>
+                        </View>
+                        <View style={{ alignItems: 'flex-end', gap: 12 }}>
+                          <Text style={styles.orderTotal}>${safeToFixed(order.total_cents / 100, 2, '0.00')}</Text>
+                          <View style={{ flexDirection: 'row', gap: 8 }}>
+                            <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
+                              <TouchableOpacity style={styles.orderButtonPrimary}>
+                                <Text style={styles.orderButtonTextPrimary}>Track</Text>
+                              </TouchableOpacity>
+                            </Link>
+                            {order.chef_id ? (
+                              <Link href={`/chef/${order.chef_id}`} asChild>
+                                <TouchableOpacity style={styles.orderButtonSecondary}>
+                                  <Text style={styles.orderButtonTextSecondary}>View Chef</Text>
+                                </TouchableOpacity>
+                              </Link>
+                            ) : null}
+                          </View>
                         </View>
                       </View>
-                      <TouchableOpacity
-                        style={[
-                          styles.orderButton,
-                          order.status === 'paid' ? styles.orderButtonPrimary : styles.orderButtonSecondary
-                        ]}
-                        onPress={() => router.push(`/order/${order.id}`)}
-                      >
-                        <Text style={[
-                          styles.orderButtonText,
-                          order.status === 'paid' ? styles.orderButtonTextPrimary : styles.orderButtonTextSecondary
-                        ]}>
-                          {order.status === 'paid' ? 'Track Order' : 'View Details'}
-                        </Text>
-                      </TouchableOpacity>
                     </View>
-                    <View style={styles.orderImageContainer}>
-                      <Image
-                        source={{ 
-                          uri: order.firstDishImage || firstItem?.dish_image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" 
-                        }}
-                        style={styles.orderImage}
-                        resizeMode="cover"
-                      />
-                    </View>
-                  </View>
-                );
-              })
+                  );
+                })}
+              </View>
             )}
-          </ScrollView>
+          </View>
         </View>
       </View>
     </Screen>
@@ -555,7 +573,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   ordersListContent: {
-    padding: theme.spacing.md,
     gap: theme.spacing.md,
   },
   loadingContainer: {
@@ -667,5 +684,11 @@ const styles = StyleSheet.create({
   orderImage: {
     width: "100%",
     height: "100%",
+  },
+  orderTotal: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    lineHeight: theme.typography.fontSize.lg * 1.2,
   },
 });

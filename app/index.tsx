@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, Sty
 import { Link, useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
-import { Screen } from "../components/Screen";
+import Screen from "../components/Screen";
 import { getDishRatings, getChefById } from "../lib/db";
 import { safeToFixed, toNumber } from "../lib/number";
 
@@ -115,8 +115,8 @@ export default function HomePage() {
 
   return (
     <Screen 
-      useScrollView 
-      contentStyle={{ paddingBottom: theme.spacing['4xl'] }}
+      scroll 
+      contentPadding={0}
       style={{ backgroundColor: '#FFFFFF' }}
     >
       <View style={styles.container}>
@@ -237,42 +237,6 @@ export default function HomePage() {
             ))}
           </ScrollView>
         </View>
-
-        {/* Footer - matches HTML structure */}
-        <View style={styles.footer}>
-          <View style={styles.footerContent}>
-            <View style={styles.footerLeft}>
-              <Text style={styles.footerLogoIcon}>🍽️</Text>
-              <Text style={styles.footerBrand}>HomeChef</Text>
-            </View>
-            <Text style={styles.footerDescription}>
-              Your marketplace for authentic homemade meals.
-            </Text>
-          </View>
-          <View style={styles.footerLinks}>
-            <Link href="/about" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>About Us</Text>
-              </TouchableOpacity>
-            </Link>
-            <Link href="/faq" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>FAQ</Text>
-              </TouchableOpacity>
-            </Link>
-            <Link href="#" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Contact</Text>
-              </TouchableOpacity>
-            </Link>
-            <Link href="/terms" asChild>
-              <TouchableOpacity>
-                <Text style={styles.footerLink}>Terms of Service</Text>
-              </TouchableOpacity>
-            </Link>
-          </View>
-          <Text style={styles.footerCopyright}>© 2024 HomeChef, Inc. All rights reserved.</Text>
-        </View>
       </View>
     </Screen>
   );
@@ -288,6 +252,7 @@ const styles = StyleSheet.create({
       default: theme.spacing.md,
     }),
     paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing['4xl'],
     backgroundColor: '#FFFFFF',
   },
   // Hero section
@@ -593,62 +558,5 @@ const styles = StyleSheet.create({
   featuredChefCuisine: {
     color: '#555555',
     fontSize: theme.typography.fontSize.sm,
-  },
-  // Footer
-  footer: {
-    marginTop: theme.spacing['4xl'],
-    borderTopWidth: 1,
-    borderTopColor: '#F4F4F4',
-    paddingTop: theme.spacing['2xl'],
-    paddingBottom: theme.spacing['2xl'],
-    paddingHorizontal: theme.spacing.md,
-  },
-  footerContent: {
-    flexDirection: Platform.select({
-      web: "row",
-      default: "column",
-    }),
-    gap: theme.spacing['2xl'],
-    marginBottom: theme.spacing['2xl'],
-  },
-  footerLeft: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.sm,
-  },
-  footerLogoIcon: {
-    fontSize: 24,
-    color: PRIMARY_COLOR,
-  },
-  footerBrand: {
-    color: PRIMARY_COLOR,
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold,
-  },
-  footerDescription: {
-    color: '#555555',
-    fontSize: theme.typography.fontSize.sm,
-    marginTop: theme.spacing.md,
-  },
-  footerLinks: {
-    flexDirection: Platform.select({
-      web: "row",
-      default: "column",
-    }),
-    flexWrap: "wrap",
-    gap: theme.spacing.lg,
-    marginBottom: theme.spacing['2xl'],
-  },
-  footerLink: {
-    color: '#555555',
-    fontSize: theme.typography.fontSize.sm,
-  },
-  footerCopyright: {
-    textAlign: "center",
-    fontSize: theme.typography.fontSize.sm,
-    color: '#555555',
-    paddingTop: theme.spacing['2xl'],
-    borderTopWidth: 1,
-    borderTopColor: '#F4F4F4',
   },
 });

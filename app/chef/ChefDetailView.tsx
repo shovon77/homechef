@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, ScrollView, TouchableOpacity, Platform, TextInput, Alert, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -8,7 +8,7 @@ import { getChefById, getDishesByChefId } from '../../lib/db';
 import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../lib/reviews';
 import { useRole } from '../../hooks/useRole';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
-import { Screen } from '../../components/Screen';
+import Screen from '../../components/Screen';
 import { theme, elev } from '../../lib/theme';
 
 // Colors from HTML design
@@ -150,13 +150,8 @@ export default function ChefDetailView() {
   }
 
   return (
-    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
-      <ScrollView 
-        style={{ flex: 1 }}
-        contentContainerStyle={{ paddingBottom: 32 }}
-        showsVerticalScrollIndicator={true}
-      >
-        <View style={styles.container}>
+    <Screen scroll contentPadding={0} style={{ backgroundColor: BACKGROUND_LIGHT }}>
+      <View style={styles.container}>
           <View style={styles.layout}>
             {/* Left Sidebar - Sticky */}
             <View style={styles.sidebar}>
@@ -194,7 +189,7 @@ export default function ChefDetailView() {
                 <View style={styles.statCard}>
                   <Text style={styles.statValue}>{reviewCount}</Text>
                   <Text style={styles.statLabel}>Reviews</Text>
-                </View>
+          </View>
                 <View style={styles.statCard}>
                   <Text style={styles.statValue}>{dishCount}</Text>
                   <Text style={styles.statLabel}>Dishes</Text>
@@ -383,10 +378,9 @@ export default function ChefDetailView() {
     </View>
               )}
             </View>
-            </View>
           </View>
         </View>
-      </ScrollView>
+      </View>
     </Screen>
   );
 }
@@ -402,6 +396,7 @@ const styles = StyleSheet.create({
       default: theme.spacing.md,
     }),
     paddingVertical: theme.spacing['2xl'],
+    paddingBottom: 80,
   },
   layout: {
     flexDirection: Platform.select({

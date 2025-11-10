@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>Order Tracking</title>
+<script src="https://cdn.tailwindcss.com?plugins=forms,container-queries"></script>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;700;800&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              "primary": "#2D6966", // Updated to talo green
+              "background-light": "#f6f8f8",
+              "background-dark": "#112120",
+            },
+            fontFamily: {
+              "display": ["Plus Jakarta Sans", "Noto Sans", "sans-serif"]
+            },
+            borderRadius: {"DEFAULT": "0.25rem", "lg": "0.5rem", "xl": "0.75rem", "full": "9999px"},
+          },
+        },
+      }
+    </script>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+<style>
+    body {
+      min-height: max(884px, 100dvh);
+    }
+  </style>
+  </head>
+<body class="bg-background-light dark:bg-background-dark">
+<div class="relative flex min-h-screen w-full flex-col font-display group/design-root overflow-x-hidden text-[#111817] dark:text-white">
+<div class="flex items-center bg-background-light dark:bg-background-dark p-4 pb-2 justify-between sticky top-0 z-10">
+<div class="flex size-10 shrink-0 items-center justify-center">
+<span class="material-symbols-outlined text-2xl">arrow_back</span>
+</div>
+<h2 class="text-lg font-bold leading-tight tracking-[-0.015em] flex-1 text-center pr-10">Track Your Order</h2>
+</div>
+<div class="px-4 py-6">
+<div class="flex justify-between items-center relative">
+<div class="absolute left-0 top-1/2 -translate-y-1/2 w-full h-1 bg-gray-200 dark:bg-gray-700">
+<div class="h-1 bg-primary w-1/2"></div>
+</div>
+<div class="flex flex-col items-center z-10">
+<div class="flex items-center justify-center size-8 rounded-full bg-primary text-white">
+<span class="material-symbols-outlined text-lg">receipt_long</span>
+</div>
+<p class="text-xs font-medium mt-2 text-center">Order Placed</p>
+</div>
+<div class="flex flex-col items-center z-10">
+<div class="flex items-center justify-center size-8 rounded-full bg-primary text-white">
+<span class="material-symbols-outlined text-lg">soup_kitchen</span>
+</div>
+<p class="text-xs font-bold mt-2 text-center text-primary dark:text-primary">In the Kitchen</p>
+</div>
+<div class="flex flex-col items-center z-10">
+<div class="flex items-center justify-center size-8 rounded-full bg-gray-200 dark:bg-gray-700 text-gray-500 dark:text-gray-400">
+<span class="material-symbols-outlined text-lg">shopping_bag</span>
+</div>
+<p class="text-xs font-medium text-gray-500 dark:text-gray-400 mt-2 text-center">Ready for Pickup</p>
+</div>
+</div>
+</div>
+<h2 class="text-[#111817] dark:text-white tracking-light text-[28px] font-bold leading-tight px-4 text-left pb-3 pt-5">Your Order is in the Kitchen</h2>
+<div class="p-4 @container">
+<div class="flex flex-col items-stretch justify-start rounded-lg bg-white dark:bg-background-dark/50 shadow-sm p-4 @xl:flex-row @xl:items-start">
+<div class="w-20 h-20 bg-center bg-no-repeat aspect-square bg-cover rounded-lg mr-4 shrink-0" data-alt="Photo of Chef Isabella" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuCf0iDaTA6TbpzepZOE4-OrlIQQvRVW11jbBFNyHtvKceI9Fi9-JIe6zoLKZniET_vcOiALZCHbzI1wUlJVSA63qRAZfK0zBOP_q1j5lC6PmcFEx9PHTaKuxci4rIdjmQRjIqLR9aqEypDKGnJeCzeWK_TndKVQM6jTmOx3Yc2V98V8I3J7erHlSngtaee2zLyzlvsC4yS17c-z9veU5aNiI_MAhYcfA49uabI6Q2ZikFZwLmz8bDVYdnlVNCkQ4vpvV4ULx3w5pByy");'></div>
+<div class="flex w-full min-w-0 grow flex-col items-stretch justify-center gap-2 py-1 @xl:px-0">
+<p class="text-[#638886] dark:text-gray-400 text-sm font-normal leading-normal">Order #HC45678</p>
+<p class="text-[#111817] dark:text-white text-lg font-bold leading-tight tracking-[-0.015em]">Chef Isabella's Kitchen</p>
+<div class="flex flex-col gap-1 mt-1">
+<p class="text-[#638886] dark:text-gray-400 text-base font-normal leading-normal">Estimated Pickup Time: 5:45 PM</p>
+<p class="text-[#638886] dark:text-gray-400 text-base font-normal leading-normal">2 items</p>
+</div>
+<button class="flex mt-3 w-full min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-lg h-12 px-5 bg-primary text-white text-base font-bold leading-normal gap-2">
+<span class="material-symbols-outlined">forum</span>
+<span class="truncate">Contact Chef</span>
+</button>
+</div>
+</div>
+</div>
+<h1 class="text-[#111817] dark:text-white text-[22px] font-bold leading-tight tracking-[-0.015em] px-4 text-left pb-2 pt-5">Pickup Location</h1>
+<div class="px-4">
+<div class="w-full h-48 bg-center bg-no-repeat bg-cover rounded-xl" data-location="San Francisco" style='background-image: url("https://lh3.googleusercontent.com/aida-public/AB6AXuBg1dkZx2D4CB-MC4O_Jk1ZVSUjF80o9iwW7dnZTD2T74inx7NstpooQ7r4yNTcDujF8tkLJ_9NEzzo_j2GMeTWbalGsUEWeAg3WAWAfLl6-wn1JCR2GCiUnHXlpvl-OlkG-LUQ7NN9zFJM4IKyJHZakLsyK_HjLPcE1NDa5Xp5ndLHmMOcTkFhmjpqYCd_lSbX-Fv-DGSzH_K0c-IpxQvmW9l0WJAJQDd6rxltQInHPCR3lN8Y7U-06jB3x2qj7Jy0nhaTDDgLIgEV");'></div>
+<p class="text-[#111817] dark:text-gray-300 text-base font-normal leading-normal pt-3">123 Market Street, San Francisco, CA 94103</p>
+</div>
+<div class="mt-auto p-4 sticky bottom-0 bg-background-light dark:bg-background-dark pb-6">
+<button class="flex w-full min-w-[84px] max-w-[480px] cursor-pointer items-center justify-center overflow-hidden rounded-xl h-12 px-4 bg-primary text-white text-base font-bold leading-normal">
+<span class="truncate">View Order Summary</span>
+</button>
+</div>
+</div>
+</body></html>

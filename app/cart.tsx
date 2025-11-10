@@ -7,6 +7,7 @@ import { useCart } from "../context/CartContext";
 import { getChefById } from "../lib/db";
 import { Screen } from "../components/Screen";
 import { safeToFixed } from "../lib/number";
+import { useRouter } from "expo-router";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#17cfa1';
@@ -17,8 +18,8 @@ const BORDER_COLOR = '#e7f3f0';
 const DELIVERY_FEE = 5.00;
 
 export default function CartScreen() {
+  const router = useRouter();
   const { items, setQuantity, removeFromCart, total } = useCart();
-  const [loading, setLoading] = useState(false);
   const [chefNames, setChefNames] = useState<Map<number | null, string>>(new Map());
   const { width } = useResponsiveColumns();
   const isMobile = width < 1024;
@@ -46,51 +47,13 @@ export default function CartScreen() {
     });
   }, [items]);
 
-  const handleCheckout = async () => {
+  const handleCheckout = () => {
     if (items.length === 0) {
       Alert.alert("Cart is empty", "Please add items to your cart before checkout.");
       return;
     }
 
-    setLoading(true);
-    try {
-      const apiItems = items.map(item => ({
-        id: item.id,
-        name: item.name,
-        price: item.price,
-        qty: item.quantity,
-        image: item.image,
-      }));
-
-      const response = await fetch('/api/create-checkout-session', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ items: apiItems }),
-      });
-
-      const data = await response.json();
-
-      if (!response.ok) {
-        throw new Error(data.error || 'Failed to create checkout session');
-      }
-
-      if (data.url) {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.href = data.url;
-        } else {
-          Alert.alert("Checkout", "Please use the web version to complete checkout.");
-        }
-      } else {
-        throw new Error('No checkout URL received');
-      }
-    } catch (error: any) {
-      console.error('Checkout error:', error);
-      Alert.alert("Checkout Error", error.message || "Failed to start checkout. Please try again.");
-    } finally {
-      setLoading(false);
-    }
+    router.push('/checkout');
   };
 
   return (
@@ -220,12 +183,12 @@ export default function CartScreen() {
                   <Text style={styles.orderSummaryTotalValue}>${safeToFixed(totalWithDelivery, 2, '0.00')}</Text>
                 </View>
                 <TouchableOpacity
-                  style={[styles.checkoutButton, loading && styles.checkoutButtonDisabled]}
+                  style={[styles.checkoutButton, items.length === 0 && styles.checkoutButtonDisabled]}
                   onPress={handleCheckout}
-                  disabled={loading}
+                  disabled={items.length === 0}
                 >
                   <Text style={styles.checkoutButtonText}>
-                    {loading ? "Processing..." : "Proceed to Checkout"}
+                    Proceed to Checkout
                   </Text>
                 </TouchableOpacity>
               </View>

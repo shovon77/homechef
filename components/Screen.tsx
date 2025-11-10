@@ -1,55 +1,53 @@
 import React from 'react';
-import { SafeAreaView, View, ScrollView, StyleProp, ViewStyle } from 'react-native';
+import { Platform, ScrollView, View, ViewProps, StyleSheet } from 'react-native';
 import { theme } from '../lib/theme';
 
-type ScreenProps = {
+type ScreenProps = ViewProps & {
+  scroll?: boolean;
+  contentPadding?: number;
   children: React.ReactNode;
-  style?: StyleProp<ViewStyle>;
-  contentStyle?: StyleProp<ViewStyle>;
-  useScrollView?: boolean;
-  scrollViewProps?: any;
 };
 
-/**
- * Screen wrapper component that provides consistent layout structure
- * - Uses SafeAreaView with flex: 1
- * - Optionally wraps children in ScrollView
- * - Accepts style and contentStyle props for customization
- */
-export function Screen({ 
-  children, 
-  style, 
-  contentStyle,
-  useScrollView = false,
-  scrollViewProps = {}
+export default function Screen({
+  scroll = false,
+  contentPadding = 16,
+  style,
+  children,
+  ...rest
 }: ScreenProps) {
-  const containerStyle: StyleProp<ViewStyle> = [
-    { flex: 1, backgroundColor: theme.colors.background },
+  const baseViewStyle: any = [
+    {
+      flex: 1,
+      backgroundColor: theme.colors.background,
+    },
     style,
   ];
 
-  if (useScrollView) {
+  if (!scroll) {
     return (
-      <SafeAreaView style={containerStyle}>
-        <ScrollView
-          style={{ flex: 1 }}
-          contentContainerStyle={contentStyle}
-          keyboardShouldPersistTaps="handled"
-          nestedScrollEnabled
-          {...scrollViewProps}
-        >
-          {children}
-        </ScrollView>
-      </SafeAreaView>
+      <View style={baseViewStyle} {...rest}>
+        {children}
+      </View>
     );
   }
 
+  const scrollStyle: any = StyleSheet.flatten([
+    { flex: 1 },
+    style,
+  ]);
+
   return (
-    <SafeAreaView style={containerStyle}>
-      <View style={[{ flex: 1 }, contentStyle]}>
-        {children}
-      </View>
-    </SafeAreaView>
+    <ScrollView
+      style={scrollStyle}
+      contentContainerStyle={{ padding: contentPadding, paddingBottom: 160, flexGrow: 1 }}
+      scrollEnabled
+      {...rest}
+    >
+      {children}
+    </ScrollView>
   );
 }
+
+// Export named export for backward compatibility
+export { Screen };
 

@@ -91,13 +91,15 @@ export type ChefReview = {
 // ============================================================================
 // Orders
 // ============================================================================
-export type OrderStatus = 'pending' | 'paid' | 'completed' | 'cancelled';
+export type OrderStatus = 'requested' | 'pending' | 'ready' | 'paid' | 'completed' | 'cancelled' | 'rejected';
 
 export type Order = {
   id: number; // BIGINT
   user_id: string; // uuid FK -> auth.users.id
-  status: OrderStatus; // default 'pending'
+  chef_id: number | null; // BIGINT FK -> chefs.id
+  status: OrderStatus; // default 'requested'
   total_cents: number; // integer, default 0
+  pickup_at: string | null; // timestamptz
   created_at: string; // timestamptz, NOT NULL
 };
 
@@ -145,6 +147,9 @@ export type CreateOrderItem = {
 
 export type CreateOrderInput = {
   userId: string;
+  chefId: number;
+  pickupAt: string;
+  status?: OrderStatus;
   items: CreateOrderItem[];
 };
 

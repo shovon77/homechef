@@ -7,6 +7,8 @@ import { Stack } from 'expo-router';
 import { View, Platform } from 'react-native';
 import NavBar from '../components/NavBar';
 import { CartProvider } from '../context/CartContext';
+import { NAVBAR_HEIGHT } from '../constants/layout';
+import Footer from '../components/Footer';
 
 export default function RootLayout() {
 // __ensureUserEffect: keep users/profiles synced with auth
@@ -71,13 +73,21 @@ useEffect(() => {
 
   return (
     <CartProvider>
-      <View style={{ flex: 1 }}>
+      <View style={{ flex: 1, minHeight: Platform.OS === 'web' ? '100vh' : undefined }}>
         <NavBar />
-        <Stack
-          screenOptions={{
-            headerShown: false, // hide expo-router's default headers
+        <View
+          style={{
+            flex: 1,
+            paddingTop: Platform.OS === 'web' ? NAVBAR_HEIGHT : 0,
           }}
-        />
+        >
+          <Stack
+            screenOptions={{
+              headerShown: false, // hide expo-router's default headers
+            }}
+          />
+        </View>
+        <Footer />
       </View>
     </CartProvider>
   );

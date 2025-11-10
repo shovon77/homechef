@@ -101,8 +101,11 @@ CREATE TABLE public.orders (
   status text NOT NULL DEFAULT 'pending'::text CHECK (status = ANY (ARRAY['pending'::text, 'paid'::text, 'completed'::text, 'cancelled'::text])),
   total_cents integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
+  pickup_at timestamp with time zone,
+  chef_id bigint,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
-  CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id)
+  CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
+  CONSTRAINT orders_chef_id_fkey FOREIGN KEY (chef_id) REFERENCES public.chefs(id)
 );
 CREATE TABLE public.profiles (
   id uuid NOT NULL,

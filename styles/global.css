@@ -1,4 +1,5 @@
 /* Kill default page margins & horizontal scroll */
-html, body, #root { margin: 0; padding: 0; height: 100%; overflow-x: hidden; }
+html, body, #root, #app-root { margin: 0; padding: 0; height: 100%; overflow-x: hidden; }
+body { overflow: auto; }
 * { box-sizing: border-box; }
 img, canvas, video { max-width: 100%; height: auto; display: block; }
