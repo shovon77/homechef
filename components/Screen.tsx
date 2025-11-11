@@ -1,53 +1,35 @@
 import React from 'react';
-import { Platform, ScrollView, View, ViewProps, StyleSheet } from 'react-native';
-import { theme } from '../lib/theme';
+import { ScrollView, ViewProps, ViewStyle, StyleSheet } from 'react-native';
+import { FOOTER_HEIGHT } from './Footer';
 
 type ScreenProps = ViewProps & {
-  scroll?: boolean;
-  contentPadding?: number;
   children: React.ReactNode;
+  style?: ViewStyle | ViewStyle[];
+  contentStyle?: ViewStyle | ViewStyle[];
+  scroll?: boolean; // kept for compatibility
+  contentPadding?: number;
 };
 
 export default function Screen({
-  scroll = false,
-  contentPadding = 16,
-  style,
   children,
-  ...rest
+  style,
+  contentStyle,
+  contentPadding,
 }: ScreenProps) {
-  const baseViewStyle: any = [
-    {
-      flex: 1,
-      backgroundColor: theme.colors.background,
-    },
-    style,
-  ];
+  const baseStyle = StyleSheet.flatten([{ flex: 1 }, style]);
 
-  if (!scroll) {
-    return (
-      <View style={baseViewStyle} {...rest}>
-        {children}
-      </View>
-    );
-  }
-
-  const scrollStyle: any = StyleSheet.flatten([
-    { flex: 1 },
-    style,
+  const content = StyleSheet.flatten([
+    { flexGrow: 1, paddingBottom: FOOTER_HEIGHT + 24 },
+    contentPadding != null ? { padding: contentPadding } : null,
+    contentStyle,
   ]);
 
   return (
-    <ScrollView
-      style={scrollStyle}
-      contentContainerStyle={{ padding: contentPadding, paddingBottom: 160, flexGrow: 1 }}
-      scrollEnabled
-      {...rest}
-    >
+    <ScrollView style={baseStyle} contentContainerStyle={content}>
       {children}
     </ScrollView>
   );
 }
 
-// Export named export for backward compatibility
 export { Screen };
 
