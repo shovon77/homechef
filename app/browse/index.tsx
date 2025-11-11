@@ -155,7 +155,7 @@ export default function BrowsePage() {
       <View style={styles.tabs}>
         <Pressable
           onPress={() => setTab('dishes')}
-          style={[styles.tab, tab === 'dishes' && styles.tabActive]}
+          style={[styles.tab, styles.tabSpacing, tab === 'dishes' && styles.tabActive]}
         >
           <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
         </Pressable>
@@ -170,6 +170,7 @@ export default function BrowsePage() {
       <TextInput
         value={query}
         onChangeText={setQuery}
+        onSubmitEditing={() => setPage(1)}
         placeholder={tab === 'dishes' ? 'Search dishes…' : 'Search chefs…'}
         placeholderTextColor="#94a3b8"
         style={styles.search}
@@ -184,13 +185,17 @@ export default function BrowsePage() {
       ) : tab === 'dishes' ? (
         <View style={styles.grid}>
           {dishes.map((dish) => (
-            <DishCard key={dish.id} dish={dish} />
+            <View key={dish.id} style={styles.cardWrapper}>
+              <DishCard dish={dish} />
+            </View>
           ))}
         </View>
       ) : (
         <View style={styles.grid}>
           {chefs.map((chef) => (
-            <ChefCard key={chef.id} chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
+            <View key={chef.id} style={styles.cardWrapper}>
+              <ChefCard chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
+            </View>
           ))}
         </View>
       )}
@@ -213,7 +218,6 @@ const styles = StyleSheet.create({
   },
   tabs: {
     flexDirection: 'row',
-    gap: 12,
     alignSelf: 'center',
     marginBottom: 16,
   },
@@ -253,14 +257,17 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    gap: 16,
     justifyContent: 'center',
+    marginHorizontal: -8,
+  },
+  cardWrapper: {
+    marginHorizontal: 8,
+    marginBottom: 16,
   },
   pager: {
     flexDirection: 'row',
     alignSelf: 'center',
     marginTop: 24,
-    gap: 8,
     alignItems: 'center',
   },
   pageBtn: {
@@ -268,6 +275,7 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 8,
     backgroundColor: '#e2e8f0',
+    marginHorizontal: 4,
   },
   pageBtnText: {
     color: '#0f172a',
@@ -283,6 +291,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2e8f0',
     alignItems: 'center',
     justifyContent: 'center',
+    marginHorizontal: 4,
   },
   pageNumberActive: {
     backgroundColor: '#10b981',
@@ -293,5 +302,8 @@ const styles = StyleSheet.create({
   },
   pageNumberTextActive: {
     color: 'white',
+  },
+  tabSpacing: {
+    marginRight: 10,
   },
 });

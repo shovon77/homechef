@@ -1,5 +1,5 @@
 import React from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle } from "react-native";
 import { Link } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Stars } from "../../components/ui/Stars";
@@ -15,20 +15,26 @@ type Chef = {
   rating?: number | null;
 };
 
+type Props = {
+  chef: Chef;
+  style?: StyleProp<ViewStyle>;
+};
 
-export default function ChefCard({ chef }: { chef: Chef }) {
+export default function ChefCard({ chef, style }: Props) {
   const avatar =
     chef?.photo ||
     chef?.avatar ||
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
 
+  const containerStyle = StyleSheet.flatten([styles.card, cardStyle(), style]);
+
   return (
-    <Link href={`/chef/${chef.id}`} asChild>
-      <TouchableOpacity activeOpacity={0.85} style={[styles.card, cardStyle()]}>
-        <View style={styles.container}>
+    <View style={containerStyle}>
+      <Link href={`/chef/${chef.id}`} asChild>
+        <Pressable style={styles.pressable}>
           <Image source={{ uri: avatar }} style={styles.avatar} />
           <View style={styles.info}>
-            <Text style={styles.name}>
+            <Text style={styles.name} numberOfLines={1}>
               {chef.name}
             </Text>
             <Text numberOfLines={1} style={styles.location}>
@@ -38,9 +44,9 @@ export default function ChefCard({ chef }: { chef: Chef }) {
               <Stars value={toNumber(chef?.rating, 0)} size={16} />
             </View>
           </View>
-        </View>
-      </TouchableOpacity>
-    </Link>
+        </Pressable>
+      </Link>
+    </View>
   );
 }
 
@@ -48,9 +54,8 @@ const styles = StyleSheet.create({
   card: {
     padding: theme.spacing.md,
   },
-  container: {
+  pressable: {
     flexDirection: "row",
-    gap: theme.spacing.md,
     alignItems: "center",
   },
   avatar: {
@@ -61,6 +66,7 @@ const styles = StyleSheet.create({
   },
   info: {
     flex: 1,
+    marginLeft: theme.spacing.md,
   },
   name: {
     color: theme.colors.text,
