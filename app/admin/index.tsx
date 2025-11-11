@@ -9,6 +9,7 @@ import { Tabs } from '../../components/Tabs';
 import { theme } from '../../constants/theme';
 import { getChefsPaginated, getOrders } from '../../lib/db';
 import type { Chef, OrderWithItems, Profile } from '../../lib/types';
+import { callFn } from '../../lib/fn';
 
 const ITEMS_PER_PAGE = 25;
 
@@ -31,6 +32,7 @@ export default function AdminPage() {
   const [applicationSearch, setApplicationSearch] = useState('');
   const [chefRequests, setChefRequests] = useState<any[]>([]);
   const [chefReqSearch, setChefReqSearch] = useState('');
+  const [autoRejecting, setAutoRejecting] = useState(false);
 
   async function fetchChefRequests() {
     const { data, error } = await supabase
@@ -141,6 +143,23 @@ export default function AdminPage() {
       setChefRequests(prev => prev.filter(r => r.id !== id));
     } else {
       Alert.alert('Error', result.error || 'Failed to reject application');
+    }
+  }
+
+  async function runAutoReject() {
+    if (autoRejecting) return;
+    try {
+      setAutoRejecting(true);
+      const result = await callFn<{ checked?: number; rejected?: number }>('auto-reject-expired');
+      Alert.alert(
+        'Auto-reject executed',
+        `Checked ${result?.checked ?? 0} orders; rejected ${result?.rejected ?? 0}.`
+      );
+      await loadAll();
+    } catch (error: any) {
+      Alert.alert('Auto-reject failed', error?.message || 'Unable to run auto-reject.');
+    } finally {
+      setAutoRejecting(false);
     }
   }
 
@@ -1062,24 +1081,41 @@ export default function AdminPage() {
       }}>
         <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 28 }}>Admin Dashboard</Text>
-          <TouchableOpacity
-            onPress={() => {
-              loadAll();
-              fetchChefRequests().then(setChefRequests);
-            }}
-            disabled={loading}
-            style={{
-              backgroundColor: theme.colors.primary,
-              paddingVertical: 10,
-              paddingHorizontal: 16,
-              borderRadius: 8,
-              opacity: loading ? 0.7 : 1,
-            }}
-          >
-            <Text style={{ color: theme.colors.white, fontWeight: '800' }}>
-              {loading ? 'Refreshing…' : 'Refresh'}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ flexDirection: 'row', gap: 12 }}>
+            <TouchableOpacity
+              onPress={runAutoReject}
+              disabled={autoRejecting}
+              style={{
+                backgroundColor: '#f97316',
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                opacity: autoRejecting ? 0.7 : 1,
+              }}
+            >
+              <Text style={{ color: '#ffffff', fontWeight: '800' }}>
+                {autoRejecting ? 'Running…' : 'Run auto-reject now'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                loadAll();
+                fetchChefRequests().then(setChefRequests);
+              }}
+              disabled={loading}
+              style={{
+                backgroundColor: theme.colors.primary,
+                paddingVertical: 10,
+                paddingHorizontal: 16,
+                borderRadius: 8,
+                opacity: loading ? 0.7 : 1,
+              }}
+            >
+              <Text style={{ color: theme.colors.white, fontWeight: '800' }}>
+                {loading ? 'Refreshing…' : 'Refresh'}
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
         {err && (
           <View style={{

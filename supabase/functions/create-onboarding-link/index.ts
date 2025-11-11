@@ -1,6 +1,14 @@
-import { serve } from 'https://deno.land/std@0.200.0/http/server.ts';
-import { adminClient } from '../_shared/db.ts';
+import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { stripe } from '../_shared/stripe.ts';
+
+const SITE_URL = Deno.env.get('SITE_URL') ?? Deno.env.get('PUBLIC_SITE_URL') ?? 'http://localhost:8081';
+const DEFAULT_CONNECT_COUNTRY = Deno.env.get('DEFAULT_CONNECT_COUNTRY') ?? 'CA';
+const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+  console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY environment variables');
+}
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,93 +16,112 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-const FRONTEND_URL = Deno.env.get('PUBLIC_SITE_URL') ?? 'http://localhost:8081';
-
-function json(status: number, payload: Record<string, unknown>) {
-  return new Response(JSON.stringify(payload), {
-    status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders },
-  });
-}
-
-function errorResponse(status: number, message: string, detail?: unknown) {
-  console.error(`[create-onboarding-link] ${message}`, detail);
-  return json(status, { error: message });
-}
-
-serve(async (req) => {
+export const handler = async (req: Request) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
-  if (req.method !== 'POST') {
-    return errorResponse(405, 'Method not allowed');
-  }
-
   try {
-    const authHeader = req.headers.get('Authorization');
-    if (!authHeader?.startsWith('Bearer ')) {
-      return errorResponse(401, 'Unauthorized');
+    if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+      return new Response('Server misconfigured', { status: 500 });
     }
 
-    const accessToken = authHeader.replace('Bearer ', '').trim();
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
+      global: { headers: { Authorization: req.headers.get('Authorization') ?? '' } },
+    });
+    const { data: { user }, error: userErr } = await supabase.auth.getUser();
 
-    const {
-      data: { user },
-      error: userError,
-    } = await adminClient.auth.getUser(accessToken);
-
-    if (userError || !user) {
-      return errorResponse(401, 'Unauthorized', userError);
+    if (userErr || !user) {
+      return new Response('Unauthorized', { status: 401 });
     }
 
-    const { data: profile, error: profileError } = await adminClient
+    const { data: prof, error: profileErr } = await supabase
       .from('profiles')
       .select('id, email, stripe_account_id')
       .eq('id', user.id)
       .maybeSingle();
 
-    if (profileError || !profile) {
-      console.error('create-onboarding-link profile not found', { userId: user.id, profileError });
-      return errorResponse(404, 'Profile not found', profileError);
+    if (profileErr) {
+      console.error('create-onboarding-link profile error', profileErr);
+      throw profileErr;
     }
 
-    let stripeAccountId = profile.stripe_account_id as string | null;
+    let accountId = prof?.stripe_account_id ?? null;
+    const capabilities = {
+      card_payments: { requested: true as const },
+      transfers: { requested: true as const },
+    };
 
-    if (!stripeAccountId) {
-      if (!profile.email) {
-        console.error('create-onboarding-link missing email', { profileId: profile.id });
-        return errorResponse(400, 'Profile email required to create Stripe account');
+    if (accountId) {
+      await stripe.accounts.update(accountId, { capabilities });
+    } else {
+      // attempt to find existing account by metadata
+      let foundAccountId: string | null = null;
+      try {
+        const results = await stripe.accounts.search({
+          query: `metadata['app_user_id']:'${user.id}'`,
+          limit: 1,
+        });
+        if (results.data.length > 0) {
+          foundAccountId = results.data[0].id;
+        }
+      } catch (searchErr) {
+        console.warn('Stripe account search by metadata failed', searchErr);
       }
 
-      const account = await stripe.accounts.create({
-        type: 'express',
-        country: 'US',
-        email: profile.email,
-        metadata: { profile_id: profile.id },
-      });
+      if (!foundAccountId && prof?.email) {
+        try {
+          const results = await stripe.accounts.search({
+            query: `email:'${prof.email}'`,
+            limit: 1,
+          });
+          if (results.data.length > 0) {
+            foundAccountId = results.data[0].id;
+          }
+        } catch (searchErr) {
+          console.warn('Stripe account search by email failed', searchErr);
+        }
+      }
 
-      stripeAccountId = account.id;
-
-      const { error: updateError } = await adminClient
-        .from('profiles')
-        .update({ stripe_account_id: stripeAccountId })
-        .eq('id', profile.id);
-
-      if (updateError) {
-        return errorResponse(500, 'Failed to persist Stripe account', updateError);
+      if (foundAccountId) {
+        accountId = foundAccountId;
+        await stripe.accounts.update(accountId, { capabilities });
+        await supabase.from('profiles').update({ stripe_account_id: accountId }).eq('id', user.id);
+      } else {
+        const created = await stripe.accounts.create({
+          type: 'express',
+          country: DEFAULT_CONNECT_COUNTRY,
+          email: prof?.email ?? undefined,
+          business_type: 'individual',
+          capabilities,
+          metadata: { app_user_id: user.id },
+        }, {
+          idempotencyKey: user.id,
+        });
+        accountId = created.id;
+        await supabase.from('profiles').update({ stripe_account_id: accountId }).eq('id', user.id);
       }
     }
 
+    const normalizedSiteUrl = SITE_URL.replace(/\/$/, '');
     const link = await stripe.accountLinks.create({
-      account: stripeAccountId,
-      refresh_url: `${FRONTEND_URL}/onboarding/refresh`,
-      return_url: `${FRONTEND_URL}/onboarding/return`,
+      account: accountId!,
       type: 'account_onboarding',
+      refresh_url: `${normalizedSiteUrl}/chef/payouts?onboarding=refresh`,
+      return_url: `${normalizedSiteUrl}/chef/payouts?onboarding=return`,
     });
 
-    return json(200, { url: link.url });
-  } catch (err) {
-    return errorResponse(500, 'Internal Server Error', err);
+    return new Response(JSON.stringify({ url: link.url }), {
+      status: 200,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
+  } catch (err: any) {
+    console.error('create-onboarding-link error', err?.raw ?? err);
+    return new Response(JSON.stringify({ error: err?.raw?.message ?? String(err) }), {
+      status: 400,
+      headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    });
   }
-});
+};
+
+Deno.serve(handler);

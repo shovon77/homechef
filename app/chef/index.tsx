@@ -1,16 +1,16 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform } from 'react-native';
+import { useEffect, useState, useMemo, useCallback } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
 import FilePicker from '../../components/FilePicker';
 import { theme } from '../../lib/theme';
-import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
 import { formatLocal } from '../../lib/datetime';
 import { updateOrderStatus } from '../../lib/orders';
 import { callFn } from '../../lib/fn';
+import PayoutSettings from '../../components/chef/PayoutSettings';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#2C4E4B';
@@ -23,7 +23,7 @@ const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string };
+type OrderRow = { id: number; user_id: string; status: string; total_cents: number; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -41,6 +41,8 @@ export default function ChefDashboard() {
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
+  const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
+  const [earningsRange, setEarningsRange] = useState<'week' | 'month'>('week');
 
   useEffect(() => {
     (async () => {
@@ -55,10 +57,11 @@ export default function ChefDashboard() {
         const email = auth.user.email;
         if (!email) throw new Error('Missing email on session');
 
-        const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id').eq('id', auth.user.id).maybeSingle();
+        const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id,stripe_payouts_enabled').eq('id', auth.user.id).maybeSingle();
         if (!profileRow.error) {
           setChargesEnabled(profileRow.data?.charges_enabled ?? false);
           setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
+          setPayoutsEnabled(profileRow.data?.stripe_payouts_enabled ?? false);
         }
 
         let me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
@@ -286,7 +289,7 @@ export default function ChefDashboard() {
     try {
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,created_at,pickup_at,chef_id,stripe_transfer_id')
+        .select('id,user_id,status,total_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id')
         .eq('chef_id', chefId)
         .order('created_at', { ascending: false });
 
@@ -338,6 +341,7 @@ export default function ChefDashboard() {
         created_at: order.created_at,
         pickup_at: order.pickup_at ?? null,
         user_email: emailMap.get(order.user_id) ?? undefined,
+        platform_fee_cents: order.platform_fee_cents ?? 0,
         order_items: itemsByOrderId.get(order.id) ?? [],
         stripe_transfer_id: order.stripe_transfer_id ?? undefined,
       }));
@@ -350,14 +354,6 @@ export default function ChefDashboard() {
   }
 
   // Calculate analytics
-  const weeklyEarnings = useMemo(() => {
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-    return orders
-      .filter(o => new Date(o.created_at) >= weekAgo && o.status === 'completed')
-      .reduce((sum, o) => sum + (o.total_cents || 0), 0) / 100;
-  }, [orders]);
-
   const topDishes = useMemo(() => {
     const dishCounts: Record<number, number> = {};
     orders.forEach(order => {
@@ -372,6 +368,70 @@ export default function ChefDashboard() {
       .sort((a, b) => b.count - a.count)
       .slice(0, 3);
   }, [orders, dishes]);
+
+  const earningsSeries = useMemo(() => {
+    const netOrders = orders
+      .filter(order => Boolean(order.stripe_transfer_id))
+      .map(order => ({
+        date: new Date(order.created_at),
+        amount: Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)),
+      }));
+
+    const now = new Date();
+    const labels: string[] = [];
+    const values: number[] = [];
+    const msPerDay = 24 * 60 * 60 * 1000;
+
+    if (earningsRange === 'week') {
+      const startOfWeek = new Date(now);
+      startOfWeek.setHours(0, 0, 0, 0);
+      const day = startOfWeek.getDay(); // 0 (Sun) - 6 (Sat)
+      const diffToMonday = day === 0 ? 6 : day - 1;
+      startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
+      const endOfWeek = new Date(startOfWeek);
+      endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+      const weekLabels = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
+      weekLabels.forEach(label => labels.push(label));
+      for (let i = 0; i < 7; i += 1) {
+        values[i] = 0;
+      }
+
+      netOrders.forEach(order => {
+        if (order.date >= startOfWeek && order.date < endOfWeek) {
+          const dayIndex = (order.date.getDay() + 6) % 7; // convert Sun=6
+          values[dayIndex] += order.amount;
+        }
+      });
+    } else {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      const daysInMonth = Math.round((endOfMonth.getTime() - startOfMonth.getTime()) / msPerDay);
+      const weeksInMonth = Math.max(1, Math.ceil(daysInMonth / 7));
+      for (let i = 0; i < weeksInMonth; i += 1) {
+        labels.push(`Week ${i + 1}`);
+        values[i] = 0;
+      }
+
+      netOrders.forEach(order => {
+        if (order.date >= startOfMonth && order.date < endOfMonth) {
+          const diffDays = Math.floor((order.date.getTime() - startOfMonth.getTime()) / msPerDay);
+          const idx = Math.min(weeksInMonth - 1, Math.floor(diffDays / 7));
+          values[idx] += order.amount;
+        }
+      });
+    }
+
+    const total = values.reduce((sum, value) => sum + value, 0);
+    const maxValue = Math.max(...values, 0);
+
+    return {
+      labels,
+      values,
+      total,
+      maxValue,
+    };
+  }, [orders, earningsRange]);
 
   const filteredOrders = useMemo(() => {
     return orders.filter(o => o.status === orderStatusFilter);
@@ -404,82 +464,89 @@ export default function ChefDashboard() {
     );
   }
 
+  const navItems = [
+    { key: 'dashboard' as const, label: 'Dashboard', icon: '📊' },
+    { key: 'menu' as const, label: 'Menu Management', icon: '📖' },
+    { key: 'orders' as const, label: 'Order History', icon: '📋' },
+    { key: 'reviews' as const, label: 'My Reviews', icon: '⭐' },
+    { key: 'payouts' as const, label: 'Payout Settings', icon: '💳' },
+  ];
+
+  const footerNavItems = [
+    { key: 'profile' as const, label: 'Profile', icon: '⚙️', action: 'profile' as const },
+    { key: 'logout' as const, label: 'Logout', icon: '🚪', action: 'logout' as const },
+  ];
+
   const Sidebar = (
-    <View style={{ width: 256, backgroundColor: BG_LIGHT, borderRightWidth: 1, borderRightColor: BORDER_LIGHT, padding: 16 }}>
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 32, padding: 12 }}>
-        <View style={{ width: 40, height: 40, borderRadius: 8, backgroundColor: PRIMARY_COLOR + '20', alignItems: 'center', justifyContent: 'center' }}>
-          <Text style={{ fontSize: 24 }}>🍽️</Text>
+    <View style={styles.sidebar}>
+      <ScrollView contentContainerStyle={styles.sidebarInner}>
+        <View style={styles.sidebarHeader}>
+          <View style={styles.sidebarIconWrap}>
+            <Text style={styles.sidebarIcon}>🍽️</Text>
+          </View>
+          <Text style={styles.sidebarTitle}>ChefDash</Text>
         </View>
-        <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '900' }}>ChefDash</Text>
-      </View>
 
-      <View style={{ flex: 1, gap: 8 }}>
-        {[
-          { key: 'dashboard' as const, label: 'Dashboard', icon: '📊' },
-          { key: 'menu' as const, label: 'Menu Management', icon: '📖' },
-          { key: 'orders' as const, label: 'Order History', icon: '📋' },
-          { key: 'reviews' as const, label: 'My Reviews', icon: '⭐' },
-          { key: 'payouts' as const, label: 'Payout Settings', icon: '💳' },
-        ].map(item => (
-          <TouchableOpacity
-            key={item.key}
-            onPress={() => setActiveTab(item.key)}
-            style={{
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 12,
-              padding: 12,
-              borderRadius: 8,
-              backgroundColor: activeTab === item.key ? PRIMARY_COLOR + '20' : 'transparent',
-            }}
-          >
-            <Text style={{ fontSize: 20 }}>{item.icon}</Text>
-            <Text style={{ color: activeTab === item.key ? PRIMARY_COLOR : TEXT_MUTED, fontWeight: activeTab === item.key ? '800' : '600', fontSize: 14 }}>
-              {item.label}
-            </Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+        <View style={styles.sidebarSection}>
+          {navItems.map(item => (
+            <Pressable
+              key={item.key}
+              onPress={() => setActiveTab(item.key)}
+              style={({ pressed }) => [
+                styles.navItem,
+                activeTab === item.key && styles.navItemActive,
+                pressed && styles.navItemPressed,
+              ]}
+            >
+              <View style={styles.navIconWrap}><Text style={styles.navIcon}>{item.icon}</Text></View>
+              <Text
+                numberOfLines={1}
+                ellipsizeMode="tail"
+                style={[styles.navLabel, activeTab === item.key && styles.navLabelActive]}
+              >
+                {item.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
 
-      <View style={{ gap: 8, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-        <TouchableOpacity
-          onPress={() => setActiveTab('profile')}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            padding: 12,
-            borderRadius: 8,
-            backgroundColor: activeTab === 'profile' ? PRIMARY_COLOR + '20' : 'transparent',
-          }}
-        >
-          <Text style={{ fontSize: 20 }}>⚙️</Text>
-          <Text style={{ color: activeTab === 'profile' ? PRIMARY_COLOR : TEXT_MUTED, fontWeight: activeTab === 'profile' ? '800' : '600', fontSize: 14 }}>
-            Profile
-          </Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={async () => {
-            await supabase.auth.signOut();
-            router.replace('/auth');
-          }}
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 12,
-            padding: 12,
-            borderRadius: 8,
-          }}
-        >
-          <Text style={{ fontSize: 20 }}>🚪</Text>
-          <Text style={{ color: TEXT_MUTED, fontWeight: '600', fontSize: 14 }}>Logout</Text>
-        </TouchableOpacity>
-      </View>
+        <View style={styles.sidebarSectionFooter}>
+          {footerNavItems.map(item => {
+            const isActive = item.action === 'profile' && activeTab === 'profile';
+            const handlePress = item.action === 'logout'
+              ? async () => {
+                  await supabase.auth.signOut();
+                  router.replace('/auth');
+                }
+              : () => setActiveTab('profile');
+            return (
+              <Pressable
+                key={item.key}
+                onPress={handlePress}
+                style={({ pressed }) => [
+                  styles.navItem,
+                  isActive && styles.navItemActive,
+                  pressed && styles.navItemPressed,
+                ]}
+              >
+                <View style={styles.navIconWrap}><Text style={styles.navIcon}>{item.icon}</Text></View>
+                <Text
+                  numberOfLines={1}
+                  ellipsizeMode="tail"
+                  style={[styles.navLabel, isActive && styles.navLabelActive]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
+      </ScrollView>
     </View>
   );
 
   const DashboardTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -502,23 +569,54 @@ export default function ChefDashboard() {
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
             <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900' }}>Weekly Earnings</Text>
             <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
-              <TouchableOpacity style={{ paddingVertical: 4, paddingHorizontal: 12, borderRadius: 6 }}>
-                <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '700' }}>This Week</Text>
+              <TouchableOpacity
+                onPress={() => setEarningsRange('week')}
+                style={{
+                  paddingVertical: 4,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  backgroundColor: earningsRange === 'week' ? BG_LIGHT : 'transparent',
+                }}
+              >
+                <Text style={{ color: earningsRange === 'week' ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700' }}>This Week</Text>
               </TouchableOpacity>
-              <TouchableOpacity style={{ paddingVertical: 4, paddingHorizontal: 12, borderRadius: 6, backgroundColor: BG_LIGHT }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 12, fontWeight: '700' }}>This Month</Text>
+              <TouchableOpacity
+                onPress={() => setEarningsRange('month')}
+                style={{
+                  paddingVertical: 4,
+                  paddingHorizontal: 12,
+                  borderRadius: 6,
+                  backgroundColor: earningsRange === 'month' ? BG_LIGHT : 'transparent',
+                }}
+              >
+                <Text style={{ color: earningsRange === 'month' ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700' }}>This Month</Text>
               </TouchableOpacity>
             </View>
           </View>
-          <View style={{ height: 200, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 8 }}>
-            {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].map((day, i) => (
-              <View key={day} style={{ flex: 1, alignItems: 'center', gap: 8 }}>
-                <View style={{ width: '100%', height: `${60 + (i * 10)}%`, backgroundColor: i === 2 ? PRIMARY_COLOR : PRIMARY_COLOR + '30', borderRadius: 4 }} />
-                <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{day}</Text>
-              </View>
-            ))}
+          <View style={{ height: 220, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
+            {earningsSeries.labels.map((label, idx) => {
+              const value = earningsSeries.values[idx] || 0;
+              const ratio = earningsSeries.maxValue > 0 ? value / earningsSeries.maxValue : 0;
+              const barHeight = Math.max(8, ratio * 160);
+              return (
+                <View key={label} style={{ flex: 1, alignItems: 'center', gap: 8 }}>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600' }}>
+                    {value > 0 ? `$${(value / 100).toFixed(0)}` : '$0'}
+                  </Text>
+                  <View style={{
+                    width: '100%',
+                    height: barHeight,
+                    backgroundColor: value > 0 ? PRIMARY_COLOR : PRIMARY_COLOR + '30',
+                    borderRadius: 6,
+                  }} />
+                  <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{label}</Text>
+                </View>
+              );
+            })}
           </View>
-          <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginTop: 16 }}>${weeklyEarnings.toFixed(2)}</Text>
+          <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginTop: 16 }}>
+            ${ (earningsSeries.total / 100).toFixed(2) }
+          </Text>
         </View>
 
         {/* Top Dishes Card */}
@@ -609,7 +707,7 @@ export default function ChefDashboard() {
   );
 
   const MenuTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -636,7 +734,7 @@ export default function ChefDashboard() {
   );
 
   const OrdersTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 16 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120 }}>
       <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Order History</Text>
       <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
         {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
@@ -674,13 +772,13 @@ export default function ChefDashboard() {
               <>
                 {(() => {
                   const transferSent = Boolean(order.stripe_transfer_id);
-                  const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                  const canAccept = chargesEnabled && !!stripeAccountId && payoutsEnabled && !transferSent;
                   return (
                     <TouchableOpacity
                       disabled={!canAccept}
                       onPress={async () => {
                         if (!canAccept) {
-                          if (!chargesEnabled || !stripeAccountId) {
+                          if (!chargesEnabled || !stripeAccountId || !payoutsEnabled) {
                             Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
                           }
                           return;
@@ -735,21 +833,30 @@ export default function ChefDashboard() {
   );
 
   const ReviewsTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, paddingBottom: 120, alignItems: 'center', justifyContent: 'center' }}>
       <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginBottom: 8 }}>My Reviews</Text>
       <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Reviews feature coming soon</Text>
     </ScrollView>
   );
 
   const PayoutsTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginBottom: 8 }}>Payout Settings</Text>
-      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Payout settings coming soon</Text>
-    </ScrollView>
+    <View style={{ flex: 1, backgroundColor: BG_LIGHT }}>
+      <PayoutSettings
+        onStatusChange={(nextStatus) => {
+          setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled));
+          if (typeof nextStatus?.charges_enabled === 'boolean') {
+            setChargesEnabled(nextStatus.charges_enabled);
+          }
+          if (nextStatus?.account_id) {
+            setStripeAccountId(nextStatus.account_id);
+          }
+        }}
+      />
+    </View>
   );
 
   const ProfileTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -804,9 +911,9 @@ export default function ChefDashboard() {
   );
 
   return (
-    <View style={{ flex: 1, flexDirection: 'row', backgroundColor: BG_LIGHT }}>
+    <View style={styles.page}>
       {Sidebar}
-      <View style={{ flex: 1 }}>
+      <View style={styles.content}>
         {activeTab === 'dashboard' && DashboardTab}
         {activeTab === 'menu' && MenuTab}
         {activeTab === 'orders' && OrdersTab}
@@ -817,6 +924,96 @@ export default function ChefDashboard() {
     </View>
   );
 }
+
+const styles = StyleSheet.create({
+  page: {
+    flex: 1,
+    flexDirection: 'row',
+    backgroundColor: BG_LIGHT,
+    minHeight: '100%',
+  },
+  sidebar: {
+    width: 260,
+    flexShrink: 0,
+    borderRightWidth: 1,
+    borderRightColor: BORDER_LIGHT,
+    backgroundColor: BG_LIGHT,
+  },
+  sidebarInner: {
+    paddingVertical: 16,
+    paddingHorizontal: 16,
+  },
+  sidebarHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 24,
+  },
+  sidebarIconWrap: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: PRIMARY_COLOR + '20',
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginRight: 12,
+  },
+  sidebarIcon: {
+    fontSize: 24,
+  },
+  sidebarTitle: {
+    color: TEXT_DARK,
+    fontSize: 20,
+    fontWeight: '900',
+  },
+  sidebarSection: {
+    marginBottom: 24,
+  },
+  sidebarSectionFooter: {
+    borderTopWidth: 1,
+    borderTopColor: BORDER_LIGHT,
+    paddingTop: 16,
+  },
+  navItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 12,
+    borderRadius: 12,
+    marginBottom: 8,
+    backgroundColor: 'transparent',
+    minHeight: 44,
+  },
+  navItemActive: {
+    backgroundColor: PRIMARY_COLOR + '20',
+  },
+  navItemPressed: {
+    opacity: 0.85,
+  },
+  navIconWrap: {
+    width: 22,
+    height: 22,
+    marginRight: 10,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navIcon: {
+    fontSize: 18,
+  },
+  navLabel: {
+    flexShrink: 1,
+    fontSize: 16,
+    color: TEXT_MUTED,
+    fontWeight: '600',
+  },
+  navLabelActive: {
+    color: PRIMARY_COLOR,
+    fontWeight: '800',
+  },
+  content: {
+    flex: 1,
+    backgroundColor: BG_LIGHT,
+  },
+});
 
 // Dish form components
 function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price: number; description?: string; file?: File | null; preview?: string }) => void; saving: boolean }) {

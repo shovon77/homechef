@@ -34,9 +34,15 @@ serve(async (req) => {
       case 'checkout.session.completed': {
         const session = event.data.object as Stripe.Checkout.Session;
         const orderIdRaw = session.client_reference_id ?? session.metadata?.order_id;
-        if (!orderIdRaw) break;
+        if (!orderIdRaw) {
+          console.warn('checkout.session.completed missing order id');
+          break;
+        }
         const orderId = Number(orderIdRaw);
-        if (!Number.isFinite(orderId)) break;
+        if (!Number.isFinite(orderId)) {
+          console.warn('checkout.session.completed invalid order id', orderIdRaw);
+          break;
+        }
 
         let paymentIntentId: string | null = null;
         let transferGroup: string | null = null;
@@ -47,16 +53,26 @@ serve(async (req) => {
           transferGroup = intent.transfer_group ?? null;
         }
 
-        const updates: Record<string, unknown> = { status: 'requested' };
+        const updates: Record<string, unknown> = {
+          payment_status: 'succeeded',
+        };
         if (paymentIntentId) updates.stripe_payment_intent_id = paymentIntentId;
         if (transferGroup) updates.transfer_group = transferGroup;
 
         await adminClient.from('orders').update(updates).eq('id', orderId);
         break;
       }
+      case 'account.created':
       case 'account.updated': {
         const account = event.data.object as Stripe.Account;
         if (account?.id) {
+          if (account.metadata?.app_user_id) {
+            await adminClient
+              .from('profiles')
+              .update({ stripe_account_id: account.id })
+              .eq('id', account.metadata.app_user_id);
+          }
+
           await adminClient
             .from('profiles')
             .update({ charges_enabled: account.charges_enabled ?? false })

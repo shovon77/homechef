@@ -79,7 +79,7 @@ serve(async (req) => {
 
     const { data: profile } = await adminClient
       .from('profiles')
-      .select('email, is_admin, charges_enabled, stripe_account_id')
+      .select('email, is_admin, charges_enabled, stripe_account_id, stripe_payouts_enabled')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -109,6 +109,10 @@ serve(async (req) => {
 
     if (profile?.charges_enabled === false) {
       return errorResponse(400, 'Please complete payouts onboarding first');
+    }
+
+    if (profile?.stripe_payouts_enabled === false) {
+      return errorResponse(400, 'Please enable payouts before accepting orders');
     }
 
     const platformFeePercent = Number(Deno.env.get('PLATFORM_FEE_PERCENT') ?? '10');

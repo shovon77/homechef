@@ -43,6 +43,7 @@ const styles = StyleSheet.create({
   },
   tabBar: {
     flexDirection: 'row',
+    gap: theme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     marginBottom: theme.spacing.lg,

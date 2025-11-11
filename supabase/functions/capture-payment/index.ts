@@ -3,6 +3,8 @@ import Stripe from 'https://esm.sh/stripe@12?target=deno';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
+// Legacy fallback: chefs should use accept-order (transfer-based flow).
+// This endpoint remains for recovery flows where a manual capture is still required.
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',

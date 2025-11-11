@@ -98,7 +98,7 @@ CREATE TABLE public.order_items (
 CREATE TABLE public.orders (
   id bigint GENERATED ALWAYS AS IDENTITY NOT NULL,
   user_id uuid NOT NULL,
-  status text NOT NULL DEFAULT 'requested'::text CHECK (status = ANY (ARRAY['pending'::text, 'requested'::text, 'paid'::text, 'ready'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text])),
+  status text NOT NULL DEFAULT 'requested'::text CHECK (status = ANY (ARRAY['requested'::text, 'pending'::text, 'preparing'::text, 'ready'::text, 'completed'::text, 'cancelled'::text, 'rejected'::text])),
   total_cents integer NOT NULL DEFAULT 0,
   created_at timestamp with time zone NOT NULL DEFAULT now(),
   pickup_at timestamp with time zone,
@@ -107,6 +107,10 @@ CREATE TABLE public.orders (
   payment_status text,
   checkout_session_id text,
   expires_at timestamp with time zone,
+  stripe_payment_intent_id text,
+  transfer_group text,
+  stripe_transfer_id text,
+  platform_fee_cents integer DEFAULT 0,
   CONSTRAINT orders_pkey PRIMARY KEY (id),
   CONSTRAINT orders_user_id_fkey FOREIGN KEY (user_id) REFERENCES auth.users(id),
   CONSTRAINT orders_chef_id_fkey FOREIGN KEY (chef_id) REFERENCES public.chefs(id)
@@ -119,8 +123,21 @@ CREATE TABLE public.profiles (
   is_chef boolean DEFAULT false,
   created_at timestamp with time zone DEFAULT now(),
   is_admin boolean NOT NULL DEFAULT false,
+  stripe_account_id text,
+  charges_enabled boolean DEFAULT false,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
+);
+CREATE UNIQUE INDEX IF NOT EXISTS profiles_stripe_account_id_key
+  ON public.profiles (stripe_account_id)
+  WHERE stripe_account_id IS NOT NULL;
+CREATE TABLE public.scheduler_config (
+  id smallint NOT NULL DEFAULT 1,
+  project_url text NOT NULL,
+  anon_key text NOT NULL,
+  cron_secret text NOT NULL,
+  updated_at timestamp with time zone NOT NULL DEFAULT now(),
+  CONSTRAINT scheduler_config_pkey PRIMARY KEY (id)
 );
 CREATE TABLE public.users (
   id uuid NOT NULL,
