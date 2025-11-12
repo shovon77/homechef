@@ -1,12 +1,29 @@
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
 import { Link } from "expo-router";
-import { getEmailRedirect } from "../lib/authRedirect";
+import { getEmailRedirect, redirectAfterLogin } from "../lib/authRedirect";
 
 export default function Login() {
   const [email, setEmail] = useState("");
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setChecking(false);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin, is_chef, role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      redirectAfterLogin(profile ?? {});
+    })();
+  }, []);
 
   const sendMagicLink = async () => {
     if (!email.includes("@")) return Alert.alert("Enter a valid email");
@@ -18,6 +35,10 @@ export default function Login() {
     if (error) Alert.alert("Error", error.message);
     else Alert.alert("Check your email", "We sent you a sign-in link.");
   };
+
+  if (checking) {
+    return null;
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: theme.colors.surface, padding: 20, paddingTop: 60 }}>

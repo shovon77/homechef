@@ -1,0 +1,189 @@
+<!DOCTYPE html>
+<html lang="en"><head>
+<meta charset="utf-8"/>
+<meta content="width=device-width, initial-scale=1.0" name="viewport"/>
+<title>HomeChef - Admin Dashboard</title>
+<link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&amp;display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined" rel="stylesheet"/>
+<script src="https://cdn.tailwindcss.com?plugins=forms,typography"></script>
+<script>
+      tailwind.config = {
+        darkMode: "class",
+        theme: {
+          extend: {
+            colors: {
+              primary: "#3E7C64", // Talo Green from prompt
+              "background-light": "#FFFFFF",
+              "background-dark": "#18181b", // A dark gray
+              "surface-light": "#FFFFFF",
+              "surface-dark": "#27272a", // Slightly lighter dark gray
+              "border-light": "#e5e7eb",
+              "border-dark": "#3f3f46",
+              "text-light": "#111827",
+              "text-dark": "#f4f4f5",
+              "subtle-light": "#6b7280",
+              "subtle-dark": "#a1a1aa",
+            },
+            fontFamily: {
+              display: ["Poppins", "sans-serif"],
+            },
+            borderRadius: {
+              DEFAULT: "0.5rem",
+            },
+          },
+        },
+      };
+    </script>
+</head>
+<body class="font-display bg-background-light dark:bg-background-dark text-text-light dark:text-text-dark">
+<div class="flex flex-col min-h-screen">
+<header class="bg-surface-light dark:bg-surface-dark border-b border-border-light dark:border-border-dark sticky top-0 z-50">
+<div class="container mx-auto px-4 sm:px-6 lg:px-8">
+<div class="flex h-16 items-center justify-between">
+<div class="flex items-center space-x-8">
+<div class="flex items-center space-x-2">
+<span class="material-symbols-outlined text-primary text-3xl">restaurant</span>
+<span class="text-2xl font-bold">HomeChef</span>
+</div>
+<nav class="hidden md:flex space-x-8">
+<a class="text-subtle-light dark:text-subtle-dark hover:text-primary dark:hover:text-primary transition-colors" href="#">Explore</a>
+<a class="font-semibold text-text-light dark:text-text-dark hover:text-primary dark:hover:text-primary transition-colors" href="#">Dashboard</a>
+</nav>
+</div>
+<div class="flex items-center space-x-4">
+<a class="hidden sm:inline-block px-4 py-2 text-sm font-medium rounded-DEFAULT bg-primary text-white hover:bg-opacity-90 transition-colors" href="#">Profile</a>
+<a class="hidden sm:inline-block px-4 py-2 text-sm font-medium rounded-DEFAULT border border-border-light dark:border-border-dark hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors" href="#">Logout</a>
+<button class="p-2 rounded-full hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">
+<span class="material-symbols-outlined">shopping_cart</span>
+</button>
+</div>
+</div>
+</div>
+</header>
+<main class="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="space-y-6">
+<h1 class="text-3xl font-bold">Admin Dashboard</h1>
+<div class="border-b border-border-light dark:border-border-dark">
+<nav aria-label="Tabs" class="-mb-px flex space-x-6 overflow-x-auto">
+<a class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-subtle-light dark:text-subtle-dark border-transparent hover:text-text-light dark:hover:text-text-dark hover:border-border-dark dark:hover:border-border-light" href="#">
+                            Chef Requests
+                        </a>
+<a class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-subtle-light dark:text-subtle-dark border-transparent hover:text-text-light dark:hover:text-text-dark hover:border-border-dark dark:hover:border-border-light" href="#">
+                            Applications
+                        </a>
+<a class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-subtle-light dark:text-subtle-dark border-transparent hover:text-text-light dark:hover:text-text-dark hover:border-border-dark dark:hover:border-border-light" href="#">
+                            Chefs
+                        </a>
+<a class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-subtle-light dark:text-subtle-dark border-transparent hover:text-text-light dark:hover:text-text-dark hover:border-border-dark dark:hover:border-border-light" href="#">
+                            Users
+                        </a>
+<a aria-current="page" class="whitespace-nowrap py-3 px-1 border-b-2 font-medium text-sm text-primary border-primary" href="#">
+                            Orders
+                        </a>
+</nav>
+</div>
+<div class="pt-6 space-y-6">
+<div class="flex flex-col sm:flex-row gap-4 justify-between">
+<div class="relative flex-grow">
+<span class="material-symbols-outlined absolute left-3 top-1/2 -translate-y-1/2 text-subtle-light dark:text-subtle-dark">search</span>
+<input class="w-full pl-10 pr-4 py-2 rounded-DEFAULT bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark focus:ring-2 focus:ring-primary focus:border-primary" placeholder="Search by Order ID, customer, or chef..." type="text"/>
+</div>
+<div class="flex items-center gap-2">
+<select class="rounded-DEFAULT bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark focus:ring-2 focus:ring-primary focus:border-primary">
+<option>Sort by Date</option>
+<option>Sort by Status</option>
+<option>Sort by Amount</option>
+</select>
+<button class="px-4 py-2 text-sm font-medium rounded-DEFAULT bg-primary text-white hover:bg-opacity-90 transition-colors flex items-center gap-2">
+<span class="material-symbols-outlined text-base">refresh</span>
+                            Refresh
+                        </button>
+</div>
+</div>
+<div class="overflow-x-auto">
+<div class="min-w-full bg-surface-light dark:bg-surface-dark border border-border-light dark:border-border-dark rounded-lg">
+<div class="grid grid-cols-12 items-center gap-4 px-6 py-4 border-b border-border-light dark:border-border-dark font-semibold text-sm text-subtle-light dark:text-subtle-dark">
+<div class="col-span-2">Order ID</div>
+<div class="col-span-2">Customer</div>
+<div class="col-span-2">Chef</div>
+<div class="col-span-2 text-center">Amount</div>
+<div class="col-span-2 text-center">Status</div>
+<div class="col-span-2 text-right">Actions</div>
+</div>
+<div class="grid grid-cols-12 items-center gap-4 px-6 py-4 border-b border-border-light dark:border-border-dark">
+<div class="col-span-2">
+<div class="font-semibold text-sm">#HC12045</div>
+<div class="text-xs text-subtle-light dark:text-subtle-dark">2024-07-21 18:30</div>
+</div>
+<div class="col-span-2 font-medium">Liam Johnson</div>
+<div class="col-span-2 font-medium">Maria Garcia</div>
+<div class="col-span-2 text-center font-semibold">$45.50</div>
+<div class="col-span-2 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300">Delivered</span>
+</div>
+<div class="col-span-2 flex justify-end items-center gap-2">
+<button class="px-3 py-1 text-sm font-medium rounded-DEFAULT border border-border-light dark:border-border-dark hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">View Details</button>
+<button class="hidden sm:inline-block px-3 py-1 text-sm font-medium rounded-DEFAULT bg-primary/10 text-primary dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors">Update Status</button>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center gap-4 px-6 py-4 border-b border-border-light dark:border-border-dark">
+<div class="col-span-2">
+<div class="font-semibold text-sm">#HC12044</div>
+<div class="text-xs text-subtle-light dark:text-subtle-dark">2024-07-21 12:15</div>
+</div>
+<div class="col-span-2 font-medium">Olivia Smith</div>
+<div class="col-span-2 font-medium">David Chen</div>
+<div class="col-span-2 text-center font-semibold">$32.00</div>
+<div class="col-span-2 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300">Preparing</span>
+</div>
+<div class="col-span-2 flex justify-end items-center gap-2">
+<button class="px-3 py-1 text-sm font-medium rounded-DEFAULT border border-border-light dark:border-border-dark hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">View Details</button>
+<button class="px-3 py-1 text-sm font-medium rounded-DEFAULT bg-primary/10 text-primary dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors">Update Status</button>
+</div>
+</div>
+<div class="grid grid-cols-12 items-center gap-4 px-6 py-4">
+<div class="col-span-2">
+<div class="font-semibold text-sm">#HC12043</div>
+<div class="text-xs text-subtle-light dark:text-subtle-dark">2024-07-20 20:00</div>
+</div>
+<div class="col-span-2 font-medium">Noah Brown</div>
+<div class="col-span-2 font-medium">Aisha Khan</div>
+<div class="col-span-2 text-center font-semibold">$58.75</div>
+<div class="col-span-2 text-center">
+<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300">Pending</span>
+</div>
+<div class="col-span-2 flex justify-end items-center gap-2">
+<button class="px-3 py-1 text-sm font-medium rounded-DEFAULT border border-border-light dark:border-border-dark hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors">View Details</button>
+<button class="px-3 py-1 text-sm font-medium rounded-DEFAULT bg-primary/10 text-primary dark:bg-primary/20 hover:bg-primary/20 dark:hover:bg-primary/30 transition-colors">Update Status</button>
+</div>
+</div>
+</div>
+</div>
+</div>
+</div>
+</main>
+<footer class="bg-surface-light dark:bg-surface-dark border-t border-border-light dark:border-border-dark">
+<div class="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+<div class="flex flex-col md:flex-row justify-between items-center gap-6">
+<div class="text-center md:text-left">
+<div class="flex items-center justify-center md:justify-start space-x-2 mb-2">
+<span class="material-symbols-outlined text-primary text-2xl">restaurant</span>
+<span class="text-xl font-bold">HomeChef</span>
+</div>
+<p class="text-sm text-subtle-light dark:text-subtle-dark">Your marketplace for authentic homemade meals.</p>
+</div>
+<div class="flex items-center gap-6 text-sm">
+<a class="text-subtle-light dark:text-subtle-dark hover:text-primary" href="#">About Us</a>
+<a class="text-subtle-light dark:text-subtle-dark hover:text-primary" href="#">FAQ</a>
+<a class="text-subtle-light dark:text-subtle-dark hover:text-primary" href="#">Contact</a>
+<a class="text-subtle-light dark:text-subtle-dark hover:text-primary" href="#">Terms of Service</a>
+</div>
+</div>
+<div class="mt-8 pt-6 border-t border-border-light dark:border-border-dark text-center">
+<p class="text-sm text-subtle-light dark:text-subtle-dark">© 2025 HomeChef. All rights reserved.</p>
+</div>
+</div>
+</footer>
+</div>
+</body></html>

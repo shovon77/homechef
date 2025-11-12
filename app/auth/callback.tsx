@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { theme } from '../../constants/theme';
 import { ensureProfile } from '../../lib/ensureProfile';
 import { useRole } from '../../hooks/useRole';
+import { redirectAfterLogin } from '../../lib/authRedirect';
 
 /**
  * Auth callback handler for both web (PKCE) and native flows
@@ -21,7 +22,7 @@ export default function AuthCallback() {
   const [msg, setMsg] = useState('Signing you in…');
   const [error, setError] = useState<string | null>(null);
   const [sessionEstablished, setSessionEstablished] = useState(false);
-  const { loading, role } = useRole();
+  const { loading, role, profile } = useRole();
 
   useEffect(() => {
     let mounted = true;
@@ -81,7 +82,6 @@ export default function AuthCallback() {
         } else {
           setError('No active session. Try signing in again.');
           setMsg('Authentication failed');
-          setTimeout(() => router.replace('/login'), 2000);
         }
       } catch (e: any) {
         if (!mounted) return;
@@ -89,7 +89,6 @@ export default function AuthCallback() {
         setError(errorMsg);
         setMsg('Error');
         console.error('Auth callback error:', e);
-        setTimeout(() => router.replace('/login'), 3000);
       }
     }
 
@@ -103,10 +102,13 @@ export default function AuthCallback() {
   // Route based on role after session is established and role is loaded
   useEffect(() => {
     if (sessionEstablished && !loading) {
-      const redirectTo = params.redirect || (role === 'admin' ? '/admin' : role === 'chef' ? '/chef/dashboard' : '/');
-      router.replace(redirectTo);
+      if (params.redirect) {
+        router.replace(params.redirect);
+        return;
+      }
+      redirectAfterLogin(profile ?? { role });
     }
-  }, [sessionEstablished, loading, role, router, params.redirect]);
+  }, [sessionEstablished, loading, role, router, params.redirect, profile]);
 
   return (
     <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: theme.colors.surface}}>

@@ -5,6 +5,8 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
 import { getAuthRedirect } from '../../lib/authRedirect';
+import { redirectAfterLogin } from '../../lib/authRedirect';
+import { isLocalAdmin } from '../../lib/admin';
 
 /** Light brand palette */
 const C = {
@@ -25,6 +27,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
+  const [checking, setChecking] = useState(true);
 
   // Entrance animation
   const cardSlide = useRef(new Animated.Value(15)).current;
@@ -47,6 +50,26 @@ export default function AuthPage() {
     pulse();
   }, []);
 
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        if (!cancelled) setChecking(false);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin, is_chef, role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      if (!cancelled) redirectAfterLogin(profile ?? {});
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   async function doGoogle() {
     setErr(null);
     await supabase.auth.signInWithOAuth({
@@ -67,12 +90,37 @@ export default function AuthPage() {
       }
       const res = await ensureUser();
       if (res?.error) console.warn('ensureUser:', res.error);
-      router.replace('/');
+      let redirect = '/';
+      try {
+        const { data: userData } = await supabase.auth.getUser();
+        const user = userData?.user;
+        if (user) {
+          let admin = isLocalAdmin(user);
+          if (!admin) {
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_admin')
+              .eq('id', user.id)
+              .maybeSingle();
+            admin = profile?.is_admin === true;
+          }
+          if (admin) {
+            redirect = '/admin';
+          }
+        }
+      } catch (profileErr) {
+        console.warn('post-login admin check failed', profileErr);
+      }
+      redirectAfterLogin(profileRes?.data ?? {});
     } catch (e:any) {
       setErr(e.message || String(e));
     } finally {
       setBusy(false);
     }
+  }
+
+  if (checking) {
+    return null;
   }
 
   return (

@@ -1,14 +1,22 @@
 'use client';
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { theme } from '../lib/theme';
 
-export function Tabs({ tabs, initial = 0, onTabChange }: {
-  tabs: { key: string; title: string; content: JSX.Element }[];
+type TabConfig = { key: string; title: string; content: JSX.Element }[];
+
+type TabsProps = {
+  tabs: TabConfig;
   initial?: number;
   onTabChange?: (key: string) => void;
-}) {
+  activeColor?: string;
+  indicatorColor?: string;
+};
+
+export function Tabs({ tabs, initial = 0, onTabChange, activeColor, indicatorColor }: TabsProps) {
   const [idx, setIdx] = useState(initial);
+  const resolvedActiveColor = activeColor ?? theme.colors.text;
+  const resolvedIndicatorColor = indicatorColor ?? theme.colors.primary;
   return (
     <View style={styles.container}>
       {/* Underline-style tabs matching design mockups */}
@@ -24,10 +32,10 @@ export function Tabs({ tabs, initial = 0, onTabChange }: {
             accessibilityRole="tab"
             accessibilityState={{ selected: i === idx }}
           >
-            <Text style={[styles.tabText, i === idx && styles.tabTextActive]}>
+            <Text style={[styles.tabText, i === idx && { color: resolvedActiveColor }]}>
               {t.title}
             </Text>
-            {i === idx && <View style={styles.tabIndicator} />}
+            {i === idx && <View style={[styles.tabIndicator, { backgroundColor: resolvedIndicatorColor }]} />}
           </TouchableOpacity>
         ))}
       </View>
@@ -74,7 +82,6 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 3,
-    backgroundColor: theme.colors.primary,
     borderRadius: theme.radius.sm,
   },
   content: {

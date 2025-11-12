@@ -1,5 +1,7 @@
+'use client';
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
+import { router } from 'expo-router';
 
 /**
  * Get the auth redirect URL for OAuth flows (Google, Facebook, etc.)
@@ -31,5 +33,28 @@ export function getAuthRedirect(): string {
  */
 export function getEmailRedirect(): string {
   return getAuthRedirect();
+}
+
+export type RoleInfo = {
+  is_admin?: boolean | null;
+  is_chef?: boolean | null;
+  role?: string | null;
+};
+
+export function redirectAfterLogin(info: RoleInfo = {}, fallback: string = '/browse') {
+  const isAdmin = Boolean(info?.is_admin) || info?.role === 'admin';
+  const isChef = Boolean(info?.is_chef) || info?.role === 'chef';
+
+  if (isAdmin) {
+    router.replace('/admin');
+    return;
+  }
+
+  if (isChef) {
+    router.replace('/chef');
+    return;
+  }
+
+  router.replace(fallback);
 }
 

@@ -1,13 +1,30 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
 import { supabase } from '../../lib/supabase';
-import { getEmailRedirect } from '../../lib/authRedirect';
+import { getEmailRedirect, redirectAfterLogin } from '../../lib/authRedirect';
 
 export default function MagicLogin() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string|null>(null);
+  const [checking, setChecking] = useState(true);
+
+  useEffect(() => {
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) {
+        setChecking(false);
+        return;
+      }
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('is_admin, is_chef, role')
+        .eq('id', session.user.id)
+        .maybeSingle();
+      redirectAfterLogin(profile ?? {});
+    })();
+  }, []);
 
   async function sendLink() {
     setErr(null);
@@ -21,6 +38,10 @@ export default function MagicLogin() {
     } catch (e:any) {
       setErr(e.message || String(e));
     }
+  }
+
+  if (checking) {
+    return null;
   }
 
   return (

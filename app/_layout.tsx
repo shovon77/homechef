@@ -1,15 +1,20 @@
 'use client';
-import { useEffect } from 'react';
-import { Stack, useRouter } from 'expo-router';
-import { View, Platform } from 'react-native';
+import { useEffect, useRef } from 'react';
+import { Stack, useRouter, usePathname } from 'expo-router';
+import { View } from 'react-native';
 import { ensureUser } from '../lib/ensureUser';
 import { ensureProfile } from '../lib/ensureProfile';
 import { supabase } from '../lib/supabase';
 import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 import { CartProvider } from '../context/CartContext';
+import { redirectAfterLogin } from '../lib/authRedirect';
 
 export default function RootLayout() {
+  const router = useRouter();
+  const pathname = usePathname();
+  const initialized = useRef(false);
+
   useEffect(() => {
     let unsub: any;
     (async () => {
@@ -27,6 +32,12 @@ export default function RootLayout() {
             if (!res.ok) console.warn('ensureUser on change:', res.error);
             const profileRes = await ensureProfile();
             if (!profileRes.ok) console.warn('ensureProfile on change:', profileRes.error);
+            const { data: profile } = await supabase
+              .from('profiles')
+              .select('is_admin, is_chef, role')
+              .eq('id', sess.user.id)
+              .maybeSingle();
+            redirectAfterLogin(profile ?? {});
           }
         });
         unsub = sub?.data?.subscription?.unsubscribe?.bind(sub?.data?.subscription);
@@ -37,10 +48,25 @@ export default function RootLayout() {
     return () => { try { unsub?.(); } catch { /* noop */ } };
   }, []);
 
-  const router = useRouter();
+  useEffect(() => {
+    (async () => {
+      if (initialized.current) return;
+      initialized.current = true;
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session) return;
+      if (pathname && (pathname.startsWith('/login') || pathname.startsWith('/auth'))) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('is_admin, is_chef, role')
+          .eq('id', session.user.id)
+          .maybeSingle();
+        redirectAfterLogin(profile ?? {});
+      }
+    })();
+  }, [pathname]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web') return;
+    if (typeof window === 'undefined') return;
     async function resolveAndNav(idx: number) {
       const { data, error } = await supabase
         .from('chefs')

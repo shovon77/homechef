@@ -1,17 +1,34 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
 import { toggleChefActive, updateOrderStatus, approveChefApplication, rejectChefApplication } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
-import { theme } from '../../constants/theme';
 import { getChefsPaginated, getOrders } from '../../lib/db';
 import type { Chef, OrderWithItems, Profile } from '../../lib/types';
 import { callFn } from '../../lib/fn';
 
 const ITEMS_PER_PAGE = 25;
+
+const palette = {
+  background: '#F4F7F5',
+  surface: '#FFFFFF',
+  border: '#E2E8F0',
+  text: '#0F172A',
+  muted: '#64748B',
+  primary: '#3E7C64',
+  primaryDark: '#2D5C48',
+  successBg: '#E7F6EC',
+  successText: '#1E794F',
+  warningBg: '#FEF3C7',
+  warningText: '#B45309',
+  dangerBg: '#FEE2E2',
+  dangerText: '#B91C1C',
+  neutralBg: '#E2E8F0',
+  neutralText: '#475569',
+};
 
 export default function AdminPage() {
   const router = useRouter();
@@ -19,7 +36,7 @@ export default function AdminPage() {
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
-  const [applications, setApplications] = useState<any[]>([]);
+  const [, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState('');
@@ -28,8 +45,6 @@ export default function AdminPage() {
   const [chefSearch, setChefSearch] = useState('');
   const [orderPage, setOrderPage] = useState(1);
   const [orderSearch, setOrderSearch] = useState('');
-  const [applicationPage, setApplicationPage] = useState(1);
-  const [applicationSearch, setApplicationSearch] = useState('');
   const [chefRequests, setChefRequests] = useState<any[]>([]);
   const [chefReqSearch, setChefReqSearch] = useState('');
   const [autoRejecting, setAutoRejecting] = useState(false);
@@ -214,30 +229,6 @@ export default function AdminPage() {
 
   const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
 
-  const filteredApplications = useMemo(() => {
-    if (!Array.isArray(applications)) return [];
-    const submitted = applications.filter(a => a.status === 'submitted');
-    const q = (applicationSearch ?? '').toLowerCase().trim();
-    if (!q) return submitted;
-    return submitted.filter(a => 
-      (a.name ?? '').toLowerCase().includes(q) ||
-      (a.email ?? '').toLowerCase().includes(q) ||
-      (a.location ?? '').toLowerCase().includes(q) ||
-      String(a.id).toLowerCase().includes(q)
-    );
-  }, [applications, applicationSearch]);
-
-  useEffect(() => {
-    setApplicationPage(1);
-  }, [applicationSearch]);
-
-  const paginatedApplications = useMemo(() => {
-    const start = (applicationPage - 1) * ITEMS_PER_PAGE;
-    return filteredApplications.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredApplications, applicationPage]);
-
-  const totalApplicationPages = Math.ceil(filteredApplications.length / ITEMS_PER_PAGE);
-
   const filteredChefs = useMemo(() => {
     if (!Array.isArray(chefs)) return [];
     const q = (chefSearch ?? '').toLowerCase().trim();
@@ -274,642 +265,288 @@ export default function AdminPage() {
     );
   }, [chefRequests, chefReqSearch]);
 
+  const chefStatusStyles = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
+      case 'active':
+        return { container: [styles.statusPill, styles.statusSuccess], text: styles.statusTextSuccess };
+      case 'pending':
+        return { container: [styles.statusPill, styles.statusPending], text: styles.statusTextPending };
+      default:
+        return { container: [styles.statusPill, styles.statusNeutral], text: styles.statusTextNeutral };
+    }
+  };
+
+  const chefStatusText = (status?: string) => {
+    if (!status) return 'Pending';
+    const normalized = status.toLowerCase();
+    if (normalized === 'active') return 'Active';
+    if (normalized === 'pending') return 'Pending';
+    return 'Inactive';
+  };
+
+  const orderStatusStyles = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
+      case 'completed':
+        return { container: [styles.statusPill, styles.statusSuccess], text: styles.statusTextSuccess };
+      case 'cancelled':
+      case 'rejected':
+        return { container: [styles.statusPill, styles.statusDanger], text: styles.statusTextDanger };
+      case 'paid':
+      case 'ready':
+        return { container: [styles.statusPill, styles.statusAccent], text: styles.statusTextAccent };
+      default:
+        return { container: [styles.statusPill, styles.statusPending], text: styles.statusTextPending };
+    }
+  };
+
+  const orderStatusLabel = (status?: string) => status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending';
+
   const ChefRequestsTab = (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>
-        Chef Requests ({filteredChefRequests.length} pending)
-      </Text>
-      
-      <View style={{ marginBottom: 8 }}>
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <Text style={styles.sectionTitle}>Chef Requests ({filteredChefRequests.length} pending)</Text>
+      <View style={styles.searchWrapper}>
         <TextInput
           value={chefReqSearch}
           onChangeText={setChefReqSearch}
           placeholder="Search by name, email, phone, location, or ID..."
-          placeholderTextColor={theme.colors.textMuted}
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
-            borderRadius: 8,
-            padding: 12,
-            color: theme.colors.text,
-            fontSize: 14,
-          }}
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
         />
       </View>
 
       {loading && chefRequests.length === 0 ? (
-        <View style={{ padding: 32, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
       ) : filteredChefRequests.length === 0 ? (
-        <Text style={{ color: theme.colors.textMuted }}>
-          {chefReqSearch ? 'No requests found matching your search.' : 'No pending requests.'}
-        </Text>
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{chefReqSearch ? 'No requests found matching your search.' : 'No pending requests.'}</Text></View>
       ) : (
-        <>
-          {filteredChefRequests.map(req => (
-            <View
-              key={req.id}
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.10)',
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
-                    {req.name || 'Unnamed Request'}
-                  </Text>
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-                    {req.email || 'No email'}
-                  </Text>
-                  {req.phone && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-                      📞 {req.phone}
-                    </Text>
-                  )}
-                  {req.location && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-                      📍 {req.location}
-                    </Text>
-                  )}
-                  {req.created_at && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
-                      Submitted: {new Date(req.created_at).toLocaleString()}
-                    </Text>
-                  )}
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 11, marginTop: 2, fontFamily: 'monospace' }}>
-                    ID: {String(req.id).substring(0, 8)}...
-                  </Text>
-                </View>
-                <View style={{
-                  backgroundColor: 'rgba(234, 179, 8, 0.2)',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 6,
-                }}>
-                  <Text style={{ color: '#eab308', fontWeight: '700', fontSize: 12 }}>
-                    Pending
-                  </Text>
-                </View>
+        filteredChefRequests.map((req) => (
+          <View key={req.id} style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{req.name || 'Unnamed Request'}</Text>
+                <Text style={styles.cardMeta}>{req.email || 'No email'}</Text>
+                {req.phone ? <Text style={styles.cardMeta}>📞 {req.phone}</Text> : null}
+                {req.location ? <Text style={styles.cardMeta}>📍 {req.location}</Text> : null}
+                {req.created_at ? (
+                  <Text style={styles.cardTimestamp}>Submitted: {new Date(req.created_at).toLocaleString()}</Text>
+                ) : null}
+                <Text style={styles.cardId}>ID: {String(req.id).substring(0, 8)}...</Text>
               </View>
-
-              {req.short_bio && (
-                <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '800', fontSize: 14, marginBottom: 4 }}>Bio:</Text>
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                    {req.short_bio}
-                  </Text>
-                </View>
-              )}
-
-              {(req.experience || req.cuisine_specialty) && (
-                <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
-                  {req.experience && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 13, marginBottom: 4 }}>
-                      <Text style={{ fontWeight: '700' }}>Experience:</Text> {req.experience}
-                    </Text>
-                  )}
-                  {req.cuisine_specialty && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>
-                      <Text style={{ fontWeight: '700' }}>Specialties:</Text> {req.cuisine_specialty}
-                    </Text>
-                  )}
-                </View>
-              )}
-
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                <TouchableOpacity
-                  onPress={() => approveChefRequest(req.id)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: 'rgba(34, 197, 94, 0.3)',
-                  }}
-                >
-                  <Text style={{ color: '#22c55e', fontWeight: '800', textAlign: 'center' }}>
-                    ✓ Approve
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => rejectChefRequest(req.id)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: 'rgba(239, 68, 68, 0.3)',
-                  }}
-                >
-                  <Text style={{ color: '#ef4444', fontWeight: '800', textAlign: 'center' }}>
-                    ✗ Reject
-                  </Text>
-                </TouchableOpacity>
+              <View style={[styles.statusPill, styles.statusPending]}>
+                <Text style={[styles.statusPillText, styles.statusTextPending]}>Pending</Text>
               </View>
             </View>
-          ))}
-        </>
+
+            {req.short_bio ? (
+              <View style={styles.dividerSection}>
+                <Text style={styles.sectionLabel}>Bio</Text>
+                <Text style={styles.sectionBody}>{req.short_bio}</Text>
+              </View>
+            ) : null}
+
+            {req.experience || req.cuisine_specialty ? (
+              <View style={styles.dividerSection}>
+                {req.experience ? (
+                  <Text style={styles.sectionBody}><Text style={styles.sectionLabelInline}>Experience:</Text> {req.experience}</Text>
+                ) : null}
+                {req.cuisine_specialty ? (
+                  <Text style={styles.sectionBody}><Text style={styles.sectionLabelInline}>Specialties:</Text> {req.cuisine_specialty}</Text>
+                ) : null}
+              </View>
+            ) : null}
+
+            <View style={styles.cardActionsRow}>
+              <TouchableOpacity style={[styles.chipButton, styles.approveButton]} onPress={() => approveChefRequest(req.id)}>
+                <Text style={[styles.chipButtonText, styles.approveButtonText]}>✓ Approve</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.chipButton, styles.rejectButton]} onPress={() => rejectChefRequest(req.id)}>
+                <Text style={[styles.chipButtonText, styles.rejectButtonText]}>✗ Reject</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        ))
       )}
     </ScrollView>
   );
 
-  const ApplicationsTab = (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>
-        Chef Applications ({filteredApplications.length} pending)
-      </Text>
-      
-      <View style={{ marginBottom: 8 }}>
-        <TextInput
-          value={applicationSearch}
-          onChangeText={setApplicationSearch}
-          placeholder="Search by name, email, location, or ID..."
-          placeholderTextColor={theme.colors.textMuted}
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
-            borderRadius: 8,
-            padding: 12,
-            color: theme.colors.text,
-            fontSize: 14,
-          }}
-        />
-      </View>
-
-      {loading && applications.length === 0 ? (
-        <View style={{ padding: 32, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
-      ) : paginatedApplications.length === 0 ? (
-        <Text style={{ color: theme.colors.textMuted }}>
-          {applicationSearch ? 'No applications found matching your search.' : 'No pending applications.'}
+  const OverviewTab = (
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <Text style={styles.sectionTitle}>Overview</Text>
+      <View style={styles.placeholderCard}>
+        <Text style={styles.placeholderTitle}>Dashboard metrics are on their way</Text>
+        <Text style={styles.placeholderText}>
+          We'll surface quick stats, trend charts, and alerts for your marketplace here soon.
         </Text>
-      ) : (
-        <>
-          {paginatedApplications.map(app => (
-            <View
-              key={app.id}
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.10)',
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
-                    {app.name || 'Unnamed Application'}
-                  </Text>
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-                    {app.email || 'No email'}
-                  </Text>
-                  {app.location && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-                      📍 {app.location}
-                    </Text>
-                  )}
-                  {app.phone && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-                      📞 {app.phone}
-                    </Text>
-                  )}
-                  {app.created_at && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
-                      Submitted: {new Date(app.created_at).toLocaleString()}
-                    </Text>
-                  )}
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 11, marginTop: 2, fontFamily: 'monospace' }}>
-                    ID: {app.id.substring(0, 8)}...
-                  </Text>
-                </View>
-                <View style={{
-                  backgroundColor: 'rgba(234, 179, 8, 0.2)',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 6,
-                }}>
-                  <Text style={{ color: '#eab308', fontWeight: '700', fontSize: 12 }}>
-                    Pending
-                  </Text>
-                </View>
-              </View>
-
-              {app.short_bio && (
-                <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '800', fontSize: 14, marginBottom: 4 }}>Bio:</Text>
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 13, lineHeight: 18 }}>
-                    {app.short_bio}
-                  </Text>
-                </View>
-              )}
-
-              {(app.experience || app.cuisine_specialty) && (
-                <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
-                  {app.experience && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 13, marginBottom: 4 }}>
-                      <Text style={{ fontWeight: '700' }}>Experience:</Text> {app.experience}
-                    </Text>
-                  )}
-                  {app.cuisine_specialty && (
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 13 }}>
-                      <Text style={{ fontWeight: '700' }}>Specialties:</Text> {app.cuisine_specialty}
-                    </Text>
-                  )}
-                </View>
-              )}
-
-              <View style={{ flexDirection: 'row', gap: 8, marginTop: 8 }}>
-                <TouchableOpacity
-                  onPress={() => handleApproveApplication(app.id)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(34, 197, 94, 0.2)',
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: 'rgba(34, 197, 94, 0.3)',
-                  }}
-                >
-                  <Text style={{ color: '#22c55e', fontWeight: '800', textAlign: 'center' }}>
-                    ✓ Approve
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  onPress={() => handleRejectApplication(app.id)}
-                  style={{
-                    flex: 1,
-                    backgroundColor: 'rgba(239, 68, 68, 0.2)',
-                    paddingVertical: 10,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    borderWidth: 1,
-                    borderColor: 'rgba(239, 68, 68, 0.3)',
-                  }}
-                >
-                  <Text style={{ color: '#ef4444', fontWeight: '800', textAlign: 'center' }}>
-                    ✗ Reject
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-          ))}
-
-          {totalApplicationPages > 1 && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-              <TouchableOpacity
-                onPress={() => setApplicationPage(p => Math.max(1, p - 1))}
-                disabled={applicationPage === 1}
-                style={{
-                  backgroundColor: applicationPage === 1 ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: applicationPage === 1 ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
-              </TouchableOpacity>
-              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
-                Page {applicationPage} of {totalApplicationPages} ({filteredApplications.length} total)
-              </Text>
-              <TouchableOpacity
-                onPress={() => setApplicationPage(p => Math.min(totalApplicationPages, p + 1))}
-                disabled={applicationPage === totalApplicationPages}
-                style={{
-                  backgroundColor: applicationPage === totalApplicationPages ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: applicationPage === totalApplicationPages ? 0.5 : 1,
-                }}
-              >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Next</Text>
-              </TouchableOpacity>
-            </View>
-          )}
-        </>
-      )}
+      </View>
     </ScrollView>
   );
 
   const ChefsTab = (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Chefs ({filteredChefs.length} total)</Text>
-      
-      <View style={{ marginBottom: 8 }}>
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <Text style={styles.sectionTitle}>Chefs ({filteredChefs.length} total)</Text>
+      <View style={styles.searchWrapper}>
         <TextInput
           value={chefSearch}
           onChangeText={setChefSearch}
           placeholder="Search by name, location, email, or ID..."
-          placeholderTextColor={theme.colors.textMuted}
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
-            borderRadius: 8,
-            padding: 12,
-            color: theme.colors.text,
-            fontSize: 14,
-          }}
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
         />
       </View>
       {loading && chefs.length === 0 ? (
-        <View style={{ padding: 32, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
       ) : paginatedChefs.length === 0 ? (
-        <Text style={{ color: theme.colors.textMuted }}>
-          {chefSearch ? 'No chefs found matching your search.' : 'No chefs found.'}
-        </Text>
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{chefSearch ? 'No chefs found matching your search.' : 'No chefs found.'}</Text></View>
       ) : (
         <>
-          {paginatedChefs.map(c => (
-            <View
-              key={c.id}
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.10)',
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 8 }}>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
-                    {c.name || `Chef #${c.id}`}
-                  </Text>
-                  <Text style={{ color: theme.colors.textMuted, fontSize: 14 }}>
-                    {c.location || 'No location'}
-                    {c.phone ? ` · ${c.phone}` : ''}
-                  </Text>
+          {paginatedChefs.map((c) => {
+            const statusStyles = chefStatusStyles(c.status);
+            return (
+              <View key={c.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>{c.name || `Chef #${c.id}`}</Text>
+                    <Text style={styles.cardMeta}>
+                      {c.location || 'No location'}
+                      {c.phone ? ` · ${c.phone}` : ''}
+                    </Text>
+                  </View>
+                  <View style={statusStyles.container}>
+                    <Text style={[styles.statusPillText, statusStyles.text]}>{chefStatusText(c.status)}</Text>
+                  </View>
                 </View>
-                <View style={{
-                  backgroundColor: c.status === 'active' ? 'rgba(34, 197, 94, 0.2)' : 
-                                 c.status === 'pending' ? 'rgba(234, 179, 8, 0.2)' :
-                                 'rgba(107, 114, 128, 0.2)',
-                  paddingHorizontal: 8,
-                  paddingVertical: 4,
-                  borderRadius: 6,
-                }}>
-                  <Text style={{ 
-                    color: c.status === 'active' ? '#22c55e' : 
-                           c.status === 'pending' ? '#eab308' :
-                           '#6b7280', 
-                    fontWeight: '700', 
-                    fontSize: 12 
-                  }}>
-                    {c.status === 'active' ? 'Active' : c.status === 'pending' ? 'Pending' : 'Inactive'}
-                  </Text>
+                {c.bio ? <Text style={styles.cardBodyMuted}>{c.bio.length > 140 ? `${c.bio.slice(0, 140)}…` : c.bio}</Text> : null}
+                <View style={styles.cardActionsRow}>
+                  <TouchableOpacity
+                    onPress={() => handleToggleChefActive(c.id, c.status !== 'active')}
+                    style={c.status === 'active'
+                      ? [styles.dangerOutlineButton, styles.cardActionButton]
+                      : [styles.primaryButton, styles.cardActionButton]}
+                  >
+                    <Text style={c.status === 'active' ? styles.dangerOutlineButtonText : styles.primaryButtonText}>
+                      {c.status === 'active' ? 'Deactivate' : 'Activate'}
+                    </Text>
+                  </TouchableOpacity>
                 </View>
               </View>
-              {c.bio && (
-                <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginBottom: 8, fontStyle: 'italic' }}>
-                  {c.bio.length > 100 ? c.bio.substring(0, 100) + '...' : c.bio}
-                </Text>
-              )}
+            );
+          })}
+          {totalChefPages > 1 ? (
+            <View style={styles.paginationRow}>
               <TouchableOpacity
-                onPress={() => handleToggleChefActive(c.id, c.status !== 'active')}
-                style={{
-                  backgroundColor: c.status === 'active' ? 'rgba(239, 68, 68, 0.2)' : theme.colors.primary,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: c.status === 'active' ? 'rgba(239, 68, 68, 0.3)' : theme.colors.primary,
-                }}
-              >
-                <Text style={{ color: theme.colors.white, fontWeight: '800', textAlign: 'center' }}>
-                  {c.status === 'active' ? 'Deactivate' : 'Activate'}
-                </Text>
-              </TouchableOpacity>
-            </View>
-          ))}
-          {totalChefPages > 1 && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-              <TouchableOpacity
-                onPress={() => setChefPage(p => Math.max(1, p - 1))}
+                onPress={() => setChefPage((p) => Math.max(1, p - 1))}
                 disabled={chefPage === 1}
-                style={{
-                  backgroundColor: chefPage === 1 ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: chefPage === 1 ? 0.5 : 1,
-                }}
+                style={[styles.paginationButton, chefPage === 1 && styles.paginationButtonDisabled]}
               >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
+                <Text style={[styles.paginationButtonText, chefPage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
               </TouchableOpacity>
-              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
-                Page {chefPage} of {totalChefPages}
-              </Text>
+              <Text style={styles.paginationStatus}>Page {chefPage} of {totalChefPages}</Text>
               <TouchableOpacity
-                onPress={() => setChefPage(p => Math.min(totalChefPages, p + 1))}
+                onPress={() => setChefPage((p) => Math.min(totalChefPages, p + 1))}
                 disabled={chefPage === totalChefPages}
-                style={{
-                  backgroundColor: chefPage === totalChefPages ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: chefPage === totalChefPages ? 0.5 : 1,
-                }}
+                style={[styles.paginationButton, chefPage === totalChefPages && styles.paginationButtonDisabled]}
               >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Next</Text>
+                <Text style={[styles.paginationButtonText, chefPage === totalChefPages && styles.paginationButtonTextDisabled]}>Next</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
         </>
       )}
     </ScrollView>
   );
 
   const UsersTab = (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Users (non-chefs)</Text>
-      
-      <View style={{ marginBottom: 8 }}>
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <Text style={styles.sectionTitle}>Users (non-chefs)</Text>
+      <View style={styles.searchWrapper}>
         <TextInput
           value={userSearch}
           onChangeText={setUserSearch}
           placeholder="Search by email, name, or ID..."
-          placeholderTextColor={theme.colors.textMuted}
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
-            borderRadius: 8,
-            padding: 12,
-            color: theme.colors.text,
-            fontSize: 14,
-          }}
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
         />
       </View>
 
       {loading && users.length === 0 ? (
-        <View style={{ padding: 32, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
       ) : paginatedUsers.length === 0 ? (
-        <Text style={{ color: theme.colors.textMuted }}>
-          {userSearch ? 'No users found matching your search.' : 'No non-chef users found.'}
-        </Text>
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{userSearch ? 'No users found matching your search.' : 'No non-chef users found.'}</Text></View>
       ) : (
         <>
-          {paginatedUsers.map(u => (
-            <View
-              key={u.id}
-              style={{
-                backgroundColor: theme.colors.surface,
-                borderWidth: 1,
-                borderColor: 'rgba(255,255,255,0.10)',
-                borderRadius: 12,
-                padding: 16,
-              }}
-            >
-              <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 16, marginBottom: 4 }}>
-                {u.name || u.email || u.id}
-              </Text>
-              <Text style={{ color: theme.colors.textMuted, fontSize: 14 }}>{u.email || 'No email'}</Text>
-              <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>ID: {u.id}</Text>
+          {paginatedUsers.map((u) => (
+            <View key={u.id} style={styles.card}>
+              <Text style={styles.cardTitle}>{u.name || u.email || u.id}</Text>
+              <Text style={styles.cardMeta}>{u.email || 'No email'}</Text>
+              <Text style={styles.cardId}>ID: {u.id}</Text>
             </View>
           ))}
 
-          {totalUserPages > 1 && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          {totalUserPages > 1 ? (
+            <View style={styles.paginationRow}>
               <TouchableOpacity
-                onPress={() => setUserPage(p => Math.max(1, p - 1))}
+                onPress={() => setUserPage((p) => Math.max(1, p - 1))}
                 disabled={userPage === 1}
-                style={{
-                  backgroundColor: userPage === 1 ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: userPage === 1 ? 0.5 : 1,
-                }}
+                style={[styles.paginationButton, userPage === 1 && styles.paginationButtonDisabled]}
               >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
+                <Text style={[styles.paginationButtonText, userPage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
               </TouchableOpacity>
-              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
-                Page {userPage} of {totalUserPages} ({filteredUsers.length} total)
-              </Text>
+              <Text style={styles.paginationStatus}>Page {userPage} of {totalUserPages} ({filteredUsers.length} total)</Text>
               <TouchableOpacity
-                onPress={() => setUserPage(p => Math.min(totalUserPages, p + 1))}
+                onPress={() => setUserPage((p) => Math.min(totalUserPages, p + 1))}
                 disabled={userPage === totalUserPages}
-                style={{
-                  backgroundColor: userPage === totalUserPages ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: userPage === totalUserPages ? 0.5 : 1,
-                }}
+                style={[styles.paginationButton, userPage === totalUserPages && styles.paginationButtonDisabled]}
               >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Next</Text>
+                <Text style={[styles.paginationButtonText, userPage === totalUserPages && styles.paginationButtonTextDisabled]}>Next</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
         </>
       )}
     </ScrollView>
   );
 
   const OrdersTab = (
-    <ScrollView contentContainerStyle={{ padding: 16, gap: 16 }}>
-      <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 22, marginBottom: 8 }}>Orders ({filteredOrders.length} total)</Text>
-      
-      <View style={{ marginBottom: 8 }}>
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <Text style={styles.sectionTitle}>Orders ({filteredOrders.length} total)</Text>
+      <View style={styles.searchWrapper}>
         <TextInput
           value={orderSearch}
           onChangeText={setOrderSearch}
           placeholder="Search by status, email, or order ID..."
-          placeholderTextColor={theme.colors.textMuted}
-          style={{
-            backgroundColor: theme.colors.surface,
-            borderWidth: 1,
-            borderColor: 'rgba(255,255,255,0.15)',
-            borderRadius: 8,
-            padding: 12,
-            color: theme.colors.text,
-            fontSize: 14,
-          }}
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
         />
       </View>
 
       {loading && orders.length === 0 ? (
-        <View style={{ padding: 32, alignItems: 'center' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
       ) : paginatedOrders.length === 0 ? (
-        <Text style={{ color: theme.colors.textMuted }}>
-          {orderSearch ? 'No orders found matching your search.' : 'No orders found.'}
-        </Text>
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{orderSearch ? 'No orders found matching your search.' : 'No orders found.'}</Text></View>
       ) : (
         <>
-          {paginatedOrders.map(o => (
+          {paginatedOrders.map((o) => (
             <OrderCard key={o.id} order={o} onStatusUpdate={handleUpdateOrderStatus} />
           ))}
-          {totalOrderPages > 1 && (
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+          {totalOrderPages > 1 ? (
+            <View style={styles.paginationRow}>
               <TouchableOpacity
-                onPress={() => setOrderPage(p => Math.max(1, p - 1))}
+                onPress={() => setOrderPage((p) => Math.max(1, p - 1))}
                 disabled={orderPage === 1}
-                style={{
-                  backgroundColor: orderPage === 1 ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: orderPage === 1 ? 0.5 : 1,
-                }}
+                style={[styles.paginationButton, orderPage === 1 && styles.paginationButtonDisabled]}
               >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Previous</Text>
+                <Text style={[styles.paginationButtonText, orderPage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
               </TouchableOpacity>
-              <Text style={{ color: theme.colors.textMuted, fontWeight: '700' }}>
-                Page {orderPage} of {totalOrderPages} ({filteredOrders.length} total)
-              </Text>
+              <Text style={styles.paginationStatus}>Page {orderPage} of {totalOrderPages} ({filteredOrders.length} total)</Text>
               <TouchableOpacity
-                onPress={() => setOrderPage(p => Math.min(totalOrderPages, p + 1))}
+                onPress={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
                 disabled={orderPage === totalOrderPages}
-                style={{
-                  backgroundColor: orderPage === totalOrderPages ? 'rgba(255,255,255,0.05)' : theme.colors.surface,
-                  paddingVertical: 10,
-                  paddingHorizontal: 16,
-                  borderRadius: 8,
-                  borderWidth: 1,
-                  borderColor: 'rgba(255,255,255,0.15)',
-                  opacity: orderPage === totalOrderPages ? 0.5 : 1,
-                }}
+                style={[styles.paginationButton, orderPage === totalOrderPages && styles.paginationButtonDisabled]}
               >
-                <Text style={{ color: theme.colors.text, fontWeight: '800' }}>Next</Text>
+                <Text style={[styles.paginationButtonText, orderPage === totalOrderPages && styles.paginationButtonTextDisabled]}>Next</Text>
               </TouchableOpacity>
             </View>
-          )}
+          ) : null}
         </>
       )}
     </ScrollView>
@@ -919,106 +556,60 @@ export default function AdminPage() {
     const statusOptions = ['pending', 'paid', 'completed', 'cancelled'];
     const currentStatus = (order.status || '').toLowerCase();
     const totalDollars = ((order.total_cents || 0) / 100).toFixed(2);
+    const badgeStyles = orderStatusStyles(order.status);
 
     return (
-      <View
-        style={{
-          backgroundColor: theme.colors.surface,
-          borderWidth: 1,
-          borderColor: 'rgba(255,255,255,0.10)',
-          borderRadius: 12,
-          padding: 16,
-          marginBottom: 12,
-        }}
-      >
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+      <View style={styles.card}>
+        <View style={styles.cardHeader}>
           <View style={{ flex: 1 }}>
-            <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 18, marginBottom: 4 }}>
-              Order #{order.id}
+            <Text style={styles.cardTitle}>Order #{order.id}</Text>
+            <Text style={styles.cardMeta}>
+              User: {order.user_email || (order.user_id ? `${order.user_id.substring(0, 8)}…` : '—')}
             </Text>
-            <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 2 }}>
-              User: {order.user_email || (order.user_id ? order.user_id.substring(0, 8) + '...' : '—')}
-            </Text>
-            <Text style={{ color: theme.colors.primary, fontWeight: '900', fontSize: 16, marginTop: 4 }}>
-              ${totalDollars}
-            </Text>
-            {order.created_at && (
-              <Text style={{ color: theme.colors.textMuted, fontSize: 12, marginTop: 4 }}>
-                {new Date(order.created_at).toLocaleString()}
-              </Text>
-            )}
+            <Text style={styles.cardTotal}>${totalDollars}</Text>
+            {order.created_at ? <Text style={styles.cardTimestamp}>{new Date(order.created_at).toLocaleString()}</Text> : null}
           </View>
-          <View style={{
-            backgroundColor: currentStatus === 'completed' ? 'rgba(34, 197, 94, 0.2)' :
-                           currentStatus === 'cancelled' ? 'rgba(239, 68, 68, 0.2)' :
-                           currentStatus === 'paid' ? 'rgba(59, 130, 246, 0.2)' :
-                           'rgba(234, 179, 8, 0.2)',
-            paddingHorizontal: 8,
-            paddingVertical: 4,
-            borderRadius: 6,
-          }}>
-            <Text style={{
-              color: currentStatus === 'completed' ? '#22c55e' :
-                     currentStatus === 'cancelled' ? '#ef4444' :
-                     currentStatus === 'paid' ? '#3b82f6' :
-                     '#eab308',
-              fontWeight: '700',
-              fontSize: 12,
-            }}>
-              {order.status || 'Unknown'}
-            </Text>
+          <View style={badgeStyles.container}>
+            <Text style={[styles.statusPillText, badgeStyles.text]}>{orderStatusLabel(order.status)}</Text>
           </View>
         </View>
 
-        {order.order_items && order.order_items.length > 0 && (
-          <View style={{ marginBottom: 12, paddingTop: 12, borderTopWidth: 1, borderTopColor: 'rgba(255,255,255,0.10)' }}>
-            <Text style={{ color: theme.colors.text, fontWeight: '800', fontSize: 14, marginBottom: 8 }}>Items:</Text>
-            {order.order_items.map(item => {
+        {order.order_items && order.order_items.length > 0 ? (
+          <View style={styles.dividerSection}>
+            <Text style={styles.sectionLabel}>Items</Text>
+            {order.order_items.map((item) => {
               const itemTotal = ((item.unit_price_cents * item.quantity) / 100).toFixed(2);
               return (
-                <View key={item.id} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 6 }}>
+                <View key={item.id} style={styles.itemRow}>
                   <View style={{ flex: 1 }}>
-                    <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: '700' }}>
-                      {item.dish_name || `Dish #${item.dish_id}`}
-                    </Text>
-                    <Text style={{ color: theme.colors.textMuted, fontSize: 12 }}>
+                    <Text style={styles.itemTitle}>{item.dish_name || `Dish #${item.dish_id}`}</Text>
+                    <Text style={styles.itemMeta}>
                       Qty: {item.quantity} × ${((item.unit_price_cents || 0) / 100).toFixed(2)}
                     </Text>
                   </View>
-                  <Text style={{ color: theme.colors.text, fontSize: 14, fontWeight: '800' }}>
-                    ${itemTotal}
-                  </Text>
+                  <Text style={styles.itemPrice}>${itemTotal}</Text>
                 </View>
               );
             })}
           </View>
-        )}
+        ) : null}
 
-        <View style={{ flexDirection: 'row', gap: 8, flexWrap: 'wrap' }}>
-          {statusOptions.map(status => (
-            <TouchableOpacity
-              key={status}
-              onPress={() => onStatusUpdate(order.id, status)}
-              disabled={currentStatus === status}
-              style={{
-                backgroundColor: currentStatus === status ? theme.colors.primary : theme.colors.surface,
-                paddingVertical: 8,
-                paddingHorizontal: 12,
-                borderRadius: 8,
-                borderWidth: 1,
-                borderColor: currentStatus === status ? theme.colors.primary : 'rgba(255,255,255,0.15)',
-                opacity: currentStatus === status ? 1 : 0.8,
-              }}
-            >
-              <Text style={{
-                color: theme.colors.white,
-                fontWeight: currentStatus === status ? '900' : '700',
-                fontSize: 12,
-              }}>
-                {status.charAt(0).toUpperCase() + status.slice(1)}
-              </Text>
-            </TouchableOpacity>
-          ))}
+        <View style={styles.segmentRow}>
+          {statusOptions.map((status) => {
+            const active = currentStatus === status;
+            return (
+              <TouchableOpacity
+                key={status}
+                onPress={() => onStatusUpdate(order.id, status)}
+                disabled={active}
+                style={[styles.segmentButton, active && styles.segmentButtonActive]}
+              >
+                <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>
+                  {status.charAt(0).toUpperCase() + status.slice(1)}
+                </Text>
+              </TouchableOpacity>
+            );
+          })}
         </View>
       </View>
     );
@@ -1039,63 +630,42 @@ export default function AdminPage() {
 
   if (adminLoading) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
-        <ActivityIndicator size="large" color={theme.colors.primary} />
-        <Text style={{ color: theme.colors.text, marginTop: 16 }}>Checking admin access…</Text>
+      <View style={styles.loadingScreen}>
+        <ActivityIndicator size="large" color={palette.primary} />
+        <Text style={styles.loadingText}>Checking admin access…</Text>
       </View>
     );
   }
-
-  if (!isAdmin) {
-    return (
-      <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center', padding: 16, gap: 12 }}>
-        <Text style={{ color: '#ef4444', fontWeight: '900', fontSize: 20 }}>Admin access required</Text>
-        <Text style={{ color: theme.colors.textMuted, textAlign: 'center' }}>
+ 
+   if (!isAdmin) {
+     return (
+      <View style={styles.accessDenied}>
+        <Text style={styles.accessDeniedTitle}>Admin access required</Text>
+        <Text style={styles.accessDeniedSubtitle}>
           Signed in as: {user?.email || '— not signed in —'}
         </Text>
-        <TouchableOpacity
-          onPress={() => router.replace('/')}
-          style={{
-            backgroundColor: theme.colors.primary,
-            paddingVertical: 12,
-            paddingHorizontal: 24,
-            borderRadius: 10,
-            marginTop: 8,
-          }}
-        >
-          <Text style={{ color: theme.colors.white, fontWeight: '800' }}>Go Home</Text>
+        <TouchableOpacity onPress={() => router.replace('/')} style={[styles.primaryButton, styles.accessDeniedButton]}>
+          <Text style={styles.primaryButtonText}>Go Home</Text>
         </TouchableOpacity>
       </View>
     );
-  }
-
-  const content = (
-    <View style={{ width: '100%', maxWidth: 1200, alignSelf: 'center' }}>
-      <View style={{
-        backgroundColor: theme.colors.surface,
-        borderRadius: 16,
-        borderWidth: 1,
-        borderColor: 'rgba(255,255,255,0.10)',
-        padding: 24,
-        gap: 16,
-      }}>
-        <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-          <Text style={{ color: theme.colors.text, fontWeight: '900', fontSize: 28 }}>Admin Dashboard</Text>
-          <View style={{ flexDirection: 'row', gap: 12 }}>
+   }
+ 
+   const content = (
+    <View style={styles.wrapper}>
+      <View style={styles.panel}>
+        <View style={styles.headerRow}>
+          <View>
+            <Text style={styles.headerTitle}>Admin Dashboard</Text>
+            <Text style={styles.headerSubtitle}>Monitor requests, chefs, users, and orders at a glance.</Text>
+          </View>
+          <View style={styles.headerActions}>
             <TouchableOpacity
               onPress={runAutoReject}
               disabled={autoRejecting}
-              style={{
-                backgroundColor: '#f97316',
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                opacity: autoRejecting ? 0.7 : 1,
-              }}
+              style={[styles.actionButton, styles.firstActionButton, styles.warningButton, autoRejecting && styles.disabledButton]}
             >
-              <Text style={{ color: '#ffffff', fontWeight: '800' }}>
-                {autoRejecting ? 'Running…' : 'Run auto-reject now'}
-              </Text>
+              <Text style={styles.warningButtonText}>{autoRejecting ? 'Running…' : 'Run auto-reject now'}</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
@@ -1103,36 +673,23 @@ export default function AdminPage() {
                 fetchChefRequests().then(setChefRequests);
               }}
               disabled={loading}
-              style={{
-                backgroundColor: theme.colors.primary,
-                paddingVertical: 10,
-                paddingHorizontal: 16,
-                borderRadius: 8,
-                opacity: loading ? 0.7 : 1,
-              }}
+              style={[styles.actionButton, styles.primaryButton, loading && styles.disabledButton]}
             >
-              <Text style={{ color: theme.colors.white, fontWeight: '800' }}>
-                {loading ? 'Refreshing…' : 'Refresh'}
-              </Text>
+              <Text style={styles.primaryButtonText}>{loading ? 'Refreshing…' : 'Refresh'}</Text>
             </TouchableOpacity>
           </View>
         </View>
-        {err && (
-          <View style={{
-            backgroundColor: 'rgba(239, 68, 68, 0.2)',
-            borderWidth: 1,
-            borderColor: 'rgba(239, 68, 68, 0.3)',
-            borderRadius: 8,
-            padding: 12,
-          }}>
-            <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+        {err ? (
+          <View style={styles.errorBanner}>
+            <Text style={styles.errorBannerText}>{err}</Text>
           </View>
-        )}
+        ) : null}
         <Tabs
+          activeColor={palette.primary}
           initial={0}
           tabs={[
+            { key: 'overview', title: 'Overview', content: OverviewTab },
             { key: 'chef-requests', title: 'Chef Requests', content: ChefRequestsTab },
-            { key: 'applications', title: 'Applications', content: ApplicationsTab },
             { key: 'chefs', title: 'Chefs', content: ChefsTab },
             { key: 'users', title: 'Users', content: UsersTab },
             { key: 'orders', title: 'Orders', content: OrdersTab },
@@ -1141,11 +698,448 @@ export default function AdminPage() {
       </View>
     </View>
   );
-
-  return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.surface }} contentContainerStyle={{ padding: 20 }}>
+ 
+   return (
+    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
       {content}
     </ScrollView>
   );
 }
+
+const styles = StyleSheet.create({
+  screen: {
+    flex: 1,
+    backgroundColor: palette.background,
+  },
+  screenContent: {
+    paddingHorizontal: 20,
+    paddingVertical: 28,
+  },
+  wrapper: {
+    width: '100%',
+    maxWidth: 1200,
+    alignSelf: 'center',
+  },
+  panel: {
+    backgroundColor: palette.surface,
+    borderRadius: 24,
+    borderWidth: 1,
+    borderColor: palette.border,
+    padding: 24,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.04,
+    shadowRadius: 18,
+    shadowOffset: { width: 0, height: 10 },
+    elevation: 3,
+  },
+  headerRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 24,
+  },
+  headerTitle: {
+    color: palette.text,
+    fontSize: 28,
+    fontWeight: '800',
+  },
+  headerSubtitle: {
+    color: palette.muted,
+    fontSize: 15,
+    marginTop: 4,
+    maxWidth: 360,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    marginLeft: 12,
+  },
+  actionButton: {
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    marginLeft: 12,
+  },
+  firstActionButton: {
+    marginLeft: 0,
+  },
+  actionButtonText: {
+    color: palette.text,
+    fontWeight: '600',
+  },
+  warningButton: {
+    backgroundColor: '#F97316',
+    borderColor: '#F97316',
+  },
+  warningButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  primaryButton: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  primaryButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  disabledButton: {
+    opacity: 0.7,
+  },
+  errorBanner: {
+    backgroundColor: palette.dangerBg,
+    borderColor: palette.dangerText,
+    borderWidth: 1,
+    borderRadius: 12,
+    padding: 12,
+    marginBottom: 16,
+  },
+  errorBannerText: {
+    color: palette.dangerText,
+    fontWeight: '700',
+  },
+  tabScroll: {
+    paddingHorizontal: 4,
+    paddingVertical: 16,
+  },
+  sectionTitle: {
+    color: palette.text,
+    fontSize: 20,
+    fontWeight: '700',
+    marginBottom: 12,
+    paddingHorizontal: 12,
+  },
+  searchWrapper: {
+    paddingHorizontal: 12,
+    marginBottom: 16,
+  },
+  searchInput: {
+    backgroundColor: '#F8FAFC',
+    borderColor: palette.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 14,
+    color: palette.text,
+    fontSize: 14,
+  },
+  loadingState: {
+    paddingVertical: 32,
+    alignItems: 'center',
+  },
+  emptyState: {
+    paddingVertical: 40,
+    alignItems: 'center',
+  },
+  emptyText: {
+    color: palette.muted,
+    fontSize: 14,
+  },
+  card: {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 20,
+    marginBottom: 16,
+    marginHorizontal: 12,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.03,
+    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 2,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  cardTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 4,
+  },
+  cardMeta: {
+    color: palette.muted,
+    fontSize: 14,
+    marginBottom: 2,
+  },
+  cardTimestamp: {
+    color: palette.muted,
+    fontSize: 12,
+    marginTop: 4,
+  },
+  cardId: {
+    color: palette.muted,
+    fontSize: 11,
+    marginTop: 4,
+  },
+  cardBodyMuted: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 12,
+  },
+  cardTotal: {
+    color: palette.primaryDark,
+    fontSize: 18,
+    fontWeight: '800',
+    marginTop: 4,
+  },
+  statusPill: {
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  statusPillText: {
+    fontWeight: '700',
+    fontSize: 12,
+  },
+  statusPending: {
+    backgroundColor: palette.warningBg,
+  },
+  statusSuccess: {
+    backgroundColor: palette.successBg,
+  },
+  statusNeutral: {
+    backgroundColor: palette.neutralBg,
+  },
+  statusDanger: {
+    backgroundColor: palette.dangerBg,
+  },
+  statusAccent: {
+    backgroundColor: '#DBEAFE',
+  },
+  statusTextPending: {
+    color: palette.warningText,
+  },
+  statusTextSuccess: {
+    color: palette.successText,
+  },
+  statusTextNeutral: {
+    color: palette.neutralText,
+  },
+  statusTextDanger: {
+    color: palette.dangerText,
+  },
+  statusTextAccent: {
+    color: '#1D4ED8',
+  },
+  dividerSection: {
+    marginTop: 8,
+    marginBottom: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: palette.border,
+  },
+  sectionLabel: {
+    color: palette.text,
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 6,
+  },
+  sectionLabelInline: {
+    fontWeight: '700',
+  },
+  sectionBody: {
+    color: palette.muted,
+    fontSize: 13,
+    lineHeight: 18,
+    marginBottom: 4,
+  },
+  cardActionsRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+    marginRight: -12,
+  },
+  chipButton: {
+    flexGrow: 1,
+    minWidth: 140,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: '#F8FBF8',
+    marginRight: 12,
+    marginBottom: 12,
+  },
+  chipButtonText: {
+    fontWeight: '700',
+    textAlign: 'center',
+    color: palette.text,
+  },
+  approveButton: {
+    backgroundColor: palette.successBg,
+    borderColor: palette.successText,
+  },
+  approveButtonText: {
+    color: palette.successText,
+  },
+  rejectButton: {
+    backgroundColor: palette.dangerBg,
+    borderColor: palette.dangerText,
+  },
+  rejectButtonText: {
+    color: palette.dangerText,
+  },
+  paginationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginTop: 16,
+    paddingHorizontal: 12,
+  },
+  paginationButton: {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingVertical: 10,
+    paddingHorizontal: 18,
+  },
+  paginationButtonDisabled: {
+    opacity: 0.5,
+  },
+  paginationButtonText: {
+    color: palette.text,
+    fontWeight: '600',
+  },
+  paginationButtonTextDisabled: {
+    color: palette.muted,
+  },
+  paginationStatus: {
+    color: palette.muted,
+    fontWeight: '600',
+  },
+  cardActionButton: {
+    alignSelf: 'flex-start',
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    marginRight: 12,
+    marginTop: 8,
+  },
+  dangerOutlineButton: {
+    borderColor: palette.dangerText,
+    borderWidth: 1,
+    backgroundColor: '#FFF5F5',
+  },
+  dangerOutlineButtonText: {
+    color: palette.dangerText,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  segmentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginTop: 12,
+    marginRight: -8,
+  },
+  segmentButton: {
+    backgroundColor: '#F8FAFC',
+    borderColor: palette.border,
+    borderWidth: 1,
+    borderRadius: 999,
+    paddingVertical: 8,
+    paddingHorizontal: 14,
+    marginRight: 8,
+    marginBottom: 8,
+  },
+  segmentButtonActive: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
+  },
+  segmentButtonText: {
+    color: palette.text,
+    fontWeight: '600',
+    fontSize: 12,
+  },
+  segmentButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  itemTitle: {
+    color: palette.text,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  itemMeta: {
+    color: palette.muted,
+    fontSize: 12,
+  },
+  itemPrice: {
+    color: palette.text,
+    fontWeight: '800',
+    fontSize: 14,
+  },
+  loadingScreen: {
+    flex: 1,
+    backgroundColor: palette.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  loadingText: {
+    color: palette.muted,
+    marginTop: 16,
+  },
+  accessDenied: {
+    flex: 1,
+    backgroundColor: palette.background,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  accessDeniedTitle: {
+    color: palette.dangerText,
+    fontWeight: '800',
+    fontSize: 20,
+    marginBottom: 8,
+  },
+  accessDeniedSubtitle: {
+    color: palette.muted,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  accessDeniedButton: {
+    marginTop: 8,
+    alignSelf: 'center',
+  },
+  placeholderCard: {
+    backgroundColor: '#F0F9EB',
+    borderRadius: 18,
+    padding: 20,
+    marginHorizontal: 12,
+    marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  placeholderTitle: {
+    color: palette.text,
+    fontSize: 18,
+    fontWeight: '700',
+    marginBottom: 8,
+  },
+  placeholderText: {
+    color: palette.muted,
+    fontSize: 14,
+    lineHeight: 20,
+  },
+});
 
