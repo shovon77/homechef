@@ -22,12 +22,12 @@ function respond(status: number, payload: Record<string, unknown>) {
 }
 
 export const handler = async (req: Request) => {
-  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
-    return respond(500, { error: 'Server misconfigured' });
+  if (req.method === 'OPTIONS') {
+    return new Response('ok', { headers: corsHeaders });
   }
 
-  if (req.method === 'OPTIONS') {
-    return respond(200, { ok: true });
+  if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
+    return respond(500, { error: 'Server misconfigured' });
   }
 
   if (req.method !== 'POST') {
@@ -72,16 +72,17 @@ export const handler = async (req: Request) => {
     const requirements = account.requirements ?? null;
     const capabilities = account.capabilities ?? null;
 
+    // Update charges_enabled flag (stripe_payouts_enabled doesn't exist in schema)
     try {
       await supabase
         .from('profiles')
         .update({
-          stripe_payouts_enabled: Boolean(account.payouts_enabled),
-          stripe_requirements_due: Array.isArray(requirements?.currently_due) ? requirements?.currently_due : [],
+          charges_enabled: Boolean(account.charges_enabled),
         })
         .eq('id', profile.id);
     } catch (err) {
       console.error('get-connect-status profile update error', err);
+      // Don't fail the request if update fails
     }
 
     return respond(200, {

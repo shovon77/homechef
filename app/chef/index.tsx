@@ -57,11 +57,12 @@ export default function ChefDashboard() {
         const email = auth.user.email;
         if (!email) throw new Error('Missing email on session');
 
-        const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id,stripe_payouts_enabled').eq('id', auth.user.id).maybeSingle();
+        const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id').eq('id', auth.user.id).maybeSingle();
         if (!profileRow.error) {
           setChargesEnabled(profileRow.data?.charges_enabled ?? false);
           setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
-          setPayoutsEnabled(profileRow.data?.stripe_payouts_enabled ?? false);
+          // For Stripe Connect, charges_enabled typically means payouts are also enabled
+          setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
         }
 
         let me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
@@ -772,19 +773,22 @@ export default function ChefDashboard() {
               <>
                 {(() => {
                   const transferSent = Boolean(order.stripe_transfer_id);
-                  const canAccept = chargesEnabled && !!stripeAccountId && payoutsEnabled && !transferSent;
+                  const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
                   return (
                     <TouchableOpacity
                       disabled={!canAccept}
                       onPress={async () => {
                         if (!canAccept) {
-                          if (!chargesEnabled || !stripeAccountId || !payoutsEnabled) {
+                          if (!chargesEnabled || !stripeAccountId) {
                             Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                          } else if (transferSent) {
+                            Alert.alert('Order already accepted', 'This order has already been accepted.');
                           }
                           return;
                         }
                         try {
                           await callFn('accept-order', { orderId: order.id });
+                          Alert.alert('Success', 'Order accepted! Payment has been captured.');
                           await refreshOrdersForChef(chef.id);
                         } catch (err: any) {
                           Alert.alert('Accept failed', err?.message || 'Unable to accept order');
@@ -842,13 +846,13 @@ export default function ChefDashboard() {
   const PayoutsTab = (
     <View style={{ flex: 1, backgroundColor: BG_LIGHT }}>
       <PayoutSettings
-        onStatusChange={(nextStatus) => {
-          setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled));
+        onStatusChange={async (nextStatus) => {
+          setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
           if (typeof nextStatus?.charges_enabled === 'boolean') {
             setChargesEnabled(nextStatus.charges_enabled);
           }
-          if (nextStatus?.account_id) {
-            setStripeAccountId(nextStatus.account_id);
+          if (nextStatus?.accountId) {
+            setStripeAccountId(nextStatus.accountId);
           }
         }}
       />

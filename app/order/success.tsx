@@ -20,7 +20,7 @@ export default function OrderSuccessPage() {
   }, [clearCart]);
 
   return (
-    <Screen style={styles.screen}>
+    <Screen contentStyle={styles.screen}>
       <View style={styles.card}>
         <Text style={styles.title}>Order submitted!</Text>
         <Text style={styles.copy}>

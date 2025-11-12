@@ -1,4 +1,3 @@
-import { serve } from 'https://deno.land/std@0.200.0/http/server.ts';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
@@ -20,7 +19,7 @@ function errorResponse(status: number, message: string, detail?: unknown) {
   return json(status, { error: message });
 }
 
-serve(async (req) => {
+Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
@@ -53,33 +52,69 @@ serve(async (req) => {
 
     const { data: order, error: orderError } = await adminClient
       .from('orders')
-      .select('id, chef_id, total_cents, status, transfer_group, stripe_payment_intent_id, stripe_transfer_id')
+      .select('id, chef_id, total_cents, status, transfer_group, stripe_payment_intent_id, payment_intent_id, checkout_session_id, stripe_transfer_id, platform_fee_cents')
       .eq('id', orderId)
       .maybeSingle();
 
     if (orderError || !order) {
-      console.error('accept-order order not found', { orderId });
+      console.error('[accept-order] order not found', { orderId, error: orderError });
       return errorResponse(404, 'Order not found', orderError);
     }
 
     if (order.status !== 'requested') {
-      console.error('accept-order invalid status', { orderId, status: order.status });
-      return errorResponse(400, 'Order is not in a requested state');
+      console.error('[accept-order] invalid status', { orderId, status: order.status });
+      return errorResponse(400, `Order is not in a requested state (current: ${order.status})`);
     }
 
-    if (order.stripe_transfer_id) {
-      console.error('accept-order already transferred', { orderId, stripe_transfer_id: order.stripe_transfer_id });
-      return errorResponse(400, 'Order has already been accepted');
+    // Get payment intent ID - check both fields
+    let paymentIntentId = order.stripe_payment_intent_id || order.payment_intent_id || null;
+    
+    // If not found, try to get it from the checkout session
+    if (!paymentIntentId && order.checkout_session_id) {
+      try {
+        console.log('[accept-order] retrieving payment intent from checkout session', { 
+          orderId, 
+          checkout_session_id: order.checkout_session_id 
+        });
+        const session = await stripe.checkout.sessions.retrieve(order.checkout_session_id);
+        paymentIntentId = typeof session.payment_intent === 'string' ? session.payment_intent : null;
+        
+        // If we found it, save it to the order for future use
+        if (paymentIntentId) {
+          await adminClient
+            .from('orders')
+            .update({ stripe_payment_intent_id: paymentIntentId })
+            .eq('id', orderId);
+          console.log('[accept-order] saved payment intent ID from session', { orderId, paymentIntentId });
+        }
+      } catch (err) {
+        console.error('[accept-order] failed to retrieve checkout session', { 
+          orderId, 
+          checkout_session_id: order.checkout_session_id,
+          error: err 
+        });
+      }
     }
 
-    if (!order.transfer_group || !order.stripe_payment_intent_id) {
-      console.error('accept-order missing payment info', { orderId });
-      return errorResponse(400, 'Order missing payment information');
+    if (!paymentIntentId) {
+      console.error('[accept-order] missing payment intent', { 
+        orderId, 
+        stripe_payment_intent_id: order.stripe_payment_intent_id,
+        payment_intent_id: order.payment_intent_id,
+        checkout_session_id: order.checkout_session_id,
+        orderStatus: order.status,
+      });
+      return errorResponse(400, 'Order missing payment information. The payment may not have been completed. Please contact support.');
+    }
+
+    if (!order.transfer_group) {
+      console.error('[accept-order] missing transfer_group', { orderId });
+      return errorResponse(400, 'Order missing transfer group');
     }
 
     const { data: profile } = await adminClient
       .from('profiles')
-      .select('email, is_admin, charges_enabled, stripe_account_id, stripe_payouts_enabled')
+      .select('email, is_admin, charges_enabled, stripe_account_id')
       .eq('id', user.id)
       .maybeSingle();
 
@@ -88,12 +123,12 @@ serve(async (req) => {
 
     const { data: chef, error: chefError } = await adminClient
       .from('chefs')
-      .select('id, email, stripe_account_id')
+      .select('id, email')
       .eq('id', order.chef_id)
       .maybeSingle();
 
     if (chefError || !chef) {
-      return json(404, { error: 'Chef not found' });
+      return errorResponse(404, 'Chef not found', chefError);
     }
 
     const isChefOwner = chef.email && email ? chef.email.toLowerCase() === email.toLowerCase() : false;
@@ -101,45 +136,63 @@ serve(async (req) => {
       return errorResponse(403, 'Forbidden');
     }
 
-    const stripeAccountId = profile?.stripe_account_id ?? chef.stripe_account_id ?? null;
+    // Get stripe_account_id from profiles table using chef's email
+    let stripeAccountId: string | null = null;
+    let chargesEnabled = false;
+    if (chef.email) {
+      const { data: chefProfile } = await adminClient
+        .from('profiles')
+        .select('stripe_account_id, charges_enabled')
+        .eq('email', chef.email)
+        .maybeSingle();
+      stripeAccountId = chefProfile?.stripe_account_id ?? null;
+      chargesEnabled = chefProfile?.charges_enabled === true;
+    }
 
     if (!stripeAccountId) {
       return errorResponse(400, 'Please complete payouts onboarding first');
     }
 
-    if (profile?.charges_enabled === false) {
+    if (!chargesEnabled) {
       return errorResponse(400, 'Please complete payouts onboarding first');
     }
 
-    if (profile?.stripe_payouts_enabled === false) {
-      return errorResponse(400, 'Please enable payouts before accepting orders');
+    // Check if already accepted (prevent double-accept)
+    if (order.stripe_transfer_id) {
+      return errorResponse(400, 'Order already accepted');
     }
 
-    const platformFeePercent = Number(Deno.env.get('PLATFORM_FEE_PERCENT') ?? '10');
-    const platformFeeCents = Math.round(order.total_cents * platformFeePercent / 100);
-    const transferAmount = order.total_cents - platformFeeCents;
+    // With destination charges (application_fee_amount), the PaymentIntent was created with
+    // transfer_data.destination, so capturing it will automatically transfer funds to the chef
+    // and the platform fee is already collected as application_fee_amount
+    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
 
-    if (transferAmount <= 0) {
-      return errorResponse(400, 'Transfer amount must be positive');
-    }
-
-    const transfer = await stripe.transfers.create({
-      amount: transferAmount,
-      currency: 'usd',
-      destination: stripeAccountId,
-      transfer_group: order.transfer_group,
-    });
-
-    await adminClient
+    // Update order status to pending and record the capture
+    // Note: With destination charges, the transfer happens automatically on capture
+    // The platform fee was already collected as application_fee_amount during checkout
+    const { error: updateError } = await adminClient
       .from('orders')
       .update({
         status: 'pending',
-        platform_fee_cents: platformFeeCents,
-        stripe_transfer_id: transfer.id,
+        payment_status: paymentIntent.status ?? 'succeeded',
+        stripe_transfer_id: paymentIntent.id, // Mark as accepted
       })
       .eq('id', orderId);
 
-    return json(200, { ok: true, transferId: transfer.id });
+    if (updateError) {
+      console.error('[accept-order] failed to update order', updateError);
+      return errorResponse(500, 'Failed to update order status', updateError);
+    }
+
+    console.log('[accept-order] order accepted', {
+      orderId,
+      paymentIntentId: paymentIntent.id,
+      chefAccountId: stripeAccountId,
+      totalCents: order.total_cents,
+      platformFeeCents: order.platform_fee_cents,
+    });
+
+    return json(200, { ok: true, paymentIntentId: paymentIntent.id });
   } catch (err) {
     console.error('accept-order error', err);
     return errorResponse(500, 'Internal Server Error', err);

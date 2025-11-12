@@ -8,7 +8,8 @@ import { useCart } from '../../context/CartContext';
 import { getChefById } from '../../lib/db';
 import { combineLocalDateTime, isValidPickup } from '../../lib/datetime';
 import { safeToFixed } from '../../lib/number';
-import { callFn } from '../../lib/fn';
+import { submitCheckout } from '../../lib/orders';
+import ENV from '@/lib/env';
 
 const BACKGROUND = '#F8FCFB';
 const BORDER = '#E5E7EB';
@@ -24,6 +25,7 @@ export default function CheckoutPage() {
   const [dateInput, setDateInput] = useState('');
   const [timeInput, setTimeInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (cartChefId) {
@@ -65,27 +67,35 @@ export default function CheckoutPage() {
     }
 
     setSubmitting(true);
+    setError(null);
     try {
-      const pickupISO = combined.toISOString();
+      const baseUrl = (ENV.WEB_BASE_URL || 'http://localhost:8081').replace(/\/$/, '');
 
-      const payload = {
-        pickupAtISO: pickupISO,
-        items: items.map(item => ({ dishId: Number(item.id), quantity: item.quantity })),
-      };
-
-      const { url } = await callFn<{ url: string }>('create-checkout', payload);
-      if (!url) {
-        throw new Error('Checkout session missing URL');
-      }
+      const url = await submitCheckout({
+        items: items.map(item => ({
+          dish_id: Number(item.id),
+          quantity: Number(item.quantity),
+        })),
+        chef_id: cartChefId,
+        pickupAt: combined,
+        successUrl: `${baseUrl}/order/success?orderId={ORDER_ID}`,
+        cancelUrl: `${baseUrl}/cart`,
+      });
 
       if (Platform.OS === 'web') {
         window.location.href = url;
       } else {
         await Linking.openURL(url);
       }
-    } catch (error: any) {
-      console.error('Checkout submit error:', error);
-      Alert.alert('Checkout Error', error?.message || 'Could not place order. Please try again.');
+    } catch (e: any) {
+      console.error('Checkout error:', e);
+      const errorMessage = typeof e?.message === 'string' ? e.message : 'Checkout failed';
+      setError(errorMessage);
+      if (e?.code === 'CHEF_NOT_ONBOARDED') {
+        Alert.alert('Chef not ready', "This chef hasn't completed payouts yet. Please choose another chef.");
+      } else {
+        Alert.alert('Checkout Error', errorMessage);
+      }
     } finally {
       setSubmitting(false);
     }
@@ -93,13 +103,13 @@ export default function CheckoutPage() {
 
   if (items.length === 0) {
     return (
-      <Screen style={{ backgroundColor: BACKGROUND, alignItems: 'center', justifyContent: 'center' }}>
-        <View style={{ backgroundColor: '#FFFFFF', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: BORDER, width: '90%', maxWidth: 420, gap: 16, alignItems: 'center' }}>
-          <Text style={{ fontSize: 20, fontWeight: '800', color: TEXT_DARK }}>Your cart is empty</Text>
-          <Text style={{ color: TEXT_MUTED, textAlign: 'center' }}>Add a few dishes before checking out.</Text>
+      <Screen style={{ backgroundColor: BACKGROUND }} contentStyle={styles.emptyContent}>
+        <View style={styles.emptyCard}>
+          <Text style={styles.emptyTitle}>Your cart is empty</Text>
+          <Text style={styles.emptySubtitle}>Add a few dishes before checking out.</Text>
           <Link href="/browse" asChild>
-            <TouchableOpacity style={{ backgroundColor: PRIMARY, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 999 }}>
-              <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Browse Dishes</Text>
+            <TouchableOpacity style={styles.emptyButton}>
+              <Text style={styles.emptyButtonText}>Browse Dishes</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -146,6 +156,13 @@ export default function CheckoutPage() {
             <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>${safeToFixed(subtotal, 2, '0.00')}</Text>
           </View>
         </View>
+
+        {error && (
+          <View style={{ backgroundColor: '#FEE2E2', borderRadius: 12, borderWidth: 1, borderColor: '#FCA5A5', padding: 16 }}>
+            <Text style={{ color: '#DC2626', fontWeight: '700', marginBottom: 4 }}>Error</Text>
+            <Text style={{ color: '#991B1B', fontSize: 14 }}>{error}</Text>
+          </View>
+        )}
 
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 24, gap: 16 }}>
           <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>Pickup details</Text>
@@ -222,5 +239,42 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: TEXT_DARK,
     backgroundColor: '#FFFFFF',
+  },
+  emptyContent: {
+    flexGrow: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 24,
+  },
+  emptyCard: {
+    backgroundColor: '#FFFFFF',
+    padding: 24,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    width: '100%',
+    maxWidth: 420,
+    alignItems: 'center',
+  },
+  emptyTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: TEXT_DARK,
+    marginBottom: 12,
+  },
+  emptySubtitle: {
+    color: TEXT_MUTED,
+    textAlign: 'center',
+    marginBottom: 16,
+  },
+  emptyButton: {
+    backgroundColor: PRIMARY,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 999,
+  },
+  emptyButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
 });

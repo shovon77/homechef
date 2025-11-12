@@ -179,7 +179,7 @@ export default function TrackOrderPage() {
 
   if (loading) {
     return (
-      <Screen style={{ alignItems: 'center', justifyContent: 'center', backgroundColor: BG }}>
+      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center' }} style={{ backgroundColor: BG }}>
         <ActivityIndicator color={PRIMARY} />
       </Screen>
     );
@@ -187,7 +187,7 @@ export default function TrackOrderPage() {
 
   if (error) {
     return (
-      <Screen style={{ alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: BG }}>
+      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }} style={{ backgroundColor: BG }}>
         <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '800', marginBottom: 8 }}>Unable to load order</Text>
         <Text style={{ color: TEXT_MUTED, textAlign: 'center' }}>{error}</Text>
         <Link href="/browse" asChild>
@@ -201,7 +201,7 @@ export default function TrackOrderPage() {
 
   if (!order) {
     return (
-      <Screen style={{ alignItems: 'center', justifyContent: 'center', padding: 24, backgroundColor: BG }}>
+      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }} style={{ backgroundColor: BG }}>
         <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '800', marginBottom: 8 }}>No active orders</Text>
         <Text style={{ color: TEXT_MUTED, marginBottom: 16, textAlign: 'center' }}>Once you place an order you can track it here.</Text>
         <Link href="/browse" asChild>

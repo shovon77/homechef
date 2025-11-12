@@ -301,6 +301,52 @@ export default function AdminPage() {
 
   const orderStatusLabel = (status?: string) => status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending';
 
+  const overviewStats = useMemo(() => {
+    const now = new Date();
+    const weekAgo = new Date(now);
+    weekAgo.setDate(now.getDate() - 7);
+    const monthAgo = new Date(now);
+    monthAgo.setDate(now.getDate() - 30);
+
+    let weeklyCents = 0;
+    let monthlyCents = 0;
+    let totalCents = 0;
+    let orderCount = 0;
+
+    (orders || []).forEach((order) => {
+      if (!order || typeof order.total_cents !== 'number') return;
+      const createdAt = order.created_at ? new Date(order.created_at) : null;
+      totalCents += order.total_cents ?? 0;
+      orderCount += 1;
+      if (createdAt) {
+        if (createdAt >= monthAgo) {
+          monthlyCents += order.total_cents ?? 0;
+        }
+        if (createdAt >= weekAgo) {
+          weeklyCents += order.total_cents ?? 0;
+        }
+      }
+    });
+
+    const totalUsers = Array.isArray(users) ? users.length : 0;
+    const totalChefs = Array.isArray(chefs) ? chefs.length : 0;
+
+    return {
+      weeklyCents,
+      monthlyCents,
+      totalCents,
+      orderCount,
+      totalUsers,
+      totalChefs,
+    };
+  }, [orders, users, chefs]);
+
+  const formatCad = (value: number) => (value / 100).toLocaleString('en-CA', {
+    style: 'currency',
+    currency: 'CAD',
+    minimumFractionDigits: 0,
+  });
+
   const ChefRequestsTab = (
     <ScrollView contentContainerStyle={styles.tabScroll}>
       <Text style={styles.sectionTitle}>Chef Requests ({filteredChefRequests.length} pending)</Text>
@@ -372,11 +418,60 @@ export default function AdminPage() {
   const OverviewTab = (
     <ScrollView contentContainerStyle={styles.tabScroll}>
       <Text style={styles.sectionTitle}>Overview</Text>
-      <View style={styles.placeholderCard}>
-        <Text style={styles.placeholderTitle}>Dashboard metrics are on their way</Text>
-        <Text style={styles.placeholderText}>
-          We'll surface quick stats, trend charts, and alerts for your marketplace here soon.
-        </Text>
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Platform earnings</Text>
+          <Text style={styles.chartSubtitle}>Rolling totals, last 7 vs 30 days</Text>
+        </View>
+        <View style={styles.earningsChartRow}>
+          {[
+            { label: 'This week', value: overviewStats.weeklyCents },
+            { label: 'This month', value: overviewStats.monthlyCents },
+          ].map(({ label, value }) => {
+            const max = Math.max(overviewStats.weeklyCents, overviewStats.monthlyCents, 1);
+            const height = Math.round((value / (max || 1)) * 140);
+            return (
+              <View key={label} style={styles.earningsBarWrapper}>
+                <View style={[styles.earningsBar, { height: Math.max(height, 8) }]} />
+                <Text style={styles.earningsValue}>{formatCad(value)}</Text>
+                <Text style={styles.earningsLabel}>{label}</Text>
+              </View>
+            );
+          })}
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Marketplace snapshot</Text>
+          <Text style={styles.chartSubtitle}>Live counts across the platform</Text>
+        </View>
+        <View style={styles.metricsList}>
+          {[
+            { label: 'Users', value: overviewStats.totalUsers, formatted: overviewStats.totalUsers.toLocaleString() },
+            { label: 'Chefs', value: overviewStats.totalChefs, formatted: overviewStats.totalChefs.toLocaleString() },
+            { label: 'Orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString() },
+            { label: 'Order volume (CAD)', value: overviewStats.totalCents / 100, formatted: formatCad(overviewStats.totalCents) },
+          ].map((metric) => {
+            const maxValue = Math.max(
+              overviewStats.totalUsers,
+              overviewStats.totalChefs,
+              overviewStats.orderCount,
+              overviewStats.totalCents / 100,
+              1,
+            );
+            const widthPercent = `${Math.min(100, (metric.value / (maxValue || 1)) * 100)}%`;
+            return (
+              <View key={metric.label} style={styles.metricRow}>
+                <Text style={styles.metricLabel}>{metric.label}</Text>
+                <View style={styles.metricBarTrack}>
+                  <View style={[styles.metricBarFill, { width: widthPercent }]} />
+                </View>
+                <Text style={styles.metricValue}>{metric.formatted}</Text>
+              </View>
+            );
+          })}
+        </View>
       </View>
     </ScrollView>
   );
@@ -1140,6 +1235,93 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  chartCard: {
+    backgroundColor: palette.surface,
+    borderColor: palette.border,
+    borderWidth: 1,
+    borderRadius: 18,
+    padding: 20,
+    marginHorizontal: 12,
+    marginBottom: 20,
+    shadowColor: '#0F172A',
+    shadowOpacity: 0.02,
+    shadowRadius: 14,
+    shadowOffset: { width: 0, height: 6 },
+    elevation: 1,
+  },
+  chartHeader: {
+    marginBottom: 16,
+  },
+  chartTitle: {
+    color: palette.text,
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  chartSubtitle: {
+    color: palette.muted,
+    fontSize: 13,
+    marginTop: 2,
+  },
+  earningsChartRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    alignItems: 'flex-end',
+    paddingHorizontal: 12,
+    paddingBottom: 12,
+  },
+  earningsBarWrapper: {
+    alignItems: 'center',
+    width: '45%',
+  },
+  earningsBar: {
+    width: '100%',
+    maxWidth: 120,
+    borderRadius: 12,
+    backgroundColor: palette.primary,
+    marginBottom: 12,
+  },
+  earningsValue: {
+    color: palette.text,
+    fontWeight: '700',
+    fontSize: 14,
+    marginBottom: 4,
+  },
+  earningsLabel: {
+    color: palette.muted,
+    fontSize: 13,
+  },
+  metricsList: {
+    paddingHorizontal: 4,
+  },
+  metricRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  metricLabel: {
+    flex: 1,
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  metricBarTrack: {
+    flex: 2,
+    height: 10,
+    borderRadius: 999,
+    backgroundColor: '#E9F0EB',
+    overflow: 'hidden',
+  },
+  metricBarFill: {
+    height: '100%',
+    backgroundColor: palette.primary,
+    borderRadius: 999,
+  },
+  metricValue: {
+    minWidth: 90,
+    textAlign: 'right',
+    color: palette.text,
+    fontWeight: '600',
   },
 });
 

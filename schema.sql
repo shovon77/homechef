@@ -2,7 +2,6 @@
 -- Table order and constraints may not be valid for execution.
 
 'SQL'
-
 -- WARNING: This schema is for context only and is not meant to be run.
 -- Table order and constraints may not be valid for execution.
 
@@ -128,9 +127,6 @@ CREATE TABLE public.profiles (
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
-CREATE UNIQUE INDEX IF NOT EXISTS profiles_stripe_account_id_key
-  ON public.profiles (stripe_account_id)
-  WHERE stripe_account_id IS NOT NULL;
 CREATE TABLE public.scheduler_config (
   id smallint NOT NULL DEFAULT 1,
   project_url text NOT NULL,

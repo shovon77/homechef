@@ -1,133 +1,180 @@
-import { serve } from 'https://deno.land/std@0.200.0/http/server.ts';
+// supabase/functions/create-checkout/index.ts
+import { CreateCheckoutBody, TCreateCheckoutBody } from '../_shared/schemas.ts';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
-const DEFAULT_ORIGIN = Deno.env.get('PUBLIC_SITE_URL') ?? 'http://localhost:8081';
+const PLATFORM_FEE_PERCENT = Number(Deno.env.get('PLATFORM_FEE_PERCENT') ?? Deno.env.get('PLATFORM_FEE_PCT') ?? '0.10');
+const PLATFORM_FEE_MIN = Number.isFinite(Number(Deno.env.get('PLATFORM_FEE_MIN'))) ? Number(Deno.env.get('PLATFORM_FEE_MIN')) : 50;
+const PLATFORM_FEE_MAX = Number.isFinite(Number(Deno.env.get('PLATFORM_FEE_MAX'))) ? Number(Deno.env.get('PLATFORM_FEE_MAX')) : 1500;
+
+// CORS headers - must match what the client sends
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
-  'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
-  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS, GET',
+  'Access-Control-Allow-Headers': 'authorization, content-type, x-client-info, apikey',
+  'Access-Control-Max-Age': '86400', // 24 hours
 };
 
-function json(status: number, payload: Record<string, unknown>) {
-  return new Response(JSON.stringify(payload), {
+function j(status: number, data: unknown) {
+  return new Response(JSON.stringify(data, null, 2), {
     status,
-    headers: { 'Content-Type': 'application/json', ...corsHeaders },
+    headers: { 'content-type': 'application/json', ...corsHeaders },
   });
 }
 
-function errorResponse(status: number, message: string, detail?: unknown) {
-  console.error(`[create-checkout] ${message}`, detail);
-  return json(status, { error: message });
-}
-
-interface CartItemInput {
-  dishId: number;
-  quantity: number;
-}
-
-serve(async (req) => {
+export const handler = async (req: Request) => {
+  // Handle CORS preflight - must return early with headers
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders });
   }
 
   if (req.method !== 'POST') {
-    return errorResponse(405, 'Method not allowed');
+    return j(405, { error: 'Method not allowed' });
   }
 
   try {
     const authHeader = req.headers.get('Authorization');
     if (!authHeader?.startsWith('Bearer ')) {
-      return errorResponse(401, 'Unauthorized');
+      return j(401, { error: 'Unauthorized' });
     }
+
     const accessToken = authHeader.replace('Bearer ', '').trim();
-
-    const {
-      data: { user },
-      error: userError,
-    } = await adminClient.auth.getUser(accessToken);
+    const { data: userResult, error: userError } = await adminClient.auth.getUser(accessToken);
+    const user = userResult?.user ?? null;
     if (userError || !user) {
-      return errorResponse(401, 'Unauthorized');
+      console.error('[create-checkout] auth error', userError);
+      return j(401, { error: 'Unauthorized' });
     }
 
-    const body = await req.json().catch(() => null);
-    if (!body || typeof body.pickupAtISO !== 'string') {
-      return errorResponse(400, 'pickupAtISO is required');
+    const raw = await req.json().catch((e) => {
+      console.error('[create-checkout] JSON parse error:', e);
+      return null;
+    });
+    if (!raw) return j(400, { error: 'Invalid JSON body' });
+
+    const parsed = CreateCheckoutBody.safeParse(raw);
+    if (!parsed.success) {
+      console.error('[create-checkout] validation error:', parsed.error.flatten());
+      return j(400, { error: 'Validation failed', details: parsed.error.flatten() });
+    }
+    const body: TCreateCheckoutBody = parsed.data;
+
+    // Env guardrails (fail fast with readable messages)
+    const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
+    const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
+    const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
+    if (!STRIPE_SECRET_KEY || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
+      console.error('[create-checkout] Missing env', {
+        hasStripe: !!STRIPE_SECRET_KEY,
+        hasUrl: !!SUPABASE_URL,
+        hasService: !!SERVICE_ROLE_KEY,
+      });
+      return j(500, { error: 'Missing required server environment variables' });
     }
 
-    const pickupAt = new Date(body.pickupAtISO);
-    if (Number.isNaN(pickupAt.getTime())) {
-      return errorResponse(400, 'Invalid pickupAtISO');
-    }
-
-    const now = new Date();
-    const max = new Date();
-    max.setDate(max.getDate() + 7);
-    const hour = pickupAt.getHours();
-    if (pickupAt < now || pickupAt > max || hour < 8 || hour >= 20) {
-      return errorResponse(400, 'Pickup time must be within the next 7 days between 08:00 and 20:00');
-    }
-
-    const items: CartItemInput[] = Array.isArray(body.items) ? body.items : [];
-    if (!items.length) {
-      return errorResponse(400, 'Cart is empty');
-    }
-
-    if (!items.every((item) => Number.isInteger(item.dishId) && Number.isInteger(item.quantity) && item.quantity > 0)) {
-      return errorResponse(400, 'Invalid cart items');
-    }
-
-    const dishIds = [...new Set(items.map((item) => item.dishId))];
-    const { data: dishes, error: dishesError } = await adminClient
+    // 1) Ensure all items are from the same chef as body.chef_id
+    // Query dishes once to validate ownership and get price data
+    const dishIds = body.items.map((i) => i.dish_id);
+    const { data: dishes, error: dishErr } = await adminClient
       .from('dishes')
-      .select('id, name, price, chef_id')
+      .select('id, chef_id, price, name')
       .in('id', dishIds);
-    if (dishesError || !dishes?.length) {
-      return errorResponse(500, 'Unable to load dishes');
+
+    if (dishErr) {
+      console.error('[create-checkout] Dish query failed:', dishErr);
+      return j(500, { error: 'Failed to fetch dishes' });
+    }
+    if (!dishes || dishes.length !== dishIds.length) {
+      return j(400, { error: 'One or more dishes not found' });
     }
 
-    const dishMap = new Map(dishes.map((dish) => [dish.id, dish]));
-    const firstDish = dishMap.get(items[0].dishId);
-    if (!firstDish?.chef_id) {
-      return errorResponse(400, 'Invalid chef for order');
+    const uniqueChefs = new Set(dishes.map((d) => d.chef_id));
+    if (uniqueChefs.size !== 1 || !uniqueChefs.has(body.chef_id)) {
+      return j(400, { error: 'All items must belong to the selected chef' });
     }
 
-    const chefId = firstDish.chef_id;
-    for (const item of items) {
-      const dish = dishMap.get(item.dishId);
-      if (!dish) {
-        return errorResponse(400, `Dish ${item.dishId} not found`);
+    // 2) Validate pickup window: within next 7 days, between 08:00 and 20:00 (local)
+    const pickupDate = new Date(body.pickup_at);
+    const now = new Date();
+    const max = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+    if (pickupDate < now || pickupDate > max) {
+      return j(400, { error: 'Pickup must be within the next 7 days' });
+    }
+    const hour = pickupDate.getHours();
+    if (hour < 8 || hour >= 20) {
+      return j(400, { error: 'Pickup time must be between 08:00 and 20:00' });
+    }
+
+    // 3) Compute totals (assume `price` is numeric in DB)
+    const lineItems = body.items.map((i) => {
+      const d = dishes.find((x) => x.id === i.dish_id)!;
+      const priceNumber = Number(d.price ?? 0);
+      if (!Number.isFinite(priceNumber) || priceNumber <= 0) {
+        throw new Error(`Dish ${d.id} has invalid price`);
       }
-      if (dish.chef_id !== chefId) {
-        return errorResponse(400, 'Only one chef per order is allowed');
-      }
-    }
-
-    const orderItemsPayload = items.map((item) => {
-      const dish = dishMap.get(item.dishId)!;
-      const unitPriceCents = Math.round(Number(dish.price ?? 0) * 100);
+      const unit_cents = Math.round(priceNumber * 100);
       return {
-        dish_id: dish.id,
-        quantity: item.quantity,
-        unit_price_cents: unitPriceCents,
+        dish_id: d.id,
+        name: d.name,
+        quantity: i.quantity,
+        unit_cents,
+        subtotal_cents: unit_cents * i.quantity,
       };
     });
+    const total_cents = lineItems.reduce((s, li) => s + li.subtotal_cents, 0);
 
-    const subtotal = orderItemsPayload.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
-    if (!Number.isFinite(subtotal) || subtotal <= 0) {
-      return errorResponse(400, 'Order total must be greater than zero');
+    if (!Number.isFinite(total_cents) || total_cents <= 0) {
+      return j(400, { error: 'Order total must be greater than zero' });
     }
 
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000); // 1 hour
+    const platformFeeCents = (() => {
+      const pctConfig = Number.isFinite(PLATFORM_FEE_PERCENT) ? PLATFORM_FEE_PERCENT : 0;
+      const normalizedPct = pctConfig > 1 ? pctConfig / 100 : pctConfig;
+      const raw = Math.round(total_cents * normalizedPct);
+      const clampedMin = Number.isFinite(PLATFORM_FEE_MIN) ? PLATFORM_FEE_MIN : 0;
+      const clampedMax = Number.isFinite(PLATFORM_FEE_MAX) ? PLATFORM_FEE_MAX : raw;
+      const fee = Math.min(clampedMax, Math.max(clampedMin, raw));
+      return Math.max(0, Math.min(fee, total_cents));
+    })();
 
+    const { data: chefRow, error: chefError } = await adminClient
+      .from('chefs')
+      .select('id, email')
+      .eq('id', body.chef_id)
+      .maybeSingle();
+
+    if (chefError || !chefRow) {
+      console.error('[create-checkout] chef lookup failed', { chefId: body.chef_id, error: chefError });
+      return j(404, { error: 'Chef not found' });
+    }
+
+    // Get stripe_account_id from profiles table using chef's email
+    let stripeAccountId: string | null = null;
+    if (chefRow.email) {
+      const { data: profileRow } = await adminClient
+        .from('profiles')
+        .select('stripe_account_id, charges_enabled')
+        .eq('email', chefRow.email)
+        .maybeSingle();
+      stripeAccountId = profileRow?.stripe_account_id ?? null;
+    }
+
+    if (!stripeAccountId) {
+      console.warn('[create-checkout] chef missing stripe account', { chefId: body.chef_id, email: chefRow.email });
+      return j(409, { error: 'Chef payouts are not configured yet', code: 'CHEF_NOT_ONBOARDED' });
+    }
+
+    // 4) Create (or upsert) an order row in 'orders' with status 'requested'
+    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     const { data: orderRow, error: orderError } = await adminClient
       .from('orders')
       .insert({
         user_id: user.id,
-        chef_id: chefId,
+        chef_id: body.chef_id,
         status: 'requested',
-        total_cents: subtotal,
-        pickup_at: pickupAt.toISOString(),
+        total_cents: total_cents,
+        platform_fee_cents: platformFeeCents,
+        pickup_at: pickupDate.toISOString(),
         expires_at: expiresAt.toISOString(),
         payment_status: 'requires_payment_method',
       })
@@ -135,65 +182,108 @@ serve(async (req) => {
       .single();
 
     if (orderError || !orderRow) {
-      return errorResponse(500, 'Failed to create order', orderError);
+      console.error('[create-checkout] order insert failed', orderError);
+      return j(500, { error: 'Failed to create order' });
     }
 
-    const orderId: number = orderRow.id;
+    const orderId = Number(orderRow.id);
     const transferGroup = `order_${orderId}`;
 
-    const { error: orderItemsError } = await adminClient
-      .from('order_items')
-      .insert(orderItemsPayload.map((item) => ({ ...item, order_id: orderId })));
+    const orderItemsPayload = lineItems.map((item) => ({
+      order_id: orderId,
+      dish_id: item.dish_id,
+      quantity: item.quantity,
+      unit_price_cents: item.unit_cents,
+    }));
+
+    const { error: orderItemsError } = await adminClient.from('order_items').insert(orderItemsPayload);
+
     if (orderItemsError) {
+      console.error('[create-checkout] order_items insert failed', orderItemsError);
       await adminClient.from('orders').delete().eq('id', orderId);
-      return errorResponse(500, 'Failed to create order items', orderItemsError);
+      return j(500, { error: 'Failed to create order items' });
     }
 
-    const origin = req.headers.get('origin') ?? DEFAULT_ORIGIN;
+    // 5) Create Stripe Checkout session
+    const resolveUrl = (template: string) => template.replace(/\{ORDER_ID\}/g, String(orderId));
 
-    const session = await stripe.checkout.sessions.create({
-      mode: 'payment',
-      payment_method_types: ['card'],
-      payment_intent_data: {
-        capture_method: 'manual',
-        transfer_group: transferGroup,
-        metadata: {
-          order_id: String(orderId),
-          user_id: user.id,
+    const session = await stripe.checkout.sessions.create(
+      {
+        mode: 'payment',
+        payment_method_types: ['card'],
+        payment_intent_data: {
+          capture_method: 'manual',
+          application_fee_amount: platformFeeCents,
+          transfer_data: {
+            destination: stripeAccountId,
+          },
+          transfer_group: transferGroup,
+          metadata: {
+            order_id: String(orderId),
+            user_id: user.id,
+            chef_id: String(body.chef_id),
+            pickup_at: pickupDate.toISOString(),
+          },
         },
-      },
-      customer_creation: 'if_required',
-      client_reference_id: String(orderId),
-      line_items: orderItemsPayload.map((item) => {
-        const dish = dishMap.get(item.dish_id)!;
-        return {
+        customer_creation: 'if_required',
+        client_reference_id: String(orderId),
+        line_items: lineItems.map((item) => ({
           price_data: {
             currency: 'usd',
             product_data: {
-              name: dish.name || 'Dish',
+              name: item.name || 'Dish',
             },
-            unit_amount: item.unit_price_cents,
+            unit_amount: item.unit_cents,
           },
           quantity: item.quantity,
-        };
-      }),
-      success_url: `${origin}/order/success?orderId=${orderId}`,
-      cancel_url: `${origin}/order/cancel?orderId=${orderId}`,
-      metadata: {
-        order_id: String(orderId),
+        })),
+        success_url: resolveUrl(body.success_url),
+        cancel_url: resolveUrl(body.cancel_url),
+        metadata: {
+          order_id: String(orderId),
+          chef_id: String(body.chef_id),
+          user_id: user.id,
+        },
       },
-    });
+      { idempotencyKey: `order-session-${orderId}` },
+    );
+
+    // Store checkout session ID and payment intent ID if available
+    const updateData: Record<string, unknown> = {
+      checkout_session_id: session.id,
+      transfer_group: transferGroup,
+    };
+    
+    // Store payment intent ID if available (it might be a string or an object)
+    if (session.payment_intent) {
+      const paymentIntentId = typeof session.payment_intent === 'string' 
+        ? session.payment_intent 
+        : (session.payment_intent as any)?.id || null;
+      if (paymentIntentId) {
+        updateData.stripe_payment_intent_id = paymentIntentId;
+      }
+    }
 
     await adminClient
       .from('orders')
-      .update({
-        checkout_session_id: session.id,
-        transfer_group: transferGroup,
-      })
+      .update(updateData)
       .eq('id', orderId);
 
-    return json(200, { url: session.url });
-  } catch (err) {
-    return errorResponse(500, 'Internal Server Error', err);
+    console.log('[create-checkout] session created', {
+      orderId,
+      sessionId: session.id,
+      paymentIntent: session.payment_intent,
+      paymentIntentId: updateData.stripe_payment_intent_id || 'not available yet',
+      applicationFeeCents: platformFeeCents,
+      transferDestination: stripeAccountId,
+      captureMethod: 'manual',
+    });
+
+    return j(200, { url: session.url });
+  } catch (e) {
+    console.error('[create-checkout] unhandled error:', e);
+    return j(500, { error: 'Unexpected error', message: String((e as any)?.message || e) });
   }
-});
+};
+
+Deno.serve(handler);
