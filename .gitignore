@@ -41,3 +41,14 @@ app-example
 .backups/
 .backups/
 .backups/
+
+# Ignore heavy or local files
+node_modules
+.backups
+*.zip
+*.log
+.DS_Store
+.env.local
+.env.development.local
+.env.production.local
+
