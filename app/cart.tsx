@@ -7,6 +7,7 @@ import { useCart } from "../context/CartContext";
 import { getChefById } from "../lib/db";
 import { Screen } from "../components/Screen";
 import { safeToFixed } from "../lib/number";
+import { formatCad } from "../lib/money";
 import { useRouter } from "expo-router";
 
 // Colors from HTML design
@@ -100,7 +101,7 @@ export default function CartScreen() {
               <View style={styles.cartItemsList}>
                 {items.map((item) => {
                   const chefName = item.chef_id ? chefNames.get(item.chef_id) : null;
-                  const itemPrice = safeToFixed(item.price, 2, '0.00');
+                  const itemPrice = formatCad(item.price);
                   
                   return (
                     <View key={String(item.id)} style={styles.cartItem}>
@@ -117,13 +118,13 @@ export default function CartScreen() {
                               <Text style={styles.cartItemChef}>By {chefName}</Text>
                             )}
                             {isMobile && (
-                              <Text style={styles.cartItemPriceMobile}>${itemPrice}</Text>
+                              <Text style={styles.cartItemPriceMobile}>{itemPrice}</Text>
                             )}
                           </View>
                         </View>
                         <View style={styles.cartItemRight}>
                           {!isMobile && (
-                            <Text style={styles.cartItemPriceDesktop}>${itemPrice}</Text>
+                            <Text style={styles.cartItemPriceDesktop}>{itemPrice}</Text>
                           )}
                           <View style={styles.quantityControls}>
                             <TouchableOpacity
@@ -170,17 +171,17 @@ export default function CartScreen() {
                 <View style={styles.orderSummaryDetails}>
                   <View style={styles.orderSummaryRow}>
                     <Text style={styles.orderSummaryLabel}>Subtotal</Text>
-                    <Text style={styles.orderSummaryValue}>${safeToFixed(subtotal, 2, '0.00')}</Text>
+                    <Text style={styles.orderSummaryValue}>{formatCad(subtotal)}</Text>
                   </View>
                   <View style={styles.orderSummaryRow}>
                     <Text style={styles.orderSummaryLabel}>Delivery Fee</Text>
-                    <Text style={styles.orderSummaryValue}>${safeToFixed(deliveryFee, 2, '0.00')}</Text>
+                    <Text style={styles.orderSummaryValue}>{formatCad(deliveryFee)}</Text>
                   </View>
                 </View>
                 <View style={styles.orderSummaryDivider} />
                 <View style={styles.orderSummaryTotal}>
                   <Text style={styles.orderSummaryTotalLabel}>Total</Text>
-                  <Text style={styles.orderSummaryTotalValue}>${safeToFixed(totalWithDelivery, 2, '0.00')}</Text>
+                  <Text style={styles.orderSummaryTotalValue}>{formatCad(totalWithDelivery)}</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.checkoutButton, items.length === 0 && styles.checkoutButtonDisabled]}

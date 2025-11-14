@@ -1,7 +1,9 @@
 // components/FilePicker.tsx
 'use client'
-import React from 'react'
-import { Platform, Text, TouchableOpacity, View } from 'react-native'
+import React, { useRef, useEffect } from 'react'
+import { Platform, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
+
+const PRIMARY_COLOR = '#295141'; // Talo green from design
 
 type Props = {
   label?: string
@@ -11,31 +13,60 @@ type Props = {
 
 export default function FilePicker({ label = 'Choose image', accept = 'image/*', onFile }: Props) {
   if (Platform.OS === 'web') {
+    const inputRef = useRef<HTMLInputElement>(null);
+    const buttonRef = useRef<HTMLButtonElement>(null);
+    
+    useEffect(() => {
+      if (buttonRef.current && inputRef.current) {
+        const handleClick = () => {
+          inputRef.current?.click();
+        };
+        buttonRef.current.addEventListener('click', handleClick);
+        return () => {
+          buttonRef.current?.removeEventListener('click', handleClick);
+        };
+      }
+    }, []);
+    
     return (
       <View>
-        <label style={{ display: 'inline-block' }}>
-          <input
-            type="file"
-            accept={accept}
-            style={{ display: 'none' }}
-            onChange={async (e) => {
-              const f = e.target.files?.[0]
-              if (f) onFile(f)
-            }}
-          />
-          <span
-            style={{
-              cursor: 'pointer',
-              padding: 10,
-              borderRadius: 10,
-              background: '#FBBF24',
-              color: '#0B1F17',
-              fontWeight: 800,
-            }}
-          >
-            {label}
-          </span>
-        </label>
+        {React.createElement('input', {
+          ref: inputRef,
+          type: 'file',
+          accept: accept,
+          style: { display: 'none' },
+          onChange: async (e: any) => {
+            const f = e.target.files?.[0];
+            if (f) onFile(f);
+          },
+        })}
+        {React.createElement('button', {
+          ref: buttonRef,
+          type: 'button',
+          style: {
+            paddingTop: 10,
+            paddingBottom: 10,
+            paddingLeft: 16,
+            paddingRight: 16,
+            borderRadius: 8,
+            backgroundColor: PRIMARY_COLOR + '1A', // 10% opacity
+            color: PRIMARY_COLOR,
+            fontWeight: 700,
+            fontSize: 14,
+            border: 'none',
+            cursor: 'pointer',
+            display: 'inline-flex',
+            justifyContent: 'center',
+            alignItems: 'center',
+            transition: 'background-color 0.2s',
+          } as any,
+          onMouseEnter: (e: any) => {
+            e.currentTarget.style.backgroundColor = PRIMARY_COLOR + '33'; // 20% opacity on hover
+          },
+          onMouseLeave: (e: any) => {
+            e.currentTarget.style.backgroundColor = PRIMARY_COLOR + '1A'; // Back to 10%
+          },
+        }, label)}
       </View>
     )
   }
@@ -69,8 +100,26 @@ export default function FilePicker({ label = 'Choose image', accept = 'image/*',
   }
 
   return (
-    <TouchableOpacity onPress={pickNative} style={{ padding: 10, borderRadius: 10, backgroundColor: '#FBBF24' }}>
-      <Text style={{ color: '#0B1F17', fontWeight: '800' }}>{label}</Text>
+    <TouchableOpacity 
+      onPress={pickNative} 
+      style={styles.nativeButton}
+    >
+      <Text style={styles.nativeButtonText}>{label}</Text>
     </TouchableOpacity>
   )
 }
+
+const styles = StyleSheet.create({
+  nativeButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    backgroundColor: PRIMARY_COLOR + '1A', // 10% opacity
+    alignSelf: 'flex-start',
+  },
+  nativeButtonText: {
+    color: PRIMARY_COLOR,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+})

@@ -10,6 +10,7 @@ import { combineLocalDateTime, isValidPickup } from '../../lib/datetime';
 import { safeToFixed } from '../../lib/number';
 import { submitCheckout } from '../../lib/orders';
 import ENV from '@/lib/env';
+import { formatCad } from '../../lib/money';
 
 const BACKGROUND = '#F8FCFB';
 const BORDER = '#E5E7EB';
@@ -146,14 +147,14 @@ export default function CheckoutPage() {
                   <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{item.quantity}×</Text>
                   <Text style={{ color: TEXT_DARK }}>{item.name}</Text>
                 </View>
-                <Text style={{ color: TEXT_DARK, fontWeight: '600' }}>${safeToFixed(item.price * item.quantity, 2, '0.00')}</Text>
+                <Text style={{ color: TEXT_DARK, fontWeight: '600' }}>{formatCad(item.price * item.quantity)}</Text>
               </View>
             ))}
           </View>
           <View style={{ height: 1, backgroundColor: BORDER }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 16 }}>Subtotal</Text>
-            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>${safeToFixed(subtotal, 2, '0.00')}</Text>
+            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>{formatCad(subtotal)}</Text>
           </View>
         </View>
 

@@ -7,6 +7,7 @@ import { Button } from "../../components/ui/Button";
 import { getDishAvgRating } from "../../utils/ratings";
 import { useCart } from "../../context/CartContext";
 import { toNumber, safeToFixed } from "../../lib/number";
+import { formatCad } from "../../lib/money";
 
 export default function DishCard({ dish }: { dish: any }) {
   const [avg, setAvg] = useState(0);
@@ -32,7 +33,7 @@ export default function DishCard({ dish }: { dish: any }) {
         <Text style={styles.name}>{dish.name}</Text>
         <Stars value={toNumber(avg, 0)} size={16} />
         <Text style={styles.price}>
-          ${safeToFixed(dish.price, 2, '0.00')}
+          {formatCad(dish.price)}
         </Text>
         <Button
           title="Add to cart"

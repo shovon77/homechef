@@ -10,6 +10,7 @@ import type { Dish } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import { Screen } from "../../components/Screen";
+import { formatCad } from "../../lib/money";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#19e680';
@@ -343,7 +344,7 @@ export default function DishDetail() {
             ) : null}
 
             {/* Price */}
-            <Text style={styles.price}>${(dish.price || 0).toFixed(2)}</Text>
+            <Text style={styles.price}>{formatCad(dish.price)}</Text>
 
             {/* Quantity & Add to Cart */}
             <View style={styles.actionRow}>

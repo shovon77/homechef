@@ -26,18 +26,23 @@ export default function RootLayout() {
           const profileRes = await ensureProfile();
           if (!profileRes.ok) console.warn('ensureProfile on load:', profileRes.error);
         }
-        const sub = supabase.auth.onAuthStateChange(async (_evt, sess) => {
+        const sub = supabase.auth.onAuthStateChange(async (evt, sess) => {
           if (sess?.user) {
             const res = await ensureUser();
             if (!res.ok) console.warn('ensureUser on change:', res.error);
             const profileRes = await ensureProfile();
             if (!profileRes.ok) console.warn('ensureProfile on change:', profileRes.error);
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('is_admin, is_chef, role')
-              .eq('id', sess.user.id)
-              .maybeSingle();
-            redirectAfterLogin(profile ?? {});
+            // Only redirect on SIGNED_IN event and only if user is on login/auth pages
+            // Don't redirect on TOKEN_REFRESHED or other events that happen on page refresh
+            const currentPath = typeof window !== 'undefined' ? window.location.pathname : pathname;
+            if (evt === 'SIGNED_IN' && currentPath && (currentPath.startsWith('/login') || currentPath.startsWith('/auth'))) {
+              const { data: profile } = await supabase
+                .from('profiles')
+                .select('is_admin, is_chef, role')
+                .eq('id', sess.user.id)
+                .maybeSingle();
+              redirectAfterLogin(profile ?? {});
+            }
           }
         });
         unsub = sub?.data?.subscription?.unsubscribe?.bind(sub?.data?.subscription);
@@ -46,7 +51,7 @@ export default function RootLayout() {
       }
     })();
     return () => { try { unsub?.(); } catch { /* noop */ } };
-  }, []);
+  }, [pathname]);
 
   useEffect(() => {
     (async () => {

@@ -229,7 +229,7 @@ export const handler = async (req: Request) => {
         client_reference_id: String(orderId),
         line_items: lineItems.map((item) => ({
           price_data: {
-            currency: 'usd',
+            currency: 'cad',
             product_data: {
               name: item.name || 'Dish',
             },

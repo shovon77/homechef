@@ -380,7 +380,7 @@ export default function ProfilePage() {
                           </View>
                         </View>
                         <View style={{ alignItems: 'flex-end', gap: 12 }}>
-                          <Text style={styles.orderTotal}>${safeToFixed(order.total_cents / 100, 2, '0.00')}</Text>
+                          <Text style={styles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
                           <View style={{ flexDirection: 'row', gap: 8 }}>
                             <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
                               <TouchableOpacity style={styles.orderButtonPrimary}>

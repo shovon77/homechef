@@ -7,6 +7,7 @@ import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import { formatLocal } from '../../lib/datetime';
 import { safeToFixed } from '../../lib/number';
+import { formatCad } from '../../lib/money';
 
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
@@ -95,7 +96,7 @@ export default function CheckoutSubmitted() {
         <Text style={styles.orderId}>Order ID: #{order.id}</Text>
         <Text style={styles.status}>Status: Requested</Text>
         <Text style={styles.copy}>Pickup time: {formatLocal(order.pickup_at)}</Text>
-        <Text style={styles.copy}>Total: ${safeToFixed((order.total_cents || 0) / 100, 2, '0.00')}</Text>
+        <Text style={styles.copy}>Total: {formatCad((order.total_cents || 0) / 100)}</Text>
         <View style={{ flexDirection: 'row', gap: 12, marginTop: 16 }}>
           <Link href="/profile" asChild>
             <TouchableOpacity style={styles.buttonPrimary}>

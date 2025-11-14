@@ -11,6 +11,7 @@ import { formatLocal } from '../../lib/datetime';
 import { updateOrderStatus } from '../../lib/orders';
 import { callFn } from '../../lib/fn';
 import PayoutSettings from '../../components/chef/PayoutSettings';
+import { formatCad, cents } from '../../lib/money';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#2C4E4B';
@@ -602,7 +603,7 @@ export default function ChefDashboard() {
               return (
                 <View key={label} style={{ flex: 1, alignItems: 'center', gap: 8 }}>
                   <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600' }}>
-                    {value > 0 ? `$${(value / 100).toFixed(0)}` : '$0'}
+                    {value > 0 ? formatCad(value / 100) : formatCad(0)}
                   </Text>
                   <View style={{
                     width: '100%',
@@ -616,7 +617,7 @@ export default function ChefDashboard() {
             })}
           </View>
           <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginTop: 16 }}>
-            ${ (earningsSeries.total / 100).toFixed(2) }
+            {formatCad(earningsSeries.total / 100)}
           </Text>
         </View>
 
@@ -708,7 +709,7 @@ export default function ChefDashboard() {
   );
 
   const MenuTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_GRAY }} contentContainerStyle={{ padding: 16, gap: 32, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -720,11 +721,11 @@ export default function ChefDashboard() {
         </View>
       )}
 
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Menu Management</Text>
+      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900' }}>Menu Management</Text>
 
       <NewDishForm onCreate={createDish} saving={saving} />
 
-      <View style={{ gap: 16 }}>
+      <View style={{ gap: 24 }}>
         {dishes.length === 0 ? (
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
         ) : (
@@ -760,7 +761,7 @@ export default function ChefDashboard() {
         <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900' }}>Order #{order.id}</Text>
-            <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>${((order.total_cents || 0) / 100).toFixed(2)}</Text>
+            <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>{formatCad((order.total_cents || 0) / 100)}</Text>
           </View>
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
@@ -1029,61 +1030,96 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
   const valid = name.trim().length > 0 && Number(price) > 0;
 
   return (
-    <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 12 }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900' }}>Add a new dish</Text>
-      <View style={{ flexDirection: 'row', gap: 12, flexWrap: 'wrap', alignItems: 'flex-end' }}>
-        <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', marginBottom: 4 }}>Name</Text>
+    <View style={{ backgroundColor: BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
+      <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '700', marginBottom: 16 }}>Add a new dish</Text>
+      <View style={{ gap: 16 }}>
+        <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, alignItems: Platform.OS === 'web' ? 'flex-end' : 'stretch' }}>
+          <View style={{ flex: Platform.OS === 'web' ? 2 : 1, minWidth: Platform.OS === 'web' ? 200 : undefined }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
+            <TextInput
+              value={name}
+              onChangeText={setName}
+              placeholder="Chicken Biryani"
+              placeholderTextColor={TEXT_MUTED}
+              style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+            />
+          </View>
+          <View style={{ flex: Platform.OS === 'web' ? 1 : 1, minWidth: Platform.OS === 'web' ? 120 : undefined }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
+            <View style={{ position: 'relative' }}>
+              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
+              <TextInput
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+                placeholder="19.99"
+                placeholderTextColor={TEXT_MUTED}
+                style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 28, minHeight: 40 }}
+              />
+            </View>
+          </View>
+          <View style={{ minWidth: Platform.OS === 'web' ? 200 : undefined, alignItems: Platform.OS === 'web' ? 'flex-start' : 'stretch' }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Photo</Text>
+            {preview ? (
+              <View style={{ gap: 8 }}>
+                <Image 
+                  source={{ uri: preview }} 
+                  style={{ width: 192, height: 192, borderRadius: 8, backgroundColor: '#EEE', marginBottom: 8 }} 
+                />
+                <FilePicker 
+                  label="Replace Image" 
+                  onFile={(f) => { 
+                    if (preview) URL.revokeObjectURL(preview);
+                    setFile(f); 
+                    setPreview(URL.createObjectURL(f)); 
+                  }} 
+                  accept="image/*" 
+                />
+              </View>
+            ) : (
+              <FilePicker 
+                label="Choose Image" 
+                onFile={(f) => { setFile(f); setPreview(URL.createObjectURL(f)); }} 
+                accept="image/*" 
+              />
+            )}
+          </View>
+        </View>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Description</Text>
           <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Chicken Biryani"
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Aromatic rice with tender chicken…"
             placeholderTextColor={TEXT_MUTED}
-            style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 48 }}
+            multiline
+            numberOfLines={3}
+            style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }}
           />
         </View>
-        <View style={{ width: 140 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', marginBottom: 4 }}>Price</Text>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="numeric"
-            placeholder="19.99"
-            placeholderTextColor={TEXT_MUTED}
-            style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 48 }}
-          />
-        </View>
-        <View style={{ minWidth: 200, alignItems: 'flex-start' }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', marginBottom: 4 }}>Photo</Text>
-          <FilePicker label="Choose image" onFile={(f) => { setFile(f); setPreview(URL.createObjectURL(f)); }} accept="image/*" />
+        <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
+          <TouchableOpacity
+            onPress={() => {
+              onCreate({ name: name.trim(), price: Number(price), description: description.trim(), file, preview });
+              setName('');
+              setPrice('');
+              setDescription('');
+              setFile(null);
+              setPreview(null);
+            }}
+            disabled={!valid || saving}
+            style={{ 
+              backgroundColor: (!valid || saving) ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
+              paddingVertical: 10, 
+              paddingHorizontal: 24, 
+              borderRadius: 8,
+              opacity: (!valid || saving) ? 0.6 : 1
+            }}
+          >
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+          </TouchableOpacity>
         </View>
       </View>
-      {preview && <Image source={{ uri: preview }} style={{ width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, marginTop: 6 }} />}
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Aromatic rice with tender chicken…"
-          placeholderTextColor={TEXT_MUTED}
-          multiline
-          style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 96 }}
-        />
-      </View>
-      <TouchableOpacity
-        onPress={() => {
-          onCreate({ name: name.trim(), price: Number(price), description: description.trim(), file, preview });
-          setName('');
-          setPrice('');
-          setDescription('');
-          setFile(null);
-          setPreview(null);
-        }}
-        disabled={!valid || saving}
-        style={{ backgroundColor: (!valid || saving) ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, padding: 12, borderRadius: 8, alignSelf: 'flex-start' }}
-      >
-        <Text style={{ color: '#FFFFFF', fontWeight: '900' }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
-      </TouchableOpacity>
     </View>
   );
 }
@@ -1096,61 +1132,112 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
   const [preview, setPreview] = useState<string | null>(dish.image || dish.thumbnail || '');
 
   return (
-    <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 12 }}>
-      <View style={{ flexDirection: 'row', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
-        <Image source={{ uri: preview || 'https://placehold.co/96x96?text=Dish' }} style={{ width: 96, height: 96, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, backgroundColor: '#EEE' }} />
-        <View style={{ flex: 1, minWidth: 200 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', marginBottom: 4 }}>Name</Text>
-          <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="Dish name"
-            placeholderTextColor={TEXT_MUTED}
-            style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 48 }}
-          />
-        </View>
-        <View style={{ width: 120 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', marginBottom: 4 }}>Price</Text>
-          <TextInput
-            value={price}
-            onChangeText={setPrice}
-            keyboardType="numeric"
-            placeholder="0.00"
-            placeholderTextColor={TEXT_MUTED}
-            style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 48 }}
-          />
-        </View>
-        <View style={{ minWidth: 200, alignItems: 'flex-start' }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', marginBottom: 4 }}>Replace photo</Text>
-          <FilePicker label="Choose image" onFile={(f) => { setFile(f); setPreview(URL.createObjectURL(f)); }} accept="image/*" />
-        </View>
-      </View>
-      <View style={{ gap: 8 }}>
-        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>Description</Text>
-        <TextInput
-          value={description}
-          onChangeText={setDescription}
-          placeholder="Describe the dish"
-          placeholderTextColor={TEXT_MUTED}
-          multiline
-          style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 96 }}
+    <View style={{ backgroundColor: BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
+      <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 24 }}>
+        <Image 
+          source={{ uri: preview || 'https://placehold.co/192x192?text=Dish' }} 
+          style={{ 
+            width: Platform.OS === 'web' ? 192 : '100%', 
+            height: 192, 
+            borderRadius: 8, 
+            backgroundColor: '#EEE',
+            maxWidth: Platform.OS === 'web' ? 192 : '100%'
+          }} 
         />
-      </View>
-      <View style={{ flexDirection: 'row', gap: 12 }}>
-        <TouchableOpacity
-          onPress={() => onSave({ id: dish.id, name: name.trim(), price: price, description: description.trim(), file, preview })}
-          disabled={saving}
-          style={{ backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, padding: 12, borderRadius: 8 }}
-        >
-          <Text style={{ color: '#FFFFFF', fontWeight: '900' }}>Save</Text>
-        </TouchableOpacity>
-        <TouchableOpacity
-          onPress={() => onDelete(dish.id)}
-          disabled={saving}
-          style={{ backgroundColor: '#7a1d1d', padding: 12, borderRadius: 8 }}
-        >
-          <Text style={{ color: '#fff', fontWeight: '900' }}>Delete</Text>
-        </TouchableOpacity>
+        <View style={{ flex: 1, gap: 16 }}>
+          <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, alignItems: Platform.OS === 'web' ? 'flex-end' : 'stretch' }}>
+            <View style={{ flex: Platform.OS === 'web' ? 2 : 1, minWidth: Platform.OS === 'web' ? 200 : undefined }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
+              <TextInput
+                value={name}
+                onChangeText={setName}
+                placeholder="Dish name"
+                placeholderTextColor={TEXT_MUTED}
+                style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+              />
+            </View>
+            <View style={{ flex: Platform.OS === 'web' ? 1 : 1, minWidth: Platform.OS === 'web' ? 120 : undefined }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
+              <View style={{ position: 'relative' }}>
+                <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
+                <TextInput
+                  value={price}
+                  onChangeText={setPrice}
+                  keyboardType="numeric"
+                  placeholder="0.00"
+                  placeholderTextColor={TEXT_MUTED}
+                  style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 28, minHeight: 40 }}
+                />
+              </View>
+            </View>
+          </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Description</Text>
+            <TextInput
+              value={description}
+              onChangeText={setDescription}
+              placeholder="Describe the dish"
+              placeholderTextColor={TEXT_MUTED}
+              multiline
+              numberOfLines={2}
+              style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+            />
+          </View>
+          <View style={{ 
+            flexDirection: Platform.OS === 'web' ? 'row' : 'column', 
+            gap: 16, 
+            alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+            width: '100%'
+          }}>
+            <View>
+              <FilePicker 
+                label="Replace Photo" 
+                onFile={(f) => { 
+                  if (preview && preview.startsWith('blob:')) {
+                    URL.revokeObjectURL(preview);
+                  }
+                  setFile(f); 
+                  setPreview(URL.createObjectURL(f)); 
+                }} 
+                accept="image/*" 
+              />
+            </View>
+            {Platform.OS === 'web' && <View style={{ flex: 1 }} />}
+            <View style={{ 
+              flexDirection: 'row', 
+              gap: 8
+            }}>
+              <TouchableOpacity
+                onPress={() => onSave({ id: dish.id, name: name.trim(), price: price, description: description.trim(), file, preview })}
+                disabled={saving}
+                style={{ 
+                  backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
+                  paddingVertical: 10, 
+                  paddingHorizontal: 24, 
+                  borderRadius: 8,
+                  opacity: saving ? 0.6 : 1
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Save</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onDelete(dish.id)}
+                disabled={saving}
+                style={{ 
+                  backgroundColor: BG_LIGHT, 
+                  borderWidth: 1, 
+                  borderColor: '#d1d5db', 
+                  paddingVertical: 10, 
+                  paddingHorizontal: 16, 
+                  borderRadius: 8,
+                  opacity: saving ? 0.6 : 1
+                }}
+              >
+                <Text style={{ color: TEXT_DARK, fontWeight: '700', fontSize: 14 }}>Delete</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
       </View>
     </View>
   );

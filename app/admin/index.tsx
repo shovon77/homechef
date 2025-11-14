@@ -650,7 +650,7 @@ export default function AdminPage() {
   function OrderCard({ order, onStatusUpdate }: { order: OrderWithItems; onStatusUpdate: (id: number, status: string) => void }) {
     const statusOptions = ['pending', 'paid', 'completed', 'cancelled'];
     const currentStatus = (order.status || '').toLowerCase();
-    const totalDollars = ((order.total_cents || 0) / 100).toFixed(2);
+    const totalDollars = formatCad(order.total_cents || 0);
     const badgeStyles = orderStatusStyles(order.status);
 
     return (
@@ -661,7 +661,7 @@ export default function AdminPage() {
             <Text style={styles.cardMeta}>
               User: {order.user_email || (order.user_id ? `${order.user_id.substring(0, 8)}…` : '—')}
             </Text>
-            <Text style={styles.cardTotal}>${totalDollars}</Text>
+            <Text style={styles.cardTotal}>{totalDollars}</Text>
             {order.created_at ? <Text style={styles.cardTimestamp}>{new Date(order.created_at).toLocaleString()}</Text> : null}
           </View>
           <View style={badgeStyles.container}>
@@ -673,16 +673,16 @@ export default function AdminPage() {
           <View style={styles.dividerSection}>
             <Text style={styles.sectionLabel}>Items</Text>
             {order.order_items.map((item) => {
-              const itemTotal = ((item.unit_price_cents * item.quantity) / 100).toFixed(2);
+              const itemTotal = formatCad(item.unit_price_cents * item.quantity);
               return (
                 <View key={item.id} style={styles.itemRow}>
                   <View style={{ flex: 1 }}>
                     <Text style={styles.itemTitle}>{item.dish_name || `Dish #${item.dish_id}`}</Text>
                     <Text style={styles.itemMeta}>
-                      Qty: {item.quantity} × ${((item.unit_price_cents || 0) / 100).toFixed(2)}
+                      Qty: {item.quantity} × {formatCad(item.unit_price_cents || 0)}
                     </Text>
                   </View>
-                  <Text style={styles.itemPrice}>${itemTotal}</Text>
+                  <Text style={styles.itemPrice}>{itemTotal}</Text>
                 </View>
               );
             })}

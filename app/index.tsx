@@ -6,6 +6,7 @@ import { theme, elev } from "../lib/theme";
 import Screen from "../components/Screen";
 import { getDishRatings, getChefById } from "../lib/db";
 import { safeToFixed, toNumber } from "../lib/number";
+import { formatCad } from "../lib/money";
 
 type Chef = Record<string, any>;
 type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null; chef?: string | null };
@@ -57,7 +58,7 @@ function HomeDishCard({ dish }: { dish: Dish }) {
             <Text style={styles.dishChefName} numberOfLines={1}>{chefName}</Text>
           </View>
           <View style={styles.dishFooter}>
-            <Text style={styles.dishPrice}>${safeToFixed(dish.price, 2, '0.00')}</Text>
+            <Text style={styles.dishPrice}>{formatCad(dish.price)}</Text>
             <View style={styles.dishRating}>
               <Text style={styles.starIcon}>★</Text>
               <Text style={styles.ratingText}>{safeToFixed(rating?.avg)}</Text>
