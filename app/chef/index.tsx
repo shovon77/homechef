@@ -44,6 +44,10 @@ export default function ChefDashboard() {
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
   const [earningsRange, setEarningsRange] = useState<'week' | 'month'>('week');
+  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; comment: string | null; created_at: string; user_email?: string; user_name?: string }>>([]);
+  const [reviewsLoading, setReviewsLoading] = useState(false);
+  const [reviewSearch, setReviewSearch] = useState('');
+  const [reviewSort, setReviewSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
 
   useEffect(() => {
     (async () => {
@@ -84,6 +88,7 @@ export default function ChefDashboard() {
         setDishes((d.data || []) as DishRow[]);
 
         await refreshOrdersForChef(me.id);
+        await loadReviews(me.id);
 
       } catch (e: any) {
         setErr(e.message || String(e));
@@ -98,6 +103,12 @@ export default function ChefDashboard() {
       refreshOrdersForChef(chef.id);
     }
   }, [dishes, chef]);
+
+  useEffect(() => {
+    if (activeTab === 'reviews' && chef) {
+      loadReviews(chef.id);
+    }
+  }, [activeTab, chef]);
 
   async function saveProfile() {
     if (!chef) return;
@@ -439,6 +450,81 @@ export default function ChefDashboard() {
     return orders.filter(o => o.status === orderStatusFilter);
   }, [orders, orderStatusFilter]);
 
+  async function loadReviews(chefId: number) {
+    setReviewsLoading(true);
+    try {
+      const { data: reviewsData, error } = await supabase
+        .from('chef_reviews')
+        .select('id, rating, comment, created_at, user_id')
+        .eq('chef_id', chefId)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const userIds = [...new Set((reviewsData || []).map((r: any) => r.user_id).filter((id): id is string => Boolean(id)))];
+      const { data: profilesData } = userIds.length > 0
+        ? await supabase.from('profiles').select('id, email').in('id', userIds)
+        : { data: [], error: null };
+      const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
+
+      const reviewsWithUsers = (reviewsData || []).map((r: any) => {
+        const email = r.user_id ? (emailMap.get(r.user_id) || '') : '';
+        const nameFromEmail = email ? email.split('@')[0] : '';
+        return {
+          id: r.id,
+          rating: r.rating,
+          comment: r.comment,
+          created_at: r.created_at,
+          user_email: email || undefined,
+          user_name: nameFromEmail || 'Anonymous',
+        };
+      });
+
+      setReviews(reviewsWithUsers);
+    } catch (e: any) {
+      console.error('loadReviews error', e);
+      setReviews([]);
+    } finally {
+      setReviewsLoading(false);
+    }
+  }
+
+  const reviewStats = useMemo(() => {
+    if (reviews.length === 0) return { avg: 0, count: 0 };
+    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
+    return { avg: sum / reviews.length, count: reviews.length };
+  }, [reviews]);
+
+  const filteredAndSortedReviews = useMemo(() => {
+    let filtered = reviews;
+    
+    if (reviewSearch.trim()) {
+      const searchLower = reviewSearch.toLowerCase();
+      filtered = filtered.filter(r => 
+        r.comment?.toLowerCase().includes(searchLower) ||
+        r.user_name?.toLowerCase().includes(searchLower) ||
+        r.user_email?.toLowerCase().includes(searchLower)
+      );
+    }
+
+    const sorted = [...filtered];
+    switch (reviewSort) {
+      case 'newest':
+        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
+        break;
+      case 'oldest':
+        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
+        break;
+      case 'highest':
+        sorted.sort((a, b) => b.rating - a.rating);
+        break;
+      case 'lowest':
+        sorted.sort((a, b) => a.rating - b.rating);
+        break;
+    }
+    return sorted;
+  }, [reviews, reviewSearch, reviewSort]);
+
   if (loading) {
     return (
       <Screen>
@@ -484,7 +570,15 @@ export default function ChefDashboard() {
       <ScrollView contentContainerStyle={styles.sidebarInner}>
         <View style={styles.sidebarHeader}>
           <View style={styles.sidebarIconWrap}>
-            <Text style={styles.sidebarIcon}>🍽️</Text>
+            {chef?.photo ? (
+              <Image 
+                source={{ uri: chef.photo }} 
+                style={styles.sidebarAvatar}
+                resizeMode="cover"
+              />
+            ) : (
+              <Text style={styles.sidebarIcon}>🍽️</Text>
+            )}
           </View>
           <Text style={styles.sidebarTitle}>ChefDash</Text>
         </View>
@@ -838,9 +932,128 @@ export default function ChefDashboard() {
   );
 
   const ReviewsTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, paddingBottom: 120, alignItems: 'center', justifyContent: 'center' }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginBottom: 8 }}>My Reviews</Text>
-      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Reviews feature coming soon</Text>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
+      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900' }}>My Reviews</Text>
+
+      {/* Rating Summary Card */}
+      <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {[1, 2, 3, 4, 5].map((star) => {
+              const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
+              if (star <= Math.floor(rounded)) {
+                return <Text key={star} style={{ fontSize: 32, color: '#FBBF24' }}>★</Text>;
+              } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
+                // Half star - using a visual approximation
+                return <Text key={star} style={{ fontSize: 32, color: '#FBBF24', opacity: 0.6 }}>★</Text>;
+              } else {
+                return <Text key={star} style={{ fontSize: 32, color: '#D1D5DB' }}>★</Text>;
+              }
+            })}
+          </View>
+          <View>
+            <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900' }}>
+              {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
+            </Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+              Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
+            </Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Search and Sort */}
+      <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, justifyContent: 'space-between', alignItems: Platform.OS === 'web' ? 'center' : 'stretch' }}>
+        <View style={{ flex: Platform.OS === 'web' ? 1 : 1, position: 'relative', maxWidth: Platform.OS === 'web' ? 400 : '100%' }}>
+          <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>🔍</Text>
+          <TextInput
+            value={reviewSearch}
+            onChangeText={setReviewSearch}
+            placeholder="Search reviews..."
+            placeholderTextColor={TEXT_MUTED}
+            style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }}
+          />
+        </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Sort by:</Text>
+          <View style={{ backgroundColor: BG_LIGHT, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 4 }}>
+            <View style={{ flexDirection: 'row', gap: 4 }}>
+              {(['newest', 'oldest', 'highest', 'lowest'] as const).map(sort => (
+                <TouchableOpacity
+                  key={sort}
+                  onPress={() => setReviewSort(sort)}
+                  style={{
+                    paddingVertical: 6,
+                    paddingHorizontal: 12,
+                    borderRadius: 6,
+                    backgroundColor: reviewSort === sort ? PRIMARY_COLOR + '20' : 'transparent',
+                  }}
+                >
+                  <Text style={{ color: reviewSort === sort ? PRIMARY_COLOR : TEXT_MUTED, fontSize: 12, fontWeight: reviewSort === sort ? '700' : '500' }}>
+                    {sort === 'newest' ? 'Newest' : sort === 'oldest' ? 'Oldest' : sort === 'highest' ? 'Highest' : 'Lowest'}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+        </View>
+      </View>
+
+      {/* Reviews List */}
+      {reviewsLoading ? (
+        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+          <Text style={{ color: TEXT_MUTED, marginTop: 16 }}>Loading reviews...</Text>
+        </View>
+      ) : filteredAndSortedReviews.length === 0 ? (
+        <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 32, alignItems: 'center' }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 16 }}>
+            {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
+          </Text>
+        </View>
+      ) : (
+        <View style={{ gap: 16 }}>
+          {filteredAndSortedReviews.map((review) => {
+            const reviewDate = new Date(review.created_at);
+            const daysAgo = Math.floor((Date.now() - reviewDate.getTime()) / (1000 * 60 * 60 * 24));
+            const timeAgo = daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : daysAgo < 7 ? `${daysAgo} days ago` : daysAgo < 30 ? `${Math.floor(daysAgo / 7)} weeks ago` : `${Math.floor(daysAgo / 30)} months ago`;
+
+            return (
+              <View key={review.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                <View style={{ flexDirection: 'row', gap: 16 }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: PRIMARY_COLOR + '20', alignItems: 'center', justifyContent: 'center' }}>
+                    <Text style={{ fontSize: 20 }}>{review.user_name?.[0]?.toUpperCase() || 'A'}</Text>
+                  </View>
+                  <View style={{ flex: 1, gap: 8 }}>
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+                      <View>
+                        <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700' }}>{review.user_name || 'Anonymous'}</Text>
+                        <View style={{ flexDirection: 'row', marginTop: 4 }}>
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Text key={star} style={{ fontSize: 16, color: star <= review.rating ? '#FBBF24' : '#D1D5DB' }}>★</Text>
+                          ))}
+                        </View>
+                      </View>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{timeAgo}</Text>
+                    </View>
+                    {review.comment && (
+                      <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>"{review.comment}"</Text>
+                    )}
+                    <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+                      <TouchableOpacity>
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700' }}>Reply</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Report</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                </View>
+              </View>
+            );
+          })}
+        </View>
+      )}
     </ScrollView>
   );
 
@@ -961,9 +1174,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     marginRight: 12,
+    overflow: 'hidden',
   },
   sidebarIcon: {
     fontSize: 24,
+  },
+  sidebarAvatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 8,
   },
   sidebarTitle: {
     color: TEXT_DARK,

@@ -318,12 +318,19 @@ export default function AdminPage() {
       const createdAt = order.created_at ? new Date(order.created_at) : null;
       totalCents += order.total_cents ?? 0;
       orderCount += 1;
-      if (createdAt) {
+      
+      // Only count platform fees for orders where payment has been captured
+      // Platform fees are collected when payment is captured (indicated by stripe_transfer_id)
+      const platformFee = order.platform_fee_cents ?? 0;
+      const hasTransfer = Boolean((order as any).stripe_transfer_id);
+      
+      // Count fees only if payment was captured (transfer exists) and fee is positive
+      if (createdAt && hasTransfer && platformFee > 0) {
         if (createdAt >= monthAgo) {
-          monthlyCents += order.total_cents ?? 0;
+          monthlyCents += platformFee;
         }
         if (createdAt >= weekAgo) {
-          weeklyCents += order.total_cents ?? 0;
+          weeklyCents += platformFee;
         }
       }
     });

@@ -52,7 +52,6 @@ export default function DishCard({ dish }: { dish: any }) {
 const styles = StyleSheet.create({
   card: {
     width: "100%",
-    maxWidth: 280,
     overflow: "hidden",
   },
   image: {

@@ -1,7 +1,7 @@
 // components/NavBar.tsx
 'use client'
 import React, { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, Platform, StyleSheet } from 'react-native'
+import { View, Text, TouchableOpacity, Platform, StyleSheet, Image } from 'react-native'
 import { Link, useRouter, usePathname } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { useRole } from '../hooks/useRole'
@@ -162,9 +162,11 @@ export default function NavBar() {
             style={styles.logoContainer}
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
           >
-            <View style={styles.logoIcon}>
-              <Text style={styles.logoIconText}>🍽️</Text>
-            </View>
+            <Image 
+              source={require('../design/stitch_homechef_hub_homepage/HCLogo.png/HClogo2.png')}
+              style={styles.logoImage}
+              resizeMode="contain"
+            />
             <Text style={styles.logoText}>HomeChef</Text>
           </TouchableOpacity>
         </Link>
@@ -287,15 +289,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 8,
   },
-  logoIcon: {
-    width: 32,
-    height: 32,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoIconText: {
-    fontSize: 24,
-    color: PRIMARY_COLOR,
+  logoImage: {
+    width: 40,
+    height: 40,
+    backgroundColor: 'transparent',
   },
   logoText: {
     fontSize: 24,

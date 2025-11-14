@@ -5,7 +5,8 @@ import { supabase } from '../../lib/supabase';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
 
-const PER_PAGE = 10;
+const PER_PAGE = 25; // 5x5 grid layout
+const GRID_COLUMNS = 5;
 
 type Dish = {
   id: number;
@@ -257,11 +258,12 @@ const styles = StyleSheet.create({
   grid: {
     flexDirection: 'row',
     flexWrap: 'wrap',
-    justifyContent: 'center',
-    marginHorizontal: -8,
+    justifyContent: 'flex-start',
+    marginHorizontal: -6,
   },
   cardWrapper: {
-    marginHorizontal: 8,
+    width: `${100 / GRID_COLUMNS}%`,
+    paddingHorizontal: 6,
     marginBottom: 16,
   },
   pager: {
