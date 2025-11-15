@@ -16,7 +16,6 @@ const BACKGROUND_LIGHT = '#f8fcfb';
 const TEXT_DARK = '#0e1b18';
 const TEXT_MUTED = '#4e9785';
 const BORDER_COLOR = '#e7f3f0';
-const DELIVERY_FEE = 5.00;
 
 export default function CartScreen() {
   const router = useRouter();
@@ -26,8 +25,6 @@ export default function CartScreen() {
   const isMobile = width < 1024;
 
   const subtotal = total;
-  const deliveryFee = items.length > 0 ? DELIVERY_FEE : 0;
-  const totalWithDelivery = subtotal + deliveryFee;
 
   // Load chef names for all items
   useEffect(() => {
@@ -173,15 +170,11 @@ export default function CartScreen() {
                     <Text style={styles.orderSummaryLabel}>Subtotal</Text>
                     <Text style={styles.orderSummaryValue}>{formatCad(subtotal)}</Text>
                   </View>
-                  <View style={styles.orderSummaryRow}>
-                    <Text style={styles.orderSummaryLabel}>Delivery Fee</Text>
-                    <Text style={styles.orderSummaryValue}>{formatCad(deliveryFee)}</Text>
-                  </View>
                 </View>
                 <View style={styles.orderSummaryDivider} />
                 <View style={styles.orderSummaryTotal}>
                   <Text style={styles.orderSummaryTotalLabel}>Total</Text>
-                  <Text style={styles.orderSummaryTotalValue}>{formatCad(totalWithDelivery)}</Text>
+                  <Text style={styles.orderSummaryTotalValue}>{formatCad(subtotal)}</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.checkoutButton, items.length === 0 && styles.checkoutButtonDisabled]}

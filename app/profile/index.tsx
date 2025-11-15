@@ -1,16 +1,17 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput } from "react-native";
 import { useRouter, Link } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
 import { useRole } from "../../hooks/useRole";
 import { getProfile } from "../../lib/db";
-import { uploadAvatar } from "../../lib/storage";
+import { uploadToBucket } from "../../lib/upload";
+import FilePicker from "../../components/FilePicker";
 import type { Profile, OrderStatus } from "../../lib/types";
 import Screen from "../../components/Screen";
 import { formatLocal } from "../../lib/datetime";
 import { safeToFixed } from "../../lib/number";
+import { formatCad } from "../../lib/money";
 
 type UserOrderSummary = {
   id: number;
@@ -33,6 +34,7 @@ export default function ProfilePage() {
   const [email, setEmail] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
+  const [activeNavTab, setActiveNavTab] = useState<"orders" | "settings">("orders");
   const [orders, setOrders] = useState<UserOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
@@ -126,59 +128,88 @@ export default function ProfilePage() {
 
     setSaving(true);
     try {
+      console.log("Attempting to update profile:", { userId: user.id, name: name.trim(), photoUrl });
+      
+      // Build update object with name and photo_url if changed
       const updateData: { name: string; photo_url?: string | null } = {
         name: name.trim(),
       };
       
-      if (photoUrl !== profile?.photo_url) {
+      // Include photo_url if it has changed and is not null
+      if (photoUrl !== null && photoUrl !== profile?.photo_url) {
         updateData.photo_url = photoUrl;
       }
 
-      const { error } = await supabase
+      console.log("Update data:", updateData);
+
+      // Update both fields in a single query (more efficient)
+      const { data, error } = await supabase
         .from("profiles")
         .update(updateData)
-        .eq("id", user.id);
+        .eq("id", user.id)
+        .select();
 
-      if (error) throw error;
+      if (error) {
+        console.error("Profile update error - full error object:", JSON.stringify(error, null, 2));
+        console.error("Error details:", {
+          message: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint,
+        });
+
+        // If error is about photo_url column not existing, try name only
+        if (error.message?.includes('photo_url') || error.code === '42703') {
+          console.warn("Photo URL column may not exist, updating name only");
+          const { error: nameError, data: nameData } = await supabase
+            .from("profiles")
+            .update({ name: name.trim() })
+            .eq("id", user.id)
+            .select();
+          
+          if (nameError) {
+            console.error("Profile name update error:", nameError);
+            throw new Error(`Failed to update name: ${nameError.message}`);
+          }
+          console.log("Name updated successfully:", nameData);
+        } else if (error.code === '42501' || error.message?.includes('permission') || error.message?.includes('policy')) {
+          // RLS policy error
+          throw new Error("Permission denied. You may not have permission to update your profile. Please contact support.");
+        } else {
+          throw new Error(error.message || `Update failed: ${error.code || 'Unknown error'}`);
+        }
+      } else {
+        console.log("Profile updated successfully:", data);
+      }
 
       Alert.alert("Success", "Profile updated successfully");
       await loadProfile();
     } catch (e: any) {
-      Alert.alert("Error", e?.message || "Failed to update profile");
+      console.error("Profile update exception:", e);
+      const errorMsg = e?.message || e?.details || "Failed to update profile";
+      Alert.alert("Error", errorMsg);
     } finally {
       setSaving(false);
     }
   }
 
-  async function handleUploadAvatar() {
+  async function handleAvatarPick(file: File) {
     if (!user) return;
-
+    setUploadingAvatar(true);
     try {
-      const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert("Permission required", "Please grant camera roll permissions to upload photos.");
-        return;
-      }
-
-      const result = await ImagePicker.launchImageLibraryAsync({
-        mediaTypes: ImagePicker.MediaTypeOptions.Images,
-        allowsEditing: true,
-        aspect: [1, 1],
-        quality: 0.8,
-      });
-
-      if (result.canceled || !result.assets[0]) {
-        return;
-      }
-
-      setUploadingAvatar(true);
-      const asset = result.assets[0];
-      const response = await fetch(asset.uri);
-      const blob = await response.blob();
-      const url = await uploadAvatar(blob, user.id);
-      setPhotoUrl(url);
-      Alert.alert("Success", "Avatar uploaded successfully. Click 'Save Changes' to update your profile.");
+      const { publicUrl } = await uploadToBucket('public-assets', file, `users/${user.id}/avatar`);
+      setPhotoUrl(publicUrl);
+      // Automatically save to profile
+      const { error } = await supabase
+        .from('profiles')
+        .update({ photo_url: publicUrl })
+        .eq('id', user.id);
+      if (error) throw error;
+      // Reload profile to get updated data
+      await loadProfile();
+      Alert.alert("Success", "Avatar uploaded and saved successfully!");
     } catch (e: any) {
+      console.error("Avatar upload error:", e);
       Alert.alert("Error", e?.message || "Failed to upload avatar");
     } finally {
       setUploadingAvatar(false);
@@ -292,26 +323,18 @@ export default function ProfilePage() {
             {/* Navigation Menu */}
             <View style={styles.navMenu}>
               <TouchableOpacity 
-                style={[styles.navItem, styles.navItemActive]}
-                onPress={() => setActiveTab("active")}
+                style={[styles.navItem, activeNavTab === "orders" && styles.navItemActive]}
+                onPress={() => setActiveNavTab("orders")}
               >
                 <Text style={styles.navIcon}>📄</Text>
-                <Text style={[styles.navText, styles.navTextActive]}>My Orders</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem}>
-                <Text style={styles.navIcon}>❤️</Text>
-                <Text style={styles.navText}>Favorite Dishes</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={styles.navItem}>
-                <Text style={styles.navIcon}>🏪</Text>
-                <Text style={styles.navText}>Saved Chefs</Text>
+                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>My Orders</Text>
               </TouchableOpacity>
               <TouchableOpacity 
-                style={styles.navItem}
-                onPress={() => router.push("/profile/settings")}
+                style={[styles.navItem, activeNavTab === "settings" && styles.navItemActive]}
+                onPress={() => setActiveNavTab("settings")}
               >
                 <Text style={styles.navIcon}>⚙️</Text>
-                <Text style={styles.navText}>Account Settings</Text>
+                <Text style={[styles.navText, activeNavTab === "settings" && styles.navTextActive]}>Account Settings</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -325,84 +348,150 @@ export default function ProfilePage() {
 
         {/* Main Content Area */}
         <View style={styles.mainContent}>
-          <View style={styles.header}>
-            <Text style={styles.pageTitle}>My Orders</Text>
-          </View>
-
-          {/* Tabs */}
-          <View style={styles.tabs}>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === "active" && styles.tabActive]}
-              onPress={() => setActiveTab("active")}
-            >
-              <Text style={[styles.tabText, activeTab === "active" && styles.tabTextActive]}>
-                Active Orders
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.tab, activeTab === "past" && styles.tabActive]}
-              onPress={() => setActiveTab("past")}
-            >
-              <Text style={[styles.tabText, activeTab === "past" && styles.tabTextActive]}>
-                Past Orders
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          {/* Orders List - no nested ScrollView, just View */}
-          <View style={styles.ordersList}>
-            {ordersLoading ? (
-              <View style={styles.loadingContainer}>
-                <ActivityIndicator size="large" color={theme.colors.primary} />
+          {activeNavTab === "orders" ? (
+            <>
+              <View style={styles.header}>
+                <Text style={styles.pageTitle}>My Orders</Text>
               </View>
-            ) : filteredOrders.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Text style={styles.emptyText}>
-                  {activeTab === "active" ? "No upcoming orders" : "No past orders"}
-                </Text>
+
+              {/* Tabs */}
+              <View style={styles.tabs}>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === "active" && styles.tabActive]}
+                  onPress={() => setActiveTab("active")}
+                >
+                  <Text style={[styles.tabText, activeTab === "active" && styles.tabTextActive]}>
+                    Active Orders
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === "past" && styles.tabActive]}
+                  onPress={() => setActiveTab("past")}
+                >
+                  <Text style={[styles.tabText, activeTab === "past" && styles.tabTextActive]}>
+                    Past Orders
+                  </Text>
+                </TouchableOpacity>
               </View>
-            ) : (
-              <View style={styles.ordersListContent}>
-                {filteredOrders.map((order) => {
-                  const statusInfo = getStatusInfo(order.status);
-                  return (
-                    <View key={order.id} style={styles.orderCard}>
-                      <View style={styles.orderContent}>
-                        <View style={styles.orderInfo}>
-                          <Text style={styles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
-                          <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                          <Text style={styles.orderChef}>Placed: {formatLocal(order.created_at)}</Text>
-                          <View style={styles.orderStatus}>
-                            <Text style={styles.statusIcon}>{statusInfo.icon}</Text>
-                            <Text style={[styles.statusText, { color: statusInfo.color }]}>
-                              {statusInfo.label}
-                            </Text>
+
+              {/* Orders List - no nested ScrollView, just View */}
+              <View style={styles.ordersList}>
+                {ordersLoading ? (
+                  <View style={styles.loadingContainer}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                  </View>
+                ) : filteredOrders.length === 0 ? (
+                  <View style={styles.emptyContainer}>
+                    <Text style={styles.emptyText}>
+                      {activeTab === "active" ? "No upcoming orders" : "No past orders"}
+                    </Text>
+                  </View>
+                ) : (
+                  <View style={styles.ordersListContent}>
+                    {filteredOrders.map((order) => {
+                      const statusInfo = getStatusInfo(order.status);
+                      return (
+                        <View key={order.id} style={styles.orderCard}>
+                          <View style={styles.orderContent}>
+                            <View style={styles.orderInfo}>
+                              <Text style={styles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
+                              <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                              <Text style={styles.orderChef}>Placed: {formatLocal(order.created_at)}</Text>
+                              <View style={styles.orderStatus}>
+                                <Text style={styles.statusIcon}>{statusInfo.icon}</Text>
+                                <Text style={[styles.statusText, { color: statusInfo.color }]}>
+                                  {statusInfo.label}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={{ alignItems: 'flex-end', gap: 12 }}>
+                              <Text style={styles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
+                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                                <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
+                                  <TouchableOpacity style={styles.orderButtonPrimary}>
+                                    <Text style={styles.orderButtonTextPrimary}>Track</Text>
+                                  </TouchableOpacity>
+                                </Link>
+                                {order.chef_id ? (
+                                  <Link href={`/chef/${order.chef_id}`} asChild>
+                                    <TouchableOpacity style={styles.orderButtonSecondary}>
+                                      <Text style={styles.orderButtonTextSecondary}>View Chef</Text>
+                                    </TouchableOpacity>
+                                  </Link>
+                                ) : null}
+                              </View>
+                            </View>
                           </View>
                         </View>
-                        <View style={{ alignItems: 'flex-end', gap: 12 }}>
-                          <Text style={styles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
-                          <View style={{ flexDirection: 'row', gap: 8 }}>
-                            <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
-                              <TouchableOpacity style={styles.orderButtonPrimary}>
-                                <Text style={styles.orderButtonTextPrimary}>Track</Text>
-                              </TouchableOpacity>
-                            </Link>
-                            {order.chef_id ? (
-                              <Link href={`/chef/${order.chef_id}`} asChild>
-                                <TouchableOpacity style={styles.orderButtonSecondary}>
-                                  <Text style={styles.orderButtonTextSecondary}>View Chef</Text>
-                                </TouchableOpacity>
-                              </Link>
-                            ) : null}
-                          </View>
-                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </>
+          ) : (
+            <View style={styles.settingsContent}>
+              <View style={styles.header}>
+                <Text style={styles.pageTitle}>Account Settings</Text>
+              </View>
+
+              <View style={styles.settingsCard}>
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Profile Photo</Text>
+                  <View style={styles.avatarSection}>
+                    {photoUrl ? (
+                      <Image source={{ uri: photoUrl }} style={styles.settingsAvatar} />
+                    ) : (
+                      <View style={[styles.settingsAvatar, styles.avatarPlaceholder]}>
+                        <Text style={styles.avatarInitials}>{initials}</Text>
                       </View>
+                    )}
+                    <View style={{ marginTop: 12 }}>
+                      <FilePicker 
+                        label={uploadingAvatar ? "Uploading..." : "Change Photo"} 
+                        onFile={handleAvatarPick} 
+                        accept="image/*" 
+                      />
                     </View>
-                  );
-                })}
+                  </View>
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Name</Text>
+                  <TextInput
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Enter your name"
+                    placeholderTextColor="#94a3b8"
+                    style={styles.settingsInput}
+                  />
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Email</Text>
+                  <TextInput
+                    value={email}
+                    editable={false}
+                    style={[styles.settingsInput, styles.settingsInputReadOnly]}
+                    placeholderTextColor="#94a3b8"
+                  />
+                  <Text style={styles.settingsHint}>Email cannot be changed</Text>
+                </View>
+
+                <TouchableOpacity
+                  style={[styles.saveButton, saving && styles.saveButtonDisabled]}
+                  onPress={handleSave}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
               </View>
-            )}
-          </View>
+            </View>
+          )}
         </View>
       </View>
     </Screen>
@@ -690,5 +779,82 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.fontSize.lg * 1.2,
+  },
+  settingsContent: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.xl,
+    gap: theme.spacing['2xl'],
+    ...elev('sm'),
+  },
+  settingsSection: {
+    gap: theme.spacing.md,
+  },
+  settingsSectionTitle: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  avatarSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  settingsAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: theme.colors.primary,
+  },
+  uploadButton: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    backgroundColor: 'rgba(62, 106, 85, 0.1)',
+    borderWidth: 1,
+    borderColor: theme.colors.primary,
+  },
+  uploadButtonText: {
+    color: theme.colors.primary,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
+  settingsInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    fontSize: theme.typography.fontSize.base,
+    color: '#101828',
+    backgroundColor: '#FFFFFF',
+  },
+  settingsInputReadOnly: {
+    backgroundColor: '#F9FAFB',
+    color: '#667085',
+  },
+  settingsHint: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    marginTop: theme.spacing.xs / 2,
+  },
+  saveButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: theme.spacing.md,
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
   },
 });

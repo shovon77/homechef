@@ -38,6 +38,9 @@ export default function CheckoutPage() {
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
   const totalCents = useMemo(() => Math.round(subtotal * 100), [subtotal]);
+  
+  // Check if date and time are both selected
+  const isFormValid = dateInput.trim().length > 0 && timeInput.trim().length > 0;
 
   const handleSubmit = async () => {
     if (items.length === 0) {
@@ -127,7 +130,28 @@ export default function CheckoutPage() {
     return { iso, label };
   });
 
-  const timeHint = 'HH:mm (24h)';
+  // Generate time slots from 8am to 8pm in 30-minute intervals
+  // Returns array of { value: 'HH:mm' (24h), label: 'h:mm AM/PM' (12h) }
+  const timeSlots = useMemo(() => {
+    const slots: Array<{ value: string; label: string }> = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      const hour24 = hour.toString().padStart(2, '0');
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour < 12 ? 'AM' : 'PM';
+      
+      slots.push({
+        value: `${hour24}:00`,
+        label: `${hour12}:00 ${ampm}`,
+      });
+      if (hour < 20) {
+        slots.push({
+          value: `${hour24}:30`,
+          label: `${hour12}:30 ${ampm}`,
+        });
+      }
+    }
+    return slots;
+  }, []);
 
   return (
     <Screen scroll style={{ backgroundColor: BACKGROUND }} contentPadding={0}>
@@ -192,32 +216,47 @@ export default function CheckoutPage() {
           </View>
 
           <View style={{ gap: 12 }}>
-            <Text style={{ color: TEXT_MUTED, fontWeight: '700' }}>Pickup time ({timeHint})</Text>
-            <TextInput
-              value={timeInput}
-              onChangeText={setTimeInput}
-              placeholder="e.g. 18:30"
-              placeholderTextColor={TEXT_MUTED}
-              style={styles.input}
-              autoCapitalize="none"
-            />
+            <Text style={{ color: TEXT_MUTED, fontWeight: '700' }}>Pickup time</Text>
+            <ScrollRow>
+              {timeSlots.map(timeSlot => (
+                <TouchableOpacity
+                  key={timeSlot.value}
+                  onPress={() => setTimeInput(timeSlot.value)}
+                  style={{
+                    paddingVertical: 10,
+                    paddingHorizontal: 16,
+                    borderRadius: 999,
+                    borderWidth: 1,
+                    borderColor: timeInput === timeSlot.value ? PRIMARY : BORDER,
+                    backgroundColor: timeInput === timeSlot.value ? PRIMARY + '15' : 'transparent',
+                  }}
+                >
+                  <Text style={{ color: timeInput === timeSlot.value ? PRIMARY : TEXT_DARK }}>
+                    {timeSlot.label}
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollRow>
           </View>
         </View>
 
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={submitting}
+          disabled={submitting || !isFormValid}
           style={{
-            backgroundColor: submitting ? TEXT_MUTED : ACCENT,
+            backgroundColor: (submitting || !isFormValid) ? TEXT_MUTED : '#123524',
             paddingVertical: 16,
             borderRadius: 12,
             alignItems: 'center',
+            opacity: (submitting || !isFormValid) ? 0.6 : 1,
           }}
         >
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>Submit order</Text>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+              {!isFormValid ? 'Please select date and time' : 'Submit order'}
+            </Text>
           )}
         </TouchableOpacity>
       </View>

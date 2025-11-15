@@ -11,8 +11,10 @@ export async function uploadAvatar(file: File | Blob, userId: string): Promise<s
   const fileName = `${userId}/${timestamp}.jpg`;
   const filePath = `avatars/${fileName}`;
 
+  console.log('Uploading avatar to path:', filePath);
+
   // Upload file to Supabase Storage
-  const { error: uploadError } = await supabase.storage
+  const { data: uploadData, error: uploadError } = await supabase.storage
     .from('avatars')
     .upload(filePath, file, {
       contentType: 'image/jpeg',
@@ -20,18 +22,22 @@ export async function uploadAvatar(file: File | Blob, userId: string): Promise<s
     });
 
   if (uploadError) {
+    console.error('Storage upload error:', uploadError);
     throw new Error(`Failed to upload avatar: ${uploadError.message}`);
   }
 
+  console.log('Upload successful, getting public URL...');
+
   // Get public URL
-  const { data } = supabase.storage
+  const { data: urlData } = supabase.storage
     .from('avatars')
     .getPublicUrl(filePath);
 
-  if (!data?.publicUrl) {
+  if (!urlData?.publicUrl) {
     throw new Error('Failed to get public URL for uploaded avatar');
   }
 
-  return data.publicUrl;
+  console.log('Public URL:', urlData.publicUrl);
+  return urlData.publicUrl;
 }
 
