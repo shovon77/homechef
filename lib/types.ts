@@ -18,6 +18,7 @@ export type Profile = {
   created_at: string | null; // timestamptz
   is_admin: boolean; // default false
   photo_url?: string | null; // Avatar URL (stored in Supabase Storage)
+  location?: string | null; // User location from Google Places
 };
 
 // ============================================================================

@@ -7,6 +7,7 @@ import { useRole } from "../../hooks/useRole";
 import { getProfile } from "../../lib/db";
 import { uploadToBucket } from "../../lib/upload";
 import FilePicker from "../../components/FilePicker";
+import LocationPicker from "../../components/LocationPicker";
 import type { Profile, OrderStatus } from "../../lib/types";
 import Screen from "../../components/Screen";
 import { formatLocal } from "../../lib/datetime";
@@ -33,6 +34,7 @@ export default function ProfilePage() {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [location, setLocation] = useState("");
   const [activeTab, setActiveTab] = useState<"active" | "past">("active");
   const [activeNavTab, setActiveNavTab] = useState<"orders" | "settings">("orders");
   const [orders, setOrders] = useState<UserOrderSummary[]>([]);
@@ -67,6 +69,7 @@ export default function ProfilePage() {
         setName(prof.name || "");
         setEmail(prof.email || "");
         setPhotoUrl(prof.photo_url || null);
+        setLocation(prof.location || "");
       }
     } catch (e: any) {
       console.error("Error loading profile:", e);
@@ -130,9 +133,10 @@ export default function ProfilePage() {
     try {
       console.log("Attempting to update profile:", { userId: user.id, name: name.trim(), photoUrl });
       
-      // Build update object with name and photo_url if changed
-      const updateData: { name: string; photo_url?: string | null } = {
+      // Build update object with name, location, and photo_url if changed
+      const updateData: { name: string; location?: string | null; photo_url?: string | null } = {
         name: name.trim(),
+        location: location.trim() || null,
       };
       
       // Include photo_url if it has changed and is not null
@@ -476,6 +480,17 @@ export default function ProfilePage() {
                     placeholderTextColor="#94a3b8"
                   />
                   <Text style={styles.settingsHint}>Email cannot be changed</Text>
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Location</Text>
+                  <LocationPicker
+                    value={location}
+                    onChange={setLocation}
+                    placeholder="Search for your location..."
+                    style={styles.locationPicker}
+                  />
+                  <Text style={styles.settingsHint}>Select your location from the dropdown</Text>
                 </View>
 
                 <TouchableOpacity
@@ -840,6 +855,9 @@ const styles = StyleSheet.create({
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     marginTop: theme.spacing.xs / 2,
+  },
+  locationPicker: {
+    marginTop: 0,
   },
   saveButton: {
     backgroundColor: theme.colors.primary,

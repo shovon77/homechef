@@ -10,7 +10,7 @@ export async function ensureUser(): Promise<{ ok: boolean; error?: string }> {
     // Check if profile already exists to preserve existing fields
     const { data: existingProfile } = await supabase
       .from('profiles')
-      .select('name, is_chef, role, photo_url, is_admin, stripe_account_id, charges_enabled')
+      .select('name, is_chef, role, photo_url, is_admin, stripe_account_id, charges_enabled, location')
       .eq('id', u.id)
       .maybeSingle();
 
@@ -48,6 +48,7 @@ export async function ensureUser(): Promise<{ ok: boolean; error?: string }> {
       if (existingProfile.is_admin !== undefined) profileData.is_admin = existingProfile.is_admin;
       if (existingProfile.stripe_account_id !== undefined) profileData.stripe_account_id = existingProfile.stripe_account_id;
       if (existingProfile.charges_enabled !== undefined) profileData.charges_enabled = existingProfile.charges_enabled;
+      if (existingProfile.location !== undefined) profileData.location = existingProfile.location;
     } else {
       // New profile, set defaults
       profileData.is_chef = false;

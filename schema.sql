@@ -125,6 +125,7 @@ CREATE TABLE public.profiles (
   stripe_account_id text,
   charges_enabled boolean DEFAULT false,
   photo_url text,
+  location text,
   CONSTRAINT profiles_pkey PRIMARY KEY (id),
   CONSTRAINT profiles_id_fkey FOREIGN KEY (id) REFERENCES auth.users(id)
 );
