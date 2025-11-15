@@ -5,6 +5,7 @@ import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
 import FilePicker from '../../components/FilePicker';
+import LocationPicker from '../../components/LocationPicker';
 import { theme } from '../../lib/theme';
 import { Screen } from '../../components/Screen';
 import { formatLocal } from '../../lib/datetime';
@@ -40,6 +41,7 @@ export default function ChefDashboard() {
   const [name, setName] = useState('');
   const [bio, setBio] = useState('');
   const [photo, setPhoto] = useState<string | undefined>(undefined);
+  const [location, setLocation] = useState('');
   const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
@@ -81,6 +83,7 @@ export default function ChefDashboard() {
         setName(me.name || '');
         setBio(me.bio || '');
         setPhoto(me.photo || undefined);
+        setLocation(me.location || '');
 
         // Load dishes
         const d = await supabase.from('dishes').select('*').eq('chef_id', me.id).order('id', { ascending: true });
@@ -116,9 +119,14 @@ export default function ChefDashboard() {
     setMsg(null);
     setErr(null);
     try {
-      const { error } = await supabase.from('chefs').update({ name: name || chef.name, bio: bio ?? null, photo: photo ?? null }).eq('id', chef.id);
+      const { error } = await supabase.from('chefs').update({ 
+        name: name || chef.name, 
+        bio: bio ?? null, 
+        photo: photo ?? null,
+        location: location.trim() || null
+      }).eq('id', chef.id);
       if (error) throw error;
-      setChef({ ...chef, name: name || chef.name, bio: bio ?? null, photo: photo ?? null });
+      setChef({ ...chef, name: name || chef.name, bio: bio ?? null, photo: photo ?? null, location: location.trim() || null });
       setMsg('Profile saved ✓');
       setTimeout(() => setMsg(null), 3000);
     } catch (e: any) {
@@ -1115,6 +1123,16 @@ export default function ChefDashboard() {
             multiline
             style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 96 }}
           />
+        </View>
+
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>Location</Text>
+          <LocationPicker
+            value={location}
+            onChange={setLocation}
+            placeholder="Search for your location..."
+          />
+          <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 4 }}>Select your location from the dropdown</Text>
         </View>
 
         <TouchableOpacity
