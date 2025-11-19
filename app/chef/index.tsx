@@ -750,7 +750,7 @@ export default function ChefDashboard() {
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Order Management</Text>
         <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16 }}>
-          {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
+          {(['requested', 'pending', 'ready', 'completed'] as const).map(status => (
             <TouchableOpacity
               key={status}
               onPress={() => setOrderStatusFilter(status)}
@@ -768,44 +768,101 @@ export default function ChefDashboard() {
             </TouchableOpacity>
           ))}
         </View>
-        <ScrollView horizontal>
-          <View style={{ minWidth: '100%' }}>
-            {filteredOrders.length > 0 ? (
-              filteredOrders.slice(0, 10).map(order => (
-                <View key={order.id} style={{ flexDirection: 'row', paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: BORDER_LIGHT, alignItems: 'center' }}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700' }}>#{order.id}</Text>
-                  </View>
-                  <View style={{ flex: 2 }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>{order.user_email || 'Customer'}</Text>
-                  </View>
-                  <View style={{ flex: 2 }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                      {order.order_items?.map((item: any) => `${item.quantity}x ${item.dishes?.name || 'Item'}`).join(', ') || 'No items'}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                      {new Date(order.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
-                    </Text>
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    {order.status === 'pending' && (
-                      <TouchableOpacity
-                        onPress={() => updateOrderStatus(order.id, 'paid')}
-                        style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', textAlign: 'center' }}>Accept</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
+        <View style={{ gap: 16 }}>
+          {filteredOrders.length > 0 ? (
+            filteredOrders.slice(0, 10).map(order => (
+              <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900' }}>Order #{order.id}</Text>
+                  <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>{formatCad((order.total_cents || 0) / 100)}</Text>
                 </View>
-              ))
-            ) : (
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, padding: 16, textAlign: 'center' }}>No {orderStatusFilter} orders</Text>
-            )}
-          </View>
-        </ScrollView>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Placed: {formatLocal(order.created_at)}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                  Items: {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || item.dishes?.name || 'Item'}`).join(', ') || 'No items'}
+                </Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {order.status === 'requested' ? (
+                    <>
+                      {(() => {
+                        const transferSent = Boolean(order.stripe_transfer_id);
+                        const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                        return (
+                          <TouchableOpacity
+                            disabled={!canAccept}
+                            onPress={async () => {
+                              if (!canAccept) {
+                                if (!chargesEnabled || !stripeAccountId) {
+                                  Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                                } else if (transferSent) {
+                                  Alert.alert('Order already accepted', 'This order has already been accepted.');
+                                }
+                                return;
+                              }
+                              try {
+                                await callFn('accept-order', { orderId: order.id });
+                                Alert.alert('Success', 'Order accepted! Payment has been captured.');
+                                await refreshOrdersForChef(chef!.id);
+                              } catch (err: any) {
+                                Alert.alert('Accept failed', err?.message || 'Unable to accept order');
+                              }
+                            }}
+                            style={{
+                              backgroundColor: PRIMARY_COLOR,
+                              paddingVertical: 8,
+                              paddingHorizontal: 16,
+                              borderRadius: 8,
+                              opacity: canAccept ? 1 : 0.5,
+                            }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                          </TouchableOpacity>
+                        );
+                      })()}
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                            await refreshOrdersForChef(chef!.id);
+                          } catch (err: any) {
+                            Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                          }
+                        }}
+                        style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                      </TouchableOpacity>
+                    </>
+                  ) : order.status === 'pending' ? (
+                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await handleOrderStatus(order.id, 'ready');
+                            Alert.alert('Success', 'Order marked as ready!');
+                          } catch (err: any) {
+                            Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                          }
+                        }}
+                        style={{ backgroundColor: '#10B981', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                      </TouchableOpacity>
+                      <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                    </View>
+                  ) : order.status === 'ready' ? (
+                    <View style={{ backgroundColor: '#DCFCE7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+                      <Text style={{ color: '#15803D', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                    </View>
+                  ) : null}
+                </View>
+              </View>
+            ))
+          ) : (
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, padding: 16, textAlign: 'center' }}>No {orderStatusFilter} orders</Text>
+          )}
+        </View>
       </View>
     </ScrollView>
   );
@@ -924,7 +981,22 @@ export default function ChefDashboard() {
                 </TouchableOpacity>
               </>
             ) : order.status === 'pending' ? (
-              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                <TouchableOpacity
+                  onPress={async () => {
+                    try {
+                      await handleOrderStatus(order.id, 'ready');
+                      Alert.alert('Success', 'Order marked as ready!');
+                    } catch (err: any) {
+                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                    }
+                  }}
+                  style={{ backgroundColor: '#10B981', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                </TouchableOpacity>
+                <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+              </View>
             ) : order.status === 'ready' ? (
               <View style={{ backgroundColor: '#DCFCE7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
                 <Text style={{ color: '#15803D', fontSize: 12, fontWeight: '700' }}>Ready</Text>
