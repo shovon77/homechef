@@ -57,15 +57,11 @@
   },
   "homepage": "https://docs.expo.dev/routing/introduction/",
   "scripts": {
-    "build": "bash -c 'if [ -z \"$1\" ]; then expo-module build -p tsconfig.json; else expo-module build \"$1\"; fi' --",
-    "clean": "expo-module clean",
-    "lint": "expo-module lint",
-    "lint:routes": "node scripts/check-routes.js",
-    "test": "expo-module test",
-    "test:rsc": "jest --config jest-rsc.config.js",
-    "test:tsd": "EXPORT_ROUTER_JEST_TSD=true expo-module test",
-    "prepublishOnly": "expo-module prepublishOnly",
-    "expo-module": "expo-module"
+    "start": "expo start",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "build": "expo export -p web"
   },
   "keywords": [
     "react-native",
