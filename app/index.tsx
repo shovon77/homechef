@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform } from "react-native";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
@@ -72,6 +72,8 @@ function HomeDishCard({ dish }: { dish: Dish }) {
 
 export default function HomePage() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
@@ -120,9 +122,9 @@ export default function HomePage() {
       contentPadding={0}
       style={{ backgroundColor: '#FFFFFF' }}
     >
-      <View style={styles.container}>
+      <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Hero section - matches HTML design */}
-        <View style={styles.hero}>
+        <View style={[styles.hero, isMobile && styles.heroMobile]}>
           <Image
             source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT" }}
             style={styles.heroBackgroundImage}
@@ -130,10 +132,10 @@ export default function HomePage() {
           />
           <View style={styles.heroOverlay} />
           <View style={styles.heroContent}>
-            <Text style={styles.heroTitle}>
+            <Text style={[styles.heroTitle, isMobile && styles.heroTitleMobile]}>
               Authentic Homemade Meals, Delivered.
             </Text>
-            <Text style={styles.heroSubtitle}>
+            <Text style={[styles.heroSubtitle, isMobile && styles.heroSubtitleMobile]}>
               Discover and order from the best home chefs in your neighborhood.
             </Text>
           </View>
@@ -144,7 +146,7 @@ export default function HomePage() {
                 <Text style={styles.searchIcon}>🔍</Text>
               </View>
               <TextInput
-                placeholder="Search for a dish or cuisine..."
+                placeholder={isMobile ? "Search..." : "Search for a dish or cuisine..."}
                 placeholderTextColor="#555555"
                 style={styles.searchInput}
                 value={searchQuery}
@@ -156,7 +158,7 @@ export default function HomePage() {
                 style={styles.searchButton}
                 onPress={handleSearch}
               >
-                <Text style={styles.searchButtonText}>Find Food</Text>
+                <Text style={styles.searchButtonText}>{isMobile ? "Search" : "Find Food"}</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -164,7 +166,7 @@ export default function HomePage() {
 
         {/* Trending Dishes section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Trending Dishes Near You</Text>
+          <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Trending Dishes Near You</Text>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
@@ -181,8 +183,8 @@ export default function HomePage() {
 
         {/* How It Works section */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>How It Works</Text>
-          <View style={styles.howItWorksGrid}>
+          <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>How It Works</Text>
+          <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
             <View style={styles.howItWorksCard}>
               <View style={styles.howItWorksIconContainer}>
                 <Text style={styles.howItWorksIcon}>🔍</Text>
@@ -215,7 +217,7 @@ export default function HomePage() {
 
         {/* Featured Chefs section - matches HTML design */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Featured Chefs</Text>
+          <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Chefs</Text>
           <ScrollView 
             horizontal 
             showsHorizontalScrollIndicator={false}
@@ -559,5 +561,28 @@ const styles = StyleSheet.create({
   featuredChefCuisine: {
     color: '#555555',
     fontSize: theme.typography.fontSize.sm,
+  },
+  // Mobile Styles
+  containerMobile: {
+    paddingHorizontal: theme.spacing.md,
+  },
+  heroMobile: {
+    minHeight: 400,
+    padding: theme.spacing.sm,
+  },
+  heroTitleMobile: {
+    fontSize: 32,
+    lineHeight: 38,
+  },
+  heroSubtitleMobile: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  sectionTitleMobile: {
+    fontSize: 24,
+    paddingHorizontal: 0,
+  },
+  howItWorksGridMobile: {
+    flexDirection: "column",
+    gap: theme.spacing.lg,
   },
 });

@@ -1,6 +1,6 @@
 'use client';
 import { useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { theme } from '../lib/theme';
 
 type TabConfig = { key: string; title: string; content: JSX.Element }[];
@@ -20,24 +20,30 @@ export function Tabs({ tabs, initial = 0, onTabChange, activeColor, indicatorCol
   return (
     <View style={styles.container}>
       {/* Underline-style tabs matching design mockups */}
-      <View style={styles.tabBar}>
-        {tabs.map((t, i) => (
-          <TouchableOpacity
-            key={t.key}
-            onPress={() => {
-              setIdx(i);
-              onTabChange?.(t.key);
-            }}
-            style={[styles.tab, i === idx && styles.tabActive]}
-            accessibilityRole="tab"
-            accessibilityState={{ selected: i === idx }}
-          >
-            <Text style={[styles.tabText, i === idx && { color: resolvedActiveColor }]}>
-              {t.title}
-            </Text>
-            {i === idx && <View style={[styles.tabIndicator, { backgroundColor: resolvedIndicatorColor }]} />}
-          </TouchableOpacity>
-        ))}
+      <View style={styles.tabBarWrapper}>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.tabBarContent}
+        >
+          {tabs.map((t, i) => (
+            <TouchableOpacity
+              key={t.key}
+              onPress={() => {
+                setIdx(i);
+                onTabChange?.(t.key);
+              }}
+              style={[styles.tab, i === idx && styles.tabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: i === idx }}
+            >
+              <Text style={[styles.tabText, i === idx && { color: resolvedActiveColor }]}>
+                {t.title}
+              </Text>
+              {i === idx && <View style={[styles.tabIndicator, { backgroundColor: resolvedIndicatorColor }]} />}
+            </TouchableOpacity>
+          ))}
+        </ScrollView>
       </View>
       <View style={styles.content}>{tabs[idx]?.content}</View>
     </View>
@@ -49,12 +55,15 @@ const styles = StyleSheet.create({
     width: '100%',
     flex: 1,
   },
-  tabBar: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
+  tabBarWrapper: {
     borderBottomWidth: 1,
     borderBottomColor: theme.colors.border,
     marginBottom: theme.spacing.lg,
+  },
+  tabBarContent: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    paddingHorizontal: 4,
   },
   tab: {
     paddingVertical: theme.spacing.md,

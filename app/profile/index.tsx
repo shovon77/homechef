@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput, ScrollView, useWindowDimensions } from "react-native";
 import { useRouter, Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
@@ -26,6 +26,8 @@ type UserOrderSummary = {
 
 export default function ProfilePage() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const { loading: roleLoading, user, isAdmin, isChef } = useRole();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
@@ -302,11 +304,12 @@ export default function ProfilePage() {
 
   return (
     <Screen scroll contentPadding={16} style={{ backgroundColor: '#FFFFFF' }}>
-      <View style={styles.container}>
+      <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Left Sidebar */}
-        <View style={styles.sidebar}>
-          <View style={styles.sidebarContent}>
+        <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
+          <View style={[styles.sidebarContent, isMobile && styles.sidebarContentMobile]}>
             {/* Profile Header */}
+            {!isMobile && (
             <View style={styles.profileHeader}>
               {photoUrl ? (
                 <Image
@@ -323,9 +326,15 @@ export default function ProfilePage() {
                 <Text style={styles.profileEmail}>{email || "No email"}</Text>
               </View>
             </View>
+            )}
 
-            {/* Navigation Menu */}
-            <View style={styles.navMenu}>
+            {/* Navigation Menu - Horizontal Scroll on Mobile */}
+            <ScrollView 
+              horizontal={isMobile} 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[isMobile && styles.navMenuMobileContent]}
+              style={[styles.navMenu, isMobile && styles.navMenuMobile]}
+            >
               <TouchableOpacity 
                 style={[styles.navItem, activeNavTab === "orders" && styles.navItemActive]}
                 onPress={() => setActiveNavTab("orders")}
@@ -340,14 +349,16 @@ export default function ProfilePage() {
                 <Text style={styles.navIcon}>⚙️</Text>
                 <Text style={[styles.navText, activeNavTab === "settings" && styles.navTextActive]}>Account Settings</Text>
               </TouchableOpacity>
-            </View>
+            </ScrollView>
           </View>
 
           {/* Log Out Button */}
+          {!isMobile && (
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Text style={styles.logoutIcon}>→</Text>
             <Text style={styles.logoutText}>Log Out</Text>
           </TouchableOpacity>
+          )}
         </View>
 
         {/* Main Content Area */}
@@ -874,5 +885,36 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold,
+  },
+  // Mobile Styles
+  containerMobile: {
+    flexDirection: 'column',
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  sidebarMobile: {
+    width: '100%',
+    minHeight: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+    boxShadow: 'none', // Remove shadow on mobile for cleaner look
+    elevation: 0,
+  },
+  sidebarContentMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  navMenuMobile: {
+    marginTop: 0,
+    width: '100%',
+  },
+  navMenuMobileContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
   },
 });

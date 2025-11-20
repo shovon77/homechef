@@ -1,7 +1,7 @@
 // components/NavBar.tsx
 'use client'
 import React, { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, Platform, StyleSheet, Image } from 'react-native'
+import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions } from 'react-native'
 import { Link, useRouter, usePathname } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { useRole } from '../hooks/useRole'
@@ -117,6 +117,8 @@ function ExploreLink() {
 
 export default function NavBar() {
   const router = useRouter()
+  const { width } = useWindowDimensions()
+  const isMobile = width < 768
   const { isAdmin, isChef, user } = useRole()
   const { items } = useCart()
   const loggedIn = !!user
@@ -155,7 +157,7 @@ export default function NavBar() {
 
   return (
     <View style={styles.header}>
-      <View style={styles.container}>
+      <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Left Section: Logo */}
         <Link href="/" asChild>
           <TouchableOpacity 
@@ -167,17 +169,17 @@ export default function NavBar() {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            <Text style={styles.logoText}>HomeChef</Text>
+            {!isMobile && <Text style={styles.logoText}>HomeChef</Text>}
           </TouchableOpacity>
         </Link>
 
         {/* Center Section: Navigation */}
-        <View style={styles.navCenter}>
+        <View style={[styles.navCenter, isMobile && styles.navCenterMobile]}>
           <ExploreLink />
           {hasActiveOrder ? (
             <Link href="/orders/track" asChild>
               <TouchableOpacity style={[styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                <Text style={[styles.navLinkText, { fontWeight: '700' }]}>Track Order</Text>
+                <Text style={[styles.navLinkText, { fontWeight: '700' }]}>{isMobile ? '' : 'Track Order'}</Text>
                 {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
               </TouchableOpacity>
             </Link>
@@ -188,13 +190,13 @@ export default function NavBar() {
               onPress={() => router.push(isAdmin ? '/admin' : '/chef')}
               style={styles.navLink}
             >
-              <Text style={styles.navLinkText}>Dashboard</Text>
+              <Text style={styles.navLinkText}>{isMobile ? 'Dash' : 'Dashboard'}</Text>
             </TouchableOpacity>
           )}
         </View>
 
         {/* Right Section: Actions */}
-        <View style={styles.rightSection}>
+        <View style={[styles.rightSection, isMobile && styles.rightSectionMobile]}>
           {loggedIn ? (
             <>
               <TouchableOpacity
@@ -208,29 +210,29 @@ export default function NavBar() {
                     router.push('/profile');
                   }
                 }}
-                style={styles.primaryButton}
+                style={isMobile ? styles.iconButton : styles.primaryButton}
               >
-                <Text style={styles.primaryButtonText}>Profile</Text>
+                {isMobile ? <Text style={{fontSize: 20}}>👤</Text> : <Text style={styles.primaryButtonText}>Profile</Text>}
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
                   await supabase.auth.signOut(); 
                   router.push('/auth');
                 }}
-                style={styles.secondaryButton}
+                style={isMobile ? styles.iconButton : styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Logout</Text>
+                {isMobile ? <Text style={{fontSize: 20}}>🚪</Text> : <Text style={styles.secondaryButtonText}>Logout</Text>}
               </TouchableOpacity>
             </>
           ) : (
             <>
               <Link href="/auth/chef" asChild>
-                <TouchableOpacity style={styles.primaryButton}>
-                  <Text style={styles.primaryButtonText}>Sign up as Chef</Text>
+                <TouchableOpacity style={isMobile ? styles.secondaryButtonMobile : styles.primaryButton}>
+                  <Text style={isMobile ? styles.secondaryButtonText : styles.primaryButtonText}>{isMobile ? 'Chef' : 'Sign up as Chef'}</Text>
                 </TouchableOpacity>
               </Link>
               <Link href="/auth" asChild>
-                <TouchableOpacity style={styles.secondaryButton}>
+                <TouchableOpacity style={isMobile ? styles.secondaryButtonMobile : styles.secondaryButton}>
                   <Text style={styles.secondaryButtonText}>Login</Text>
                 </TouchableOpacity>
               </Link>
@@ -403,5 +405,37 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     lineHeight: 12,
+  },
+  // Mobile styles
+  containerMobile: {
+    paddingHorizontal: 12,
+  },
+  navCenterMobile: {
+    position: 'relative',
+    left: 'auto',
+    transform: [],
+    flex: 1,
+    justifyContent: 'center',
+  },
+  rightSectionMobile: {
+    gap: 8,
+  },
+  iconButton: {
+    width: 36,
+    height: 36,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#F3F4F6',
+    borderRadius: 18,
+  },
+  secondaryButtonMobile: {
+    height: 36,
+    paddingHorizontal: 10,
+    borderRadius: 8,
+    backgroundColor: BG_LIGHT,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
 })

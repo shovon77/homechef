@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -24,6 +24,8 @@ const STAR_COLOR = '#ffb700'; // yellow-500
 export default function ChefDetailView() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
   const numericFromAny = (() => {
     const m = raw.match(/(\d+)/);
@@ -152,9 +154,9 @@ export default function ChefDetailView() {
   return (
     <Screen scroll contentPadding={0} style={{ backgroundColor: BACKGROUND_LIGHT }}>
       <View style={styles.container}>
-          <View style={styles.layout}>
+          <View style={[styles.layout, isMobile && styles.layoutMobile]}>
             {/* Left Sidebar - Sticky */}
-            <View style={styles.sidebar}>
+            <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
             <View style={styles.sidebarCard}>
               {/* Profile Card */}
               <View style={styles.profileSection}>
@@ -217,7 +219,7 @@ export default function ChefDetailView() {
           </View>
 
           {/* Main Content Area */}
-          <View style={styles.mainContent}>
+          <View style={[styles.mainContent, isMobile && styles.mainContentMobile]}>
             {/* Tab Navigation */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity
@@ -820,5 +822,19 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     textAlign: 'center',
     paddingVertical: theme.spacing['4xl'],
+  },
+  // Mobile Styles
+  layoutMobile: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+  },
+  sidebarMobile: {
+    width: '100%',
+    maxWidth: '100%',
+    position: 'relative',
+    top: 0,
+  },
+  mainContentMobile: {
+    width: '100%',
   },
 });

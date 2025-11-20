@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, StyleSheet, useWindowDimensions } from "react-native";
 import { theme } from "../lib/theme";
 import { Link } from "expo-router";
 import { useResponsiveColumns } from "../utils/responsive";
@@ -21,8 +21,8 @@ export default function CartScreen() {
   const router = useRouter();
   const { items, setQuantity, removeFromCart, total } = useCart();
   const [chefNames, setChefNames] = useState<Map<number | null, string>>(new Map());
-  const { width } = useResponsiveColumns();
-  const isMobile = width < 1024;
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
 
   const subtotal = total;
 
@@ -61,7 +61,7 @@ export default function CartScreen() {
         contentContainerStyle={{ paddingBottom: 32 }}
         showsVerticalScrollIndicator={true}
       >
-        <View style={styles.container}>
+        <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Breadcrumbs */}
         <View style={styles.breadcrumbs}>
           <Link href="/" asChild>
@@ -92,7 +92,7 @@ export default function CartScreen() {
             </Link>
           </View>
         ) : (
-          <View style={isMobile ? styles.mobileLayout : styles.desktopLayout}>
+          <View style={[styles.desktopLayout, isMobile && styles.mobileLayout]}>
             {/* Cart Items Column */}
             <View style={styles.cartItemsColumn}>
               <View style={styles.cartItemsList}>
@@ -162,7 +162,7 @@ export default function CartScreen() {
             </View>
 
             {/* Order Summary Column */}
-            <View style={styles.orderSummaryColumn}>
+            <View style={[styles.orderSummaryColumn, isMobile && styles.orderSummaryColumnMobile]}>
               <View style={styles.orderSummaryCard}>
                 <Text style={styles.orderSummaryTitle}>Order Summary</Text>
                 <View style={styles.orderSummaryDetails}>
@@ -459,5 +459,9 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
+  },
+  // Mobile Styles
+  containerMobile: {
+    paddingHorizontal: theme.spacing.md,
   },
 });

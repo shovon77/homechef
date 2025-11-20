@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform } from "react-native";
+import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
@@ -25,6 +25,8 @@ const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_
 export default function DishDetail() {
   const router = useRouter();
   const { id } = useLocalSearchParams();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
   const dishId = (() => {
     const m = raw.match(/(\d+)/);
@@ -285,7 +287,7 @@ export default function DishDetail() {
         </View>
 
         {/* Main Content Grid */}
-        <View style={styles.grid}>
+        <View style={[styles.grid, isMobile && styles.gridMobile]}>
           {/* Left Column: Image Gallery */}
           <View style={styles.imageColumn}>
             <View style={styles.mainImageContainer}>
@@ -873,5 +875,10 @@ const styles = StyleSheet.create({
   emptyText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
+  },
+  // Mobile styles
+  gridMobile: {
+    flexDirection: 'column',
+    gap: theme.spacing.lg,
   },
 });

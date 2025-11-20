@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions } from 'react-native';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import DishCard from '../components/DishCard';
@@ -25,6 +25,12 @@ type Chef = {
 };
 
 export default function BrowsePage() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+  
+  const gridColumns = isMobile ? 1 : isTablet ? 3 : 5;
+  
   const [tab, setTab] = useState<'dishes' | 'chefs'>('dishes');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -186,7 +192,7 @@ export default function BrowsePage() {
       ) : tab === 'dishes' ? (
         <View style={styles.grid}>
           {dishes.map((dish) => (
-            <View key={dish.id} style={styles.cardWrapper}>
+            <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
               <DishCard dish={dish} />
             </View>
           ))}
@@ -194,7 +200,7 @@ export default function BrowsePage() {
       ) : (
         <View style={styles.grid}>
           {chefs.map((chef) => (
-            <View key={chef.id} style={styles.cardWrapper}>
+            <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
               <ChefCard chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
             </View>
           ))}
@@ -262,7 +268,6 @@ const styles = StyleSheet.create({
     marginHorizontal: -6,
   },
   cardWrapper: {
-    width: `${100 / GRID_COLUMNS}%`,
     paddingHorizontal: 6,
     marginBottom: 16,
   },

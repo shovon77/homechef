@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
@@ -29,6 +29,8 @@ type OrderRow = { id: number; user_id: string; status: string; total_cents: numb
 
 export default function ChefDashboard() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [chef, setChef] = useState<ChefRow | null>(null);
@@ -574,8 +576,9 @@ export default function ChefDashboard() {
   ];
 
   const Sidebar = (
-    <View style={styles.sidebar}>
-      <ScrollView contentContainerStyle={styles.sidebarInner}>
+    <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
+      <ScrollView contentContainerStyle={styles.sidebarInner} horizontal={isMobile} showsHorizontalScrollIndicator={false}>
+        {!isMobile && (
         <View style={styles.sidebarHeader}>
           <View style={styles.sidebarIconWrap}>
             {chef?.photo ? (
@@ -590,14 +593,16 @@ export default function ChefDashboard() {
           </View>
           <Text style={styles.sidebarTitle}>ChefDash</Text>
         </View>
+        )}
 
-        <View style={styles.sidebarSection}>
+        <View style={[styles.sidebarSection, isMobile && styles.sidebarSectionMobile]}>
           {navItems.map(item => (
             <Pressable
               key={item.key}
               onPress={() => setActiveTab(item.key)}
               style={({ pressed }) => [
                 styles.navItem,
+                isMobile && styles.navItemMobile,
                 activeTab === item.key && styles.navItemActive,
                 pressed && styles.navItemPressed,
               ]}
@@ -613,7 +618,8 @@ export default function ChefDashboard() {
             </Pressable>
           ))}
         </View>
-
+        
+        {!isMobile && (
         <View style={styles.sidebarSectionFooter}>
           {footerNavItems.map(item => {
             const isActive = item.action === 'profile' && activeTab === 'profile';
@@ -645,6 +651,7 @@ export default function ChefDashboard() {
             );
           })}
         </View>
+        )}
       </ScrollView>
     </View>
   );
@@ -749,17 +756,17 @@ export default function ChefDashboard() {
       {/* Order Management */}
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Order Management</Text>
-        <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16 }}>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16, minWidth: '100%' }}>
           {(['requested', 'pending', 'ready', 'completed'] as const).map(status => (
             <TouchableOpacity
               key={status}
               onPress={() => setOrderStatusFilter(status)}
               style={{
-                flex: 1,
                 paddingVertical: 8,
-                paddingHorizontal: 12,
+                paddingHorizontal: 16,
                 borderRadius: 6,
                 backgroundColor: orderStatusFilter === status ? BG_LIGHT : 'transparent',
+                minWidth: 100,
               }}
             >
               <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
@@ -767,7 +774,7 @@ export default function ChefDashboard() {
               </Text>
             </TouchableOpacity>
           ))}
-        </View>
+        </ScrollView>
         <View style={{ gap: 16 }}>
           {filteredOrders.length > 0 ? (
             filteredOrders.slice(0, 10).map(order => (
@@ -897,17 +904,17 @@ export default function ChefDashboard() {
   const OrdersTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120 }}>
       <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Order History</Text>
-      <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
+      <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, minWidth: '100%' }}>
         {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
           <TouchableOpacity
             key={status}
             onPress={() => setOrderStatusFilter(status)}
             style={{
-              flex: 1,
               paddingVertical: 8,
-              paddingHorizontal: 12,
+              paddingHorizontal: 16,
               borderRadius: 6,
               backgroundColor: orderStatusFilter === status ? BG_LIGHT : 'transparent',
+              minWidth: 100,
             }}
           >
             <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
@@ -915,7 +922,7 @@ export default function ChefDashboard() {
             </Text>
           </TouchableOpacity>
         ))}
-      </View>
+      </ScrollView>
       {filteredOrders.map(order => (
         <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
@@ -1219,7 +1226,7 @@ export default function ChefDashboard() {
   );
 
   return (
-    <View style={styles.page}>
+    <View style={[styles.page, isMobile && styles.pageMobile]}>
       {Sidebar}
       <View style={styles.content}>
         {activeTab === 'dashboard' && DashboardTab}
@@ -1327,10 +1334,31 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: BG_LIGHT,
   },
+  // Mobile Styles
+  pageMobile: {
+    flexDirection: 'column',
+  },
+  sidebarMobile: {
+    width: '100%',
+    height: 'auto',
+    borderRightWidth: 0,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  sidebarSectionMobile: {
+    flexDirection: 'row',
+    marginBottom: 0,
+  },
+  navItemMobile: {
+    marginRight: 8,
+    marginBottom: 0,
+  },
 });
 
 // Dish form components
 function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price: number; description?: string; file?: File | null; preview?: string }) => void; saving: boolean }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
@@ -1342,8 +1370,8 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
     <View style={{ backgroundColor: BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
       <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '700', marginBottom: 16 }}>Add a new dish</Text>
       <View style={{ gap: 16 }}>
-        <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, alignItems: Platform.OS === 'web' ? 'flex-end' : 'stretch' }}>
-          <View style={{ flex: Platform.OS === 'web' ? 2 : 1, minWidth: Platform.OS === 'web' ? 200 : undefined }}>
+        <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
+          <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
             <TextInput
               value={name}
@@ -1353,7 +1381,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
             />
           </View>
-          <View style={{ flex: Platform.OS === 'web' ? 1 : 1, minWidth: Platform.OS === 'web' ? 120 : undefined }}>
+          <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
             <View style={{ position: 'relative' }}>
               <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
@@ -1367,13 +1395,13 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               />
             </View>
           </View>
-          <View style={{ minWidth: Platform.OS === 'web' ? 200 : undefined, alignItems: Platform.OS === 'web' ? 'flex-start' : 'stretch' }}>
+          <View style={{ minWidth: isMobile ? undefined : 200, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Photo</Text>
             {preview ? (
               <View style={{ gap: 8 }}>
                 <Image 
                   source={{ uri: preview }} 
-                  style={{ width: 192, height: 192, borderRadius: 8, backgroundColor: '#EEE', marginBottom: 8 }} 
+                  style={{ width: isMobile ? '100%' : 192, height: 192, borderRadius: 8, backgroundColor: '#EEE', marginBottom: 8 }} 
                 />
                 <FilePicker 
                   label="Replace Image" 
@@ -1434,6 +1462,8 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
 }
 
 function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave: (p: { id: number; name?: string; price?: number | string; description?: string; file?: File | null; preview?: string }) => void; onDelete: (id: number) => void; saving: boolean }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [name, setName] = useState(dish.name || '');
   const [price, setPrice] = useState(String(dish.price ?? ''));
   const [description, setDescription] = useState(dish.description || '');
@@ -1442,20 +1472,20 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
 
   return (
     <View style={{ backgroundColor: BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
-      <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 24 }}>
+      <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 24 }}>
         <Image 
           source={{ uri: preview || 'https://placehold.co/192x192?text=Dish' }} 
           style={{ 
-            width: Platform.OS === 'web' ? 192 : '100%', 
+            width: isMobile ? '100%' : 192, 
             height: 192, 
             borderRadius: 8, 
             backgroundColor: '#EEE',
-            maxWidth: Platform.OS === 'web' ? 192 : '100%'
+            maxWidth: isMobile ? '100%' : 192
           }} 
         />
         <View style={{ flex: 1, gap: 16 }}>
-          <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, alignItems: Platform.OS === 'web' ? 'flex-end' : 'stretch' }}>
-            <View style={{ flex: Platform.OS === 'web' ? 2 : 1, minWidth: Platform.OS === 'web' ? 200 : undefined }}>
+          <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
+            <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
               <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
               <TextInput
                 value={name}
@@ -1465,7 +1495,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
                 style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
               />
             </View>
-            <View style={{ flex: Platform.OS === 'web' ? 1 : 1, minWidth: Platform.OS === 'web' ? 120 : undefined }}>
+            <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
               <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
               <View style={{ position: 'relative' }}>
                 <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
@@ -1493,9 +1523,9 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
             />
           </View>
           <View style={{ 
-            flexDirection: Platform.OS === 'web' ? 'row' : 'column', 
+            flexDirection: isMobile ? 'column' : 'row', 
             gap: 16, 
-            alignItems: Platform.OS === 'web' ? 'center' : 'stretch',
+            alignItems: isMobile ? 'stretch' : 'center',
             width: '100%'
           }}>
             <View>
@@ -1511,7 +1541,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
                 accept="image/*" 
               />
             </View>
-            {Platform.OS === 'web' && <View style={{ flex: 1 }} />}
+            {!isMobile && <View style={{ flex: 1 }} />}
             <View style={{ 
               flexDirection: 'row', 
               gap: 8
