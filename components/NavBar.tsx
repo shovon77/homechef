@@ -165,7 +165,7 @@ export default function NavBar() {
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
           >
             <Image 
-              source={require('../design/stitch_homechef_hub_homepage/HCLogo.png/HClogo2.png')}
+              source={require('../assets/HClogo2.png')}
               style={styles.logoImage}
               resizeMode="contain"
             />

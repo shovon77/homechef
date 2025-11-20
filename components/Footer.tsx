@@ -24,7 +24,7 @@ export default function Footer() {
       <View style={styles.inner}>
         <View style={styles.brandContainer}>
           <Image 
-            source={require('../design/stitch_homechef_hub_homepage/HCLogo.png/HClogo2.png')}
+            source={require('../assets/HClogo2.png')}
             style={styles.brandLogo}
             resizeMode="contain"
           />
