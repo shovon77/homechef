@@ -55,7 +55,12 @@ export const handler = async (req: Request) => {
     const parsed = CreateCheckoutBody.safeParse(raw);
     if (!parsed.success) {
       console.error('[create-checkout] validation error:', parsed.error.flatten());
-      return j(400, { error: 'Validation failed', details: parsed.error.flatten() });
+      console.error('[create-checkout] received data:', JSON.stringify(raw, null, 2));
+      return j(400, { 
+        error: 'Validation failed', 
+        details: parsed.error.flatten(),
+        received: raw, // Include received data for debugging
+      });
     }
     const body: TCreateCheckoutBody = parsed.data;
 

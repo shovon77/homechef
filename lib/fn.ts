@@ -19,9 +19,17 @@ export async function callFn<T = any>(
   if (error) {
     // Surface the function error with context
     console.error(`[functions.invoke] ${name} error`, error);
+    // Log full error details for debugging
+    console.error(`[functions.invoke] ${name} error details:`, {
+      message: (error as any)?.message,
+      context: (error as any)?.context,
+      status: (error as any)?.status,
+      statusText: (error as any)?.statusText,
+    });
     // Supabase functions can include details in error.context
     const msg =
       (error as any)?.context?.error ??
+      (error as any)?.context?.details ??
       (error as any)?.message ??
       'Edge Function returned a non-2xx status code';
     throw new Error(msg);

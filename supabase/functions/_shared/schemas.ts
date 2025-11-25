@@ -11,8 +11,21 @@ export const CreateCheckoutBody = z.object({
   chef_id: z.number().int().positive(),
   // ISO datetime string required
   pickup_at: z.string().refine((s) => !Number.isNaN(Date.parse(s)), "pickup_at must be ISO datetime"),
-  success_url: z.string().url(),
-  cancel_url: z.string().url(),
+  // Allow URLs with placeholders like {ORDER_ID} - validate as URL pattern instead of strict URL
+  success_url: z.string().refine(
+    (s) => {
+      // Replace placeholders with dummy values for validation, then check if it's a valid URL pattern
+      const testUrl = s.replace(/\{[^}]+\}/g, 'placeholder');
+      try {
+        new URL(testUrl);
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    "success_url must be a valid URL (placeholders like {ORDER_ID} are allowed)"
+  ),
+  cancel_url: z.string().url(), // cancel_url doesn't have placeholders, so strict validation is fine
 });
 
 export type TCreateCheckoutBody = z.infer<typeof CreateCheckoutBody>;

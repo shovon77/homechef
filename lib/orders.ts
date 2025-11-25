@@ -19,13 +19,22 @@ export async function submitCheckout({
   successUrl: string;
   cancelUrl: string;
 }) {
+  // Ensure pickupAt is a Date object
+  const pickupDate = pickupAt instanceof Date ? pickupAt : new Date(pickupAt);
+  
   const payload = {
     items,
     chef_id,
-    pickup_at: pickupAt.toISOString(),
+    pickup_at: pickupDate.toISOString(),
     success_url: successUrl,
     cancel_url: cancelUrl,
   };
+
+  console.log('Submitting checkout with payload:', {
+    ...payload,
+    pickup_at: pickupDate.toISOString(),
+    items_count: items.length,
+  });
 
   const { url } = await callFn<{ url: string }>('create-checkout', payload);
   if (!url) {

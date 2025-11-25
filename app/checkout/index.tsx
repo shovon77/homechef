@@ -121,6 +121,12 @@ export default function CheckoutPage() {
       }
       baseUrl = baseUrl.replace(/\/$/, '');
 
+      const successUrl = `${baseUrl}/order/success?orderId={ORDER_ID}`;
+      const cancelUrl = `${baseUrl}/cart`;
+
+      // Log the URLs being sent for debugging
+      console.log('Checkout URLs:', { baseUrl, successUrl, cancelUrl, pickupAt: combined });
+
       const url = await submitCheckout({
         items: items.map(item => ({
           dish_id: Number(item.id),
@@ -128,8 +134,8 @@ export default function CheckoutPage() {
         })),
         chef_id: cartChefId,
         pickupAt: combined,
-        successUrl: `${baseUrl}/order/success?orderId={ORDER_ID}`,
-        cancelUrl: `${baseUrl}/cart`,
+        successUrl,
+        cancelUrl,
       });
 
       if (Platform.OS === 'web') {
@@ -139,6 +145,11 @@ export default function CheckoutPage() {
       }
     } catch (e: any) {
       console.error('Checkout error:', e);
+      console.error('Checkout error details:', {
+        message: e?.message,
+        stack: e?.stack,
+        name: e?.name,
+      });
       const errorMessage = typeof e?.message === 'string' ? e.message : 'Checkout failed';
       setError(errorMessage);
       if (e?.code === 'CHEF_NOT_ONBOARDED') {
