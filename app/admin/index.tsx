@@ -4,7 +4,7 @@ import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator,
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
-import { toggleChefActive, updateOrderStatus, approveChefApplication, rejectChefApplication } from '../../lib/adminActions';
+import { toggleChefActive, toggleChefFeatured, updateOrderStatus, approveChefApplication, rejectChefApplication } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
 import { getChefsPaginated, getOrders } from '../../lib/db';
@@ -107,6 +107,15 @@ export default function AdminPage() {
       setChefs(cs => cs.map(c => c.id === id ? { ...c, status: next ? 'active' : 'pending' } : c));
     } else {
       setErr(result.error || 'Failed to update chef');
+    }
+  }
+
+  async function handleToggleChefFeatured(id: number, featured: boolean) {
+    const result = await toggleChefFeatured(id, featured);
+    if (result.ok) {
+      setChefs(cs => cs.map(c => c.id === id ? { ...c, featured } : c));
+    } else {
+      setErr(result.error || 'Failed to update chef featured status');
     }
   }
 
@@ -528,6 +537,16 @@ export default function AdminPage() {
                   >
                     <Text style={c.status === 'active' ? styles.dangerOutlineButtonText : styles.primaryButtonText}>
                       {c.status === 'active' ? 'Deactivate' : 'Activate'}
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={() => handleToggleChefFeatured(c.id, !(c as any).featured)}
+                    style={(c as any).featured
+                      ? [styles.successOutlineButton, styles.cardActionButton]
+                      : [styles.neutralOutlineButton, styles.cardActionButton]}
+                  >
+                    <Text style={(c as any).featured ? styles.successOutlineButtonText : styles.neutralOutlineButtonText}>
+                      {(c as any).featured ? '★ Featured' : '☆ Feature'}
                     </Text>
                   </TouchableOpacity>
                 </View>
@@ -1145,6 +1164,26 @@ const styles = StyleSheet.create({
   },
   dangerOutlineButtonText: {
     color: palette.dangerText,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  successOutlineButton: {
+    borderColor: palette.successText,
+    borderWidth: 1,
+    backgroundColor: palette.successBg,
+  },
+  successOutlineButtonText: {
+    color: palette.successText,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  neutralOutlineButton: {
+    borderColor: palette.border,
+    borderWidth: 1,
+    backgroundColor: palette.surface,
+  },
+  neutralOutlineButtonText: {
+    color: palette.muted,
     fontWeight: '700',
     textAlign: 'center',
   },

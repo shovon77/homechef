@@ -60,6 +60,28 @@ export async function toggleChefActive(chefId: number, active: boolean): Promise
 }
 
 /**
+ * Toggle chef featured status
+ * Sets featured to true/false to control homepage visibility
+ */
+export async function toggleChefFeatured(chefId: number, featured: boolean): Promise<{ ok: boolean; error?: string }> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: 'Admin access required' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('chefs')
+      .update({ featured })
+      .eq('id', chefId);
+
+    if (error) throw error;
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
  * Update order status
  */
 export async function updateOrderStatus(orderId: number, status: string): Promise<{ ok: boolean; error?: string }> {

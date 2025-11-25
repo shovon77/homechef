@@ -84,7 +84,8 @@ export default function HomePage() {
     (async () => {
       setLoading(true);
       const [{ data: c }, { data: d }] = await Promise.all([
-        supabase.from("chefs").select("*").order("rating", { ascending: false }).limit(5),
+        // Show only featured chefs on homepage, ordered by rating
+        supabase.from("chefs").select("*").eq("featured", true).order("rating", { ascending: false }).limit(5),
         supabase.from("dishes").select("id,name,image,price,chef_id,chef").order("id", { ascending: false }).limit(8),
       ]);
       if (!mounted) return;
