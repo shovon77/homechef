@@ -118,7 +118,6 @@ export default function HomePage() {
 
   return (
     <Screen 
-      scroll 
       contentPadding={0}
       style={{ backgroundColor: '#FFFFFF' }}
     >

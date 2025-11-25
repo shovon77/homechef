@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
 import { getAuthRedirect } from '../../lib/authRedirect';
 import { redirectAfterLogin } from '../../lib/authRedirect';
-import { isLocalAdmin } from '../../lib/admin';
+import Screen from '../../components/Screen';
 
 /** Light brand palette */
 const C = {
@@ -111,7 +111,8 @@ export default function AuthPage() {
       } catch (profileErr) {
         console.warn('post-login admin check failed', profileErr);
       }
-      redirectAfterLogin(profileRes?.data ?? {});
+      const { data: profile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).maybeSingle();
+      redirectAfterLogin(profile ?? {});
     } catch (e:any) {
       setErr(e.message || String(e));
     } finally {
@@ -124,7 +125,10 @@ export default function AuthPage() {
   }
 
   return (
-    <View style={{ flex:1, backgroundColor:C.bg, alignItems:'center', justifyContent:'center', padding:16 }}>
+    <Screen 
+      style={{ backgroundColor: C.bg }}
+      contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}
+    >
       <Animated.View style={{
         transform:[{ translateY: cardSlide }],
         opacity: cardOp,
@@ -252,6 +256,6 @@ export default function AuthPage() {
 
         {err ? <Text style={{ color:'tomato', marginTop:4 }}>{err}</Text> : null}
       </Animated.View>
-    </View>
+    </Screen>
   );
 }

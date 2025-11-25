@@ -6,7 +6,6 @@ import { theme } from "../lib/theme";
 export default function FAQPage() {
   return (
     <Screen 
-      useScrollView 
       contentStyle={styles.content}
       style={{ backgroundColor: '#FFFFFF' }}
     >

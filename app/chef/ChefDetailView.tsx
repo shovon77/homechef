@@ -152,7 +152,7 @@ export default function ChefDetailView() {
   }
 
   return (
-    <Screen scroll contentPadding={0} style={{ backgroundColor: BACKGROUND_LIGHT }}>
+    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
       <View style={styles.container}>
           <View style={[styles.layout, isMobile && styles.layoutMobile]}>
             {/* Left Sidebar - Sticky */}

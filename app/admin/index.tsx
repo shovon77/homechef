@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
 import { toggleChefActive, updateOrderStatus, approveChefApplication, rejectChefApplication } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
+import { Screen } from '../../components/Screen';
 import { getChefsPaginated, getOrders } from '../../lib/db';
 import type { Chef, OrderWithItems, Profile } from '../../lib/types';
 import { callFn } from '../../lib/fn';
@@ -732,24 +733,28 @@ export default function AdminPage() {
 
   if (adminLoading) {
     return (
-      <View style={styles.loadingScreen}>
-        <ActivityIndicator size="large" color={palette.primary} />
-        <Text style={styles.loadingText}>Checking admin access…</Text>
-      </View>
+      <Screen style={{ backgroundColor: palette.background }}>
+        <View style={styles.loadingScreen}>
+          <ActivityIndicator size="large" color={palette.primary} />
+          <Text style={styles.loadingText}>Checking admin access…</Text>
+        </View>
+      </Screen>
     );
   }
  
    if (!isAdmin) {
      return (
-      <View style={styles.accessDenied}>
-        <Text style={styles.accessDeniedTitle}>Admin access required</Text>
-        <Text style={styles.accessDeniedSubtitle}>
-          Signed in as: {user?.email || '— not signed in —'}
-        </Text>
-        <TouchableOpacity onPress={() => router.replace('/')} style={[styles.primaryButton, styles.accessDeniedButton]}>
-          <Text style={styles.primaryButtonText}>Go Home</Text>
-        </TouchableOpacity>
-      </View>
+      <Screen style={{ backgroundColor: palette.background }}>
+        <View style={styles.accessDenied}>
+          <Text style={styles.accessDeniedTitle}>Admin access required</Text>
+          <Text style={styles.accessDeniedSubtitle}>
+            Signed in as: {user?.email || '— not signed in —'}
+          </Text>
+          <TouchableOpacity onPress={() => router.replace('/')} style={[styles.primaryButton, styles.accessDeniedButton]}>
+            <Text style={styles.primaryButtonText}>Go Home</Text>
+          </TouchableOpacity>
+        </View>
+      </Screen>
     );
    }
  
@@ -802,9 +807,9 @@ export default function AdminPage() {
   );
  
    return (
-    <ScrollView style={styles.screen} contentContainerStyle={styles.screenContent}>
+    <Screen style={{ backgroundColor: palette.background }} contentStyle={styles.screenContent}>
       {content}
-    </ScrollView>
+    </Screen>
   );
 }
 

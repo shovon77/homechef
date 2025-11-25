@@ -260,14 +260,8 @@ const styles = StyleSheet.create({
     height: NAVBAR_HEIGHT,
     ...Platform.select({
       web: {
-        position: 'sticky',
-        top: 0,
-        left: 0,
-        right: 0,
         zIndex: 1000,
-        backgroundColor: 'rgba(255, 255, 255, 0.8)',
-        backdropFilter: 'blur(8px)',
-        WebkitBackdropFilter: 'blur(8px)',
+        backgroundColor: BG_LIGHT,
       },
       default: {
         backgroundColor: BG_LIGHT,

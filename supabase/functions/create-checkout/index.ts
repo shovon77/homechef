@@ -159,9 +159,10 @@ export const handler = async (req: Request) => {
       stripeAccountId = profileRow?.stripe_account_id ?? null;
     }
 
+    // If chef is not onboarded, we proceed without transfers (platform collects all)
+    // This allows testing checkout without full Stripe Connect setup
     if (!stripeAccountId) {
-      console.warn('[create-checkout] chef missing stripe account', { chefId: body.chef_id, email: chefRow.email });
-      return j(409, { error: 'Chef payouts are not configured yet', code: 'CHEF_NOT_ONBOARDED' });
+      console.warn('[create-checkout] chef missing stripe account - collecting to platform', { chefId: body.chef_id });
     }
 
     // 4) Create (or upsert) an order row in 'orders' with status 'requested'
@@ -207,24 +208,30 @@ export const handler = async (req: Request) => {
     // 5) Create Stripe Checkout session
     const resolveUrl = (template: string) => template.replace(/\{ORDER_ID\}/g, String(orderId));
 
+    const paymentIntentData: any = {
+      capture_method: 'manual',
+      metadata: {
+        order_id: String(orderId),
+        user_id: user.id,
+        chef_id: String(body.chef_id),
+        pickup_at: pickupDate.toISOString(),
+      },
+    };
+
+    // Only add transfer data if we have a destination account
+    if (stripeAccountId) {
+      paymentIntentData.application_fee_amount = platformFeeCents;
+      paymentIntentData.transfer_data = {
+        destination: stripeAccountId,
+      };
+      paymentIntentData.transfer_group = transferGroup;
+    }
+
     const session = await stripe.checkout.sessions.create(
       {
         mode: 'payment',
         payment_method_types: ['card'],
-        payment_intent_data: {
-          capture_method: 'manual',
-          application_fee_amount: platformFeeCents,
-          transfer_data: {
-            destination: stripeAccountId,
-          },
-          transfer_group: transferGroup,
-          metadata: {
-            order_id: String(orderId),
-            user_id: user.id,
-            chef_id: String(body.chef_id),
-            pickup_at: pickupDate.toISOString(),
-          },
-        },
+        payment_intent_data: paymentIntentData,
         customer_creation: 'if_required',
         client_reference_id: String(orderId),
         line_items: lineItems.map((item) => ({

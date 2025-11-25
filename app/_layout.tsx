@@ -20,13 +20,7 @@ export default function RootLayout() {
   return (
     <CartProvider>
       <View style={{ flex: 1, backgroundColor: 'white' }}>
-        <NavBar />
-        <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
-          <View style={{ flex: 1 }}>
-            <Stack screenOptions={{ headerShown: false }} />
-          </View>
-          <Footer />
-        </ScrollView>
+        <Stack screenOptions={{ headerShown: false }} />
       </View>
     </CartProvider>
   );

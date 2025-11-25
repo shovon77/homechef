@@ -1226,17 +1226,19 @@ export default function ChefDashboard() {
   );
 
   return (
-    <View style={[styles.page, isMobile && styles.pageMobile]}>
-      {Sidebar}
-      <View style={styles.content}>
-        {activeTab === 'dashboard' && DashboardTab}
-        {activeTab === 'menu' && MenuTab}
-        {activeTab === 'orders' && OrdersTab}
-        {activeTab === 'reviews' && ReviewsTab}
-        {activeTab === 'payouts' && PayoutsTab}
-        {activeTab === 'profile' && ProfileTab}
+    <Screen style={{ backgroundColor: BG_LIGHT }}>
+      <View style={[styles.page, isMobile && styles.pageMobile]}>
+        {Sidebar}
+        <View style={styles.content}>
+          {activeTab === 'dashboard' && DashboardTab}
+          {activeTab === 'menu' && MenuTab}
+          {activeTab === 'orders' && OrdersTab}
+          {activeTab === 'reviews' && ReviewsTab}
+          {activeTab === 'payouts' && PayoutsTab}
+          {activeTab === 'profile' && ProfileTab}
+        </View>
       </View>
-    </View>
+    </Screen>
   );
 }
 
