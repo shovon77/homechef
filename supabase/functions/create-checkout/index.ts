@@ -166,6 +166,8 @@ export const handler = async (req: Request) => {
     }
 
     // 4) Create (or upsert) an order row in 'orders' with status 'requested'
+    // We use 'requested' because it is a valid status in the DB constraint.
+    // We will hide unpaid orders from the chef dashboard using payment_status.
     const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
     const { data: orderRow, error: orderError } = await adminClient
       .from('orders')
@@ -173,11 +175,11 @@ export const handler = async (req: Request) => {
         user_id: user.id,
         chef_id: body.chef_id,
         status: 'requested',
+        payment_status: 'awaiting_payment', // Order is created before payment
         total_cents: total_cents,
         platform_fee_cents: platformFeeCents,
         pickup_at: pickupDate.toISOString(),
         expires_at: expiresAt.toISOString(),
-        payment_status: 'requires_payment_method',
       })
       .select('id')
       .single();
@@ -209,7 +211,9 @@ export const handler = async (req: Request) => {
     const resolveUrl = (template: string) => template.replace(/\{ORDER_ID\}/g, String(orderId));
 
     const paymentIntentData: any = {
-      capture_method: 'manual',
+      // Use automatic capture for immediate payment processing
+      // Manual capture is typically used for delayed fulfillment scenarios
+      capture_method: 'automatic',
       metadata: {
         order_id: String(orderId),
         user_id: user.id,

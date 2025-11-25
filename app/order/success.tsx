@@ -1,10 +1,11 @@
 'use client';
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
 import Screen from '../../components/Screen';
 import { useCart } from '../../context/CartContext';
+import { supabase } from '../../lib/supabase';
 
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
@@ -14,10 +15,25 @@ export default function OrderSuccessPage() {
   const params = useLocalSearchParams<{ orderId?: string }>();
   const orderId = params.orderId ? Number(params.orderId) : null;
   const { clearCart } = useCart();
+  const [paymentConfirmed, setPaymentConfirmed] = useState(false);
 
   useEffect(() => {
-    clearCart();
-  }, [clearCart]);
+    // Only clear cart if payment is actually confirmed
+    if (orderId && !paymentConfirmed) {
+      (async () => {
+        const { data: order } = await supabase
+          .from('orders')
+          .select('payment_status')
+          .eq('id', orderId)
+          .maybeSingle();
+        
+        if (order?.payment_status === 'succeeded') {
+          clearCart();
+          setPaymentConfirmed(true);
+        }
+      })();
+    }
+  }, [orderId, paymentConfirmed, clearCart]);
 
   return (
     <Screen contentStyle={styles.screen}>

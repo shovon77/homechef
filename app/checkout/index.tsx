@@ -39,6 +39,42 @@ export default function CheckoutPage() {
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
   const totalCents = useMemo(() => Math.round(subtotal * 100), [subtotal]);
   
+  // Generate time slots from 8am to 8pm in 30-minute intervals
+  // Returns array of { value: 'HH:mm' (24h), label: 'h:mm AM/PM' (12h) }
+  // MUST be before any early returns to satisfy Rules of Hooks
+  const timeSlots = useMemo(() => {
+    const slots: Array<{ value: string; label: string }> = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      const hour24 = hour.toString().padStart(2, '0');
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour < 12 ? 'AM' : 'PM';
+      
+      slots.push({
+        value: `${hour24}:00`,
+        label: `${hour12}:00 ${ampm}`,
+      });
+      if (hour < 20) {
+        slots.push({
+          value: `${hour24}:30`,
+          label: `${hour12}:30 ${ampm}`,
+        });
+      }
+    }
+    return slots;
+  }, []);
+
+  // Generate upcoming dates - MUST be before any early returns
+  const upcomingDates = useMemo(() => {
+    const today = new Date();
+    return Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(today.getDate() + i);
+      const iso = d.toISOString().split('T')[0];
+      const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+      return { iso, label };
+    });
+  }, []);
+  
   // Check if date and time are both selected
   const isFormValid = dateInput.trim().length > 0 && timeInput.trim().length > 0;
 
@@ -120,38 +156,6 @@ export default function CheckoutPage() {
       </Screen>
     );
   }
-
-  const today = new Date();
-  const upcomingDates = Array.from({ length: 7 }, (_, i) => {
-    const d = new Date();
-    d.setDate(today.getDate() + i);
-    const iso = d.toISOString().split('T')[0];
-    const label = d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
-    return { iso, label };
-  });
-
-  // Generate time slots from 8am to 8pm in 30-minute intervals
-  // Returns array of { value: 'HH:mm' (24h), label: 'h:mm AM/PM' (12h) }
-  const timeSlots = useMemo(() => {
-    const slots: Array<{ value: string; label: string }> = [];
-    for (let hour = 8; hour <= 20; hour++) {
-      const hour24 = hour.toString().padStart(2, '0');
-      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-      const ampm = hour < 12 ? 'AM' : 'PM';
-      
-      slots.push({
-        value: `${hour24}:00`,
-        label: `${hour12}:00 ${ampm}`,
-      });
-      if (hour < 20) {
-        slots.push({
-          value: `${hour24}:30`,
-          label: `${hour12}:30 ${ampm}`,
-        });
-      }
-    }
-    return slots;
-  }, []);
 
   return (
     <Screen scroll style={{ backgroundColor: BACKGROUND }} contentPadding={0}>

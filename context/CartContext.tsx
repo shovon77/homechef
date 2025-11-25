@@ -1,5 +1,8 @@
 import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
-import { Alert } from "react-native";
+import { Alert, Platform } from "react-native";
+import AsyncStorage from "@react-native-async-storage/async-storage";
+
+const CART_STORAGE_KEY = '@homechef_cart';
 
 export type CartItem = {
   id: string | number;
@@ -30,6 +33,39 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
+  const [isLoaded, setIsLoaded] = useState(false);
+
+  // Load cart from storage on mount
+  useEffect(() => {
+    (async () => {
+      try {
+        const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (Array.isArray(parsed)) {
+            setItems(parsed);
+          }
+        }
+      } catch (e) {
+        console.warn('Failed to load cart from storage', e);
+      } finally {
+        setIsLoaded(true);
+      }
+    })();
+  }, []);
+
+  // Save cart to storage whenever it changes
+  useEffect(() => {
+    if (isLoaded) {
+      (async () => {
+        try {
+          await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+        } catch (e) {
+          console.warn('Failed to save cart to storage', e);
+        }
+      })();
+    }
+  }, [items, isLoaded]);
   
   // Derive cartChefId from first item's chef_id (single-chef constraint)
   const cartChefId = useMemo(() => {
@@ -75,7 +111,14 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     setItems(prev => prev.filter(p => p.id !== id));
   };
 
-  const clearCart = () => setItems([]);
+  const clearCart = async () => {
+    setItems([]);
+    try {
+      await AsyncStorage.removeItem(CART_STORAGE_KEY);
+    } catch (e) {
+      console.warn('Failed to clear cart from storage', e);
+    }
+  };
 
   const setQuantity = (id: string | number, qty: number) => {
     setItems(prev =>

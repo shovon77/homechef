@@ -1,22 +1,47 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
-import { cart } from "../../lib/cart";
+import { useCart } from "../../context/CartContext";
 import { theme } from "../../constants/theme";
 import { Link } from "expo-router";
+import { supabase } from "../../lib/supabase";
 
 export default function CheckoutSuccess() {
   const router = useRouter();
-  const { session_id } = useLocalSearchParams<{ session_id?: string }>();
+  const { session_id, orderId } = useLocalSearchParams<{ session_id?: string; orderId?: string }>();
+  const { clearCart } = useCart();
   const [cleared, setCleared] = useState(false);
 
   useEffect(() => {
-    // Clear cart after successful checkout
-    if (!cleared && session_id) {
-      cart.clear();
-      setCleared(true);
+    // Only clear cart if payment is actually confirmed
+    if (!cleared && (session_id || orderId)) {
+      (async () => {
+        // Try to verify payment status from order if orderId is available
+        if (orderId) {
+          const orderIdNum = Number(orderId);
+          if (Number.isFinite(orderIdNum)) {
+            const { data: order } = await supabase
+              .from('orders')
+              .select('payment_status')
+              .eq('id', orderIdNum)
+              .maybeSingle();
+            
+            if (order?.payment_status === 'succeeded') {
+              clearCart();
+              setCleared(true);
+              return;
+            }
+          }
+        }
+        
+        // If we have a session_id, assume payment succeeded (Stripe redirects here on success)
+        if (session_id) {
+          clearCart();
+          setCleared(true);
+        }
+      })();
     }
-  }, [session_id, cleared]);
+  }, [session_id, orderId, cleared, clearCart]);
 
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }} contentContainerStyle={{ padding: 16, alignItems: "center", justifyContent: "center", minHeight: "100%" }}>

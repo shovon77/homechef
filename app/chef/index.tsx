@@ -310,10 +310,14 @@ export default function ChefDashboard() {
 
   async function refreshOrdersForChef(chefId: number) {
     try {
+      // Show orders that are ready for chef to process
+      // Fetch all 'requested' orders and filter for paid ones
+      // Include: payment_status='succeeded' OR (payment_status IS NULL AND has stripe_payment_intent_id)
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id')
+        .select('id,user_id,status,total_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
         .eq('chef_id', chefId)
+        .eq('status', 'requested')
         .order('created_at', { ascending: false });
 
       if (error || !ordersData) {
@@ -322,8 +326,51 @@ export default function ChefDashboard() {
         return;
       }
 
-      const orderIds = ordersData.map(o => o.id);
-      const userIds = [...new Set(ordersData.map(o => o.user_id))];
+      // Client-side filter: ONLY show orders where payment was successfully processed
+      // This is strict to ensure chefs only see paid orders
+      // Include:
+      // 1. payment_status = 'succeeded' (confirmed paid - webhook updated)
+      // 2. payment_status IS NULL AND stripe_payment_intent_id IS NOT NULL (legacy paid orders)
+      // Exclude: 'awaiting_payment', 'failed', 'canceled', or any other non-success status
+      // Note: Orders with 'awaiting_payment' are NOT shown until webhook updates them to 'succeeded'
+      const filteredOrders = ordersData.filter(order => {
+        const paymentStatus = order.payment_status;
+        const hasPaymentIntent = !!order.stripe_payment_intent_id;
+        
+        // Only show if:
+        // 1. payment_status is explicitly 'succeeded' (confirmed paid)
+        // 2. payment_status is null but has payment intent (legacy paid order from before payment_status tracking)
+        if (paymentStatus === 'succeeded') return true;
+        if (paymentStatus === null && hasPaymentIntent) return true;
+        
+        // For orders with 'awaiting_payment' status, verify payment in background but DON'T show them
+        // They will appear after webhook updates payment_status to 'succeeded'
+        if (paymentStatus === 'awaiting_payment' && (order.stripe_payment_intent_id || order.checkout_session_id)) {
+          // Verify payment status from Stripe asynchronously to update the order
+          // This helps fix orders where webhook didn't fire, but we don't show them until verified
+          supabase.functions.invoke('verify-payment', {
+            body: { orderId: order.id },
+          })
+          .then(result => {
+            console.log('Payment verification result for order', order.id, result);
+            // If payment was verified, refresh orders to show the updated order
+            if (result?.paymentSucceeded && result?.updated) {
+              // Refresh orders after a short delay to allow DB update to propagate
+              setTimeout(() => {
+                refreshOrdersForChef(chefId);
+              }, 1000);
+            }
+          })
+          .catch(err => {
+            console.warn('Failed to verify payment for order', order.id, err);
+          });
+        }
+        
+        return false;
+      });
+
+      const orderIds = filteredOrders.map(o => o.id);
+      const userIds = [...new Set(filteredOrders.map(o => o.user_id))];
 
       const { data: itemsData, error: itemsError } = orderIds.length > 0
         ? await supabase.from('order_items').select('id,order_id,dish_id,quantity,unit_price_cents').in('order_id', orderIds)
@@ -356,7 +403,7 @@ export default function ChefDashboard() {
         });
       });
 
-      const mapped = ordersData.map(order => ({
+      const mapped = filteredOrders.map(order => ({
         id: order.id,
         user_id: order.user_id,
         status: order.status,

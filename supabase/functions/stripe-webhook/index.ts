@@ -45,20 +45,59 @@ serve(async (req) => {
 
         let paymentIntentId: string | null = null;
         let transferGroup: string | null = null;
+        let paymentIntentStatus: string | null = null;
 
         if (typeof session.payment_intent === 'string') {
           paymentIntentId = session.payment_intent;
           const intent = await stripe.paymentIntents.retrieve(session.payment_intent);
           transferGroup = intent.transfer_group ?? null;
+          paymentIntentStatus = intent.status;
         }
 
-        const updates: Record<string, unknown> = {
-          payment_status: 'succeeded',
-        };
-        if (paymentIntentId) updates.stripe_payment_intent_id = paymentIntentId;
-        if (transferGroup) updates.transfer_group = transferGroup;
+        // Verify payment status from both session and payment intent
+        const isPaymentSucceeded = 
+          session.payment_status === 'paid' || 
+          paymentIntentStatus === 'succeeded';
 
-        await adminClient.from('orders').update(updates).eq('id', orderId);
+        // Always update payment intent ID and transfer group if available
+        // This ensures the order can be found by payment_intent.succeeded event
+        const updates: Record<string, unknown> = {};
+        if (paymentIntentId) {
+          updates.stripe_payment_intent_id = paymentIntentId;
+        }
+        if (transferGroup) {
+          updates.transfer_group = transferGroup;
+        }
+
+        if (isPaymentSucceeded) {
+          // Payment confirmed - make order visible to chef
+          updates.payment_status = 'succeeded';
+          updates.status = 'requested';
+          console.log('Order payment confirmed and made visible to chef', { 
+            orderId, 
+            paymentIntentId,
+            paymentIntentStatus,
+            sessionPaymentStatus: session.payment_status
+          });
+        } else {
+          // Payment not yet confirmed - update metadata but keep hidden
+          // payment_intent.succeeded will finalize it
+          console.log('Checkout completed but payment pending', { 
+            orderId, 
+            paymentStatus: session.payment_status,
+            paymentIntentStatus
+          });
+        }
+
+        // Always update to ensure payment intent ID is stored
+        if (Object.keys(updates).length > 0) {
+          const { error: updateError } = await adminClient.from('orders').update(updates).eq('id', orderId);
+          if (updateError) {
+            console.error('Error updating order in checkout.session.completed', { orderId, error: updateError });
+          }
+        } else {
+          console.warn('No updates to apply for checkout.session.completed', { orderId });
+        }
         break;
       }
       case 'account.created':
@@ -81,10 +120,49 @@ serve(async (req) => {
       }
       case 'payment_intent.succeeded': {
         const pi = event.data.object as Stripe.PaymentIntent;
-        await adminClient
+        // Update payment status and ensure order is visible to chef
+        // Try to find order by payment intent ID in either field
+        const { data: orders, error: findError } = await adminClient
           .from('orders')
-          .update({ payment_status: 'succeeded' })
+          .select('id, payment_status')
           .or(`stripe_payment_intent_id.eq.${pi.id},payment_intent_id.eq.${pi.id}`);
+        
+        if (findError) {
+          console.error('Error finding order for payment intent', pi.id, findError);
+        } else if (orders && orders.length > 0) {
+          // Update all matching orders (should only be one)
+          const updateResult = await adminClient
+            .from('orders')
+            .update({ 
+              payment_status: 'succeeded',
+              status: 'requested', // Make order visible to chef after payment
+            })
+            .or(`stripe_payment_intent_id.eq.${pi.id},payment_intent_id.eq.${pi.id}`);
+          
+          console.log('Updated orders for payment_intent.succeeded', {
+            paymentIntentId: pi.id,
+            orderIds: orders.map(o => o.id),
+            updated: orders.length,
+          });
+        } else {
+          // Try to find by checkout session metadata
+          if (pi.metadata?.order_id) {
+            const orderId = Number(pi.metadata.order_id);
+            if (Number.isFinite(orderId)) {
+              await adminClient
+                .from('orders')
+                .update({ 
+                  payment_status: 'succeeded',
+                  status: 'requested',
+                  stripe_payment_intent_id: pi.id,
+                })
+                .eq('id', orderId);
+              console.log('Updated order from payment intent metadata', { orderId, paymentIntentId: pi.id });
+            }
+          } else {
+            console.warn('payment_intent.succeeded: No order found for payment intent', pi.id);
+          }
+        }
         break;
       }
       case 'payment_intent.canceled': {
