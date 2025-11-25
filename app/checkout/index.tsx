@@ -109,7 +109,17 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError(null);
     try {
-      const baseUrl = (ENV.WEB_BASE_URL || 'http://localhost:8081').replace(/\/$/, '');
+      // Get base URL: prefer env var, then detect from window.location (for production), fallback to localhost
+      let baseUrl = ENV.WEB_BASE_URL;
+      if (!baseUrl || baseUrl === 'http://localhost:8081') {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          // Use current origin in production
+          baseUrl = window.location.origin;
+        } else {
+          baseUrl = 'http://localhost:8081';
+        }
+      }
+      baseUrl = baseUrl.replace(/\/$/, '');
 
       const url = await submitCheckout({
         items: items.map(item => ({
