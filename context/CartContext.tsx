@@ -1,8 +1,15 @@
-import React, { createContext, useContext, useMemo, useState, useEffect } from "react";
+import React, { createContext, useContext, useMemo, useState, useEffect, useRef } from "react";
 import { Alert, Platform } from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
+import { supabase } from "../lib/supabase";
 
-const CART_STORAGE_KEY = '@homechef_cart';
+const getCartStorageKey = (userId: string | null): string => {
+  if (userId) {
+    return `@homechef_cart_${userId}`;
+  }
+  // For anonymous users, use a session-based key that gets cleared on logout
+  return '@homechef_cart_anonymous';
+};
 
 export type CartItem = {
   id: string | number;
@@ -34,38 +41,104 @@ const CartContext = createContext<CartContextType | undefined>(undefined);
 export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<CartItem[]>([]);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const userIdRef = useRef<string | null>(null);
 
-  // Load cart from storage on mount
+  // Load cart for a specific user
+  const loadCartForUser = async (userId: string | null) => {
+    try {
+      const storageKey = getCartStorageKey(userId);
+      const stored = await AsyncStorage.getItem(storageKey);
+      if (stored) {
+        const parsed = JSON.parse(stored);
+        if (Array.isArray(parsed)) {
+          setItems(parsed);
+        } else {
+          setItems([]);
+        }
+      } else {
+        setItems([]);
+      }
+    } catch (e) {
+      console.warn('Failed to load cart for user', userId, e);
+      setItems([]);
+    }
+  };
+
+  // Initial load on mount
   useEffect(() => {
     (async () => {
       try {
-        const stored = await AsyncStorage.getItem(CART_STORAGE_KEY);
-        if (stored) {
-          const parsed = JSON.parse(stored);
-          if (Array.isArray(parsed)) {
-            setItems(parsed);
-          }
-        }
+        const { data: { session } } = await supabase.auth.getSession();
+        const userId = session?.user?.id || null;
+        userIdRef.current = userId;
+        setCurrentUserId(userId);
+        await loadCartForUser(userId);
       } catch (e) {
-        console.warn('Failed to load cart from storage', e);
+        console.warn('Failed to get initial session', e);
+        await loadCartForUser(null);
       } finally {
         setIsLoaded(true);
       }
     })();
   }, []);
 
-  // Save cart to storage whenever it changes
+  // Listen to auth state changes to detect login/logout
   useEffect(() => {
-    if (isLoaded) {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      const userId = session?.user?.id || null;
+      const previousUserId = userIdRef.current;
+      
+      // If user changed (login or logout), switch carts
+      if (userId !== previousUserId) {
+        userIdRef.current = userId;
+        setCurrentUserId(userId);
+        
+        // Clear current cart items before loading new user's cart
+        setItems([]);
+        
+        // Load new user's cart
+        await loadCartForUser(userId);
+        
+        // If user logged out, also clear anonymous cart storage
+        if (!userId && previousUserId) {
+          try {
+            await AsyncStorage.removeItem(getCartStorageKey(null));
+          } catch (e) {
+            console.warn('Failed to clear anonymous cart', e);
+          }
+        }
+      }
+    });
+
+    return () => {
+      subscription.unsubscribe();
+    };
+  }, []);
+
+  // Save cart to storage whenever it changes or user changes
+  useEffect(() => {
+    if (isLoaded && currentUserId !== null) {
       (async () => {
         try {
-          await AsyncStorage.setItem(CART_STORAGE_KEY, JSON.stringify(items));
+          const storageKey = getCartStorageKey(currentUserId);
+          await AsyncStorage.setItem(storageKey, JSON.stringify(items));
         } catch (e) {
           console.warn('Failed to save cart to storage', e);
         }
       })();
+    } else if (isLoaded && currentUserId === null) {
+      // Save anonymous cart
+      (async () => {
+        try {
+          const storageKey = getCartStorageKey(null);
+          await AsyncStorage.setItem(storageKey, JSON.stringify(items));
+        } catch (e) {
+          console.warn('Failed to save anonymous cart to storage', e);
+        }
+      })();
     }
-  }, [items, isLoaded]);
+  }, [items, isLoaded, currentUserId]);
   
   // Derive cartChefId from first item's chef_id (single-chef constraint)
   const cartChefId = useMemo(() => {
@@ -114,7 +187,8 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
   const clearCart = async () => {
     setItems([]);
     try {
-      await AsyncStorage.removeItem(CART_STORAGE_KEY);
+      const storageKey = getCartStorageKey(currentUserId);
+      await AsyncStorage.removeItem(storageKey);
     } catch (e) {
       console.warn('Failed to clear cart from storage', e);
     }
