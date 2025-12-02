@@ -131,20 +131,27 @@ export default function HomePage() {
   const infiniteDishes = useMemo(() => {
     if (dishes.length === 0) return [];
     // Ensure we have enough items to fill the screen width + buffer
-    // 6 copies is usually safe
-    return [...dishes, ...dishes, ...dishes, ...dishes, ...dishes, ...dishes];
+    // Create at least 20 copies or enough to have 100 items, whichever is safer
+    const MIN_ITEMS = 100;
+    const copies = Math.ceil(MIN_ITEMS / dishes.length);
+    // Create array of copies
+    return Array(Math.max(copies, 10)).fill(dishes).flat();
   }, [dishes]);
 
   useEffect(() => {
     if (dishes.length === 0) return;
     
+    // Reset position before starting
+    scrollX.setValue(0);
+
     const animation = Animated.loop(
       Animated.timing(scrollX, {
         toValue: -(dishes.length * TOTAL_ITEM_WIDTH),
         duration: dishes.length * 6000, // Slower: 6s per item
         easing: Easing.linear,
         useNativeDriver: true,
-      })
+      }),
+      { iterations: -1 } // Explicitly set infinite iterations
     );
     animation.start();
     
