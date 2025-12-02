@@ -641,10 +641,12 @@ const styles = StyleSheet.create({
   howItWorksCard: {
     flex: 1,
     alignItems: "center",
+    justifyContent: "center",
     gap: theme.spacing.md,
     padding: theme.spacing['2xl'],
     backgroundColor: '#F4F4F4',
-    borderRadius: theme.radius.xl,
+    borderRadius: 9999, // Make it circular
+    aspectRatio: 1, // Ensure it's a perfect circle
     textAlign: "center",
   },
   howItWorksIconContainer: {

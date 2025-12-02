@@ -8,7 +8,7 @@ export default function TermsPage() {
     <Screen 
       useScrollView 
       contentStyle={styles.content}
-      style={{ backgroundColor: '#FFFFFF' }}
+      style={{ backgroundColor: '#F2F0EF' }}
     >
       <View style={styles.container}>
         <Text style={styles.title}>Terms of Service</Text>

@@ -1,7 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
-import * as ImagePicker from "expo-image-picker";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
 import { getDishById, getDishRatings, getChefById } from "../../lib/db";
@@ -14,7 +13,7 @@ import { formatCad } from "../../lib/money";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#19e680';
-const BACKGROUND_LIGHT = '#f6f8f7';
+const BACKGROUND_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b14';
 const TEXT_MUTED = '#71717a';
 const TEXT_GRAY = '#6b7280';
@@ -38,7 +37,6 @@ export default function DishDetail() {
   const [dish, setDish] = useState<Dish | null>(null);
   const [chef, setChef] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [uploading, setUploading] = useState(false);
   const [avgRating, setAvgRating] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
   const [userRating, setUserRating] = useState(0);
@@ -111,60 +109,6 @@ export default function DishDetail() {
     })();
     return () => { mounted = false; };
   }, [raw, user]);
-
-  const onUploadPhoto = async () => {
-    try {
-      if (!dish) return;
-      setUploading(true);
-      const perm = await ImagePicker.requestMediaLibraryPermissionsAsync();
-      if (perm.status !== "granted") { 
-        Alert.alert("Permission needed", "Please allow photo access to upload."); 
-        setUploading(false); 
-        return; 
-      }
-      const picked = await ImagePicker.launchImageLibraryAsync({ 
-        mediaTypes: ImagePicker.MediaTypeOptions.Images, 
-        quality: 0.9 
-      });
-      if (picked.canceled) { setUploading(false); return; }
-      const asset = picked.assets[0];
-      const uri = asset.uri;
-      const baseName = uri.split("/").pop() || `dish-${Date.now()}.jpg`;
-      const extGuess = (baseName.split(".").pop() || "jpg").toLowerCase();
-      const contentType = asset.mimeType || (extGuess === "png" ? "image/png" : extGuess === "webp" ? "image/webp" : "image/jpeg");
-      const res = await fetch(uri);
-      const blob = await res.blob();
-      const path = `dishes/${dish.id}/${Date.now()}-${baseName}`;
-      const { error: upErr } = await supabase.storage.from("dish-images").upload(path, blob, { upsert: true, contentType, cacheControl: "3600" });
-      if (upErr) { 
-        console.log("[upload] storage error:", upErr); 
-        Alert.alert("Upload failed", upErr.message); 
-        setUploading(false); 
-        return; 
-      }
-      const { data: pub } = await supabase.storage.from("dish-images").getPublicUrl(path);
-      const publicUrl = pub?.publicUrl;
-      if (!publicUrl) { 
-        Alert.alert("Upload failed", "Could not obtain public URL"); 
-        setUploading(false); 
-        return; 
-      }
-      const { error: rowErr } = await supabase.from("dishes").update({ image: publicUrl }).eq("id", dish.id);
-      if (rowErr) { 
-        console.log("[upload] row update error:", rowErr); 
-        Alert.alert("Save failed", rowErr.message); 
-        setUploading(false); 
-        return; 
-      }
-      setDish(prev => prev ? { ...prev, image: publicUrl } : prev);
-      Alert.alert("Done", "Photo updated!");
-    } catch (e: any) {
-      console.log("[upload] exception:", e);
-      Alert.alert("Upload failed", e?.message || "Unknown error");
-    } finally {
-      setUploading(false);
-    }
-  };
 
   const handleAddToCart = () => {
     if (!dish) return;
@@ -293,21 +237,6 @@ export default function DishDetail() {
                 resizeMode="cover"
               />
             </View>
-            <View style={styles.thumbnailGrid}>
-              {thumbnailImages.map((img, i) => (
-                <TouchableOpacity 
-                  key={i} 
-                  style={[styles.thumbnail, i === 0 && styles.thumbnailActive]}
-                  onPress={() => setDish({ ...dish, image: img })}
-                >
-        <Image
-                    source={{ uri: img }}
-                    style={styles.thumbnailImage}
-                    resizeMode="cover"
-                  />
-                </TouchableOpacity>
-              ))}
-            </View>
           </View>
 
           {/* Right Column: Dish Info & Actions */}
@@ -369,19 +298,6 @@ export default function DishDetail() {
                 <Text style={styles.addToCartButtonText}>Add to Cart</Text>
               </TouchableOpacity>
             </View>
-
-            {/* Upload photo button: only show for admin or dish owner */}
-            {(isAdmin || isDishOwner) && (
-              <TouchableOpacity
-                onPress={onUploadPhoto}
-                disabled={uploading}
-                style={[styles.uploadButton, uploading && styles.uploadButtonDisabled]}
-              >
-                <Text style={styles.uploadButtonText}>
-                  {uploading ? "Uploading…" : "Upload photo"}
-                </Text>
-              </TouchableOpacity>
-            )}
           </View>
         </View>
 
@@ -559,34 +475,15 @@ const styles = StyleSheet.create({
   },
   mainImageContainer: {
     width: '100%',
+    maxWidth: 480, // Limit width to be smaller
     aspectRatio: 1,
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
+    alignSelf: 'flex-start', // Or center
     ...elev('lg'),
   },
   mainImage: {
-    width: '100%',
-    height: '100%',
-  },
-  thumbnailGrid: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-  },
-  thumbnail: {
-    flex: 1,
-    aspectRatio: 1,
-    borderRadius: theme.radius.lg,
-    overflow: 'hidden',
-    borderWidth: 2,
-    borderColor: 'transparent',
-    opacity: 0.7,
-  },
-  thumbnailActive: {
-    borderColor: PRIMARY_COLOR,
-    opacity: 1,
-  },
-  thumbnailImage: {
     width: '100%',
     height: '100%',
   },
@@ -721,23 +618,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
-  },
-  uploadButton: {
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.radius.lg,
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
-    backgroundColor: '#FFFFFF',
-    alignItems: 'center',
-  },
-  uploadButtonDisabled: {
-    opacity: 0.7,
-  },
-  uploadButtonText: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
   },
   tabsSection: {
     marginTop: theme.spacing['4xl'],

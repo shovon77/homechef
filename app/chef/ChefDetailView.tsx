@@ -13,7 +13,7 @@ import { theme, elev } from '../../lib/theme';
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#19e680';
-const BACKGROUND_LIGHT = '#f6f8f7';
+const BACKGROUND_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#18181b'; // zinc-900
 const TEXT_MUTED = '#71717a'; // zinc-500
 const TEXT_MUTED_DARK = '#52525b'; // zinc-600

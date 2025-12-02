@@ -7,7 +7,7 @@ export default function FAQPage() {
   return (
     <Screen 
       contentStyle={styles.content}
-      style={{ backgroundColor: '#FFFFFF' }}
+      style={{ backgroundColor: '#F2F0EF' }}
     >
       <View style={styles.container}>
         <Text style={styles.title}>Frequently Asked Questions</Text>
