@@ -1,9 +1,11 @@
 import React from "react";
 import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle } from "react-native";
 import { Link } from "expo-router";
-import { theme, cardStyle } from "../../lib/theme";
-import { Stars } from "../../components/ui/Stars";
-import { toNumber } from "../../lib/number";
+import { theme } from "../../lib/theme";
+import { toNumber, safeToFixed } from "../../lib/number";
+
+const PRIMARY_COLOR = '#2C4E4B';
+const ACCENT_COLOR = '#FFA500';
 
 type Chef = {
   id: number | string;
@@ -13,6 +15,7 @@ type Chef = {
   bio?: string | null;
   location?: string | null;
   rating?: number | null;
+  cuisine?: string | null;
 };
 
 type Props = {
@@ -26,23 +29,21 @@ export default function ChefCard({ chef, style }: Props) {
     chef?.avatar ||
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
 
-  const containerStyle = StyleSheet.flatten([styles.card, cardStyle(), style]);
-
   return (
-    <View style={containerStyle}>
+    <View style={[styles.card, style]}>
       <Link href={`/chef/${chef.id}`} asChild>
-        <Pressable style={styles.pressable}>
+        <Pressable style={styles.pressable} activeOpacity={0.9}>
           <Image source={{ uri: avatar }} style={styles.avatar} />
-          <View style={styles.info}>
-            <Text style={styles.name} numberOfLines={1}>
-              {chef.name}
+          <Text style={styles.name}>{chef.name}</Text>
+          <Text style={styles.cuisine}>{chef.cuisine || 'Chef'}</Text>
+          {chef.location && (
+            <Text style={styles.location} numberOfLines={1}>
+              📍 {chef.location}
             </Text>
-            <Text numberOfLines={1} style={styles.location}>
-              {chef.location || "—"}
-            </Text>
-            <View style={styles.rating}>
-              <Stars value={toNumber(chef?.rating, 0)} size={16} />
-            </View>
+          )}
+          <View style={styles.rating}>
+            <Text style={styles.starIcon}>★</Text>
+            <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
           </View>
         </Pressable>
       </Link>
@@ -52,33 +53,53 @@ export default function ChefCard({ chef, style }: Props) {
 
 const styles = StyleSheet.create({
   card: {
-    padding: theme.spacing.md,
+    flex: 1,
+    alignItems: "center",
+    gap: theme.spacing.md,
+    padding: theme.spacing['2xl'],
+    backgroundColor: '#F4F4F4',
+    borderRadius: theme.radius.xl,
+    textAlign: "center",
   },
   pressable: {
-    flexDirection: "row",
     alignItems: "center",
+    width: "100%",
   },
   avatar: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: theme.colors.surface,
-  },
-  info: {
-    flex: 1,
-    marginLeft: theme.spacing.md,
+    width: 96,
+    height: 96,
+    borderRadius: 48,
+    borderWidth: 4,
+    borderColor: `${PRIMARY_COLOR}80`, // primary/50
   },
   name: {
-    color: theme.colors.text,
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.extrabold,
+    color: '#333333',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
   },
-  location: {
-    color: theme.colors.subtle,
-    marginTop: theme.spacing.xs / 2,
+  cuisine: {
+    color: '#555555',
     fontSize: theme.typography.fontSize.sm,
   },
+  location: {
+    color: '#777777',
+    fontSize: theme.typography.fontSize.xs,
+    marginTop: theme.spacing.xs / 2,
+    textAlign: 'center',
+  },
   rating: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs / 2,
     marginTop: theme.spacing.sm,
+  },
+  starIcon: {
+    fontSize: theme.typography.fontSize.lg,
+    color: ACCENT_COLOR,
+  },
+  ratingText: {
+    color: '#555555',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
   },
 });

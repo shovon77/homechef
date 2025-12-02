@@ -1,10 +1,10 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
-import { getChefById, getDishesByChefId } from '../../lib/db';
+import { getChefById } from '../../lib/db';
 import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../lib/reviews';
 import { useRole } from '../../hooks/useRole';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
@@ -43,6 +43,11 @@ export default function ChefDetailView() {
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
+  const [dishesPage, setDishesPage] = useState(1);
+  const [dishesTotal, setDishesTotal] = useState(0);
+  const [dishesLoading, setDishesLoading] = useState(false);
+  const DISHES_PER_PAGE = isMobile ? 3 : 16; // 3x1 on mobile, 4x4 on desktop
+  const GRID_COLUMNS = isMobile ? 3 : 4;
   const { addToCart } = useCart();
   const { user } = useRole();
 
@@ -66,9 +71,6 @@ export default function ChefDetailView() {
         }
         setChef(chefData);
 
-        const dishesData = await getDishesByChefId(chefId);
-        setDishes(dishesData);
-
         const reviewsData = await getChefReviewsHelper(chefId);
         setReviews(reviewsData);
       } catch (e:any) {
@@ -76,6 +78,45 @@ export default function ChefDetailView() {
       }
     })();
   }, [chefId]);
+
+  // Load dishes with pagination
+  useEffect(() => {
+    if (!chefId) return;
+    let cancelled = false;
+    (async () => {
+      setDishesLoading(true);
+      try {
+        const perPage = isMobile ? 3 : 16;
+        const from = (dishesPage - 1) * perPage;
+        const to = from + perPage - 1;
+
+        // Query dishes by chef_id
+        const { data, error, count } = await supabase
+          .from('dishes')
+          .select('*', { count: 'exact' })
+          .eq('chef_id', chefId)
+          .order('id', { ascending: true })
+          .range(from, to);
+
+        if (cancelled) return;
+        if (error) throw error;
+
+        setDishes(data || []);
+        setDishesTotal(count || 0);
+      } catch (e: any) {
+        if (!cancelled) {
+          console.error('Error loading dishes:', e);
+          setError(e.message || String(e));
+        }
+      } finally {
+        if (!cancelled) setDishesLoading(false);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [chefId, dishesPage, isMobile]);
 
   const avatar = chef?.photo || chef?.avatar || '';
   const title = chef?.name || (chefId ? `Chef #${chefId}` : 'Chef');
@@ -255,51 +296,82 @@ export default function ChefDetailView() {
             {/* Content based on active tab */}
             <View style={styles.contentScroll}>
               {activeTab === 'dishes' ? (
-                <View style={styles.dishesGrid}>
-                  {dishes.length === 0 ? (
+                <>
+                  {dishesLoading ? (
+                    <View style={styles.loader}><Text style={styles.emptyText}>Loading dishes...</Text></View>
+                  ) : dishes.length === 0 ? (
                     <Text style={styles.emptyText}>No dishes yet.</Text>
                   ) : (
-                    dishes.map(d => {
-                      const img = d.image || d.thumbnail || '';
-                      return (
-                        <View key={d.id} style={styles.dishCard}>
-                          <Link href={`/dish/${d.id}`} asChild>
-                            <TouchableOpacity style={styles.dishImageContainer}>
-                              {img ? (
-                                <Image source={{ uri: img }} style={styles.dishImage} resizeMode="cover" />
-                              ) : (
-                                <View style={styles.dishImagePlaceholder}>
-                                  <Text style={styles.dishImagePlaceholderText}>No image</Text>
-        </View>
-      )}
-                            </TouchableOpacity>
-                          </Link>
-                          <View style={styles.dishInfo}>
-                            <View style={styles.dishHeader}>
-                              <Text style={styles.dishName} numberOfLines={1}>
-                                {d.name || `Dish #${d.id}`}
-                              </Text>
-                              <Text style={styles.dishPrice}>
-                                ${d.price != null ? Number(d.price).toFixed(2) : '0.00'}
-                              </Text>
+                    <>
+                      <View style={[styles.dishesGrid, isMobile && styles.dishesGridMobile]}>
+                        {dishes.map(d => {
+                          const img = d.image || d.thumbnail || '';
+                          return (
+                            <View key={d.id} style={[styles.dishCard, isMobile && styles.dishCardMobile]}>
+                              <Link href={`/dish/${d.id}`} asChild>
+                                <TouchableOpacity style={styles.dishImageContainer}>
+                                  {img ? (
+                                    <Image source={{ uri: img }} style={styles.dishImage} resizeMode="cover" />
+                                  ) : (
+                                    <View style={styles.dishImagePlaceholder}>
+                                      <Text style={styles.dishImagePlaceholderText}>No image</Text>
+                                    </View>
+                                  )}
+                                </TouchableOpacity>
+                              </Link>
+                              <View style={styles.dishInfo}>
+                              <View style={styles.dishHeader}>
+                                <Text style={styles.dishName} adjustsFontSizeToFit minimumFontScale={0.7} numberOfLines={1}>
+                                  {d.name || `Dish #${d.id}`}
+                                </Text>
+                                <Text style={styles.dishPrice}>
+                                  ${d.price != null ? Number(d.price).toFixed(2) : '0.00'}
+                                </Text>
+                              </View>
+                                {d.description ? (
+                                  <Text style={styles.dishDescription} numberOfLines={2}>
+                                    {d.description}
+                                  </Text>
+                                ) : null}
+                                <TouchableOpacity
+                                  style={styles.addToCartButton}
+                                  onPress={() => handleAddToCart(d)}
+                                >
+                                  <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                                </TouchableOpacity>
+                              </View>
                             </View>
-                            {d.description ? (
-                              <Text style={styles.dishDescription} numberOfLines={2}>
-                                {d.description}
-                              </Text>
-                            ) : null}
-                            <TouchableOpacity
-                              style={styles.addToCartButton}
-                              onPress={() => handleAddToCart(d)}
+                          );
+                        })}
+                      </View>
+                      {(() => {
+                        const perPage = isMobile ? 3 : 16;
+                        const totalPages = Math.ceil(dishesTotal / perPage);
+                        return totalPages > 1 && (
+                          <View style={styles.pagination}>
+                            <Pressable
+                              style={[styles.pageButton, dishesPage === 1 && styles.pageButtonDisabled]}
+                              onPress={() => setDishesPage(p => Math.max(1, p - 1))}
+                              disabled={dishesPage === 1}
                             >
-                              <Text style={styles.addToCartButtonText}>Add to Cart</Text>
-                            </TouchableOpacity>
+                              <Text style={[styles.pageButtonText, dishesPage === 1 && styles.pageButtonTextDisabled]}>Previous</Text>
+                            </Pressable>
+                            <Text style={styles.pageInfo}>
+                              Page {dishesPage} of {totalPages}
+                            </Text>
+                            <Pressable
+                              style={[styles.pageButton, dishesPage >= totalPages && styles.pageButtonDisabled]}
+                              onPress={() => setDishesPage(p => Math.min(totalPages, p + 1))}
+                              disabled={dishesPage >= totalPages}
+                            >
+                              <Text style={[styles.pageButtonText, dishesPage >= totalPages && styles.pageButtonTextDisabled]}>Next</Text>
+                            </Pressable>
                           </View>
-    </View>
-  );
-                    })
+                        );
+                      })()}
+                    </>
                   )}
-                </View>
+                </>
               ) : (
                 <View style={styles.reviewsContent}>
                   {/* Review form for signed-in users */}
@@ -565,7 +637,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.md,
     flexWrap: 'wrap',
-    justifyContent: 'flex-end',
+    justifyContent: Platform.select({
+      web: 'flex-end',
+      default: 'flex-start',
+    }),
   },
   filterLabel: {
     color: TEXT_DARK,
@@ -589,22 +664,32 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing['4xl'],
   },
   dishesGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing['2xl'],
+    flexDirection: Platform.select({
+      web: 'row',
+      default: 'column', // Column layout on mobile for 1 dish per row
+    }),
+    flexWrap: Platform.select({
+      web: 'wrap',
+      default: 'nowrap',
+    }),
+    justifyContent: 'flex-start',
+    width: '100%',
+    gap: Platform.select({
+      web: theme.spacing.md,
+      default: theme.spacing.md,
+    }),
   },
   dishCard: {
-    flex: 1,
-    minWidth: Platform.select({
-      web: 280,
-      default: '100%',
+    width: Platform.select({
+      web: '23%', // 4 columns on desktop with gap
+      default: '100%', // 1 column on mobile (1 dish per row)
     }),
-    maxWidth: Platform.select({
-      web: 'none',
-      default: '100%',
-    }),
+    marginBottom: 0, // Gap handles spacing
     overflow: 'hidden',
-    borderRadius: theme.radius.xl,
+    borderRadius: Platform.select({
+      web: theme.radius.xl,
+      default: theme.radius.lg,
+    }),
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
     backgroundColor: '#FFFFFF',
@@ -631,46 +716,99 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
   },
   dishInfo: {
-    padding: theme.spacing.md,
+    padding: Platform.select({
+      web: theme.spacing.md,
+      default: theme.spacing.sm,
+    }),
     flex: 1,
-    gap: theme.spacing.md,
+    gap: Platform.select({
+      web: theme.spacing.md,
+      default: theme.spacing.sm,
+    }),
   },
   dishHeader: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'space-between',
-    gap: theme.spacing.sm,
+    width: '100%',
+    minHeight: Platform.select({
+      web: 24,
+      default: 18,
+    }),
+    marginBottom: Platform.select({
+      web: 0,
+      default: theme.spacing.xs / 2,
+    }),
   },
   dishName: {
     flex: 1,
     color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: Platform.select({
+      web: 13,
+      default: 11,
+    }),
     fontWeight: theme.typography.fontWeight.bold,
+    flexShrink: 1,
+    paddingRight: Platform.select({
+      web: 4,
+      default: 2,
+    }),
+    maxWidth: Platform.select({
+      web: '70%',
+      default: '65%', // More space for price on mobile
+    }),
   },
   dishPrice: {
     color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: Platform.select({
+      web: 13,
+      default: 11,
+    }),
     fontWeight: theme.typography.fontWeight.bold,
+    flexShrink: 0,
+    marginLeft: 'auto',
+    minWidth: Platform.select({
+      web: 50,
+      default: 45,
+    }),
   },
   dishDescription: {
     color: TEXT_MUTED_DARK,
-    fontSize: theme.typography.fontSize.sm,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontSize: Platform.select({
+      web: theme.typography.fontSize.sm,
+      default: 10,
+    }),
+    lineHeight: Platform.select({
+      web: theme.typography.fontSize.sm * 1.5,
+      default: 14,
+    }),
     flex: 1,
-    marginBottom: theme.spacing.md,
+    marginBottom: Platform.select({
+      web: theme.spacing.sm,
+      default: theme.spacing.xs,
+    }),
   },
   addToCartButton: {
     width: '100%',
-    height: 40,
+    height: Platform.select({
+      web: 40,
+      default: 32,
+    }),
     borderRadius: theme.radius.lg,
     backgroundColor: PRIMARY_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 'auto',
+    marginTop: Platform.select({
+      web: 'auto',
+      default: theme.spacing.xs,
+    }),
   },
   addToCartButtonText: {
     color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: Platform.select({
+      web: theme.typography.fontSize.sm,
+      default: 10,
+    }),
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
   },
@@ -788,6 +926,43 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     paddingVertical: theme.spacing['4xl'],
   },
+  loader: {
+    paddingVertical: theme.spacing['4xl'],
+    alignItems: 'center',
+  },
+  pagination: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing['2xl'],
+    paddingVertical: theme.spacing.lg,
+    width: '100%',
+  },
+  pageButton: {
+    paddingHorizontal: theme.spacing.lg,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+  },
+  pageButtonDisabled: {
+    opacity: 0.5,
+  },
+  pageButtonText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  pageButtonTextDisabled: {
+    color: TEXT_MUTED,
+  },
+  pageInfo: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
   // Mobile Styles
   layoutMobile: {
     flexDirection: 'column',
@@ -800,6 +975,12 @@ const styles = StyleSheet.create({
     top: 0,
   },
   mainContentMobile: {
+    width: '100%',
+  },
+  dishesGridMobile: {
+    flexDirection: 'column',
+  },
+  dishCardMobile: {
     width: '100%',
   },
 });

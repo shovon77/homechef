@@ -25,6 +25,7 @@ type Chef = {
   location: string | null;
   photo: string | null;
   rating: number | null;
+  cuisine: string | null;
 };
 
 export default function BrowsePage() {
@@ -100,7 +101,7 @@ export default function BrowsePage() {
         } else {
           let request = supabase
             .from('chefs')
-            .select('id,name,location,photo,rating', { count: 'exact' })
+            .select('id,name,location,photo,rating,cuisine', { count: 'exact' })
             .eq('status', 'active')
             .order('created_at', { ascending: false })
             .range(from, to);
