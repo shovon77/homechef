@@ -1,9 +1,10 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet, Image } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
+import FilePicker from '../../components/FilePicker';
 import { toggleChefActive, toggleChefFeatured, updateOrderStatus, approveChefApplication, rejectChefApplication } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
@@ -49,6 +50,10 @@ export default function AdminPage() {
   const [chefRequests, setChefRequests] = useState<any[]>([]);
   const [chefReqSearch, setChefReqSearch] = useState('');
   const [autoRejecting, setAutoRejecting] = useState(false);
+  const [bannerUrl, setBannerUrl] = useState('');
+  const [originalBannerUrl, setOriginalBannerUrl] = useState('');
+  const [savingBanner, setSavingBanner] = useState(false);
+  const [uploading, setUploading] = useState(false);
 
   async function fetchChefRequests() {
     const { data, error } = await supabase
@@ -85,6 +90,18 @@ export default function AdminPage() {
         .select('*')
         .order('created_at', { ascending: false });
       
+      // Load banner setting
+      const { data: bannerData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'banner_url')
+        .single();
+      
+      if (bannerData?.value) {
+        setBannerUrl(bannerData.value);
+        setOriginalBannerUrl(bannerData.value);
+      }
+
       setChefs(chefRows);
       setOrders(orderRows);
       setUsers((userRows as any[]) || []);
@@ -185,6 +202,86 @@ export default function AdminPage() {
       Alert.alert('Auto-reject failed', error?.message || 'Unable to run auto-reject.');
     } finally {
       setAutoRejecting(false);
+    }
+  }
+
+  async function updateBanner() {
+    if (!bannerUrl.trim()) {
+      Alert.alert('Error', 'Please enter a valid URL');
+      return;
+    }
+    setSavingBanner(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ key: 'banner_url', value: bannerUrl.trim() });
+      
+      if (error) throw error;
+      setOriginalBannerUrl(bannerUrl);
+      Alert.alert('Success', 'Banner updated successfully');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update banner. Make sure app_settings table exists.');
+    } finally {
+      setSavingBanner(false);
+    }
+  }
+
+  async function handleUpload(file: File) {
+    if (!file) return;
+    setUploading(true);
+    try {
+      const fileExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'png';
+      const fileName = `banner_${Date.now()}.${fileExt || 'png'}`;
+      const filePath = `${fileName}`;
+
+      console.log('Starting upload...', { fileName, filePath });
+
+      // Try 'public' bucket first
+      let bucket = 'public';
+      
+      let { data, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        console.warn(`Upload to '${bucket}' failed:`, uploadError);
+        
+        // Try fallback buckets
+        const fallbacks = ['assets', 'images', 'common'];
+        for (const b of fallbacks) {
+          console.log(`Retrying upload to '${b}'...`);
+          const res = await supabase.storage.from(b).upload(filePath, file, { upsert: true });
+          if (!res.error) {
+            bucket = b;
+            uploadError = null;
+            data = res.data;
+            console.log(`Upload to '${b}' succeeded`);
+            break;
+          } else {
+            console.warn(`Upload to '${b}' failed:`, res.error);
+          }
+        }
+        
+        if (uploadError) {
+          throw uploadError;
+        }
+      }
+
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      if (urlData?.publicUrl) {
+        console.log('Public URL generated:', urlData.publicUrl);
+        setBannerUrl(urlData.publicUrl);
+      }
+    } catch (error: any) {
+      console.error('Upload error details:', error);
+      const msg = error.message || 'Unknown upload error';
+      if (msg.includes('400') || msg.includes('row-level security')) {
+         Alert.alert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
+      } else {
+         Alert.alert('Upload Failed', `Could not upload file: ${msg}`);
+      }
+    } finally {
+      setUploading(false);
     }
   }
 
@@ -488,6 +585,43 @@ export default function AdminPage() {
               </View>
             );
           })}
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Homepage Banner</Text>
+          <Text style={styles.chartSubtitle}>Update the main hero image</Text>
+        </View>
+        <View style={styles.searchWrapper}>
+          {bannerUrl ? (
+            <View style={styles.bannerPreviewContainer}>
+              <Text style={styles.sectionLabel}>Preview</Text>
+              <Image source={{ uri: bannerUrl }} style={styles.bannerPreview} resizeMode="cover" />
+            </View>
+          ) : null}
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <FilePicker 
+              label={uploading ? "Uploading..." : "Upload New Image"} 
+              onFile={handleUpload} 
+            />
+            {uploading && <ActivityIndicator size="small" color={palette.primary} />}
+          </View>
+
+          <Text style={styles.helperText}>
+            Recommended dimensions: Desktop 1920x600px, Mobile 800x600px.
+          </Text>
+
+          {bannerUrl !== originalBannerUrl && (
+            <TouchableOpacity
+              onPress={updateBanner}
+              disabled={savingBanner || uploading}
+              style={[styles.primaryButton, (savingBanner || uploading) && styles.disabledButton, { marginTop: 8 }]}
+            >
+              <Text style={styles.primaryButtonText}>{savingBanner ? 'Publishing...' : 'Publish Changes'}</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </View>
     </ScrollView>
@@ -1373,6 +1507,21 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     color: palette.text,
     fontWeight: '600',
+  },
+  helperText: {
+    color: palette.muted,
+    fontSize: 12,
+    marginBottom: 12,
+    fontStyle: 'italic',
+  },
+  bannerPreviewContainer: {
+    marginBottom: 16,
+  },
+  bannerPreview: {
+    width: '100%',
+    height: 150,
+    borderRadius: 12,
+    backgroundColor: '#E2E8F0',
   },
 });
 

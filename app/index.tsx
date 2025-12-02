@@ -120,6 +120,7 @@ export default function HomePage() {
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
+  const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
 
@@ -162,6 +163,15 @@ export default function HomePage() {
     let mounted = true;
     (async () => {
       setLoading(true);
+      
+      // Try to fetch dynamic banner
+      supabase.from('app_settings').select('value').eq('key', 'banner_url').single()
+        .then(({ data }) => {
+          if (mounted && data?.value) {
+            setBannerUrl(data.value);
+          }
+        });
+
       const [{ data: c }, { data: d }] = await Promise.all([
         // Show only featured and active chefs on homepage
         supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").order("rating", { ascending: false }).limit(5),
@@ -211,7 +221,7 @@ export default function HomePage() {
           {/* Hero section - matches HTML design */}
           <View style={[styles.hero, isMobile && styles.heroMobile]}>
             <Image
-              source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT" }}
+              source={{ uri: bannerUrl }}
               style={styles.heroBackgroundImage}
               resizeMode="cover"
             />

@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
@@ -36,14 +36,16 @@ export default function BrowsePage() {
   const gridColumns = isMobile ? 1 : isTablet ? 3 : 5;
   
   const { q } = useLocalSearchParams();
-  const [tab, setTab] = useState<'dishes' | 'chefs'>('dishes');
+  const [tab, setTab] = useState<'dishes' | 'chefs' | 'cuisines'>('dishes');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [chefs, setChefs] = useState<Chef[]>([]);
+  const [cuisines, setCuisines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const [sortBy, setSortBy] = useState('relevance');
 
   useEffect(() => {
     if (typeof q === 'string') {
@@ -59,7 +61,8 @@ export default function BrowsePage() {
     setError(null);
     setDishes([]);
     setChefs([]);
-  }, [tab, query]);
+    setCuisines([]);
+  }, [tab, query, sortBy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -74,9 +77,18 @@ export default function BrowsePage() {
           let request = supabase
             .from('dishes')
             .select('id,name,price,image,chef_id, chefs!inner(status)', { count: 'exact' })
-            .eq('chefs.status', 'active')
-            .order('created_at', { ascending: false })
-            .range(from, to);
+            .eq('chefs.status', 'active');
+
+          if (sortBy === 'price_asc') {
+            request = request.order('price', { ascending: true });
+          } else if (sortBy === 'price_desc') {
+            request = request.order('price', { ascending: false });
+          } else {
+            // Default for relevance and popular
+            request = request.order('created_at', { ascending: false });
+          }
+
+          request = request.range(from, to);
 
           if (query.trim()) {
             const term = query.trim();
@@ -98,7 +110,7 @@ export default function BrowsePage() {
           if (error) throw error;
           setDishes(data ?? []);
           setTotal(count ?? (data?.length ?? 0));
-        } else {
+        } else if (tab === 'chefs') {
           let request = supabase
             .from('chefs')
             .select('id,name,location,photo,rating,cuisine', { count: 'exact' })
@@ -123,6 +135,31 @@ export default function BrowsePage() {
           if (error) throw error;
           setChefs(data ?? []);
           setTotal(count ?? (data?.length ?? 0));
+        } else {
+          // Cuisines tab
+          // Fetch active chefs to get available cuisines
+          let request = supabase
+            .from('chefs')
+            .select('cuisine')
+            .eq('status', 'active')
+            .not('cuisine', 'is', null);
+
+          if (query.trim()) {
+             // Simple filtering if they search in Cuisines tab
+             request = request.ilike('cuisine', `%${query.trim()}%`);
+          }
+
+          const { data, error } = await request;
+          if (cancelled) return;
+          if (error) throw error;
+          
+          if (data) {
+            const uniqueCuisines = Array.from(new Set(data.map(c => c.cuisine).filter(Boolean))).sort();
+            // Manual pagination for cuisines since we do distinct client-side
+            const pagedCuisines = uniqueCuisines.slice(from, to + 1);
+            setCuisines(pagedCuisines);
+            setTotal(uniqueCuisines.length);
+          }
         }
       } catch (err: any) {
         if (!cancelled) {
@@ -130,6 +167,7 @@ export default function BrowsePage() {
           setError(err?.message ?? 'Failed to load');
           setDishes([]);
           setChefs([]);
+          setCuisines([]);
           setTotal(0);
         }
       } finally {
@@ -140,7 +178,7 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, page, query]);
+  }, [tab, page, query, sortBy]);
 
   const go = (next: number) => {
     setPage(Math.max(1, Math.min(totalPages, next)));
@@ -180,7 +218,7 @@ export default function BrowsePage() {
     </View>
   );
 
-  const list = tab === 'dishes' ? dishes : chefs;
+  const list = tab === 'dishes' ? dishes : tab === 'chefs' ? chefs : cuisines;
 
   const handleSearch = () => {
     setPage(1);
@@ -210,11 +248,41 @@ export default function BrowsePage() {
           </Pressable>
           <Pressable
             onPress={() => setTab('chefs')}
-            style={[styles.tab, tab === 'chefs' && styles.tabActive]}
+            style={[styles.tab, styles.tabSpacing, tab === 'chefs' && styles.tabActive]}
           >
             <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
           </Pressable>
+          <Pressable
+            onPress={() => setTab('cuisines')}
+            style={[styles.tab, tab === 'cuisines' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
+          </Pressable>
         </View>
+
+        {tab === 'dishes' && (
+          <View style={styles.sortContainer}>
+            <Text style={styles.sortLabel}>Sort by:</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortOptions}>
+              {[
+                { label: 'Relevance', value: 'relevance' },
+                { label: 'Popular', value: 'popular' },
+                { label: 'Price low to high', value: 'price_asc' },
+                { label: 'Price high to low', value: 'price_desc' },
+              ].map((opt) => (
+                <Pressable
+                  key={opt.value}
+                  style={[styles.sortChip, sortBy === opt.value && styles.sortChipActive]}
+                  onPress={() => setSortBy(opt.value)}
+                >
+                  <Text style={[styles.sortChipText, sortBy === opt.value && styles.sortChipTextActive]}>
+                    {opt.label}
+                  </Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        )}
 
         {/* Old search bar removed */}
 
@@ -232,11 +300,27 @@ export default function BrowsePage() {
               </View>
             ))}
           </View>
-        ) : (
+        ) : tab === 'chefs' ? (
           <View style={styles.grid}>
             {chefs.map((chef) => (
               <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <ChefCard chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {cuisines.map((cuisine) => (
+              <View key={cuisine} style={[styles.cardWrapper, { width: `${100 / (isMobile ? 2 : isTablet ? 4 : 6)}%` }]}>
+                <TouchableOpacity 
+                  style={styles.cuisineCard}
+                  onPress={() => {
+                    setQuery(cuisine);
+                    setTab('dishes');
+                  }}
+                >
+                  <Text style={styles.cuisineText}>{cuisine}</Text>
+                </TouchableOpacity>
               </View>
             ))}
           </View>
@@ -374,6 +458,42 @@ const styles = StyleSheet.create({
   tabSpacing: {
     marginRight: 10,
   },
+  sortContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 20,
+    paddingHorizontal: Platform.select({ web: 0, default: 4 }),
+  },
+  sortLabel: {
+    color: '#475569',
+    fontWeight: '600',
+    marginRight: 12,
+    fontSize: 14,
+  },
+  sortOptions: {
+    gap: 8,
+    paddingRight: 20,
+  },
+  sortChip: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 999,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+  },
+  sortChipActive: {
+    backgroundColor: '#10b981', // PRIMARY_COLOR-ish or Green
+    borderColor: '#10b981',
+  },
+  sortChipText: {
+    color: '#64748b',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  sortChipTextActive: {
+    color: '#FFFFFF',
+  },
   floatingSearchContainer: {
     position: "absolute",
     bottom: Platform.select({
@@ -463,5 +583,26 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
+  },
+  cuisineCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    padding: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 100,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 2,
+  },
+  cuisineText: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: '#0f172a',
+    textAlign: 'center',
   },
 });
