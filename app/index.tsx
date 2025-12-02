@@ -1,5 +1,5 @@
-import React, { useEffect, useState } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions } from "react-native";
+import React, { useEffect, useState, useMemo } from "react";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
@@ -16,6 +16,49 @@ const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_
 // Primary color from design: #2C4E4B
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
+
+// Circular dish card for featured section
+function CircularDishCard({ dish }: { dish: Dish }) {
+  const [rating, setRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
+  const [chefInfo, setChefInfo] = useState<{ name?: string; photo?: string } | null>(null);
+
+  useEffect(() => {
+    let m = true;
+    getDishRatings(Number(dish.id)).then((stats) => {
+      if (m) setRating({ avg: stats.average, count: stats.count });
+    });
+    if (dish.chef_id) {
+      getChefById(Number(dish.chef_id)).then((chef) => {
+        if (m && chef) setChefInfo({ name: chef.name, photo: chef.photo || chef.avatar });
+      });
+    }
+    return () => { m = false; };
+  }, [dish.id, dish.chef_id]);
+
+  const chefName = chefInfo?.name || dish.chef || 'Chef';
+
+  return (
+    <Link href={`/dish/${dish.id}`} asChild>
+      <TouchableOpacity activeOpacity={0.9} style={styles.circularDishCard}>
+        <View style={styles.circularDishImageContainer}>
+          <Image
+            source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
+            style={styles.circularDishImage}
+            resizeMode="cover"
+          />
+        </View>
+        <View style={styles.circularDishInfo}>
+          <Text style={styles.circularDishTitle} numberOfLines={1}>
+            {dish.name} by {chefName}
+          </Text>
+          <Text style={styles.circularDishSubtitle} numberOfLines={1}>
+            {formatCad(dish.price)} • ★ {safeToFixed(rating?.avg)}
+          </Text>
+        </View>
+      </TouchableOpacity>
+    </Link>
+  );
+}
 
 // Dish card matching HTML design
 function HomeDishCard({ dish }: { dish: Dish }) {
@@ -78,6 +121,35 @@ export default function HomePage() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState("");
+  const scrollX = React.useRef(new Animated.Value(0)).current;
+
+  const CARD_WIDTH = 240;
+  const GAP = 24;
+  const TOTAL_ITEM_WIDTH = CARD_WIDTH + GAP;
+
+  // Create enough duplicates to fill screen and loop seamlessly
+  const infiniteDishes = useMemo(() => {
+    if (dishes.length === 0) return [];
+    // Ensure we have enough items to fill the screen width + buffer
+    // 6 copies is usually safe
+    return [...dishes, ...dishes, ...dishes, ...dishes, ...dishes, ...dishes];
+  }, [dishes]);
+
+  useEffect(() => {
+    if (dishes.length === 0) return;
+    
+    const animation = Animated.loop(
+      Animated.timing(scrollX, {
+        toValue: -(dishes.length * TOTAL_ITEM_WIDTH),
+        duration: dishes.length * 6000, // Slower: 6s per item
+        easing: Easing.linear,
+        useNativeDriver: true,
+      })
+    );
+    animation.start();
+    
+    return () => animation.stop();
+  }, [dishes.length, scrollX, TOTAL_ITEM_WIDTH]);
 
   useEffect(() => {
     let mounted = true;
@@ -146,21 +218,26 @@ export default function HomePage() {
             </View>
           </View>
 
-          {/* Featured Dishes section */}
+          {/* Featured Dishes section - Infinite Scroll */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Dishes</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              nestedScrollEnabled
-              contentContainerStyle={styles.horizontalScrollContent}
-            >
-              {dishes.map((dish) => (
-                <View key={String(dish.id)} style={styles.dishCardWrapper}>
-                  <HomeDishCard dish={dish} />
-                </View>
-              ))}
-            </ScrollView>
+            <View style={{ overflow: 'hidden', width: '100%' }}>
+              <Animated.View 
+                style={{ 
+                  flexDirection: 'row', 
+                  gap: GAP,
+                  paddingHorizontal: GAP / 2,
+                  transform: [{ translateX: scrollX }],
+                  width: infiniteDishes.length * TOTAL_ITEM_WIDTH,
+                }}
+              >
+                {infiniteDishes.map((dish, index) => (
+                  <View key={`${dish.id}-${index}`} style={{ width: CARD_WIDTH }}>
+                    <CircularDishCard dish={dish} />
+                  </View>
+                ))}
+              </Animated.View>
+            </View>
           </View>
 
           {/* How It Works section */}
@@ -264,10 +341,10 @@ export default function HomePage() {
 const styles = StyleSheet.create({
   container: {
     width: "100%",
-    maxWidth: 1280,
+    maxWidth: "100%",
     alignSelf: "center",
     paddingHorizontal: Platform.select({
-      web: theme.spacing['4xl'],
+      web: theme.spacing.md,
       default: theme.spacing.md,
     }),
     paddingTop: theme.spacing.lg,
@@ -648,5 +725,39 @@ const styles = StyleSheet.create({
   howItWorksGridMobile: {
     flexDirection: "column",
     gap: theme.spacing.lg,
+  },
+  // Circular Dish Card
+  circularDishCard: {
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  circularDishImageContainer: {
+    width: 200,
+    height: 200,
+    borderRadius: 100,
+    overflow: 'hidden',
+    ...elev('md'),
+    backgroundColor: '#fff',
+  },
+  circularDishImage: {
+    width: '100%',
+    height: '100%',
+  },
+  circularDishInfo: {
+    alignItems: 'center',
+    gap: 4,
+    width: '100%',
+    paddingHorizontal: 8,
+  },
+  circularDishTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+  },
+  circularDishSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    textAlign: 'center',
   },
 });
