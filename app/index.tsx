@@ -118,130 +118,146 @@ export default function HomePage() {
   }
 
   return (
+    <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
     <Screen 
       contentPadding={0}
-      style={{ backgroundColor: '#FFFFFF' }}
+      style={{ backgroundColor: '#F2F0EF' }}
+      fixedFooterHeight={Platform.select({
+        web: 100,
+        default: 80,
+      })}
     >
-      <View style={[styles.container, isMobile && styles.containerMobile]}>
-        {/* Hero section - matches HTML design */}
-        <View style={[styles.hero, isMobile && styles.heroMobile]}>
-          <Image
-            source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT" }}
-            style={styles.heroBackgroundImage}
-            resizeMode="cover"
+        <View style={[styles.container, isMobile && styles.containerMobile]}>
+          {/* Hero section - matches HTML design */}
+          <View style={[styles.hero, isMobile && styles.heroMobile]}>
+            <Image
+              source={{ uri: "https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT" }}
+              style={styles.heroBackgroundImage}
+              resizeMode="cover"
+            />
+            <View style={styles.heroOverlay} />
+            <View style={styles.heroContent}>
+              <Text style={[styles.heroTitle, isMobile && styles.heroTitleMobile]} adjustsFontSizeToFit>
+                Authentic Homemade Meals.
+              </Text>
+              <Text style={[styles.heroSubtitle, isMobile && styles.heroSubtitleMobile]}>
+                Discover and order from the best home chefs in your neighborhood.
+              </Text>
+            </View>
+          </View>
+
+          {/* Featured Dishes section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Dishes</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled
+              contentContainerStyle={styles.horizontalScrollContent}
+            >
+              {dishes.map((dish) => (
+                <View key={String(dish.id)} style={styles.dishCardWrapper}>
+                  <HomeDishCard dish={dish} />
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+
+          {/* How It Works section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>How It Works</Text>
+            <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
+              <View style={styles.howItWorksCard}>
+                <View style={styles.howItWorksIconContainer}>
+                  <Text style={styles.howItWorksIcon}>🔍</Text>
+                </View>
+                <Text style={styles.howItWorksTitle}>1. Discover</Text>
+                <Text style={styles.howItWorksText}>
+                  Browse authentic dishes made by talented home chefs in your local area.
+                </Text>
+              </View>
+              <View style={styles.howItWorksCard}>
+                <View style={styles.howItWorksIconContainer}>
+                  <Text style={styles.howItWorksIcon}>🛒</Text>
+                </View>
+                <Text style={styles.howItWorksTitle}>2. Order</Text>
+                <Text style={styles.howItWorksText}>
+                  Select your meal, customize your order, and schedule a delivery time that works for you.
+                </Text>
+              </View>
+              <View style={styles.howItWorksCard}>
+                <View style={styles.howItWorksIconContainer}>
+                  <Text style={styles.howItWorksIcon}>🍽️</Text>
+                </View>
+                <Text style={styles.howItWorksTitle}>3. Enjoy</Text>
+                <Text style={styles.howItWorksText}>
+                  Receive your delicious, freshly prepared homemade meal right at your doorstep.
+                </Text>
+              </View>
+            </View>
+          </View>
+
+          {/* Featured Chefs section - matches HTML design */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Chefs</Text>
+            <ScrollView 
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              nestedScrollEnabled
+              contentContainerStyle={styles.horizontalScrollContent}
+            >
+              {chefs.map((chef, i) => (
+                <View key={`${normalizeId(chef.id)}-${i}`} style={styles.featuredChefCardWrapper}>
+                  <Link href={{ pathname: "/chef/[id]", params: { id: normalizeId(chef.id) } }} asChild>
+                    <TouchableOpacity activeOpacity={0.9} style={styles.featuredChefCard}>
+                      <Image
+                        source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
+                        style={styles.featuredChefAvatar}
+                      />
+                      <Text style={styles.featuredChefName}>{chef.name}</Text>
+                      <Text style={styles.featuredChefCuisine}>{chef.cuisine || 'Chef'}</Text>
+                      {chef.location && (
+                        <Text style={styles.featuredChefLocation} numberOfLines={1}>
+                          📍 {chef.location}
+                        </Text>
+                      )}
+                      <View style={styles.featuredChefRating}>
+                        <Text style={styles.starIcon}>★</Text>
+                        <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
+                      </View>
+                    </TouchableOpacity>
+                  </Link>
+                </View>
+              ))}
+            </ScrollView>
+          </View>
+        </View>
+      </Screen>
+
+      {/* Floating Search Bar - fixed at bottom of viewport */}
+      <View style={styles.floatingSearchContainer}>
+        <View style={styles.floatingSearchBar}>
+          <View style={styles.searchIconContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+          </View>
+            <TextInput
+              placeholder="Search biryani"
+              placeholderTextColor="#555555"
+              style={styles.floatingSearchInput}
+              value={searchQuery}
+            onChangeText={setSearchQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
           />
-          <View style={styles.heroOverlay} />
-          <View style={styles.heroContent}>
-            <Text style={[styles.heroTitle, isMobile && styles.heroTitleMobile]}>
-              Authentic Homemade Meals, Delivered.
-            </Text>
-            <Text style={[styles.heroSubtitle, isMobile && styles.heroSubtitleMobile]}>
-              Discover and order from the best home chefs in your neighborhood.
-            </Text>
-          </View>
-          {/* Search bar - rounded-full pill shape */}
-          <View style={styles.searchContainer}>
-            <View style={styles.searchBar}>
-              <View style={styles.searchIconContainer}>
-                <Text style={styles.searchIcon}>🔍</Text>
-              </View>
-              <TextInput
-                placeholder={isMobile ? "Search..." : "Search for a dish or cuisine..."}
-                placeholderTextColor="#555555"
-                style={styles.searchInput}
-                value={searchQuery}
-                onChangeText={setSearchQuery}
-                onSubmitEditing={handleSearch}
-                returnKeyType="search"
-              />
-              <TouchableOpacity 
-                style={styles.searchButton}
-                onPress={handleSearch}
-              >
-                <Text style={styles.searchButtonText}>{isMobile ? "Search" : "Find Food"}</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        </View>
-
-        {/* Trending Dishes section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Trending Dishes Near You</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={styles.horizontalScrollContent}
+          <TouchableOpacity 
+            style={styles.searchButton}
+            onPress={handleSearch}
           >
-            {dishes.map((dish) => (
-              <View key={String(dish.id)} style={styles.dishCardWrapper}>
-                <HomeDishCard dish={dish} />
-              </View>
-            ))}
-          </ScrollView>
-        </View>
-
-        {/* How It Works section */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>How It Works</Text>
-          <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
-            <View style={styles.howItWorksCard}>
-              <View style={styles.howItWorksIconContainer}>
-                <Text style={styles.howItWorksIcon}>🔍</Text>
-              </View>
-              <Text style={styles.howItWorksTitle}>1. Discover</Text>
-              <Text style={styles.howItWorksText}>
-                Browse authentic dishes made by talented home chefs in your local area.
-              </Text>
-            </View>
-            <View style={styles.howItWorksCard}>
-              <View style={styles.howItWorksIconContainer}>
-                <Text style={styles.howItWorksIcon}>🛒</Text>
-              </View>
-              <Text style={styles.howItWorksTitle}>2. Order</Text>
-              <Text style={styles.howItWorksText}>
-                Select your meal, customize your order, and schedule a delivery time that works for you.
-              </Text>
-            </View>
-            <View style={styles.howItWorksCard}>
-              <View style={styles.howItWorksIconContainer}>
-                <Text style={styles.howItWorksIcon}>🍽️</Text>
-              </View>
-              <Text style={styles.howItWorksTitle}>3. Enjoy</Text>
-              <Text style={styles.howItWorksText}>
-                Receive your delicious, freshly prepared homemade meal right at your doorstep.
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Featured Chefs section - matches HTML design */}
-        <View style={styles.section}>
-          <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Chefs</Text>
-          <ScrollView 
-            horizontal 
-            showsHorizontalScrollIndicator={false}
-            nestedScrollEnabled
-            contentContainerStyle={styles.horizontalScrollContent}
-          >
-            {chefs.map((chef, i) => (
-              <View key={`${normalizeId(chef.id)}-${i}`} style={styles.featuredChefCardWrapper}>
-                <Link href={{ pathname: "/chef/[id]", params: { id: normalizeId(chef.id) } }} asChild>
-                  <TouchableOpacity activeOpacity={0.9} style={styles.featuredChefCard}>
-                    <Image
-                      source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
-                      style={styles.featuredChefAvatar}
-                    />
-                    <Text style={styles.featuredChefName}>{chef.name}</Text>
-                    <Text style={styles.featuredChefCuisine}>{chef.cuisine || 'Chef'}</Text>
-                  </TouchableOpacity>
-                </Link>
-              </View>
-            ))}
-          </ScrollView>
+            <Text style={styles.searchButtonText}>{isMobile ? "Search" : "Find Food"}</Text>
+          </TouchableOpacity>
         </View>
       </View>
-    </Screen>
+    </View>
   );
 }
 
@@ -255,14 +271,17 @@ const styles = StyleSheet.create({
       default: theme.spacing.md,
     }),
     paddingTop: theme.spacing.lg,
-    paddingBottom: theme.spacing['4xl'],
-    backgroundColor: '#FFFFFF',
+    paddingBottom: Platform.select({
+      web: theme.spacing['4xl'],
+      default: theme.spacing['2xl'],
+    }),
+    backgroundColor: '#F2F0EF',
   },
   // Hero section
   hero: {
     minHeight: Platform.select({
-      web: 550,
-      default: 480,
+      web: 275,
+      default: 240,
     }),
     borderRadius: theme.radius.xl,
     overflow: "hidden",
@@ -301,13 +320,13 @@ const styles = StyleSheet.create({
   heroTitle: {
     color: '#FFFFFF',
     fontSize: Platform.select({
-      web: 60,
-      default: 36,
+      web: 42,
+      default: 28,
     }),
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: Platform.select({
-      web: 60 * 1.2,
-      default: 36 * 1.2,
+      web: 42 * 1.2,
+      default: 28 * 1.2,
     }),
     letterSpacing: -0.033,
     textAlign: "center",
@@ -325,14 +344,22 @@ const styles = StyleSheet.create({
     }),
     textAlign: "center",
   },
-  searchContainer: {
+  floatingSearchContainer: {
+    position: "absolute",
+    bottom: Platform.select({
+      web: theme.spacing['2xl'],
+      default: theme.spacing.xl,
+    }),
+    left: 0,
+    right: 0,
     width: "100%",
-    maxWidth: 580,
-    zIndex: 2,
-    position: "relative",
-    marginTop: theme.spacing.md,
+    alignItems: "center",
+    paddingHorizontal: theme.spacing.md,
+    zIndex: 1000,
+    elevation: 1000, // for android
+    pointerEvents: "box-none",
   },
-  searchBar: {
+  floatingSearchBar: {
     flexDirection: "row",
     alignItems: "stretch",
     height: Platform.select({
@@ -340,9 +367,34 @@ const styles = StyleSheet.create({
       default: 56,
     }),
     borderRadius: 9999, // rounded-full
-    backgroundColor: '#FFFFFF',
-    ...elev('lg'),
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    ...elev('xl'),
     overflow: "hidden",
+    width: "100%",
+    maxWidth: Platform.select({
+      web: 580,
+      default: '100%',
+    }),
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  floatingSearchInput: {
+    flex: 1,
+    color: '#333333',
+    fontSize: Platform.select({
+      web: theme.typography.fontSize.base,
+      default: theme.typography.fontSize.sm,
+    }),
+    paddingVertical: Platform.select({
+      web: theme.spacing.md,
+      default: theme.spacing.sm,
+    }),
+    paddingHorizontal: theme.spacing.sm,
   },
   searchIconContainer: {
     justifyContent: "center",
@@ -408,7 +460,7 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.xl,
     paddingBottom: theme.spacing.md,
   },
-  // Trending Dishes
+  // Featured Dishes
   horizontalScrollContent: {
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,
@@ -562,17 +614,29 @@ const styles = StyleSheet.create({
     color: '#555555',
     fontSize: theme.typography.fontSize.sm,
   },
+  featuredChefLocation: {
+    color: '#777777',
+    fontSize: theme.typography.fontSize.xs,
+    marginTop: theme.spacing.xs / 2,
+    textAlign: 'center',
+  },
+  featuredChefRating: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.xs / 2,
+    marginTop: theme.spacing.sm,
+  },
   // Mobile Styles
   containerMobile: {
     paddingHorizontal: theme.spacing.md,
   },
   heroMobile: {
-    minHeight: 400,
+    minHeight: 200,
     padding: theme.spacing.sm,
   },
   heroTitleMobile: {
-    fontSize: 32,
-    lineHeight: 38,
+    fontSize: 24,
+    lineHeight: 30,
   },
   heroSubtitleMobile: {
     fontSize: theme.typography.fontSize.sm,

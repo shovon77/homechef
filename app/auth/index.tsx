@@ -10,7 +10,7 @@ import Screen from '../../components/Screen';
 
 /** Light brand palette */
 const C = {
-  bg: '#F4F8F5',
+  bg: '#F2F0EF',
   panel: '#FFFFFF',
   border: '#E3EEE8',
   text: '#0B1F17',

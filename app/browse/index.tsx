@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform } from 'react-native';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
+import { theme, elev } from '../../lib/theme';
 
 const PER_PAGE = 25; // 5x5 grid layout
 const GRID_COLUMNS = 5;
+const PRIMARY_COLOR = '#2C4E4B';
 
 type Dish = {
   id: number;
@@ -152,63 +154,93 @@ export default function BrowsePage() {
 
   const list = tab === 'dishes' ? dishes : chefs;
 
+  const handleSearch = () => {
+    setPage(1);
+  };
+
   return (
-    <Screen contentStyle={{ paddingHorizontal: 24, paddingTop: 24 }}>
-      <View style={{ alignItems: 'center', marginBottom: 20 }}>
-        <Text style={styles.title}>Explore Meals Near You</Text>
-        <Text style={styles.subtitle}>Find your next favorite homemade dish</Text>
-      </View>
-
-      <View style={styles.tabs}>
-        <Pressable
-          onPress={() => setTab('dishes')}
-          style={[styles.tab, styles.tabSpacing, tab === 'dishes' && styles.tabActive]}
-        >
-          <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
-        </Pressable>
-        <Pressable
-          onPress={() => setTab('chefs')}
-          style={[styles.tab, tab === 'chefs' && styles.tabActive]}
-        >
-          <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
-        </Pressable>
-      </View>
-
-      <TextInput
-        value={query}
-        onChangeText={setQuery}
-        onSubmitEditing={() => setPage(1)}
-        placeholder={tab === 'dishes' ? 'Search dishes…' : 'Search chefs…'}
-        placeholderTextColor="#94a3b8"
-        style={styles.search}
-      />
-
-      {loading ? (
-        <View style={styles.loader}><ActivityIndicator /></View>
-      ) : error ? (
-        <Text style={styles.error}>{error}</Text>
-      ) : list.length === 0 ? (
-        <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
-      ) : tab === 'dishes' ? (
-        <View style={styles.grid}>
-          {dishes.map((dish) => (
-            <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
-              <DishCard dish={dish} />
-            </View>
-          ))}
+    <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
+      <Screen 
+        contentStyle={{ paddingHorizontal: 24, paddingTop: 24 }}
+        style={{ backgroundColor: '#F2F0EF' }}
+        fixedFooterHeight={Platform.select({
+          web: 100,
+          default: 80,
+        })}
+      >
+        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+          <Text style={styles.title}>Explore Meals Near You</Text>
+          <Text style={styles.subtitle}>Find your next favorite homemade dish</Text>
         </View>
-      ) : (
-        <View style={styles.grid}>
-          {chefs.map((chef) => (
-            <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
-              <ChefCard chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
-            </View>
-          ))}
-        </View>
-      )}
 
-      {showPagination && !loading && list.length > 0 && renderPagination()}
-    </Screen>
+        <View style={styles.tabs}>
+          <Pressable
+            onPress={() => setTab('dishes')}
+            style={[styles.tab, styles.tabSpacing, tab === 'dishes' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
+          </Pressable>
+          <Pressable
+            onPress={() => setTab('chefs')}
+            style={[styles.tab, tab === 'chefs' && styles.tabActive]}
+          >
+            <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
+          </Pressable>
+        </View>
+
+        {/* Old search bar removed */}
+
+        {loading ? (
+          <View style={styles.loader}><ActivityIndicator /></View>
+        ) : error ? (
+          <Text style={styles.error}>{error}</Text>
+        ) : list.length === 0 ? (
+          <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
+        ) : tab === 'dishes' ? (
+          <View style={styles.grid}>
+            {dishes.map((dish) => (
+              <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
+                <DishCard dish={dish} />
+              </View>
+            ))}
+          </View>
+        ) : (
+          <View style={styles.grid}>
+            {chefs.map((chef) => (
+              <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
+                <ChefCard chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
+              </View>
+            ))}
+          </View>
+        )}
+
+        {showPagination && !loading && list.length > 0 && renderPagination()}
+      </Screen>
+
+      {/* Floating Search Bar */}
+      <View style={styles.floatingSearchContainer}>
+        <View style={styles.floatingSearchBar}>
+          <View style={styles.searchIconContainer}>
+            <Text style={styles.searchIcon}>🔍</Text>
+          </View>
+          <TextInput
+            placeholder="Search biryani"
+            placeholderTextColor="#555555"
+            style={styles.floatingSearchInput}
+            value={query}
+            onChangeText={setQuery}
+            onSubmitEditing={handleSearch}
+            returnKeyType="search"
+          />
+          <TouchableOpacity 
+            style={styles.searchButton}
+            onPress={handleSearch}
+          >
+            <Text style={styles.searchButtonText}>Search</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </View>
   );
 }
 
@@ -244,6 +276,7 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: 'white',
   },
+  // Old search style removed/ignored
   search: {
     borderWidth: 1,
     borderColor: '#cbd5f5',
@@ -312,5 +345,95 @@ const styles = StyleSheet.create({
   },
   tabSpacing: {
     marginRight: 10,
+  },
+  floatingSearchContainer: {
+    position: "absolute",
+    bottom: Platform.select({
+      web: theme.spacing['2xl'],
+      default: theme.spacing.xl,
+    }),
+    left: 0,
+    right: 0,
+    width: "100%",
+    alignItems: "center",
+    paddingHorizontal: theme.spacing.md,
+    zIndex: 1000,
+    elevation: 1000, // for android
+    pointerEvents: "box-none",
+  },
+  floatingSearchBar: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    height: Platform.select({
+      web: 64,
+      default: 56,
+    }),
+    borderRadius: 9999, // rounded-full
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+    ...elev('xl'),
+    overflow: "hidden",
+    width: "100%",
+    maxWidth: Platform.select({
+      web: 580,
+      default: '100%',
+    }),
+    shadowColor: "#000",
+    shadowOffset: {
+      width: 0,
+      height: 4,
+    },
+    shadowOpacity: 0.15,
+    shadowRadius: 12,
+  },
+  floatingSearchInput: {
+    flex: 1,
+    color: '#333333',
+    fontSize: Platform.select({
+      web: theme.typography.fontSize.base,
+      default: theme.typography.fontSize.sm,
+    }),
+    paddingVertical: Platform.select({
+      web: theme.spacing.md,
+      default: theme.spacing.sm,
+    }),
+    paddingHorizontal: theme.spacing.sm,
+  },
+  searchIconContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: theme.spacing.lg,
+    paddingRight: theme.spacing.sm,
+  },
+  searchIcon: {
+    fontSize: 20,
+    color: '#555555',
+  },
+  searchButton: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingHorizontal: Platform.select({
+      web: theme.spacing.lg,
+      default: theme.spacing.md,
+    }),
+    paddingRight: Platform.select({
+      web: theme.spacing.lg,
+      default: theme.spacing.md,
+    }),
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 9999,
+    height: Platform.select({
+      web: 48,
+      default: 40,
+    }),
+    margin: Platform.select({
+      web: 8,
+      default: 6,
+    }),
+  },
+  searchButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.015,
   },
 });

@@ -51,7 +51,7 @@ export default function CheckoutSubmitted() {
 
   if (!orderId) {
     return (
-      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Screen style={{ backgroundColor: '#F2F0EF' }} contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <View style={styles.card}>
           <Text style={styles.heading}>Order submitted</Text>
           <Text style={styles.subheading}>We could not find that order. Please return to the profile page.</Text>
@@ -67,7 +67,7 @@ export default function CheckoutSubmitted() {
 
   if (loading) {
     return (
-      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Screen style={{ backgroundColor: '#F2F0EF' }} contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <ActivityIndicator color={PRIMARY} />
       </Screen>
     );
@@ -75,7 +75,7 @@ export default function CheckoutSubmitted() {
 
   if (!order) {
     return (
-      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
+      <Screen style={{ backgroundColor: '#F2F0EF' }} contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }}>
         <View style={styles.card}>
           <Text style={styles.heading}>Order submitted</Text>
           <Text style={styles.subheading}>Order #{orderId} could not be found.</Text>
@@ -90,7 +90,7 @@ export default function CheckoutSubmitted() {
   }
 
   return (
-    <Screen contentStyle={{ alignItems: 'center', padding: 24 }}>
+    <Screen style={{ backgroundColor: '#F2F0EF' }} contentStyle={{ alignItems: 'center', padding: 24 }}>
       <View style={styles.card}>
         <Text style={styles.heading}>Order submitted</Text>
         <Text style={styles.orderId}>Order ID: #{order.id}</Text>

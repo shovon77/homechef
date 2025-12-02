@@ -184,6 +184,7 @@ export async function approveChefApplication(
         phone: application.phone,
         location: application.location,
         bio: application.short_bio,
+        cuisine: application.cuisine_specialty || null,
         status: 'active',
       }, {
         onConflict: 'name',
@@ -198,6 +199,7 @@ export async function approveChefApplication(
           phone: application.phone,
           location: application.location,
           bio: application.short_bio,
+          cuisine: application.cuisine_specialty || null,
           status: 'active',
         })
         .eq('name', application.name);

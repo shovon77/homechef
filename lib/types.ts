@@ -36,6 +36,7 @@ export type Chef = {
   rating: number | null; // numeric
   rating_count: number | null; // integer
   created_at: string | null; // timestamptz
+  cuisine: string | null; // cuisine specialty from application
 };
 
 // ============================================================================

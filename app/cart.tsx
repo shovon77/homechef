@@ -12,7 +12,7 @@ import { useRouter } from "expo-router";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#17cfa1';
-const BACKGROUND_LIGHT = '#f8fcfb';
+const BACKGROUND_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b18';
 const TEXT_MUTED = '#4e9785';
 const BORDER_COLOR = '#e7f3f0';

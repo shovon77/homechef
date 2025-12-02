@@ -18,6 +18,7 @@ import { formatCad, cents } from '../../lib/money';
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
 const BG_LIGHT = '#FFFFFF';
+const BG_PAGE = '#F2F0EF';
 const BG_GRAY = '#F4F4F4';
 const TEXT_DARK = '#333333';
 const TEXT_MUTED = '#555555';
@@ -704,7 +705,7 @@ export default function ChefDashboard() {
   );
 
   const DashboardTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -922,7 +923,7 @@ export default function ChefDashboard() {
   );
 
   const MenuTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_GRAY }} contentContainerStyle={{ padding: 16, gap: 32, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 16, gap: 32, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -949,7 +950,7 @@ export default function ChefDashboard() {
   );
 
   const OrdersTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120 }}>
       <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Order History</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, minWidth: '100%' }}>
         {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
@@ -1066,7 +1067,7 @@ export default function ChefDashboard() {
   );
 
   const ReviewsTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900' }}>My Reviews</Text>
 
       {/* Rating Summary Card */}
@@ -1192,7 +1193,7 @@ export default function ChefDashboard() {
   );
 
   const PayoutsTab = (
-    <View style={{ flex: 1, backgroundColor: BG_LIGHT }}>
+    <View style={{ flex: 1, backgroundColor: BG_PAGE }}>
       <PayoutSettings
         onStatusChange={async (nextStatus) => {
           setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
@@ -1208,7 +1209,7 @@ export default function ChefDashboard() {
   );
 
   const ProfileTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_LIGHT }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -1273,7 +1274,7 @@ export default function ChefDashboard() {
   );
 
   return (
-    <Screen style={{ backgroundColor: BG_LIGHT }}>
+    <Screen style={{ backgroundColor: BG_PAGE }}>
       <View style={[styles.page, isMobile && styles.pageMobile]}>
         {Sidebar}
         <View style={styles.content}>
@@ -1381,7 +1382,7 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: BG_LIGHT,
+    backgroundColor: BG_PAGE,
   },
   // Mobile Styles
   pageMobile: {

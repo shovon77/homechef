@@ -12,7 +12,7 @@ import { submitCheckout } from '../../lib/orders';
 import ENV from '@/lib/env';
 import { formatCad } from '../../lib/money';
 
-const BACKGROUND = '#F8FCFB';
+const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
 const PRIMARY = '#2C4E4B';
 const ACCENT = '#1dbf73';

@@ -200,6 +200,9 @@ export async function submitChefReview({
       throw new Error(`Failed to submit review: ${error.message}`);
     }
   }
+
+  // Recalculate chef rating after submitting review
+  await recalculateChefRating(chefId);
 }
 
 /**
@@ -253,5 +256,33 @@ export async function getChefRatingSummary(chefId: number): Promise<ChefRatingSu
   const avg = count > 0 ? ratings.reduce((sum, r) => sum + r, 0) / count : 0;
 
   return { avg, count };
+}
+
+/**
+ * Recalculate and update chef rating from all reviews
+ * This should be called after reviews are added/updated/deleted
+ */
+export async function recalculateChefRating(chefId: number): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const summary = await getChefRatingSummary(chefId);
+    
+    const { error } = await supabase
+      .from('chefs')
+      .update({
+        rating: summary.count > 0 ? summary.avg : null,
+        rating_count: summary.count,
+      })
+      .eq('id', chefId);
+
+    if (error) {
+      console.error('Error updating chef rating:', error);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (e: any) {
+    console.error('Error recalculating chef rating:', e);
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 

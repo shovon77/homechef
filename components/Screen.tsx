@@ -7,19 +7,23 @@ type ScreenProps = ViewProps & {
   children: React.ReactNode;
   style?: ViewStyle | ViewStyle[];
   contentStyle?: ViewStyle | ViewStyle[];
+  scrollViewContentStyle?: ViewStyle | ViewStyle[];
   scroll?: boolean; // kept for compatibility
   contentPadding?: number;
   noHeader?: boolean;
   noFooter?: boolean;
+  fixedFooterHeight?: number; // Height of fixed/floating element at bottom
 };
 
 export default function Screen({
   children,
   style,
   contentStyle,
+  scrollViewContentStyle,
   contentPadding,
   noHeader = false,
   noFooter = false,
+  fixedFooterHeight = 0,
 }: ScreenProps) {
   const baseStyle = StyleSheet.flatten([{ flex: 1, backgroundColor: '#ffffff' }, style]);
 
@@ -31,12 +35,14 @@ export default function Screen({
 
   return (
     <View style={baseStyle}>
-      <ScrollView contentContainerStyle={{ flexGrow: 1 }}>
+      <ScrollView contentContainerStyle={[{ flexGrow: 1 }, scrollViewContentStyle]}>
         {!noHeader && <NavBar />}
         <View style={content}>
           {children}
         </View>
         {!noFooter && <Footer />}
+        {/* Spacer for fixed bottom elements */}
+        {fixedFooterHeight > 0 && <View style={{ height: fixedFooterHeight }} />}
       </ScrollView>
     </View>
   );

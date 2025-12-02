@@ -81,8 +81,8 @@ export default function ChefDetailView() {
   const title = chef?.name || (chefId ? `Chef #${chefId}` : 'Chef');
   const location = chef?.location || '';
   const bio = chef?.bio ?? chef?.description ?? '';
-  const avgRating = Number(chef?.avg_rating ?? 0);
-  const reviewCount = reviews.length;
+  const avgRating = Number(chef?.rating ?? 0);
+  const reviewCount = Number(chef?.rating_count ?? reviews.length);
   const dishCount = dishes.length;
 
   function handleAddToCart(d: Dish) {
@@ -118,6 +118,12 @@ export default function ChefDetailView() {
         rating: reviewRating,
         comment: reviewComment.trim() || undefined,
       });
+
+      // Refresh chef data to get updated rating
+      const chefData = await getChefById(chefId);
+      if (chefData) {
+        setChef(chefData);
+      }
 
       const updatedReviews = await getChefReviewsHelper(chefId);
       setReviews(updatedReviews);
@@ -205,16 +211,6 @@ export default function ChefDetailView() {
                   <Text style={styles.bioText}>{bio}</Text>
                 </View>
               ) : null}
-
-              {/* CTA Buttons */}
-              <View style={styles.ctaContainer}>
-                <TouchableOpacity style={styles.primaryButton}>
-                  <Text style={styles.primaryButtonText}>Follow Chef</Text>
-        </TouchableOpacity>
-                <TouchableOpacity style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>Message Chef</Text>
-        </TouchableOpacity>
-      </View>
     </View>
           </View>
 
@@ -529,37 +525,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.6,
-  },
-  ctaContainer: {
-    gap: theme.spacing.md,
-  },
-  primaryButton: {
-    height: 48,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    backgroundColor: PRIMARY_COLOR,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  primaryButtonText: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    letterSpacing: 0.015,
-  },
-  secondaryButton: {
-    height: 48,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    backgroundColor: `${PRIMARY_COLOR}33`, // primary/20
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  secondaryButtonText: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    letterSpacing: 0.015,
   },
   mainContent: {
     flex: 1,

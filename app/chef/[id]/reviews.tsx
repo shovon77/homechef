@@ -63,15 +63,18 @@ export default function ChefReviewsPage() {
       setReviews((revData as any) || []);
 
       // 3) recompute avg + count, update chef row
-      const total = (revData || []).reduce((a: number, r: any) => a + (r.rating || 0), 0);
+      const total = (revData || []).reduce((a: number, r: any) => a + (Number(r.rating) || 0), 0);
       const count = (revData || []).length;
-      const newAvg = count ? total / count : null;
+      const newAvg = count > 0 ? total / count : null;
 
       const { error: upErr } = await supabase
         .from("chefs")
         .update({ rating: newAvg, rating_count: count })
         .eq("id", chefId);
-      if (upErr) console.log("chef rating update error", upErr);
+      if (upErr) {
+        console.error("chef rating update error", upErr);
+        Alert.alert("Warning", "Review submitted but rating update failed. Please refresh.");
+      }
 
       // reset form
       setUserName("");

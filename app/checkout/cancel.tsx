@@ -5,7 +5,7 @@ import { Link } from "expo-router";
 
 export default function CheckoutCancel() {
   return (
-    <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }} contentContainerStyle={{ padding: 16, alignItems: "center", justifyContent: "center", minHeight: "100%" }}>
+    <ScrollView style={{ flex: 1, backgroundColor: '#F2F0EF' }} contentContainerStyle={{ padding: 16, alignItems: "center", justifyContent: "center", minHeight: "100%" }}>
       <View style={{ maxWidth: 500, width: "100%", gap: 16 }}>
         <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#EEF2F6", padding: 24, alignItems: "center", gap: 12 }}>
           <Text style={{ fontSize: 48 }}>❌</Text>

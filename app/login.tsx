@@ -41,7 +41,7 @@ export default function Login() {
   }
 
   return (
-    <View style={{ flex: 1, backgroundColor: theme.colors.surface, padding: 20, paddingTop: 60 }}>
+    <View style={{ flex: 1, backgroundColor: '#F2F0EF', padding: 20, paddingTop: 60 }}>
       <Text style={{ fontSize: 28, fontWeight: "900", color: theme.colors.text, marginBottom: 12 }}>Log in</Text>
       <Text style={{ color: theme.colors.textMuted, marginBottom: 20 }}>Use your email to receive a magic link.</Text>
 

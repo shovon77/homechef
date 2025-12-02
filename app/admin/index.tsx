@@ -14,7 +14,7 @@ import { callFn } from '../../lib/fn';
 const ITEMS_PER_PAGE = 25;
 
 const palette = {
-  background: '#F4F7F5',
+  background: '#F2F0EF',
   surface: '#FFFFFF',
   border: '#E2E8F0',
   text: '#0F172A',
