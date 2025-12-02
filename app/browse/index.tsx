@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform } from 'react-native';
+import { useLocalSearchParams } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import DishCard from '../components/DishCard';
@@ -33,6 +34,7 @@ export default function BrowsePage() {
   
   const gridColumns = isMobile ? 1 : isTablet ? 3 : 5;
   
+  const { q } = useLocalSearchParams();
   const [tab, setTab] = useState<'dishes' | 'chefs'>('dishes');
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
@@ -41,6 +43,12 @@ export default function BrowsePage() {
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+
+  useEffect(() => {
+    if (typeof q === 'string') {
+      setQuery(q);
+    }
+  }, [q]);
 
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PER_PAGE)), [total]);
 
@@ -64,13 +72,24 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,price,image,chef_id', { count: 'exact' })
+            .select('id,name,price,image,chef_id, chefs!inner(status)', { count: 'exact' })
+            .eq('chefs.status', 'active')
             .order('created_at', { ascending: false })
             .range(from, to);
 
           if (query.trim()) {
             const term = query.trim();
-            request = request.or(`name.ilike.%${term}%,category.ilike.%${term}%`);
+            // Sanitize term to avoid breaking the OR syntax (commas split conditions)
+            const safeTerm = term.replace(/,/g, ' ');
+            // Use websearch_to_tsquery (wfts) for natural language search
+            // This handles multi-word queries better than ilike (e.g. "chicken rice" finds documents with both words)
+            const searchFilter = [
+              `name.wfts.${safeTerm}`,
+              `description.wfts.${safeTerm}`,
+              `category.wfts.${safeTerm}`,
+              `chef.wfts.${safeTerm}`
+            ].join(',');
+            request = request.or(searchFilter);
           }
 
           const { data, error, count } = await request;
@@ -82,12 +101,20 @@ export default function BrowsePage() {
           let request = supabase
             .from('chefs')
             .select('id,name,location,photo,rating', { count: 'exact' })
+            .eq('status', 'active')
             .order('created_at', { ascending: false })
             .range(from, to);
 
           if (query.trim()) {
             const term = query.trim();
-            request = request.or(`name.ilike.%${term}%,location.ilike.%${term}%`);
+            const safeTerm = term.replace(/,/g, ' ');
+            // Use websearch_to_tsquery (wfts) for natural language search
+            const searchFilter = [
+              `name.wfts.${safeTerm}`,
+              `location.wfts.${safeTerm}`,
+              `bio.wfts.${safeTerm}`
+            ].join(',');
+            request = request.or(searchFilter);
           }
 
           const { data, error, count } = await request;
