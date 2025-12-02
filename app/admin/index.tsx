@@ -236,8 +236,8 @@ export default function AdminPage() {
 
       console.log('Starting upload...', { fileName, filePath });
 
-      // Try 'public' bucket first
-      let bucket = 'public';
+      // Try 'public-assets' bucket first (user specified)
+      let bucket = 'public-assets';
       
       let { data, error: uploadError } = await supabase.storage
         .from(bucket)
@@ -247,7 +247,7 @@ export default function AdminPage() {
         console.warn(`Upload to '${bucket}' failed:`, uploadError);
         
         // Try fallback buckets
-        const fallbacks = ['assets', 'images', 'common'];
+        const fallbacks = ['public', 'assets', 'images', 'common'];
         for (const b of fallbacks) {
           console.log(`Retrying upload to '${b}'...`);
           const res = await supabase.storage.from(b).upload(filePath, file, { upsert: true });
