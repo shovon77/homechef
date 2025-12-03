@@ -568,10 +568,9 @@ const styles = StyleSheet.create({
   },
   suggestionsContainer: {
     position: 'absolute',
-    bottom: '100%',
-    left: theme.spacing.md,
-    right: theme.spacing.md,
-    marginBottom: theme.spacing.sm,
+    top: '100%', // Show below the search bar
+    marginTop: theme.spacing.sm,
+    alignSelf: 'center', // Center horizontally relative to container
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
     ...elev('lg'),
@@ -582,7 +581,7 @@ const styles = StyleSheet.create({
     }),
     width: Platform.select({
        web: 580, // Match search bar max-width
-       default: '100%'
+       default: '94%' // Slightly less than full width on mobile
     }),
   },
   suggestionItem: {
