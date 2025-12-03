@@ -476,7 +476,10 @@ export default function BrowsePage() {
             style={styles.micIconContainer}
             onPress={startDictation}
           >
-            <Text style={styles.micIcon}>🎤</Text>
+            <Image 
+              source={require('../../assets/microphone.png')} 
+              style={styles.micIconImage} 
+            />
           </TouchableOpacity>
         </View>
       </View>
@@ -743,9 +746,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: PRIMARY_COLOR,
   },
-  micIcon: {
-    fontSize: 24,
-    color: PRIMARY_COLOR,
+  micIconImage: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   cuisineCard: {
     backgroundColor: '#FFFFFF',

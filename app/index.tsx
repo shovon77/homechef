@@ -369,7 +369,10 @@ export default function HomePage() {
               style={styles.micIconContainer}
               onPress={startDictation}
             >
-              <Text style={styles.micIcon}>🎤</Text>
+              <Image 
+                source={require('../assets/microphone.png')} 
+                style={styles.micIconImage} 
+              />
             </TouchableOpacity>
         </View>
       </View>
@@ -529,9 +532,10 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: PRIMARY_COLOR, // Make icon primary color
   },
-  micIcon: {
-    fontSize: 24,
-    color: PRIMARY_COLOR,
+  micIconImage: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   searchInput: {
     flex: 1,
