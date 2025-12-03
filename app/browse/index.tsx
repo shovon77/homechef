@@ -47,7 +47,7 @@ export default function BrowsePage() {
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [sortBy, setSortBy] = useState('popular');
+  const [sortBy, setSortBy] = useState('none');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   useEffect(() => {
@@ -112,7 +112,7 @@ export default function BrowsePage() {
           const { data, error, count } = await request;
           if (cancelled) return;
           if (error) throw error;
-          setDishes(data ?? []);
+          setDishes((data as any) ?? []);
           setTotal(count ?? (data?.length ?? 0));
         } else if (tab === 'chefs') {
           let request = supabase
@@ -267,22 +267,36 @@ export default function BrowsePage() {
         {tab === 'dishes' && (
           <View style={[styles.sortContainer, { zIndex: 10 }]}>
             <View style={{ position: 'relative' }}>
-              <TouchableOpacity 
-                activeOpacity={0.7}
-                onPress={() => setShowSortMenu(!showSortMenu)}
-                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
-              >
-                <SortIcon size={24} color="#475569" />
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
-                  {sortBy === 'popular' ? 'Popularity' :
-                   sortBy === 'price_asc' ? 'Price low to high' :
-                   'Price high to low'}
-                </Text>
-              </TouchableOpacity>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <TouchableOpacity 
+                  activeOpacity={0.7}
+                  onPress={() => setShowSortMenu(!showSortMenu)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                >
+                  <SortIcon size={24} color="#475569" />
+                  {sortBy !== 'none' && (
+                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
+                      {sortBy === 'popular' ? 'Popularity' :
+                       sortBy === 'price_asc' ? 'Price low to high' :
+                       'Price high to low'}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+
+                {sortBy !== 'none' && (
+                  <TouchableOpacity 
+                    onPress={() => setSortBy('none')}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
               
               {showSortMenu && (
                 <View style={styles.dropdownMenu}>
                   {[
+                    { label: 'None', value: 'none' },
                     { label: 'Popularity', value: 'popular' },
                     { label: 'Price low to high', value: 'price_asc' },
                     { label: 'Price high to low', value: 'price_desc' },
@@ -589,10 +603,10 @@ const styles = StyleSheet.create({
     }),
     borderRadius: 9999, // rounded-full
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    ...elev('xl'),
+    ...elev('lg'),
     overflow: "hidden",
     width: "100%",
-    maxWidth: Platform.select({
+    maxWidth: Platform.select<any>({
       web: 580,
       default: '100%',
     }),
