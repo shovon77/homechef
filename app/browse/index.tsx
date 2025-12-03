@@ -332,11 +332,8 @@ export default function BrowsePage() {
       {/* Floating Search Bar */}
       <View style={styles.floatingSearchContainer}>
         <View style={styles.floatingSearchBar}>
-          <View style={styles.searchIconContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
-          </View>
           <TextInput
-            placeholder="Search biryani"
+            placeholder="In the mood for biryani?"
             placeholderTextColor="#555555"
             style={styles.floatingSearchInput}
             value={query}
@@ -345,10 +342,10 @@ export default function BrowsePage() {
             returnKeyType="search"
           />
           <TouchableOpacity 
-            style={styles.searchButton}
+            style={styles.searchIconContainer}
             onPress={handleSearch}
           >
-            <Text style={styles.searchButtonText}>Search</Text>
+            <Text style={styles.searchIcon}>🔍</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -544,45 +541,18 @@ const styles = StyleSheet.create({
       web: theme.spacing.md,
       default: theme.spacing.sm,
     }),
-    paddingHorizontal: theme.spacing.sm,
+    paddingLeft: theme.spacing.lg,
+    paddingRight: theme.spacing.sm,
   },
   searchIconContainer: {
     justifyContent: "center",
     alignItems: "center",
-    paddingLeft: theme.spacing.lg,
-    paddingRight: theme.spacing.sm,
+    paddingRight: theme.spacing.lg,
+    paddingLeft: theme.spacing.sm,
   },
   searchIcon: {
-    fontSize: 20,
-    color: '#555555',
-  },
-  searchButton: {
-    justifyContent: "center",
-    alignItems: "center",
-    paddingHorizontal: Platform.select({
-      web: theme.spacing.lg,
-      default: theme.spacing.md,
-    }),
-    paddingRight: Platform.select({
-      web: theme.spacing.lg,
-      default: theme.spacing.md,
-    }),
-    backgroundColor: PRIMARY_COLOR,
-    borderRadius: 9999,
-    height: Platform.select({
-      web: 48,
-      default: 40,
-    }),
-    margin: Platform.select({
-      web: 8,
-      default: 6,
-    }),
-  },
-  searchButtonText: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
-    letterSpacing: 0.015,
+    fontSize: 24,
+    color: PRIMARY_COLOR,
   },
   cuisineCard: {
     backgroundColor: '#FFFFFF',
