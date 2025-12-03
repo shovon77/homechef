@@ -212,7 +212,11 @@ export default function NavBar() {
                 }}
                 style={isMobile ? styles.iconButton : styles.primaryButton}
               >
-                {isMobile ? <Text style={{fontSize: 20}}>👤</Text> : <Text style={styles.primaryButtonText}>Profile</Text>}
+                {isMobile ? (
+                  <Image source={require('../assets/user.png')} style={styles.iconButtonImage} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.primaryButtonText}>Profile</Text>
+                )}
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
@@ -425,6 +429,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F3F4F6',
     borderRadius: 18,
+  },
+  iconButtonImage: {
+    width: 20,
+    height: 20,
   },
   secondaryButtonMobile: {
     height: 36,
