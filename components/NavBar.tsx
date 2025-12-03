@@ -225,7 +225,11 @@ export default function NavBar() {
                 }}
                 style={isMobile ? styles.iconButton : styles.secondaryButton}
               >
-                {isMobile ? <Text style={{fontSize: 20}}>🚪</Text> : <Text style={styles.secondaryButtonText}>Logout</Text>}
+                {isMobile ? (
+                  <Image source={require('../assets/logout.png')} style={styles.iconButtonImage} resizeMode="contain" />
+                ) : (
+                  <Text style={styles.secondaryButtonText}>Logout</Text>
+                )}
               </TouchableOpacity>
             </>
           ) : (
