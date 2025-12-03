@@ -171,6 +171,7 @@ export default function BrowsePage() {
             // Use websearch_to_tsquery (wfts) for natural language search
             // This handles multi-word queries better than ilike (e.g. "chicken rice" finds documents with both words)
             const searchFilter = [
+              `name.ilike.%${safeTerm}%`,
               `name.wfts.${safeTerm}`,
               `description.wfts.${safeTerm}`,
               `category.wfts.${safeTerm}`,
