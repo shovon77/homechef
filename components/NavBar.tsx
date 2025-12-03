@@ -241,7 +241,11 @@ export default function NavBar() {
 
           <Link href="/cart" asChild>
             <TouchableOpacity style={styles.cartButton}>
-              <Text style={styles.cartIcon}>🛒</Text>
+              <Image 
+                source={require('../assets/shopping-cart.png')} 
+                style={styles.cartIconImage}
+                resizeMode="contain"
+              />
               {cartQty > 0 && (
                 <View style={styles.cartBadge}>
                   <Text style={styles.cartBadgeText}>{cartQty}</Text>
@@ -376,9 +380,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  cartIcon: {
-    fontSize: 24,
-    color: TEXT_DARK,
+  cartIconImage: {
+    width: 24,
+    height: 24,
   },
   cartBadge: {
     position: 'absolute',
