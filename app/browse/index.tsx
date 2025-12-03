@@ -12,6 +12,39 @@ const PER_PAGE = 25; // 5x5 grid layout
 const GRID_COLUMNS = 5;
 const PRIMARY_COLOR = '#2C4E4B';
 
+function cleanSearchQuery(q: string) {
+  let cleaned = q.toLowerCase().trim();
+  const phrases = [
+    "in the mood for",
+    "looking for",
+    "i want",
+    "show me",
+    "search for",
+    "find me",
+    "find",
+    "give me"
+  ];
+  for (const p of phrases) {
+    if (cleaned.startsWith(p)) {
+      cleaned = cleaned.substring(p.length).trim();
+    }
+  }
+  return cleaned || q;
+}
+
+function useDebounce<T>(value: T, delay: number): T {
+  const [debouncedValue, setDebouncedValue] = useState(value);
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      setDebouncedValue(value);
+    }, delay);
+    return () => {
+      clearTimeout(handler);
+    };
+  }, [value, delay]);
+  return debouncedValue;
+}
+
 type Dish = {
   id: number;
   name: string;
@@ -48,6 +81,7 @@ export default function BrowsePage() {
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
+  const debouncedQuery = useDebounce(query, 800);
   const [sortBy, setSortBy] = useState('none');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
@@ -66,7 +100,7 @@ export default function BrowsePage() {
     setDishes([]);
     setChefs([]);
     setCuisines([]);
-  }, [tab, query, sortBy]);
+  }, [tab, debouncedQuery, sortBy]);
 
   useEffect(() => {
     let cancelled = false;
@@ -83,6 +117,30 @@ export default function BrowsePage() {
             .select('id,name,price,image,rating,chef_id, chefs!inner(status, name)', { count: 'exact' })
             .eq('chefs.status', 'active');
 
+          // Extract search parameters using AI or fallback
+          let searchKeywords = '';
+          let maxPrice = null;
+          // let sortIntent = null;
+
+          if (debouncedQuery.trim()) {
+            try {
+                // Attempt AI search
+                const { data: aiData, error: aiError } = await supabase.functions.invoke('ai-search', { 
+                    body: { query: debouncedQuery } 
+                });
+                if (!aiError && aiData) {
+                    searchKeywords = aiData.keywords || debouncedQuery;
+                    maxPrice = aiData.max_price;
+                    // if (aiData.sort) setSortBy(aiData.sort); // Optional: auto-sort
+                } else {
+                    searchKeywords = cleanSearchQuery(debouncedQuery);
+                }
+            } catch (e) {
+                // Fallback to local cleaning
+                searchKeywords = cleanSearchQuery(debouncedQuery);
+            }
+          }
+
           if (sortBy === 'price_asc') {
             request = request.order('price', { ascending: true });
           } else if (sortBy === 'price_desc') {
@@ -95,8 +153,12 @@ export default function BrowsePage() {
 
           request = request.range(from, to);
 
-          if (query.trim()) {
-            const term = query.trim();
+          if (maxPrice) {
+             request = request.lte('price', maxPrice);
+          }
+
+          if (searchKeywords.trim()) {
+            const term = searchKeywords.trim();
             // Sanitize term to avoid breaking the OR syntax (commas split conditions)
             const safeTerm = term.replace(/,/g, ' ');
             // Use websearch_to_tsquery (wfts) for natural language search
@@ -123,8 +185,8 @@ export default function BrowsePage() {
             .order('created_at', { ascending: false })
             .range(from, to);
 
-          if (query.trim()) {
-            const term = query.trim();
+          if (debouncedQuery.trim()) {
+            const term = cleanSearchQuery(debouncedQuery.trim());
             const safeTerm = term.replace(/,/g, ' ');
             // Use websearch_to_tsquery (wfts) for natural language search
             const searchFilter = [
@@ -149,9 +211,9 @@ export default function BrowsePage() {
             .eq('status', 'active')
             .not('cuisine', 'is', null);
 
-          if (query.trim()) {
+          if (debouncedQuery.trim()) {
              // Simple filtering if they search in Cuisines tab
-             request = request.ilike('cuisine', `%${query.trim()}%`);
+             request = request.ilike('cuisine', `%${debouncedQuery.trim()}%`);
           }
 
           const { data, error } = await request;
