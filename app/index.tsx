@@ -391,7 +391,7 @@ export default function HomePage() {
 
         <View style={styles.floatingSearchBar}>
             <TextInput
-              placeholder="Search biryani"
+              placeholder="In the mood for biryani?"
               placeholderTextColor="#555555"
               style={styles.floatingSearchInput}
               value={searchQuery}
