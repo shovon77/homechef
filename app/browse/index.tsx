@@ -461,7 +461,10 @@ export default function BrowsePage() {
             style={styles.searchIconContainer}
             onPress={handleSearch}
           >
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Image 
+              source={require('../../assets/search.png')} 
+              style={styles.searchIconImage} 
+            />
           </TouchableOpacity>
           <TextInput
             placeholder="In the mood for biryani?"
@@ -742,9 +745,10 @@ const styles = StyleSheet.create({
     paddingRight: theme.spacing.lg,
     paddingLeft: theme.spacing.sm,
   },
-  searchIcon: {
-    fontSize: 24,
-    color: PRIMARY_COLOR,
+  searchIconImage: {
+    width: 24,
+    height: 24,
+    resizeMode: 'contain',
   },
   micIconImage: {
     width: 24,
