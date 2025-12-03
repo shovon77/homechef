@@ -18,6 +18,7 @@ type Dish = {
   price: number | null;
   image: string | null;
   chef_id: number | null;
+  rating?: number | null;
   chefs?: { name: string | null } | null;
 };
 
@@ -79,7 +80,7 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,price,image,chef_id, chefs!inner(status, name, rating)', { count: 'exact' })
+            .select('id,name,price,image,rating,chef_id, chefs!inner(status, name)', { count: 'exact' })
             .eq('chefs.status', 'active');
 
           if (sortBy === 'price_asc') {
@@ -87,7 +88,7 @@ export default function BrowsePage() {
           } else if (sortBy === 'price_desc') {
             request = request.order('price', { ascending: false });
           } else if (sortBy === 'popular') {
-            request = request.order('rating', { foreignTable: 'chefs', ascending: false });
+            request = request.order('rating', { ascending: false });
           } else {
             request = request.order('created_at', { ascending: false });
           }
