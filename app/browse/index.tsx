@@ -300,6 +300,24 @@ export default function BrowsePage() {
     setPage(1);
   };
 
+  const startDictation = () => {
+    if (Platform.OS === 'web') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setQuery(transcript);
+        };
+        recognition.start();
+      } else {
+        alert("Voice search not supported in this browser.");
+      }
+    } else {
+      alert("Voice search coming soon to mobile app.");
+    }
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
       <Screen 
@@ -439,6 +457,12 @@ export default function BrowsePage() {
       {/* Floating Search Bar */}
       <View style={styles.floatingSearchContainer}>
         <View style={styles.floatingSearchBar}>
+          <TouchableOpacity 
+            style={styles.searchIconContainer}
+            onPress={handleSearch}
+          >
+            <Text style={styles.searchIcon}>🔍</Text>
+          </TouchableOpacity>
           <TextInput
             placeholder="In the mood for biryani?"
             placeholderTextColor="#555555"
@@ -449,10 +473,10 @@ export default function BrowsePage() {
             returnKeyType="search"
           />
           <TouchableOpacity 
-            style={styles.searchIconContainer}
-            onPress={handleSearch}
+            style={styles.micIconContainer}
+            onPress={startDictation}
           >
-            <Text style={styles.searchIcon}>🔍</Text>
+            <Text style={styles.micIcon}>🎤</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -700,16 +724,26 @@ const styles = StyleSheet.create({
       web: theme.spacing.md,
       default: theme.spacing.sm,
     }),
-    paddingLeft: theme.spacing.lg,
+    paddingLeft: theme.spacing.sm,
     paddingRight: theme.spacing.sm,
   },
   searchIconContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: theme.spacing.lg,
+    paddingRight: theme.spacing.sm,
+  },
+  micIconContainer: {
     justifyContent: "center",
     alignItems: "center",
     paddingRight: theme.spacing.lg,
     paddingLeft: theme.spacing.sm,
   },
   searchIcon: {
+    fontSize: 24,
+    color: PRIMARY_COLOR,
+  },
+  micIcon: {
     fontSize: 24,
     color: PRIMARY_COLOR,
   },

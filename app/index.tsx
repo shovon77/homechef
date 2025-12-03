@@ -197,6 +197,24 @@ export default function HomePage() {
     }
   };
 
+  const startDictation = () => {
+    if (Platform.OS === 'web') {
+      const SpeechRecognition = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;
+      if (SpeechRecognition) {
+        const recognition = new SpeechRecognition();
+        recognition.onresult = (event: any) => {
+          const transcript = event.results[0][0].transcript;
+          setSearchQuery(transcript);
+        };
+        recognition.start();
+      } else {
+        alert("Voice search not supported in this browser.");
+      }
+    } else {
+      alert("Voice search coming soon to mobile app.");
+    }
+  };
+
   if (loading) {
     return (
       <Screen>
@@ -332,6 +350,12 @@ export default function HomePage() {
       {/* Floating Search Bar - fixed at bottom of viewport */}
       <View style={styles.floatingSearchContainer}>
         <View style={styles.floatingSearchBar}>
+            <TouchableOpacity 
+              style={styles.searchIconContainer}
+              onPress={handleSearch}
+            >
+              <Text style={styles.searchIcon}>🔍</Text>
+            </TouchableOpacity>
             <TextInput
               placeholder="In the mood for biryani?"
               placeholderTextColor="#555555"
@@ -342,10 +366,10 @@ export default function HomePage() {
               returnKeyType="search"
             />
             <TouchableOpacity 
-              style={styles.searchIconContainer}
-              onPress={handleSearch}
+              style={styles.micIconContainer}
+              onPress={startDictation}
             >
-              <Text style={styles.searchIcon}>🔍</Text>
+              <Text style={styles.micIcon}>🎤</Text>
             </TouchableOpacity>
         </View>
       </View>
@@ -486,10 +510,16 @@ const styles = StyleSheet.create({
       web: theme.spacing.md,
       default: theme.spacing.sm,
     }),
-    paddingLeft: theme.spacing.lg, // Add left padding since icon is gone
+    paddingLeft: theme.spacing.sm,
     paddingRight: theme.spacing.sm,
   },
   searchIconContainer: {
+    justifyContent: "center",
+    alignItems: "center",
+    paddingLeft: theme.spacing.lg,
+    paddingRight: theme.spacing.sm,
+  },
+  micIconContainer: {
     justifyContent: "center",
     alignItems: "center",
     paddingRight: theme.spacing.lg,
@@ -498,6 +528,10 @@ const styles = StyleSheet.create({
   searchIcon: {
     fontSize: 24,
     color: PRIMARY_COLOR, // Make icon primary color
+  },
+  micIcon: {
+    fontSize: 24,
+    color: PRIMARY_COLOR,
   },
   searchInput: {
     flex: 1,
