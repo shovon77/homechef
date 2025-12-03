@@ -125,17 +125,24 @@ export default function BrowsePage() {
           if (debouncedQuery.trim()) {
             try {
                 // Attempt AI search
+                console.log('Invoking AI search for:', debouncedQuery);
                 const { data: aiData, error: aiError } = await supabase.functions.invoke('ai-search', { 
                     body: { query: debouncedQuery } 
                 });
-                if (!aiError && aiData) {
+                
+                if (aiError) {
+                    console.warn('AI Search Error:', aiError);
+                    searchKeywords = cleanSearchQuery(debouncedQuery);
+                } else if (aiData) {
+                    console.log('AI Search Result:', aiData);
                     searchKeywords = aiData.keywords || debouncedQuery;
                     maxPrice = aiData.max_price;
-                    // if (aiData.sort) setSortBy(aiData.sort); // Optional: auto-sort
+                    // if (aiData.sort) setSortBy(aiData.sort); 
                 } else {
                     searchKeywords = cleanSearchQuery(debouncedQuery);
                 }
             } catch (e) {
+                console.error('AI Search Exception:', e);
                 // Fallback to local cleaning
                 searchKeywords = cleanSearchQuery(debouncedQuery);
             }
