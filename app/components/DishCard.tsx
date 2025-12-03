@@ -12,6 +12,7 @@ import { formatCad } from "../../lib/money";
 export default function DishCard({ dish }: { dish: any }) {
   const [avg, setAvg] = useState(0);
   const { addToCart } = useCart();
+  const chefName = dish.chefs?.name || dish.chef;
 
   useEffect(() => {
     let m = true;
@@ -30,7 +31,10 @@ export default function DishCard({ dish }: { dish: any }) {
         </TouchableOpacity>
       </Link>
       <View style={styles.content}>
-        <Text style={styles.name}>{dish.name}</Text>
+        <View>
+          <Text style={styles.name} numberOfLines={1}>{dish.name}</Text>
+          {chefName && <Text style={styles.chefName} numberOfLines={1}>by {chefName}</Text>}
+        </View>
         <Stars value={toNumber(avg, 0)} size={16} />
         <Text style={styles.price}>
           {formatCad(dish.price)}
@@ -67,6 +71,11 @@ const styles = StyleSheet.create({
     color: theme.colors.text,
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.base,
+  },
+  chefName: {
+    color: theme.colors.textMuted,
+    fontSize: theme.typography.fontSize.sm,
+    marginTop: 2,
   },
   price: {
     color: theme.colors.primary,

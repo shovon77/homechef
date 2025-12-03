@@ -17,6 +17,7 @@ type Dish = {
   price: number | null;
   image: string | null;
   chef_id: number | null;
+  chefs?: { name: string | null } | null;
 };
 
 type Chef = {
@@ -76,7 +77,7 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,price,image,chef_id, chefs!inner(status)', { count: 'exact' })
+            .select('id,name,price,image,chef_id, chefs!inner(status, name)', { count: 'exact' })
             .eq('chefs.status', 'active');
 
           if (sortBy === 'price_asc') {
