@@ -122,6 +122,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT");
   const [searchQuery, setSearchQuery] = useState("");
+  const [suggestions, setSuggestions] = useState<string[]>([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
   const scrollX = React.useRef(new Animated.Value(0)).current;
 
   const CARD_WIDTH = 240;
@@ -186,14 +188,52 @@ export default function HomePage() {
     return () => { mounted = false; };
   }, []);
 
-  const handleSearch = () => {
-    if (searchQuery.trim()) {
+  const handleSearch = (term?: string) => {
+    const q = term || searchQuery;
+    if (q.trim()) {
       router.push({
         pathname: "/browse",
-        params: { q: searchQuery.trim() },
+        params: { q: q.trim() },
       });
+      setShowSuggestions(false);
     } else {
       router.push("/browse");
+    }
+  };
+
+  const handleTextChange = async (text: string) => {
+    setSearchQuery(text);
+    if (text.length < 2) {
+      setSuggestions([]);
+      setShowSuggestions(false);
+      return;
+    }
+
+    try {
+      const [{ data: d }, { data: c }] = await Promise.all([
+        supabase
+          .from('dishes')
+          .select('name')
+          .ilike('name', `%${text}%`)
+          .limit(5),
+        supabase
+          .from('chefs')
+          .select('name, cuisine')
+          .or(`name.ilike.%${text}%,cuisine.ilike.%${text}%`)
+          .limit(5)
+      ]);
+
+      const results = new Set<string>();
+      d?.forEach(item => results.add(item.name));
+      c?.forEach(item => {
+        if (item.name.toLowerCase().includes(text.toLowerCase())) results.add(item.name);
+        if (item.cuisine && item.cuisine.toLowerCase().includes(text.toLowerCase())) results.add(item.cuisine);
+      });
+
+      setSuggestions(Array.from(results).slice(0, 5));
+      setShowSuggestions(true);
+    } catch (error) {
+      console.warn('Error fetching suggestions:', error);
     }
   };
 
@@ -331,25 +371,49 @@ export default function HomePage() {
 
       {/* Floating Search Bar - fixed at bottom of viewport */}
       <View style={styles.floatingSearchContainer}>
-        <View style={styles.floatingSearchBar}>
-          <View style={styles.searchIconContainer}>
-            <Text style={styles.searchIcon}>🔍</Text>
+        {/* Suggestions List (Appears above search bar) */}
+        {showSuggestions && suggestions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            {suggestions.map((item, index) => (
+              <TouchableOpacity 
+                key={index} 
+                style={styles.suggestionItem}
+                onPress={() => {
+                  setSearchQuery(item);
+                  handleSearch(item);
+                }}
+              >
+                <Text style={styles.suggestionText}>{item}</Text>
+              </TouchableOpacity>
+            ))}
           </View>
+        )}
+
+        <View style={styles.floatingSearchBar}>
             <TextInput
               placeholder="Search biryani"
               placeholderTextColor="#555555"
               style={styles.floatingSearchInput}
               value={searchQuery}
-            onChangeText={setSearchQuery}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
-          <TouchableOpacity 
-            style={styles.searchButton}
-            onPress={handleSearch}
-          >
-            <Text style={styles.searchButtonText}>{isMobile ? "Search" : "Find Food"}</Text>
-          </TouchableOpacity>
+              onChangeText={handleTextChange}
+              onSubmitEditing={() => handleSearch()}
+              returnKeyType="search"
+              onFocus={() => {
+                if (searchQuery.length >= 2 && suggestions.length > 0) {
+                  setShowSuggestions(true);
+                }
+              }}
+              onBlur={() => {
+                // Small delay to allow clicks on suggestions to register
+                setTimeout(() => setShowSuggestions(false), 200);
+              }}
+            />
+            <TouchableOpacity 
+              style={styles.searchIconContainer}
+              onPress={() => handleSearch()}
+            >
+              <Text style={styles.searchIcon}>🔍</Text>
+            </TouchableOpacity>
         </View>
       </View>
     </View>
@@ -489,17 +553,47 @@ const styles = StyleSheet.create({
       web: theme.spacing.md,
       default: theme.spacing.sm,
     }),
-    paddingHorizontal: theme.spacing.sm,
+    paddingLeft: theme.spacing.lg, // Add left padding since icon is gone
+    paddingRight: theme.spacing.sm,
   },
   searchIconContainer: {
     justifyContent: "center",
     alignItems: "center",
-    paddingLeft: theme.spacing.lg,
-    paddingRight: theme.spacing.sm,
+    paddingRight: theme.spacing.lg,
+    paddingLeft: theme.spacing.sm,
   },
   searchIcon: {
-    fontSize: 20,
-    color: '#555555',
+    fontSize: 24,
+    color: PRIMARY_COLOR, // Make icon primary color
+  },
+  suggestionsContainer: {
+    position: 'absolute',
+    bottom: '100%',
+    left: theme.spacing.md,
+    right: theme.spacing.md,
+    marginBottom: theme.spacing.sm,
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    ...elev('lg'),
+    overflow: 'hidden',
+    maxWidth: Platform.select({
+      web: 580,
+      default: '100%',
+    }),
+    width: Platform.select({
+       web: 580, // Match search bar max-width
+       default: '100%'
+    }),
+  },
+  suggestionItem: {
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F2F0EF',
+  },
+  suggestionText: {
+    fontSize: theme.typography.fontSize.base,
+    color: '#333333',
   },
   searchInput: {
     flex: 1,
