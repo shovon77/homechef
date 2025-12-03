@@ -275,13 +275,12 @@ export default function BrowsePage() {
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
                 >
                   <SortIcon size={24} color="#475569" />
-                  {sortBy !== 'none' && (
-                    <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
-                      {sortBy === 'popular' ? 'Popularity' :
-                       sortBy === 'price_asc' ? 'Price low to high' :
-                       'Price high to low'}
-                    </Text>
-                  )}
+                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
+                    {sortBy === 'none' ? 'Sort' :
+                     sortBy === 'popular' ? 'Popularity' :
+                     sortBy === 'price_asc' ? 'Price low to high' :
+                     'Price high to low'}
+                  </Text>
                 </TouchableOpacity>
 
                 {sortBy !== 'none' && (
