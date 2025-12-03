@@ -198,6 +198,7 @@ export default function BrowsePage() {
             const safeTerm = term.replace(/,/g, ' ');
             // Use websearch_to_tsquery (wfts) for natural language search
             const searchFilter = [
+              `name.ilike.%${safeTerm}%`,
               `name.wfts.${safeTerm}`,
               `location.wfts.${safeTerm}`,
               `bio.wfts.${safeTerm}`
@@ -253,7 +254,7 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, page, query, sortBy]);
+  }, [tab, page, debouncedQuery, sortBy]);
 
   const go = (next: number) => {
     setPage(Math.max(1, Math.min(totalPages, next)));
