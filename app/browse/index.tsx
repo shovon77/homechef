@@ -47,6 +47,7 @@ export default function BrowsePage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const [sortBy, setSortBy] = useState('relevance');
+  const [showSortMenu, setShowSortMenu] = useState(false);
 
   useEffect(() => {
     if (typeof q === 'string') {
@@ -262,26 +263,47 @@ export default function BrowsePage() {
         </View>
 
         {tab === 'dishes' && (
-          <View style={styles.sortContainer}>
+          <View style={[styles.sortContainer, { zIndex: 10 }]}>
             <Text style={styles.sortLabel}>Sort by:</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.sortOptions}>
-              {[
-                { label: 'Relevance', value: 'relevance' },
-                { label: 'Popular', value: 'popular' },
-                { label: 'Price low to high', value: 'price_asc' },
-                { label: 'Price high to low', value: 'price_desc' },
-              ].map((opt) => (
-                <Pressable
-                  key={opt.value}
-                  style={[styles.sortChip, sortBy === opt.value && styles.sortChipActive]}
-                  onPress={() => setSortBy(opt.value)}
-                >
-                  <Text style={[styles.sortChipText, sortBy === opt.value && styles.sortChipTextActive]}>
-                    {opt.label}
-                  </Text>
-                </Pressable>
-              ))}
-            </ScrollView>
+            <View style={{ position: 'relative' }}>
+              <TouchableOpacity 
+                activeOpacity={0.7}
+                style={styles.sortButton}
+                onPress={() => setShowSortMenu(!showSortMenu)}
+              >
+                <Text style={styles.sortButtonText}>
+                  {sortBy === 'relevance' ? 'Relevance' :
+                   sortBy === 'popular' ? 'Popular' :
+                   sortBy === 'price_asc' ? 'Price low to high' :
+                   'Price high to low'}
+                </Text>
+                <Text style={styles.sortButtonIcon}>▾</Text>
+              </TouchableOpacity>
+              
+              {showSortMenu && (
+                <View style={styles.dropdownMenu}>
+                  {[
+                    { label: 'Relevance', value: 'relevance' },
+                    { label: 'Popular', value: 'popular' },
+                    { label: 'Price low to high', value: 'price_asc' },
+                    { label: 'Price high to low', value: 'price_desc' },
+                  ].map((opt) => (
+                    <Pressable
+                      key={opt.value}
+                      style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
+                      onPress={() => {
+                        setSortBy(opt.value);
+                        setShowSortMenu(false);
+                      }}
+                    >
+                      <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
+                        {opt.label}
+                      </Text>
+                    </Pressable>
+                  ))}
+                </View>
+              )}
+            </View>
           </View>
         )}
 
@@ -461,12 +483,64 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 20,
     paddingHorizontal: Platform.select({ web: 0, default: 4 }),
+    zIndex: 10, // Ensure dropdown is above content
   },
   sortLabel: {
     color: '#475569',
     fontWeight: '600',
     marginRight: 12,
     fontSize: 14,
+  },
+  sortButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    borderRadius: 999,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    gap: 8,
+  },
+  sortButtonText: {
+    color: '#0f172a',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  sortButtonIcon: {
+    color: '#64748b',
+    fontSize: 14,
+  },
+  dropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    marginTop: 8,
+    minWidth: 180,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 4,
+    ...elev('lg'),
+    zIndex: 100,
+  },
+  dropdownItem: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderRadius: 8,
+  },
+  dropdownItemActive: {
+    backgroundColor: '#f0fdf4',
+  },
+  dropdownItemText: {
+    color: '#475569',
+    fontSize: 14,
+    fontWeight: '500',
+  },
+  dropdownItemTextActive: {
+    color: '#10b981',
+    fontWeight: '700',
   },
   sortOptions: {
     gap: 8,
