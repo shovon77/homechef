@@ -4,26 +4,22 @@ import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
 import { Link } from "expo-router";
 import { getEmailRedirect, redirectAfterLogin } from "../lib/authRedirect";
+import { useRole } from "../hooks/useRole";
 
 export default function Login() {
   const [email, setEmail] = useState("");
+  const { loading, user, isChef, isAdmin, role } = useRole();
   const [checking, setChecking] = useState(true);
 
   useEffect(() => {
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
+    if (!loading) {
+      if (user) {
+        redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
+      } else {
         setChecking(false);
-        return;
       }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_admin, is_chef, role')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      redirectAfterLogin(profile ?? {});
-    })();
-  }, []);
+    }
+  }, [loading, user, isChef, isAdmin, role]);
 
   const sendMagicLink = async () => {
     if (!email.includes("@")) return Alert.alert("Enter a valid email");

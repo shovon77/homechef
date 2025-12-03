@@ -7,6 +7,7 @@ import { ensureUser } from '../../lib/ensureUser';
 import { getAuthRedirect } from '../../lib/authRedirect';
 import { redirectAfterLogin } from '../../lib/authRedirect';
 import Screen from '../../components/Screen';
+import { useRole } from '../../hooks/useRole';
 
 /** Light brand palette */
 const C = {
@@ -27,7 +28,8 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
-  const [checking, setChecking] = useState(true);
+
+  const { loading, user, isChef, isAdmin, role } = useRole();
 
   // Entrance animation
   const cardSlide = useRef(new Animated.Value(15)).current;
@@ -51,24 +53,10 @@ export default function AuthPage() {
   }, []);
 
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      const { data: { session } } = await supabase.auth.getSession();
-      if (!session) {
-        if (!cancelled) setChecking(false);
-        return;
-      }
-      const { data: profile } = await supabase
-        .from('profiles')
-        .select('is_admin, is_chef, role')
-        .eq('id', session.user.id)
-        .maybeSingle();
-      if (!cancelled) redirectAfterLogin(profile ?? {});
-    })();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
+    if (!loading && user) {
+      redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
+    }
+  }, [loading, user, isChef, isAdmin, role]);
 
   async function doGoogle() {
     setErr(null);
@@ -90,29 +78,8 @@ export default function AuthPage() {
       }
       const res = await ensureUser();
       if (res?.error) console.warn('ensureUser:', res.error);
-      let redirect = '/';
-      try {
-        const { data: userData } = await supabase.auth.getUser();
-        const user = userData?.user;
-        if (user) {
-          let admin = isLocalAdmin(user);
-          if (!admin) {
-            const { data: profile } = await supabase
-              .from('profiles')
-              .select('is_admin')
-              .eq('id', user.id)
-              .maybeSingle();
-            admin = profile?.is_admin === true;
-          }
-          if (admin) {
-            redirect = '/admin';
-          }
-        }
-      } catch (profileErr) {
-        console.warn('post-login admin check failed', profileErr);
-      }
-      const { data: profile } = await supabase.from('profiles').select('*').eq('id', (await supabase.auth.getUser()).data.user?.id).maybeSingle();
-      redirectAfterLogin(profile ?? {});
+      
+      // Redirect will be handled by useEffect
     } catch (e:any) {
       setErr(e.message || String(e));
     } finally {
@@ -120,8 +87,9 @@ export default function AuthPage() {
     }
   }
 
-  if (checking) {
-    return null;
+  if (loading && !user) {
+    // Initial load state, keep blank or spinner
+    return null; 
   }
 
   return (

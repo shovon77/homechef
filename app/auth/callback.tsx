@@ -22,7 +22,7 @@ export default function AuthCallback() {
   const [msg, setMsg] = useState('Signing you in…');
   const [error, setError] = useState<string | null>(null);
   const [sessionEstablished, setSessionEstablished] = useState(false);
-  const { loading, role, profile } = useRole();
+  const { loading, role, profile, isChef, isAdmin } = useRole();
 
   useEffect(() => {
     let mounted = true;
@@ -106,9 +106,9 @@ export default function AuthCallback() {
         router.replace(params.redirect);
         return;
       }
-      redirectAfterLogin(profile ?? { role });
+      redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
     }
-  }, [sessionEstablished, loading, role, router, params.redirect, profile]);
+  }, [sessionEstablished, loading, role, router, params.redirect, profile, isChef, isAdmin]);
 
   return (
     <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: theme.colors.surface}}>
