@@ -270,8 +270,14 @@ export default function BrowsePage() {
               <TouchableOpacity 
                 activeOpacity={0.7}
                 onPress={() => setShowSortMenu(!showSortMenu)}
+                style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
               >
                 <SortIcon size={24} color="#475569" />
+                <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
+                  {sortBy === 'popular' ? 'Popularity' :
+                   sortBy === 'price_asc' ? 'Price low to high' :
+                   'Price high to low'}
+                </Text>
               </TouchableOpacity>
               
               {showSortMenu && (
