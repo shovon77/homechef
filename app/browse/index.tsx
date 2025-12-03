@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
 import { theme, elev } from '../../lib/theme';
+import { SortIcon } from '../../components/SortIcon';
 
 const PER_PAGE = 25; // 5x5 grid layout
 const GRID_COLUMNS = 5;
@@ -46,7 +47,7 @@ export default function BrowsePage() {
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
-  const [sortBy, setSortBy] = useState('relevance');
+  const [sortBy, setSortBy] = useState('popular');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   useEffect(() => {
@@ -78,15 +79,16 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,price,image,chef_id, chefs!inner(status, name)', { count: 'exact' })
+            .select('id,name,price,image,chef_id, chefs!inner(status, name, rating)', { count: 'exact' })
             .eq('chefs.status', 'active');
 
           if (sortBy === 'price_asc') {
             request = request.order('price', { ascending: true });
           } else if (sortBy === 'price_desc') {
             request = request.order('price', { ascending: false });
+          } else if (sortBy === 'popular') {
+            request = request.order('rating', { foreignTable: 'chefs', ascending: false });
           } else {
-            // Default for relevance and popular
             request = request.order('created_at', { ascending: false });
           }
 
@@ -264,27 +266,18 @@ export default function BrowsePage() {
 
         {tab === 'dishes' && (
           <View style={[styles.sortContainer, { zIndex: 10 }]}>
-            <Text style={styles.sortLabel}>Sort by:</Text>
             <View style={{ position: 'relative' }}>
               <TouchableOpacity 
                 activeOpacity={0.7}
-                style={styles.sortButton}
                 onPress={() => setShowSortMenu(!showSortMenu)}
               >
-                <Text style={styles.sortButtonText}>
-                  {sortBy === 'relevance' ? 'Relevance' :
-                   sortBy === 'popular' ? 'Popular' :
-                   sortBy === 'price_asc' ? 'Price low to high' :
-                   'Price high to low'}
-                </Text>
-                <Text style={styles.sortButtonIcon}>▾</Text>
+                <SortIcon size={24} color="#475569" />
               </TouchableOpacity>
               
               {showSortMenu && (
                 <View style={styles.dropdownMenu}>
                   {[
-                    { label: 'Relevance', value: 'relevance' },
-                    { label: 'Popular', value: 'popular' },
+                    { label: 'Popularity', value: 'popular' },
                     { label: 'Price low to high', value: 'price_asc' },
                     { label: 'Price high to low', value: 'price_desc' },
                   ].map((opt) => (
