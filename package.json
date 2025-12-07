@@ -119,6 +119,7 @@
     "typescript": "~5.9.2"
   },
   "dependencies": {
+    "@expo-google-fonts/open-sans": "^0.4.2",
     "@expo/metro-runtime": "^6.1.2",
     "@expo/schema-utils": "^0.1.7",
     "@radix-ui/react-slot": "1.2.0",
@@ -131,9 +132,11 @@
     "client-only": "^0.0.1",
     "debug": "^4.3.4",
     "escape-string-regexp": "^4.0.0",
+    "expo-font": "~14.0.10",
     "expo-image-picker": "~17.0.8",
     "expo-router": "~6.0.14",
     "expo-server": "^1.0.3",
+    "expo-splash-screen": "~31.0.12",
     "fast-deep-equal": "^3.1.3",
     "invariant": "^2.2.4",
     "lottie-react": "^2.4.1",

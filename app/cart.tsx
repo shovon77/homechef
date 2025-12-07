@@ -213,21 +213,25 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   breadcrumbSeparator: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   breadcrumbCurrent: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   pageTitle: {
     color: TEXT_DARK,
     fontSize: 36,
     fontWeight: theme.typography.fontWeight.black as any,
+    fontFamily: theme.typography.fontFamily.display,
     lineHeight: 36 * 1.2,
     letterSpacing: -0.033,
     marginBottom: theme.spacing['2xl'],
@@ -284,16 +288,19 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cartItemChef: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cartItemPriceMobile: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cartItemRight: {
     alignItems: 'flex-end',
@@ -303,6 +310,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   quantityControls: {
     flexDirection: 'row',
@@ -321,6 +329,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   quantityInput: {
     width: 24,
@@ -328,6 +337,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
+    fontFamily: theme.typography.fontFamily.body,
     padding: 0,
     backgroundColor: 'transparent',
   },
@@ -359,6 +369,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.display,
   },
   orderSummaryDetails: {
     gap: theme.spacing.md,
@@ -370,10 +381,12 @@ const styles = StyleSheet.create({
   orderSummaryLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderSummaryValue: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderSummaryDivider: {
     height: 1,
@@ -389,11 +402,13 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.display,
   },
   orderSummaryTotalValue: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.display,
   },
   checkoutButton: {
     width: '100%',
@@ -411,6 +426,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   emptyCart: {
     alignItems: 'center',
@@ -436,12 +452,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize['2xl'],
     fontWeight: theme.typography.fontWeight.bold as any,
     marginBottom: theme.spacing.sm,
+    fontFamily: theme.typography.fontFamily.display,
   },
   emptyCartText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
     textAlign: 'center',
     marginBottom: theme.spacing.xl,
+    fontFamily: theme.typography.fontFamily.body,
   },
   emptyCartButton: {
     backgroundColor: PRIMARY_COLOR,
@@ -455,6 +473,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   // Mobile Styles
   containerMobile: {

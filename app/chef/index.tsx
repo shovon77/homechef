@@ -598,12 +598,12 @@ export default function ChefDashboard() {
     return (
       <Screen>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: BG_LIGHT }}>
-          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '700' }}>Chef profile not found</Text>
+          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '700', fontFamily: theme.typography.fontFamily.display }}>Chef profile not found</Text>
           <TouchableOpacity
             onPress={() => router.replace('/auth')}
             style={{ marginTop: 16, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '800' }}>Go to Login</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Go to Login</Text>
           </TouchableOpacity>
         </View>
       </Screen>
@@ -718,15 +718,15 @@ export default function ChefDashboard() {
       )}
 
       <View>
-        <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900' }}>Welcome back, {chef.name}!</Text>
-        <Text style={{ color: TEXT_MUTED, fontSize: 16, marginTop: 4 }}>Here's a summary of your business today.</Text>
+        <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Welcome, {chef.name.split(' ')[0]}!</Text>
+        <Text style={{ color: TEXT_MUTED, fontSize: 16, marginTop: 4, fontFamily: theme.typography.fontFamily.body }}>Here's a summary of your business today.</Text>
       </View>
 
       <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
         {/* Weekly Earnings Card */}
         <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900' }}>Weekly Earnings</Text>
+            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Weekly Earnings</Text>
             <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
               <TouchableOpacity
                 onPress={() => setEarningsRange('week')}
@@ -780,14 +780,14 @@ export default function ChefDashboard() {
 
         {/* Top Dishes Card */}
         <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Top Performing Dishes</Text>
+          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Top Performing Dishes</Text>
           <View style={{ gap: 16 }}>
             {topDishes.length > 0 ? (
               topDishes.map(({ dish, count }, idx) => (
                 <View key={dish.id} style={{ gap: 8 }}>
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700' }}>{dish.name}</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>{count} sold</Text>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{dish.name}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{count} sold</Text>
                   </View>
                   <View style={{ height: 8, backgroundColor: BG_GRAY, borderRadius: 4, overflow: 'hidden' }}>
                     <View style={{ height: '100%', width: `${Math.max(40, (count / (topDishes[0]?.count || 1)) * 100)}%`, backgroundColor: PRIMARY_COLOR }} />
@@ -803,7 +803,7 @@ export default function ChefDashboard() {
 
       {/* Order Management */}
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16 }}>Order Management</Text>
+        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order Management</Text>
         <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16, minWidth: '100%' }}>
           {(['requested', 'pending', 'ready', 'completed'] as const).map(status => (
             <TouchableOpacity
@@ -817,7 +817,7 @@ export default function ChefDashboard() {
                 minWidth: 100,
               }}
             >
-              <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+              <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                 {status.charAt(0).toUpperCase() + status.slice(1)} Orders
               </Text>
             </TouchableOpacity>
@@ -828,8 +828,8 @@ export default function ChefDashboard() {
             filteredOrders.slice(0, 10).map(order => (
               <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900' }}>Order #{order.id}</Text>
-                  <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>{formatCad((order.total_cents || 0) / 100)}</Text>
+                  <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
+                  <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.total_cents || 0) / 100)}</Text>
                 </View>
                 <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
                 <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
@@ -935,7 +935,7 @@ export default function ChefDashboard() {
         </View>
       )}
 
-      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900' }}>Menu Management</Text>
+      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Menu Management</Text>
 
       <NewDishForm onCreate={createDish} saving={saving} />
 
@@ -951,7 +951,7 @@ export default function ChefDashboard() {
 
   const OrdersTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120 }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Order History</Text>
+      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order History</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, minWidth: '100%' }}>
         {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
           <TouchableOpacity
@@ -965,7 +965,7 @@ export default function ChefDashboard() {
               minWidth: 100,
             }}
           >
-            <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center' }}>
+            <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
               {status.charAt(0).toUpperCase() + status.slice(1)}
             </Text>
           </TouchableOpacity>
@@ -974,8 +974,8 @@ export default function ChefDashboard() {
       {filteredOrders.map(order => (
         <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-            <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900' }}>Order #{order.id}</Text>
-            <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900' }}>{formatCad((order.total_cents || 0) / 100)}</Text>
+            <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
+            <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.total_cents || 0) / 100)}</Text>
           </View>
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
@@ -1068,7 +1068,7 @@ export default function ChefDashboard() {
 
   const ReviewsTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900' }}>My Reviews</Text>
+      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>My Reviews</Text>
 
       {/* Rating Summary Card */}
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
@@ -1087,7 +1087,7 @@ export default function ChefDashboard() {
             })}
           </View>
           <View>
-            <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900' }}>
+            <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
               {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
             </Text>
             <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
@@ -1221,7 +1221,7 @@ export default function ChefDashboard() {
         </View>
       )}
 
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900' }}>Profile Settings</Text>
+      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Profile Settings</Text>
 
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, gap: 16 }}>
         <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -1267,7 +1267,7 @@ export default function ChefDashboard() {
           disabled={saving}
           style={{ backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, padding: 12, borderRadius: 8, alignSelf: 'flex-start' }}
         >
-          <Text style={{ color: '#FFFFFF', fontWeight: '900' }}>{saving ? 'Saving…' : 'Save Profile'}</Text>
+          <Text style={{ color: '#FFFFFF', fontWeight: '900', fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Save Profile'}</Text>
         </TouchableOpacity>
       </View>
     </ScrollView>
@@ -1335,6 +1335,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: 20,
     fontWeight: '900',
+    fontFamily: theme.typography.fontFamily.display,
   },
   sidebarSection: {
     marginBottom: 24,
@@ -1375,6 +1376,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: TEXT_MUTED,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   navLabelActive: {
     color: PRIMARY_COLOR,
@@ -1422,7 +1424,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
       <View style={{ gap: 16 }}>
         <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
           <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Name</Text>
             <TextInput
               value={name}
               onChangeText={setName}
@@ -1432,7 +1434,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             />
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
             <View style={{ position: 'relative' }}>
               <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
               <TextInput
@@ -1446,7 +1448,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             </View>
           </View>
           <View style={{ minWidth: isMobile ? undefined : 200, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Photo</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Photo</Text>
             {preview ? (
               <View style={{ gap: 8 }}>
                 <Image 
@@ -1473,7 +1475,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           </View>
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Description</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Description</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -1503,7 +1505,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               opacity: (!valid || saving) ? 0.6 : 1
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -1536,7 +1538,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
         <View style={{ flex: 1, gap: 16 }}>
           <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
             <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Name</Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
@@ -1546,7 +1548,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
               />
             </View>
             <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
               <View style={{ position: 'relative' }}>
                 <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
                 <TextInput
@@ -1561,7 +1563,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
             </View>
           </View>
           <View style={{ gap: 8 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Description</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Description</Text>
             <TextInput
               value={description}
               onChangeText={setDescription}
@@ -1607,7 +1609,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Save</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onDelete(dish.id)}
@@ -1622,7 +1624,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: TEXT_DARK, fontWeight: '700', fontSize: 14 }}>Delete</Text>
+                <Text style={{ color: TEXT_DARK, fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>

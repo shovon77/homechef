@@ -445,6 +445,7 @@ const styles = StyleSheet.create({
       web: 42,
       default: 28,
     }),
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: Platform.select({
       web: 42 * 1.2,
@@ -459,6 +460,7 @@ const styles = StyleSheet.create({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
     }),
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: Platform.select({
       web: theme.typography.fontSize.base * 1.5,
@@ -507,6 +509,7 @@ const styles = StyleSheet.create({
   },
   floatingSearchInput: {
     flex: 1,
+    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
@@ -543,6 +546,7 @@ const styles = StyleSheet.create({
   },
   searchInput: {
     flex: 1,
+    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
@@ -575,7 +579,9 @@ const styles = StyleSheet.create({
   },
   searchButtonText: {
     color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
   },
@@ -584,11 +590,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing['3xl'],
   },
   sectionTitle: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: Platform.select({
       web: 30,
       default: 22,
     }),
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: -0.015,
     paddingHorizontal: theme.spacing.md,
@@ -632,8 +640,10 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   dishName: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.fontSize.lg * 1.5,
   },
@@ -649,8 +659,11 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   dishChefName: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
   },
@@ -663,6 +676,7 @@ const styles = StyleSheet.create({
   dishPrice: {
     color: PRIMARY_COLOR,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   dishRating: {
@@ -675,8 +689,11 @@ const styles = StyleSheet.create({
     color: ACCENT_COLOR,
   },
   ratingText: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   // How It Works
@@ -708,14 +725,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
   },
   howItWorksIcon: {
+    fontFamily: theme.typography.fontFamily.display,
     fontSize: 32,
   },
   howItWorksTitle: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
+    fontFamily: theme.typography.fontFamily.display,
     fontSize: 20,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   howItWorksText: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
     fontSize: theme.typography.fontSize.base,
     lineHeight: theme.typography.fontSize.base * 1.5,
@@ -743,15 +765,20 @@ const styles = StyleSheet.create({
     borderColor: `${PRIMARY_COLOR}80`, // primary/50
   },
   featuredChefName: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   featuredChefCuisine: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
   featuredChefLocation: {
+    fontFamily: theme.typography.fontFamily.body,
     color: '#777777',
     fontSize: theme.typography.fontSize.xs,
     marginTop: theme.spacing.xs / 2,
@@ -772,13 +799,16 @@ const styles = StyleSheet.create({
     padding: theme.spacing.sm,
   },
   heroTitleMobile: {
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: 24,
     lineHeight: 30,
   },
   heroSubtitleMobile: {
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
   sectionTitleMobile: {
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: 24,
     paddingHorizontal: 0,
   },
@@ -811,11 +841,13 @@ const styles = StyleSheet.create({
   },
   circularDishTitle: {
     fontSize: 16,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
   },
   circularDishSubtitle: {
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: 14,
     color: '#666',
     textAlign: 'center',

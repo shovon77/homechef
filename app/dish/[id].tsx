@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -27,12 +27,13 @@ export default function DishDetail() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
-  const dishId = (() => {
+  
+  const dishId = useMemo(() => {
     const m = raw.match(/(\d+)/);
     if (m) return Number(m[1]);
     const tail = raw.replace(/[^0-9]+/g,'');
     return tail ? Number(tail) : NaN;
-  })();
+  }, [raw]);
 
   const [dish, setDish] = useState<Dish | null>(null);
   const [chef, setChef] = useState<any>(null);
@@ -48,49 +49,74 @@ export default function DishDetail() {
   const { addToCart } = useCart();
   const { isAdmin, user } = useRole();
 
-  // Load dish and ratings
+  // 1. Fetch public data (dish, ratings) - depends only on dishId
   useEffect(() => {
     if (!Number.isFinite(dishId)) {
       setLoading(false);
       return;
     }
+    
     let mounted = true;
+    
     (async () => {
       setLoading(true);
-      
-      const dishData = await getDishById(dishId);
-      if (!mounted) return;
-      if (!dishData) {
-        console.log("Dish not found");
-        setLoading(false);
-        return;
-      }
-      setDish(dishData);
-      
-      // Load chef info
-      if (dishData.chef_id) {
-        const chefData = await getChefById(Number(dishData.chef_id));
-        if (chefData) {
-          setChef(chefData);
-          
-          // Check ownership
-          if (user) {
-            let ownsDish = false;
-            if ((chefData as any).user_id) {
-              ownsDish = (chefData as any).user_id === user.id;
-            } else if (chefData.email && user.email) {
-              ownsDish = chefData.email.toLowerCase() === user.email.toLowerCase();
-            }
-            setIsDishOwner(ownsDish);
+      try {
+        // Fetch dish and ratings in parallel
+        const [dishData, ratingStats] = await Promise.all([
+          getDishById(dishId),
+          getDishRatings(dishId)
+        ]);
+
+        if (!mounted) return;
+
+        if (!dishData) {
+          console.log("Dish not found");
+          setLoading(false);
+          return;
+        }
+
+        setDish(dishData);
+        setRatingCount(ratingStats.count);
+        setAvgRating(ratingStats.average);
+
+        // Then fetch chef info if needed
+        if (dishData.chef_id) {
+          const chefData = await getChefById(Number(dishData.chef_id));
+          if (mounted && chefData) {
+            setChef(chefData);
           }
         }
+      } catch (e) {
+        console.error("Error loading dish details:", e);
+      } finally {
+        if (mounted) setLoading(false);
       }
-      
-      const ratingStats = await getDishRatings(dishId);
-      setRatingCount(ratingStats.count);
-      setAvgRating(ratingStats.average);
-      
-      if (user) {
+    })();
+
+    return () => { mounted = false; };
+  }, [dishId]);
+
+  // 2. Fetch user-specific data - depends on dishId and user.id
+  useEffect(() => {
+    if (!Number.isFinite(dishId) || !user) {
+      // Reset user-specific state if user logs out
+      if (!user) {
+        setIsDishOwner(false);
+        setUserRating(0);
+        setComment("");
+      }
+      return;
+    }
+
+    let mounted = true;
+
+    (async () => {
+      try {
+        // Check ownership if chef is loaded (or check against chef_id directly if possible)
+        // We rely on 'chef' state which might be populated by the first effect.
+        // Alternatively, we can re-check ownership here if we have dish data.
+        
+        // Fetch user's existing rating
         const { data: userRatingData } = await supabase
           .from("dish_ratings")
           .select("rating, stars, comment")
@@ -98,17 +124,33 @@ export default function DishDetail() {
           .eq("user_id", user.id)
           .maybeSingle();
         
-        if (userRatingData) {
+        if (mounted && userRatingData) {
           const rating = userRatingData.rating ?? userRatingData.stars ?? 0;
           setUserRating(Number(rating));
           setComment(userRatingData.comment || "");
         }
+      } catch (e) {
+        console.error("Error loading user rating:", e);
       }
-      
-      setLoading(false);
     })();
+
     return () => { mounted = false; };
-  }, [raw, user]);
+  }, [dishId, user]);
+
+  // Update ownership when chef or user changes
+  useEffect(() => {
+    if (chef && user) {
+      let ownsDish = false;
+      if (chef.user_id) {
+        ownsDish = chef.user_id === user.id;
+      } else if (chef.email && user.email) {
+        ownsDish = chef.email.toLowerCase() === user.email.toLowerCase();
+      }
+      setIsDishOwner(ownsDish);
+    } else {
+      setIsDishOwner(false);
+    }
+  }, [chef, user]);
 
   const handleAddToCart = () => {
     if (!dish) return;
@@ -446,16 +488,19 @@ const styles = StyleSheet.create({
   breadcrumbLink: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   breadcrumbSeparator: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   breadcrumbCurrent: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   grid: {
@@ -497,6 +542,7 @@ const styles = StyleSheet.create({
       web: 48,
       default: 36,
     }),
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: Platform.select({
       web: 48 * 1.2,
@@ -516,6 +562,7 @@ const styles = StyleSheet.create({
   chefLinkText: {
     color: TEXT_GRAY,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
     textDecorationLine: 'underline',
   },
@@ -539,17 +586,20 @@ const styles = StyleSheet.create({
   reviewCount: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   description: {
     color: TEXT_GRAY,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.5,
     marginTop: theme.spacing.md,
   },
   price: {
     color: TEXT_DARK,
     fontSize: 36,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     marginTop: theme.spacing['2xl'],
     marginBottom: theme.spacing['2xl'],
@@ -590,6 +640,7 @@ const styles = StyleSheet.create({
   quantityButtonText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   quantityValue: {
@@ -597,6 +648,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   addToCartButton: {
@@ -616,6 +668,7 @@ const styles = StyleSheet.create({
   addToCartButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
   },
@@ -642,10 +695,12 @@ const styles = StyleSheet.create({
   tabText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   tabTextActive: {
     color: PRIMARY_COLOR,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   tabContent: {
@@ -657,6 +712,7 @@ const styles = StyleSheet.create({
   descriptionText: {
     color: TEXT_GRAY,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,
   },
   ingredientsContent: {
@@ -676,6 +732,7 @@ const styles = StyleSheet.create({
   reviewFormTitle: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   ratingInputContainer: {
@@ -684,6 +741,7 @@ const styles = StyleSheet.create({
   ratingLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   starsInputRow: {
     flexDirection: 'row',
@@ -698,6 +756,7 @@ const styles = StyleSheet.create({
   commentLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   commentInput: {
     borderWidth: 1,
@@ -706,6 +765,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     minHeight: 100,
     textAlignVertical: 'top',
     backgroundColor: '#FFFFFF',
@@ -723,6 +783,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   ratingSummary: {
@@ -740,17 +801,20 @@ const styles = StyleSheet.create({
   ratingSummaryText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   signInPrompt: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
     paddingVertical: theme.spacing['2xl'],
   },
   emptyText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
   },
   // Mobile styles
   gridMobile: {

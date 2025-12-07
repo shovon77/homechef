@@ -75,10 +75,12 @@ const styles = StyleSheet.create({
   name: {
     color: '#333333',
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   cuisine: {
     color: '#555555',
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
   location: {
@@ -99,7 +101,9 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     color: '#555555',
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
 });

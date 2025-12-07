@@ -69,16 +69,19 @@ const styles = StyleSheet.create({
   },
   name: {
     color: theme.colors.text,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.base,
   },
   chefName: {
     color: theme.colors.textMuted,
+    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     marginTop: 2,
   },
   price: {
     color: theme.colors.primary,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.lg,
   },

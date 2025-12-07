@@ -80,6 +80,7 @@ const styles = StyleSheet.create({
   title: {
     color: '#101828',
     fontSize: 36,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: 36 * 1.2,
     letterSpacing: -0.02,
@@ -91,6 +92,7 @@ const styles = StyleSheet.create({
   heading: {
     color: '#101828',
     fontSize: 24,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: 24 * 1.4,
     marginBottom: theme.spacing.md,
@@ -99,6 +101,7 @@ const styles = StyleSheet.create({
   paragraph: {
     color: '#101828',
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,
     marginBottom: theme.spacing.md,
   },
@@ -109,6 +112,7 @@ const styles = StyleSheet.create({
   listItem: {
     color: '#101828',
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,
     marginBottom: theme.spacing.sm,
   },

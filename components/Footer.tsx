@@ -1,6 +1,7 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, Image } from 'react-native'
 import { useRouter } from 'expo-router'
+import { theme } from '../lib/theme'
 
 export const FOOTER_HEIGHT = 88
 
@@ -70,17 +71,21 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   brandLogo: {
-    width: 32,
-    height: 32,
+    width: 40,
+    height: 40,
     backgroundColor: 'transparent',
   },
   brand: {
-    fontWeight: '700',
-    fontSize: 16,
+    fontWeight: '900',
+    fontSize: 24,
     color: '#0f172a',
+    fontFamily: theme.typography.fontFamily.display,
+    letterSpacing: -0.015,
+    lineHeight: 28,
   },
   copy: {
     color: '#334155',
+    fontFamily: theme.typography.fontFamily.body,
   },
   links: {
     marginTop: 6,
@@ -90,10 +95,12 @@ const styles = StyleSheet.create({
   },
   link: {
     color: '#0f766e',
+    fontFamily: theme.typography.fontFamily.body,
   },
   legal: {
     marginTop: 6,
     color: '#64748b',
     fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
   },
 })

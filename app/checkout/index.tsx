@@ -11,6 +11,7 @@ import { safeToFixed } from '../../lib/number';
 import { submitCheckout } from '../../lib/orders';
 import ENV from '@/lib/env';
 import { formatCad } from '../../lib/money';
+import { theme } from '../../lib/theme';
 
 const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
@@ -182,28 +183,28 @@ export default function CheckoutPage() {
     <Screen scroll style={{ backgroundColor: BACKGROUND }} contentPadding={0}>
       <View style={{ maxWidth: 960, width: '100%', alignSelf: 'center', padding: 24, gap: 24 }}>
         <View>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginBottom: 8 }}>Checkout</Text>
-          <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900' }}>Confirm your order</Text>
-          {chefName && <Text style={{ color: TEXT_MUTED, marginTop: 4 }}>Chef: {chefName}</Text>}
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Checkout</Text>
+          <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Confirm your order</Text>
+          {chefName && <Text style={{ color: TEXT_MUTED, marginTop: 4, fontFamily: theme.typography.fontFamily.body }}>Chef: {chefName}</Text>}
         </View>
 
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 24, gap: 16 }}>
-          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>Order Summary</Text>
+          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: theme.typography.fontFamily.display }}>Order Summary</Text>
           <View style={{ gap: 12 }}>
             {items.map(item => (
               <View key={String(item.id)} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{item.quantity}×</Text>
-                  <Text style={{ color: TEXT_DARK }}>{item.name}</Text>
+                  <Text style={{ color: TEXT_DARK, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{item.quantity}×</Text>
+                  <Text style={{ color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }}>{item.name}</Text>
                 </View>
-                <Text style={{ color: TEXT_DARK, fontWeight: '600' }}>{formatCad(item.price * item.quantity)}</Text>
+                <Text style={{ color: TEXT_DARK, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>{formatCad(item.price * item.quantity)}</Text>
               </View>
             ))}
           </View>
           <View style={{ height: 1, backgroundColor: BORDER }} />
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 16 }}>Subtotal</Text>
-            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>{formatCad(subtotal)}</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Subtotal</Text>
+            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: theme.typography.fontFamily.display }}>{formatCad(subtotal)}</Text>
           </View>
         </View>
 
@@ -215,11 +216,11 @@ export default function CheckoutPage() {
         )}
 
         <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 24, gap: 16 }}>
-          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800' }}>Pickup details</Text>
-          <Text style={{ color: TEXT_MUTED }}>Choose a pickup date within the next 7 days and a time between 08:00 and 20:00.</Text>
+          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: theme.typography.fontFamily.display }}>Pickup details</Text>
+          <Text style={{ color: TEXT_MUTED, fontFamily: theme.typography.fontFamily.body }}>Choose a pickup date within the next 7 days and a time between 08:00 and 20:00.</Text>
 
           <View style={{ gap: 12 }}>
-            <Text style={{ color: TEXT_MUTED, fontWeight: '700' }}>Select a date</Text>
+            <Text style={{ color: TEXT_MUTED, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Select a date</Text>
             <ScrollRow>
               {upcomingDates.map(d => (
                 <TouchableOpacity
@@ -234,14 +235,14 @@ export default function CheckoutPage() {
                     backgroundColor: dateInput === d.iso ? PRIMARY + '15' : 'transparent',
                   }}
                 >
-                  <Text style={{ color: dateInput === d.iso ? PRIMARY : TEXT_DARK }}>{d.label}</Text>
+                  <Text style={{ color: dateInput === d.iso ? PRIMARY : TEXT_DARK, fontFamily: theme.typography.fontFamily.body }}>{d.label}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollRow>
           </View>
 
           <View style={{ gap: 12 }}>
-            <Text style={{ color: TEXT_MUTED, fontWeight: '700' }}>Pickup time</Text>
+            <Text style={{ color: TEXT_MUTED, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Pickup time</Text>
             <ScrollRow>
               {timeSlots.map(timeSlot => (
                 <TouchableOpacity
@@ -256,7 +257,7 @@ export default function CheckoutPage() {
                     backgroundColor: timeInput === timeSlot.value ? PRIMARY + '15' : 'transparent',
                   }}
                 >
-                  <Text style={{ color: timeInput === timeSlot.value ? PRIMARY : TEXT_DARK }}>
+                  <Text style={{ color: timeInput === timeSlot.value ? PRIMARY : TEXT_DARK, fontFamily: theme.typography.fontFamily.body }}>
                     {timeSlot.label}
                   </Text>
                 </TouchableOpacity>
@@ -279,7 +280,7 @@ export default function CheckoutPage() {
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>
               {!isFormValid ? 'Please select date and time' : 'Submit order'}
             </Text>
           )}
@@ -326,11 +327,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: TEXT_DARK,
     marginBottom: 12,
+    fontFamily: theme.typography.fontFamily.display,
   },
   emptySubtitle: {
     color: TEXT_MUTED,
     textAlign: 'center',
     marginBottom: 16,
+    fontFamily: theme.typography.fontFamily.body,
   },
   emptyButton: {
     backgroundColor: PRIMARY,
@@ -341,5 +344,6 @@ const styles = StyleSheet.create({
   emptyButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
   },
 });

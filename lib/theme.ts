@@ -8,7 +8,7 @@
  * - Background: #112119 (dark green) - dark mode default
  * - Surface: #1C2A23 (dark surface for cards)
  * - Text: #F5F5F5 (light text), #98A2B3 (muted)
- * - Font: Plus Jakarta Sans
+ * - Font: Open Sans
  * 
  * Component Mapping:
  * - Buttons: primary (#19e680), secondary (surfaceAlt), outline, ghost
@@ -154,8 +154,8 @@ export const theme = {
   
   typography: {
     fontFamily: {
-      display: 'Plus Jakarta Sans, Noto Sans, sans-serif',
-      body: 'Plus Jakarta Sans, system-ui, sans-serif',
+      display: 'OpenSans_700Bold',
+      body: 'OpenSans_400Regular',
     },
     fontSize: {
       xs: 12,
@@ -218,6 +218,7 @@ export const textStyle = (variant: 'heading' | 'body' | 'subtitle' | 'caption' =
         fontWeight: theme.typography.fontWeight.black,
         lineHeight: theme.typography.fontSize['3xl'] * theme.typography.lineHeight.tight,
         letterSpacing: theme.typography.letterSpacing.tight,
+        fontFamily: theme.typography.fontFamily.display,
       };
     case 'subtitle':
       return {
@@ -225,6 +226,7 @@ export const textStyle = (variant: 'heading' | 'body' | 'subtitle' | 'caption' =
         fontSize: theme.typography.fontSize.lg,
         fontWeight: theme.typography.fontWeight.bold,
         lineHeight: theme.typography.fontSize.lg * theme.typography.lineHeight.normal,
+        fontFamily: theme.typography.fontFamily.body, // Use body font but bold
       };
     case 'caption':
       return {
@@ -232,6 +234,7 @@ export const textStyle = (variant: 'heading' | 'body' | 'subtitle' | 'caption' =
         fontSize: theme.typography.fontSize.sm,
         fontWeight: theme.typography.fontWeight.normal,
         lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.normal,
+        fontFamily: theme.typography.fontFamily.body,
       };
     default: // body
       return {
@@ -239,9 +242,9 @@ export const textStyle = (variant: 'heading' | 'body' | 'subtitle' | 'caption' =
         fontSize: theme.typography.fontSize.base,
         fontWeight: theme.typography.fontWeight.normal,
         lineHeight: theme.typography.fontSize.base * theme.typography.lineHeight.normal,
+        fontFamily: theme.typography.fontFamily.body,
       };
   }
 };
 
 export default theme;
-

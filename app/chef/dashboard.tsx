@@ -153,7 +153,7 @@ export default function ChefDashboard() {
 
   return (
     <ScrollView style={{ flex:1, backgroundColor:C.bg }} contentContainerStyle={{ padding:16, gap:16 }}>
-      <Text style={{ color:C.text, fontSize:24, fontWeight:'900' }}>Chef Dashboard</Text>
+      <Text style={{ color:C.text, fontSize:24, fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>Chef Dashboard</Text>
       <View style={{ height:3, width:160, backgroundColor:C.accent, marginTop:6, borderRadius:3 }} />
 
       {msg ? <Banner color={C.primary} text={msg} /> : null}
@@ -195,12 +195,12 @@ export default function ChefDashboard() {
 
 /* UI helpers */
 function Card({ children }:{ children: React.ReactNode }){ return <View style={{ backgroundColor:C.panel, borderColor:C.border, borderWidth:1, borderRadius:16, padding:16, gap:12 }}>{children}</View> }
-function Title({ children }:{ children: React.ReactNode }){ return <Text style={{ color:C.text, fontWeight:'800', fontSize:18 }}>{children}</Text> }
+function Title({ children }:{ children: React.ReactNode }){ return <Text style={{ color:C.text, fontWeight:'800', fontSize:18, fontFamily: theme.typography.fontFamily.display }}>{children}</Text> }
 function Divider(){ return <View style={{ height:1, backgroundColor:C.border, marginVertical:8 }} /> }
-function Banner({ color, text }:{ color:string; text:string }){ return <View style={{ backgroundColor:'#fff', borderLeftColor:color, borderLeftWidth:6, borderRadius:8, padding:10, borderColor:C.border, borderWidth:1 }}><Text style={{ color:C.text }}>{text}</Text></View> }
-function Field({ label, children }:{ label:string; children:React.ReactNode }){ return <View style={{ gap:6 }}><Text style={{ color:C.sub }}>{label}</Text>{children}</View> }
-function Input(props:any){ return <TextInput {...props} placeholderTextColor="#7C9B8E" style={[{ backgroundColor:C.card, color:C.text, borderColor:C.border, borderWidth:1, borderRadius:10, padding:12, minHeight:48 }, props.multiline && { minHeight:76 }]} /> }
-function PrimaryButton({ title, onPress, disabled }:{ title:string; onPress:()=>void; disabled?:boolean }){ return <TouchableOpacity onPress={onPress} disabled={!!disabled} style={{ backgroundColor: disabled? '#9CCFBA' : C.primary, padding:12, borderRadius:10, alignSelf:'flex-start' }}><Text style={{ color:C.btnTextDark, fontWeight:'900' }}>{title}</Text></TouchableOpacity> }
+function Banner({ color, text }:{ color:string; text:string }){ return <View style={{ backgroundColor:'#fff', borderLeftColor:color, borderLeftWidth:6, borderRadius:8, padding:10, borderColor:C.border, borderWidth:1 }}><Text style={{ color:C.text, fontFamily: theme.typography.fontFamily.body }}>{text}</Text></View> }
+function Field({ label, children }:{ label:string; children:React.ReactNode }){ return <View style={{ gap:6 }}><Text style={{ color:C.sub, fontFamily: theme.typography.fontFamily.body }}>{label}</Text>{children}</View> }
+function Input(props:any){ return <TextInput {...props} placeholderTextColor="#7C9B8E" style={[{ backgroundColor:C.card, color:C.text, borderColor:C.border, borderWidth:1, borderRadius:10, padding:12, minHeight:48, fontFamily: theme.typography.fontFamily.body }, props.multiline && { minHeight:76 }]} /> }
+function PrimaryButton({ title, onPress, disabled }:{ title:string; onPress:()=>void; disabled?:boolean }){ return <TouchableOpacity onPress={onPress} disabled={!!disabled} style={{ backgroundColor: disabled? '#9CCFBA' : C.primary, padding:12, borderRadius:10, alignSelf:'flex-start' }}><Text style={{ color:C.btnTextDark, fontWeight:'900', fontFamily: theme.typography.fontFamily.body }}>{title}</Text></TouchableOpacity> }
 
 /* Dish forms */
 function L({ children }:{ children:React.ReactNode }){ return <Text style={{ color:C.sub }}>{children}</Text> }

@@ -530,6 +530,7 @@ const styles = StyleSheet.create({
   avatarInitials: {
     color: '#FFFFFF',
     fontSize: 24,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   profileInfo: {
@@ -539,12 +540,14 @@ const styles = StyleSheet.create({
   profileName: {
     color: TEXT_DARK,
     fontSize: 20,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: 20 * 1.2,
   },
   profileLocation: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
   },
@@ -571,6 +574,7 @@ const styles = StyleSheet.create({
   statValue: {
     color: TEXT_DARK,
     fontSize: 24,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: 24 * 1.2,
   },
@@ -581,6 +585,7 @@ const styles = StyleSheet.create({
   statLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
   },
@@ -590,11 +595,13 @@ const styles = StyleSheet.create({
   bioTitle: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   bioText: {
     color: TEXT_MUTED_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.6,
   },
@@ -623,6 +630,7 @@ const styles = StyleSheet.create({
   tabText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
   },
@@ -645,6 +653,7 @@ const styles = StyleSheet.create({
   filterLabel: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   selectPlaceholder: {
     paddingHorizontal: theme.spacing.md,
@@ -658,6 +667,7 @@ const styles = StyleSheet.create({
   selectText: {
     color: TEXT_MUTED_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   contentScroll: {
     flex: 1,
@@ -714,6 +724,7 @@ const styles = StyleSheet.create({
   dishImagePlaceholderText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   dishInfo: {
     padding: Platform.select({
@@ -747,6 +758,7 @@ const styles = StyleSheet.create({
       web: 13,
       default: 11,
     }),
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     flexShrink: 1,
     paddingRight: Platform.select({
@@ -764,6 +776,7 @@ const styles = StyleSheet.create({
       web: 13,
       default: 11,
     }),
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     flexShrink: 0,
     marginLeft: 'auto',
@@ -778,6 +791,7 @@ const styles = StyleSheet.create({
       web: theme.typography.fontSize.sm,
       default: 10,
     }),
+    fontFamily: theme.typography.fontFamily.body,
     lineHeight: Platform.select({
       web: theme.typography.fontSize.sm * 1.5,
       default: 14,
@@ -809,6 +823,7 @@ const styles = StyleSheet.create({
       web: theme.typography.fontSize.sm,
       default: 10,
     }),
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
   },
@@ -826,6 +841,7 @@ const styles = StyleSheet.create({
   reviewFormTitle: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   ratingSelector: {
@@ -834,6 +850,7 @@ const styles = StyleSheet.create({
   ratingLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   starsRow: {
     flexDirection: 'row',
@@ -848,6 +865,7 @@ const styles = StyleSheet.create({
   commentLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   commentInput: {
     borderWidth: 1,
@@ -856,6 +874,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.md,
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     minHeight: 80,
     textAlignVertical: 'top',
     backgroundColor: '#FFFFFF',
@@ -873,6 +892,7 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   reviewsList: {
@@ -904,25 +924,30 @@ const styles = StyleSheet.create({
   reviewRatingValue: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   reviewAuthor: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   reviewDate: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.body,
     marginLeft: 'auto',
   },
   reviewComment: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.sm * 1.5,
   },
   emptyText: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
     paddingVertical: theme.spacing['4xl'],
   },
@@ -953,6 +978,7 @@ const styles = StyleSheet.create({
   pageButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   pageButtonTextDisabled: {
@@ -961,6 +987,7 @@ const styles = StyleSheet.create({
   pageInfo: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
   // Mobile Styles

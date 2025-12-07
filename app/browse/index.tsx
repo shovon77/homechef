@@ -493,6 +493,7 @@ export default function BrowsePage() {
 const styles = StyleSheet.create({
   title: {
     fontSize: 28,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
     color: '#0f172a',
   },
@@ -517,6 +518,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: '#065f46',
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
   tabTextActive: {
@@ -565,6 +567,7 @@ const styles = StyleSheet.create({
   },
   pageBtnText: {
     color: '#0f172a',
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
   disabled: {
@@ -583,6 +586,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
   },
   pageNumberText: {
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
     color: '#0f172a',
   },
@@ -601,6 +605,7 @@ const styles = StyleSheet.create({
   },
   sortLabel: {
     color: '#475569',
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
     marginRight: 12,
     fontSize: 14,
@@ -619,6 +624,7 @@ const styles = StyleSheet.create({
   sortButtonText: {
     color: '#0f172a',
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
   },
   sortButtonIcon: {
@@ -650,10 +656,12 @@ const styles = StyleSheet.create({
   dropdownItemText: {
     color: '#475569',
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: '500',
   },
   dropdownItemTextActive: {
     color: '#10b981',
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
   sortOptions: {
@@ -675,6 +683,7 @@ const styles = StyleSheet.create({
   sortChipText: {
     color: '#64748b',
     fontSize: 13,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
   },
   sortChipTextActive: {
@@ -772,6 +781,7 @@ const styles = StyleSheet.create({
   },
   cuisineText: {
     fontSize: 16,
+    fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
     color: '#0f172a',
     textAlign: 'center',

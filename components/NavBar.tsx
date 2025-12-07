@@ -7,7 +7,7 @@ import { supabase } from '../lib/supabase'
 import { useRole } from '../hooks/useRole'
 import { useCart } from '../context/CartContext'
 import { NAVBAR_HEIGHT } from '../constants/layout'
-import { money } from '../lib/money'
+import { theme } from '../lib/theme'
 
 // Web-only imports for animations
 let motion: any = null;
@@ -56,6 +56,8 @@ function ExploreLink() {
     const textStyle = {
       fontWeight: '600',
       color: isActive ? activeColor : TEXT_DARK,
+      fontFamily: theme.typography.fontFamily.body,
+      fontSize: '14px',
     };
     const underlineStyle = {
       position: 'absolute',
@@ -190,7 +192,7 @@ export default function NavBar() {
               onPress={() => router.push(isAdmin ? '/admin' : '/chef')}
               style={styles.navLink}
             >
-              <Text style={styles.navLinkText}>{isMobile ? 'Dash' : 'Dashboard'}</Text>
+              <Text style={styles.navLinkText}>{isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'}</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -308,6 +310,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     letterSpacing: -0.015,
     lineHeight: 28,
+    fontFamily: theme.typography.fontFamily.display,
   },
   navCenter: {
     ...Platform.select({
@@ -337,6 +340,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: TEXT_DARK,
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   rightSection: {
     flexDirection: 'row',
@@ -359,6 +363,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     letterSpacing: 0.015,
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   secondaryButton: {
     minWidth: 84,
@@ -378,6 +383,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     letterSpacing: 0.015,
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cartButton: {
     position: 'relative',
@@ -411,6 +417,7 @@ const styles = StyleSheet.create({
     fontSize: 10,
     fontWeight: '900',
     lineHeight: 12,
+    fontFamily: theme.typography.fontFamily.body,
   },
   // Mobile styles
   containerMobile: {

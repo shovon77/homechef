@@ -8,6 +8,7 @@ import { supabase } from '../../lib/supabase';
 import { formatLocal } from '../../lib/datetime';
 import { safeToFixed } from '../../lib/number';
 import { formatCad } from '../../lib/money';
+import { theme } from '../../lib/theme';
 
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
@@ -132,25 +133,30 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '900',
     color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.display,
   },
   subheading: {
     color: TEXT_MUTED,
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderId: {
     color: TEXT_DARK,
     fontWeight: '800',
     fontSize: 18,
     marginTop: 8,
+    fontFamily: theme.typography.fontFamily.display,
   },
   status: {
     color: PRIMARY,
     fontWeight: '700',
     fontSize: 16,
+    fontFamily: theme.typography.fontFamily.body,
   },
   copy: {
     color: TEXT_MUTED,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   buttonPrimary: {
     backgroundColor: PRIMARY,
@@ -161,6 +167,7 @@ const styles = StyleSheet.create({
   buttonPrimaryText: {
     color: '#FFFFFF',
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
   },
   buttonSecondary: {
     borderWidth: 1,
@@ -172,5 +179,6 @@ const styles = StyleSheet.create({
   buttonSecondaryText: {
     color: PRIMARY,
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
   },
 });

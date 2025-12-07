@@ -2,7 +2,7 @@ import React, { useEffect, useState } from "react";
 import { View, Text, TouchableOpacity, ScrollView } from "react-native";
 import { useRouter, useLocalSearchParams } from "expo-router";
 import { useCart } from "../../context/CartContext";
-import { theme } from "../../constants/theme";
+import { theme } from "../../lib/theme";
 import { Link } from "expo-router";
 import { supabase } from "../../lib/supabase";
 
@@ -48,14 +48,14 @@ export default function CheckoutSuccess() {
       <View style={{ maxWidth: 500, width: "100%", gap: 16 }}>
         <View style={{ backgroundColor: "#fff", borderRadius: 12, borderWidth: 1, borderColor: "#EEF2F6", padding: 24, alignItems: "center", gap: 12 }}>
           <Text style={{ fontSize: 48 }}>✅</Text>
-          <Text style={{ fontSize: 28, fontWeight: "900", color: theme.colors.text, textAlign: "center" }}>
+          <Text style={{ fontSize: 28, fontWeight: "900", color: theme.colors.text, textAlign: "center", fontFamily: theme.typography.fontFamily.display }}>
             Payment Successful!
           </Text>
-          <Text style={{ color: theme.colors.secondary, textAlign: "center", marginTop: 8 }}>
+          <Text style={{ color: theme.colors.secondary, textAlign: "center", marginTop: 8, fontFamily: theme.typography.fontFamily.body }}>
             Thank you for your order. Your payment has been processed successfully.
           </Text>
           {session_id && (
-            <Text style={{ color: "#9aa4af", fontSize: 12, marginTop: 8 }}>
+            <Text style={{ color: "#9aa4af", fontSize: 12, marginTop: 8, fontFamily: theme.typography.fontFamily.body }}>
               Session ID: {session_id}
             </Text>
           )}
@@ -64,12 +64,12 @@ export default function CheckoutSuccess() {
         <View style={{ gap: 12 }}>
           <Link href="/" asChild>
             <TouchableOpacity style={{ backgroundColor: theme.colors.primary, padding: 14, borderRadius: 10 }}>
-              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center" }}>Continue Shopping</Text>
+              <Text style={{ color: "#fff", fontWeight: "900", textAlign: "center", fontFamily: theme.typography.fontFamily.body }}>Continue Shopping</Text>
             </TouchableOpacity>
           </Link>
           <Link href="/dishes" asChild>
             <TouchableOpacity style={{ backgroundColor: "rgba(255,255,255,0.1)", padding: 14, borderRadius: 10, borderWidth: 1, borderColor: "rgba(255,255,255,0.2)" }}>
-              <Text style={{ color: theme.colors.white, fontWeight: "800", textAlign: "center" }}>Browse More Dishes</Text>
+              <Text style={{ color: theme.colors.white, fontWeight: "800", textAlign: "center", fontFamily: theme.typography.fontFamily.body }}>Browse More Dishes</Text>
             </TouchableOpacity>
           </Link>
         </View>
