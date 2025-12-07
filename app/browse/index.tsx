@@ -495,10 +495,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#FE73FC',
   },
   subtitle: {
-    color: '#475569',
+    color: '#FE73FC',
     marginTop: 4,
     textAlign: 'center',
   },
@@ -517,7 +517,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#10b981',
   },
   tabText: {
-    color: '#065f46',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
@@ -532,7 +532,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 20,
-    color: '#0f172a',
+    color: '#FE73FC',
   },
   loader: {
     paddingVertical: 40,
@@ -566,7 +566,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   pageBtnText: {
-    color: '#0f172a',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
@@ -588,7 +588,7 @@ const styles = StyleSheet.create({
   pageNumberText: {
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#FE73FC',
   },
   pageNumberTextActive: {
     color: 'white',
@@ -604,7 +604,7 @@ const styles = StyleSheet.create({
     zIndex: 10, // Ensure dropdown is above content
   },
   sortLabel: {
-    color: '#475569',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
     marginRight: 12,
@@ -622,13 +622,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sortButtonText: {
-    color: '#0f172a',
+    color: '#FE73FC',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
   },
   sortButtonIcon: {
-    color: '#64748b',
+    color: '#FE73FC',
     fontSize: 14,
   },
   dropdownMenu: {
@@ -654,7 +654,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
   },
   dropdownItemText: {
-    color: '#475569',
+    color: '#FE73FC',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '500',
@@ -681,7 +681,7 @@ const styles = StyleSheet.create({
     borderColor: '#10b981',
   },
   sortChipText: {
-    color: '#64748b',
+    color: '#FE73FC',
     fontSize: 13,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
   },
   floatingSearchInput: {
     flex: 1,
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -783,7 +783,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#FE73FC',
     textAlign: 'center',
   },
 });

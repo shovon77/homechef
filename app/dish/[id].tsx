@@ -14,9 +14,9 @@ import { formatCad } from "../../lib/money";
 // Colors from HTML design
 const PRIMARY_COLOR = '#19e680';
 const BACKGROUND_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#0e1b14';
-const TEXT_MUTED = '#71717a';
-const TEXT_GRAY = '#6b7280';
+const TEXT_DARK = '#FE73FC';
+const TEXT_MUTED = '#FE73FC';
+const TEXT_GRAY = '#FE73FC';
 const BORDER_LIGHT = '#e5e7eb';
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);

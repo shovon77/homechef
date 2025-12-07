@@ -89,7 +89,7 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing['2xl'],
   },
   title: {
-    color: '#101828',
+    color: '#FE73FC',
     fontSize: 36,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
@@ -101,7 +101,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing['2xl'],
   },
   heading: {
-    color: '#101828',
+    color: '#FE73FC',
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -110,7 +110,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
   },
   paragraph: {
-    color: '#101828',
+    color: '#FE73FC',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,

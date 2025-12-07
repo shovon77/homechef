@@ -78,13 +78,13 @@ const styles = StyleSheet.create({
   brand: {
     fontWeight: '900',
     fontSize: 24,
-    color: '#0f172a',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.display,
     letterSpacing: -0.015,
     lineHeight: 28,
   },
   copy: {
-    color: '#334155',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
   },
   links: {
@@ -94,12 +94,12 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   link: {
-    color: '#0f766e',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
   },
   legal: {
     marginTop: 6,
-    color: '#64748b',
+    color: '#FE73FC',
     fontSize: 12,
     fontFamily: theme.typography.fontFamily.body,
   },

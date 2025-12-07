@@ -312,7 +312,7 @@ export default function HomePage() {
 
           {/* Featured Chefs section - matches HTML design */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Chefs</Text>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Star Chefs</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -510,7 +510,7 @@ const styles = StyleSheet.create({
   floatingSearchInput: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -547,7 +547,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -591,7 +591,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: Platform.select({
       web: 30,
       default: 22,
@@ -641,7 +641,7 @@ const styles = StyleSheet.create({
   },
   dishName: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -660,7 +660,7 @@ const styles = StyleSheet.create({
   },
   dishChefName: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#555555',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
@@ -690,7 +690,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#555555',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
   },
   howItWorksTitle: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#333333',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.display,
     fontSize: 20,
     fontFamily: theme.typography.fontFamily.display,
@@ -738,7 +738,7 @@ const styles = StyleSheet.create({
   },
   howItWorksText: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#555555',
+    color: '#FE73FC',
     fontSize: theme.typography.fontSize.base,
     lineHeight: theme.typography.fontSize.base * 1.5,
     textAlign: "center",
@@ -766,20 +766,20 @@ const styles = StyleSheet.create({
   },
   featuredChefName: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   featuredChefCuisine: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#555555',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
   featuredChefLocation: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#777777',
+    color: '#FE73FC',
     fontSize: theme.typography.fontSize.xs,
     marginTop: theme.spacing.xs / 2,
     textAlign: 'center',
@@ -843,7 +843,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: 'bold',
-    color: '#333',
+    color: '#FE73FC',
     textAlign: 'center',
   },
   circularDishSubtitle: {

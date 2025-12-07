@@ -13,8 +13,8 @@ const PRIMARY_COLOR = '#2A9D8F';
 const BACKGROUND_LIGHT = '#F4F4F4';
 const CARD_LIGHT = '#FFFFFF';
 const BORDER_LIGHT = '#e2e8f0';
-const TEXT_LIGHT = '#264653';
-const TEXT_MUTED = '#6b7280';
+const TEXT_LIGHT = '#FE73FC';
+const TEXT_MUTED = '#FE73FC';
 
 export default function ChefSignup() {
   const router = useRouter();

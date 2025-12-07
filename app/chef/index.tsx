@@ -20,8 +20,8 @@ const ACCENT_COLOR = '#FFA500';
 const BG_LIGHT = '#FFFFFF';
 const BG_PAGE = '#F2F0EF';
 const BG_GRAY = '#F4F4F4';
-const TEXT_DARK = '#333333';
-const TEXT_MUTED = '#555555';
+const TEXT_DARK = '#FE73FC';
+const TEXT_MUTED = '#FE73FC';
 const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };

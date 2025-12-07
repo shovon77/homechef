@@ -50,11 +50,11 @@ export const theme = {
     info: '#0ea5e9',
     
     // Text
-    text: '#F5F5F5', // Primary text (dark mode)
-    heading: '#F5F5F5', // Headings
-    subtle: '#98A2B3', // Muted/secondary text
+    text: '#FE73FC', // Primary text (dark mode)
+    heading: '#FE73FC', // Headings
+    subtle: '#FE73FC', // Muted/secondary text
     disabled: '#667085', // Disabled text
-    textLight: '#101828', // Dark text (light mode)
+    textLight: '#FE73FC', // Dark text (light mode)
     
     // Borders
     border: '#344054', // Default border
@@ -63,8 +63,8 @@ export const theme = {
     
     // Legacy compatibility (keep for existing code)
     surfaceAlt: 'rgba(25, 230, 128, 0.1)',
-    brandText: '#F5F5F5',
-    textMuted: '#98A2B3',
+    brandText: '#FE73FC',
+    textMuted: '#FE73FC',
     white: '#FFFFFF',
     onPrimary: '#0B1F17',
   },

@@ -25,7 +25,7 @@ if (Platform.OS === 'web') {
 // Colors matching homepage and navbar design
 const PRIMARY_COLOR = '#2C4E4B';
 const BG_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#0e1b18';
+const TEXT_DARK = '#FE73FC';
 const BORDER_LIGHT = '#E5E7EB';
 const MAXW = 1280; // max-w-7xl
 

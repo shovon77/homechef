@@ -73,13 +73,13 @@ const styles = StyleSheet.create({
     borderColor: `${PRIMARY_COLOR}80`, // primary/50
   },
   name: {
-    color: '#333333',
+    color: '#FE73FC',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   cuisine: {
-    color: '#555555',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
     color: ACCENT_COLOR,
   },
   ratingText: {
-    color: '#555555',
+    color: '#FE73FC',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
