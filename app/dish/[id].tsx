@@ -12,11 +12,11 @@ import { Screen } from "../../components/Screen";
 import { formatCad } from "../../lib/money";
 
 // Colors from HTML design
-const PRIMARY_COLOR = '#19e680';
+const PRIMARY_COLOR = '#88B361';
 const BACKGROUND_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#FE73FC';
-const TEXT_MUTED = '#FE73FC';
-const TEXT_GRAY = '#FE73FC';
+const TEXT_DARK = '#0e1b14';
+const TEXT_MUTED = '#71717a';
+const TEXT_GRAY = '#6b7280';
 const BORDER_LIGHT = '#e5e7eb';
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
@@ -347,8 +347,7 @@ export default function DishDetail() {
                 style={styles.addToCartButton}
                 onPress={handleAddToCart}
               >
-                <Text style={styles.cartIcon}>🛒</Text>
-                <Text style={styles.addToCartButtonText}>Add to Cart</Text>
+                <Text style={styles.addToCartButtonText}>Add to cart</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -681,7 +680,7 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   addToCartButtonText: {
-    color: TEXT_DARK,
+    color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,

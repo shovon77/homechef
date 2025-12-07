@@ -17,8 +17,8 @@ const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
 const PRIMARY = '#2C4E4B';
 const ACCENT = '#1dbf73';
-const TEXT_DARK = '#FE73FC';
-const TEXT_MUTED = '#FE73FC';
+const TEXT_DARK = '#111827';
+const TEXT_MUTED = '#6B7280';
 
 export default function CheckoutPage() {
   const router = useRouter();

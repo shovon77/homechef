@@ -225,16 +225,16 @@ const styles = StyleSheet.create({
   },
   loadingText: {
     marginTop: 12,
-    color: '#FE73FC',
+    color: '#555555',
   },
   title: {
     fontSize: 24,
     fontWeight: '800',
     marginBottom: 4,
-    color: '#FE73FC',
+    color: '#1E1E1E',
   },
   subtitle: {
-    color: '#FE73FC',
+    color: '#636363',
     marginBottom: 20,
     fontSize: 14,
   },
@@ -273,14 +273,14 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 8,
-    color: '#FE73FC',
+    color: '#1F2937',
   },
   cardBody: {
-    color: '#FE73FC',
+    color: '#4B5563',
     marginBottom: 12,
   },
   cardBodyWarning: {
-    color: '#FE73FC',
+    color: '#92400E',
     marginBottom: 12,
   },
   buttonRow: {
@@ -294,11 +294,11 @@ const styles = StyleSheet.create({
     paddingVertical: 4,
   },
   detailLabel: {
-    color: '#FE73FC',
+    color: '#4B5563',
     fontSize: 13,
   },
   detailValue: {
-    color: '#FE73FC',
+    color: '#111827',
     fontWeight: '600',
     fontSize: 13,
     marginLeft: 8,
@@ -323,7 +323,7 @@ const styles = StyleSheet.create({
     marginRight: 8,
   },
   secondaryBtnText: {
-    color: '#FE73FC',
+    color: '#1F2937',
     fontWeight: '600',
   },
   infoBox: {
@@ -334,7 +334,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#F9FAFB',
   },
   infoText: {
-    color: '#FE73FC',
+    color: '#374151',
     fontSize: 13,
   },
 });

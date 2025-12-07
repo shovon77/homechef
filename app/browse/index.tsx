@@ -1,5 +1,5 @@
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image } from 'react-native';
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image, Animated } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
@@ -10,7 +10,7 @@ import { SortIcon } from '../../components/SortIcon';
 
 const PER_PAGE = 25; // 5x5 grid layout
 const GRID_COLUMNS = 5;
-const PRIMARY_COLOR = '#2C4E4B';
+const PRIMARY_COLOR = '#88B361';
 
 function cleanSearchQuery(q: string) {
   let cleaned = q.toLowerCase().trim();
@@ -84,6 +84,40 @@ export default function BrowsePage() {
   const debouncedQuery = useDebounce(query, 800);
   const [sortBy, setSortBy] = useState('none');
   const [showSortMenu, setShowSortMenu] = useState(false);
+
+  // Animated placeholder logic
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const fadeAnim = useRef(new Animated.Value(1)).current;
+  const PLACEHOLDERS = [
+    "In the mood for spicy mutton biryani?",
+    "Or maybe a classic chicken pulao?",
+    "No wait, let's get a quick fuchka?",
+    "How about samosa & shingara like school days?",
+    "Find the taste of home only a click away!"
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 500, // Fade out
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500, // Fade in
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      setTimeout(() => {
+        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
+      }, 500); // Change text halfway through
+    }, 3500); // 3s visible + 1s transition
+
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     if (typeof q === 'string') {
@@ -421,7 +455,13 @@ export default function BrowsePage() {
           <View style={styles.grid}>
             {dishes.map((dish) => (
               <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
-                <DishCard dish={dish} />
+                <DishCard 
+                  dish={dish} 
+                  style={{ backgroundColor: '#88B361' }} 
+                  chefNameColor="#FFFFFF"
+                  ratingColor="#FFD700"
+                  priceColor="#FFFFFF"
+                />
               </View>
             ))}
           </View>
@@ -429,7 +469,12 @@ export default function BrowsePage() {
           <View style={styles.grid}>
             {chefs.map((chef) => (
               <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
-                <ChefCard chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} />
+                <ChefCard 
+                  chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
+                  style={{ backgroundColor: '#88B361' }}
+                  nameColor="#FFFFFF"
+                  ratingColor="#FFD700"
+                />
               </View>
             ))}
           </View>
@@ -466,15 +511,28 @@ export default function BrowsePage() {
               style={styles.searchIconImage} 
             />
           </TouchableOpacity>
-          <TextInput
-            placeholder="In the mood for biryani?"
-            placeholderTextColor="#555555"
-            style={styles.floatingSearchInput}
-            value={query}
-            onChangeText={setQuery}
-            onSubmitEditing={handleSearch}
-            returnKeyType="search"
-          />
+          <View style={{ flex: 1, justifyContent: 'center' }}>
+            {!query && (
+              <Animated.Text 
+                style={[
+                  styles.floatingSearchPlaceholder, 
+                  { opacity: fadeAnim }
+                ]}
+                numberOfLines={1}
+              >
+                {PLACEHOLDERS[placeholderIndex]}
+              </Animated.Text>
+            )}
+            <TextInput
+              placeholder=""
+              placeholderTextColor="transparent"
+              style={styles.floatingSearchInput}
+              value={query}
+              onChangeText={setQuery}
+              onSubmitEditing={handleSearch}
+              returnKeyType="search"
+            />
+          </View>
           <TouchableOpacity 
             style={styles.micIconContainer}
             onPress={startDictation}
@@ -495,10 +553,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
-    color: '#FE73FC',
+    color: '#0f172a',
   },
   subtitle: {
-    color: '#FE73FC',
+    color: '#475569',
     marginTop: 4,
     textAlign: 'center',
   },
@@ -514,10 +572,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#e2f5ee',
   },
   tabActive: {
-    backgroundColor: '#10b981',
+    backgroundColor: '#88B361',
   },
   tabText: {
-    color: '#FE73FC',
+    color: '#065f46',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
@@ -532,7 +590,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 20,
-    color: '#FE73FC',
+    color: '#0f172a',
   },
   loader: {
     paddingVertical: 40,
@@ -566,7 +624,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   pageBtnText: {
-    color: '#FE73FC',
+    color: '#0f172a',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
@@ -588,7 +646,7 @@ const styles = StyleSheet.create({
   pageNumberText: {
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
-    color: '#FE73FC',
+    color: '#0f172a',
   },
   pageNumberTextActive: {
     color: 'white',
@@ -604,7 +662,7 @@ const styles = StyleSheet.create({
     zIndex: 10, // Ensure dropdown is above content
   },
   sortLabel: {
-    color: '#FE73FC',
+    color: '#475569',
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
     marginRight: 12,
@@ -622,13 +680,13 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sortButtonText: {
-    color: '#FE73FC',
+    color: '#0f172a',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
   },
   sortButtonIcon: {
-    color: '#FE73FC',
+    color: '#64748b',
     fontSize: 14,
   },
   dropdownMenu: {
@@ -654,7 +712,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#f0fdf4',
   },
   dropdownItemText: {
-    color: '#FE73FC',
+    color: '#475569',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '500',
@@ -681,7 +739,7 @@ const styles = StyleSheet.create({
     borderColor: '#10b981',
   },
   sortChipText: {
-    color: '#FE73FC',
+    color: '#64748b',
     fontSize: 13,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
@@ -730,7 +788,7 @@ const styles = StyleSheet.create({
   },
   floatingSearchInput: {
     flex: 1,
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -741,6 +799,20 @@ const styles = StyleSheet.create({
     }),
     paddingLeft: theme.spacing.sm,
     paddingRight: theme.spacing.sm,
+    zIndex: 2, // Ensure input is above placeholder
+  },
+  floatingSearchPlaceholder: {
+    position: 'absolute',
+    left: theme.spacing.sm,
+    right: theme.spacing.sm,
+    color: '#555555',
+    fontSize: Platform.select({
+      web: theme.typography.fontSize.base,
+      default: theme.typography.fontSize.sm,
+    }),
+    fontFamily: theme.typography.fontFamily.body,
+    zIndex: 1,
+    pointerEvents: 'none',
   },
   searchIconContainer: {
     justifyContent: "center",
@@ -783,7 +855,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
-    color: '#FE73FC',
+    color: '#0f172a',
     textAlign: 'center',
   },
 });

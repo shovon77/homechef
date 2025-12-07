@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from "react-native";
 import { Link } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Stars } from "../../components/ui/Stars";
@@ -9,7 +9,7 @@ import { useCart } from "../../context/CartContext";
 import { toNumber, safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
 
-export default function DishCard({ dish }: { dish: any }) {
+export default function DishCard({ dish, style, chefNameColor, ratingColor, priceColor }: { dish: any; style?: StyleProp<ViewStyle>; chefNameColor?: string; ratingColor?: string; priceColor?: string }) {
   const [avg, setAvg] = useState(0);
   const { addToCart } = useCart();
   const chefName = dish.chefs?.name || dish.chef;
@@ -21,7 +21,7 @@ export default function DishCard({ dish }: { dish: any }) {
   }, [dish?.id]);
 
   return (
-    <View style={[styles.card, cardStyle()]}>
+    <View style={[styles.card, cardStyle(), style]}>
       <Link href={`/dish/${dish.id}`} asChild>
         <TouchableOpacity activeOpacity={0.8}>
           <Image
@@ -33,10 +33,10 @@ export default function DishCard({ dish }: { dish: any }) {
       <View style={styles.content}>
         <View>
           <Text style={styles.name} numberOfLines={1}>{dish.name}</Text>
-          {chefName && <Text style={styles.chefName} numberOfLines={1}>by {chefName}</Text>}
+          {chefName && <Text style={[styles.chefName, chefNameColor ? { color: chefNameColor } : undefined]} numberOfLines={1}>by {chefName}</Text>}
         </View>
-        <Stars value={toNumber(avg, 0)} size={16} />
-        <Text style={styles.price}>
+        <Stars value={toNumber(avg, 0)} size={16} color={ratingColor} />
+        <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
           {formatCad(dish.price)}
         </Text>
         <Button

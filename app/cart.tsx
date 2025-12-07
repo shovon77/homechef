@@ -11,10 +11,10 @@ import { formatCad } from "../lib/money";
 import { useRouter } from "expo-router";
 
 // Colors from HTML design
-const PRIMARY_COLOR = '#17cfa1';
+const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#FE73FC';
-const TEXT_MUTED = '#FE73FC';
+const TEXT_DARK = '#0e1b18';
+const TEXT_MUTED = '#88B361';
 const BORDER_COLOR = '#e7f3f0';
 
 export default function CartScreen() {

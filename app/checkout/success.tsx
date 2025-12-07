@@ -55,7 +55,7 @@ export default function CheckoutSuccess() {
             Thank you for your order. Your payment has been processed successfully.
           </Text>
           {session_id && (
-            <Text style={{ color: '#FE73FC', fontSize: 12, marginTop: 8, fontFamily: theme.typography.fontFamily.body }}>
+            <Text style={{ color: "#9aa4af", fontSize: 12, marginTop: 8, fontFamily: theme.typography.fontFamily.body }}>
               Session ID: {session_id}
             </Text>
           )}

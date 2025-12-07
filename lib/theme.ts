@@ -35,13 +35,13 @@ export const theme = {
     card: '#1C2A23', // Card background (same as surface for now)
     
     // Primary brand
-    primary: '#3E6A55', // Dark green (matches HTML design)
+    primary: '#FE734C', // Was #3E6A55
     primaryContrast: '#FFFFFF', // White text on primary
-    primaryLight: 'rgba(62, 106, 85, 0.1)', // Primary with opacity
+    primaryLight: 'rgba(254, 115, 76, 0.1)', // Primary with opacity
     
     // Secondary/Accent
-    secondary: '#2DA97B', // Muted green (fallback)
-    accent: '#19e680', // Same as primary
+    secondary: '#88B361', // Was #2DA97B
+    accent: '#FE734C', // Same as primary
     
     // Semantic
     success: '#19e680',
@@ -50,11 +50,11 @@ export const theme = {
     info: '#0ea5e9',
     
     // Text
-    text: '#FE73FC', // Primary text (dark mode)
-    heading: '#FE73FC', // Headings
-    subtle: '#FE73FC', // Muted/secondary text
+    text: '#F5F5F5', // Primary text (dark mode)
+    heading: '#F5F5F5', // Headings
+    subtle: '#98A2B3', // Muted/secondary text
     disabled: '#667085', // Disabled text
-    textLight: '#FE73FC', // Dark text (light mode)
+    textLight: '#101828', // Dark text (light mode)
     
     // Borders
     border: '#344054', // Default border
@@ -63,8 +63,8 @@ export const theme = {
     
     // Legacy compatibility (keep for existing code)
     surfaceAlt: 'rgba(25, 230, 128, 0.1)',
-    brandText: '#FE73FC',
-    textMuted: '#FE73FC',
+    brandText: '#F5F5F5',
+    textMuted: '#98A2B3',
     white: '#FFFFFF',
     onPrimary: '#0B1F17',
   },

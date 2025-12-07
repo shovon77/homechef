@@ -23,9 +23,9 @@ if (Platform.OS === 'web') {
 }
 
 // Colors matching homepage and navbar design
-const PRIMARY_COLOR = '#2C4E4B';
+const PRIMARY_COLOR = '#88B361';
 const BG_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#FE73FC';
+const TEXT_DARK = '#0e1b18';
 const BORDER_LIGHT = '#E5E7EB';
 const MAXW = 1280; // max-w-7xl
 
@@ -33,7 +33,7 @@ const MAXW = 1280; // max-w-7xl
 function ExploreLink() {
   const pathname = usePathname?.() || '';
   const isActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
-  const activeColor = '#1dbf73'; // Brand green
+  const activeColor = '#88B361'; // Brand green
 
   // Web version with framer-motion animations
   if (Platform.OS === 'web' && motion && Compass) {
@@ -66,7 +66,7 @@ function ExploreLink() {
       bottom: '-4px',
       height: '2.5px',
       borderRadius: '2px',
-      background: 'linear-gradient(90deg, rgba(29,191,115,1) 0%, rgba(22,160,133,1) 100%)',
+      background: 'linear-gradient(90deg, rgba(136,179,97,1) 0%, rgba(136,179,97,1) 100%)',
       pointerEvents: 'none' as const,
     };
     

@@ -21,9 +21,11 @@ type Chef = {
 type Props = {
   chef: Chef;
   style?: StyleProp<ViewStyle>;
+  nameColor?: string;
+  ratingColor?: string;
 };
 
-export default function ChefCard({ chef, style }: Props) {
+export default function ChefCard({ chef, style, nameColor, ratingColor }: Props) {
   const avatar =
     chef?.photo ||
     chef?.avatar ||
@@ -34,7 +36,7 @@ export default function ChefCard({ chef, style }: Props) {
       <Link href={`/chef/${chef.id}`} asChild>
         <Pressable style={styles.pressable} activeOpacity={0.9}>
           <Image source={{ uri: avatar }} style={styles.avatar} />
-          <Text style={styles.name}>{chef.name}</Text>
+          <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]}>{chef.name}</Text>
           <Text style={styles.cuisine}>{chef.cuisine || 'Chef'}</Text>
           {chef.location && (
             <Text style={styles.location} numberOfLines={1}>
@@ -42,7 +44,7 @@ export default function ChefCard({ chef, style }: Props) {
             </Text>
           )}
           <View style={styles.rating}>
-            <Text style={styles.starIcon}>★</Text>
+            <Text style={[styles.starIcon, ratingColor ? { color: ratingColor } : undefined]}>★</Text>
             <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
           </View>
         </Pressable>
@@ -73,13 +75,13 @@ const styles = StyleSheet.create({
     borderColor: `${PRIMARY_COLOR}80`, // primary/50
   },
   name: {
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   cuisine: {
-    color: '#FE73FC',
+    color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
@@ -100,7 +102,7 @@ const styles = StyleSheet.create({
     color: ACCENT_COLOR,
   },
   ratingText: {
-    color: '#FE73FC',
+    color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,

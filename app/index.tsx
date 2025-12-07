@@ -123,6 +123,40 @@ export default function HomePage() {
   const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
+  
+  // Animated placeholder logic
+  const [placeholderIndex, setPlaceholderIndex] = useState(0);
+  const fadeAnim = React.useRef(new Animated.Value(1)).current;
+  const PLACEHOLDERS = [
+    "In the mood for spicy mutton biryani?",
+    "Or maybe a classic chicken pulao?",
+    "No wait, let's get a quick fuchka?",
+    "How about samosa & shingara like school days?",
+    "Find the taste of home only a click away!"
+  ];
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      Animated.sequence([
+        Animated.timing(fadeAnim, {
+          toValue: 0,
+          duration: 500, // Fade out
+          useNativeDriver: true,
+        }),
+        Animated.timing(fadeAnim, {
+          toValue: 1,
+          duration: 500, // Fade in
+          useNativeDriver: true,
+        }),
+      ]).start();
+
+      setTimeout(() => {
+        setPlaceholderIndex((prev) => (prev + 1) % PLACEHOLDERS.length);
+      }, 500); // Change text halfway through
+    }, 3500); // 3s visible + 1s transition
+
+    return () => clearInterval(interval);
+  }, []);
 
   const CARD_WIDTH = 240;
   const GAP = 24;
@@ -359,15 +393,28 @@ export default function HomePage() {
                 style={styles.searchIconImage} 
               />
             </TouchableOpacity>
-            <TextInput
-              placeholder="In the mood for biryani?"
-              placeholderTextColor="#555555"
-              style={styles.floatingSearchInput}
-              value={searchQuery}
-              onChangeText={setSearchQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
+            <View style={{ flex: 1, justifyContent: 'center' }}>
+              {!searchQuery && (
+                <Animated.Text 
+                  style={[
+                    styles.floatingSearchPlaceholder, 
+                    { opacity: fadeAnim }
+                  ]}
+                  numberOfLines={1}
+                >
+                  {PLACEHOLDERS[placeholderIndex]}
+                </Animated.Text>
+              )}
+              <TextInput
+                placeholder=""
+                placeholderTextColor="transparent"
+                style={styles.floatingSearchInput}
+                value={searchQuery}
+                onChangeText={setSearchQuery}
+                onSubmitEditing={handleSearch}
+                returnKeyType="search"
+              />
+            </View>
             <TouchableOpacity 
               style={styles.micIconContainer}
               onPress={startDictation}
@@ -510,7 +557,7 @@ const styles = StyleSheet.create({
   floatingSearchInput: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -521,6 +568,20 @@ const styles = StyleSheet.create({
     }),
     paddingLeft: theme.spacing.sm,
     paddingRight: theme.spacing.sm,
+    zIndex: 2, // Ensure input is above placeholder
+  },
+  floatingSearchPlaceholder: {
+    position: 'absolute',
+    left: theme.spacing.sm,
+    right: theme.spacing.sm,
+    color: '#555555',
+    fontSize: Platform.select({
+      web: theme.typography.fontSize.base,
+      default: theme.typography.fontSize.sm,
+    }),
+    fontFamily: theme.typography.fontFamily.body,
+    zIndex: 1,
+    pointerEvents: 'none',
   },
   searchIconContainer: {
     justifyContent: "center",
@@ -547,7 +608,7 @@ const styles = StyleSheet.create({
   searchInput: {
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -591,7 +652,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: Platform.select({
       web: 30,
       default: 22,
@@ -641,7 +702,7 @@ const styles = StyleSheet.create({
   },
   dishName: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -660,7 +721,7 @@ const styles = StyleSheet.create({
   },
   dishChefName: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
@@ -690,7 +751,7 @@ const styles = StyleSheet.create({
   },
   ratingText: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
@@ -730,7 +791,7 @@ const styles = StyleSheet.create({
   },
   howItWorksTitle: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#333333',
     fontFamily: theme.typography.fontFamily.display,
     fontSize: 20,
     fontFamily: theme.typography.fontFamily.display,
@@ -738,7 +799,7 @@ const styles = StyleSheet.create({
   },
   howItWorksText: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#555555',
     fontSize: theme.typography.fontSize.base,
     lineHeight: theme.typography.fontSize.base * 1.5,
     textAlign: "center",
@@ -766,20 +827,20 @@ const styles = StyleSheet.create({
   },
   featuredChefName: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#333333',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   featuredChefCuisine: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
   featuredChefLocation: {
     fontFamily: theme.typography.fontFamily.body,
-    color: '#FE73FC',
+    color: '#777777',
     fontSize: theme.typography.fontSize.xs,
     marginTop: theme.spacing.xs / 2,
     textAlign: 'center',
@@ -843,7 +904,7 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: 'bold',
-    color: '#FE73FC',
+    color: '#333',
     textAlign: 'center',
   },
   circularDishSubtitle: {

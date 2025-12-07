@@ -14,11 +14,11 @@ const C = {
   bg: '#F2F0EF',
   panel: '#FFFFFF',
   border: '#E3EEE8',
-  text: '#FE73FC',
-  subtext: '#FE73FC',
+  text: '#0B1F17',
+  subtext: '#4A6B5D',
   primary: '#2DA97B',
-  primaryHi: '#FE73FC',
-  link: '#FE73FC',
+  primaryHi: '#27C08A',
+  link: '#0EA5E9',
 };
 
 export default function AuthPage() {

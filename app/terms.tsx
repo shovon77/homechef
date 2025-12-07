@@ -112,7 +112,7 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing['2xl'],
   },
   title: {
-    color: '#FE73FC',
+    color: '#101828',
     fontSize: 36,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
@@ -121,7 +121,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   lastUpdated: {
-    color: '#FE73FC',
+    color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontStyle: 'italic',
@@ -131,7 +131,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing['2xl'],
   },
   heading: {
-    color: '#FE73FC',
+    color: '#101828',
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -140,7 +140,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.lg,
   },
   paragraph: {
-    color: '#FE73FC',
+    color: '#101828',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,
