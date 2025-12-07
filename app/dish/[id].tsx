@@ -396,7 +396,11 @@ export default function DishDetail() {
 
             {activeTab === 'ingredients' && (
               <View style={styles.ingredientsContent}>
-                <Text style={styles.emptyText}>Ingredients and allergen information coming soon.</Text>
+                {dish.ingredients ? (
+                  <Text style={styles.descriptionText}>{dish.ingredients}</Text>
+                ) : (
+                  <Text style={styles.emptyText}>Ingredients and allergen information coming soon.</Text>
+                )}
               </View>
             )}
 

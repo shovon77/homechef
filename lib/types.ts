@@ -52,6 +52,7 @@ export type Dish = {
   category: string | null;
   image: string | null; // default URL
   description: string | null;
+  ingredients: string | null;
   thumbnail: string | null;
   featured: boolean; // default false
   created_at: string | null; // timestamptz

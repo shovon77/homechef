@@ -25,7 +25,7 @@ const TEXT_MUTED = '#555555';
 const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
-type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
+type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string };
 
 export default function ChefDashboard() {
@@ -159,7 +159,7 @@ export default function ChefDashboard() {
     }
   }
 
-  async function createDish(d: { name: string; price: number; description?: string; file?: File | null; preview?: string }) {
+  async function createDish(d: { name: string; price: number; description?: string; ingredients?: string; file?: File | null; preview?: string }) {
     if (!chef) return;
     setSaving(true);
     setMsg(null);
@@ -170,7 +170,8 @@ export default function ChefDashboard() {
         chef: name || chef.name,
         name: d.name,
         price: d.price,
-        description: d.description || null
+        description: d.description || null,
+        ingredients: d.ingredients || null
       }).select('*').single();
       if (ins.error) throw ins.error;
       const created = ins.data as DishRow;
@@ -211,7 +212,7 @@ export default function ChefDashboard() {
     }
   }
 
-  async function updateDish(p: { id: number; name?: string; price?: number | string; description?: string; file?: File | null; preview?: string }) {
+  async function updateDish(p: { id: number; name?: string; price?: number | string; description?: string; ingredients?: string; file?: File | null; preview?: string }) {
     if (!chef) return;
     setSaving(true);
     setMsg(null);
@@ -226,6 +227,7 @@ export default function ChefDashboard() {
         payload.price = n;
       }
       if (typeof p.description !== 'undefined') payload.description = p.description || null;
+      if (typeof p.ingredients !== 'undefined') payload.ingredients = p.ingredients || null;
 
       if (p.file) {
         const { publicUrl } = await uploadToBucket('dish-images', p.file, `chefs/${chef!.id}/dishes/${p.id}`);
@@ -611,11 +613,11 @@ export default function ChefDashboard() {
   }
 
   const navItems = [
-    { key: 'dashboard' as const, label: 'Dashboard', icon: '📊' },
-    { key: 'menu' as const, label: 'Menu Management', icon: '📖' },
-    { key: 'orders' as const, label: 'Order History', icon: '📋' },
-    { key: 'reviews' as const, label: 'My Reviews', icon: '⭐' },
-    { key: 'payouts' as const, label: 'Payout Settings', icon: '💳' },
+    { key: 'dashboard' as const, label: 'Overview', icon: '📊' },
+    { key: 'menu' as const, label: 'Menu', icon: '📖' },
+    { key: 'orders' as const, label: 'Orders', icon: '📋' },
+    { key: 'reviews' as const, label: 'Reviews', icon: '⭐' },
+    { key: 'payouts' as const, label: 'Payment', icon: '💳' },
   ];
 
   const footerNavItems = [
@@ -1408,12 +1410,13 @@ const styles = StyleSheet.create({
 });
 
 // Dish form components
-function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price: number; description?: string; file?: File | null; preview?: string }) => void; saving: boolean }) {
+function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price: number; description?: string; ingredients?: string; file?: File | null; preview?: string }) => void; saving: boolean }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
+  const [ingredients, setIngredients] = useState('');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(null);
   const valid = name.trim().length > 0 && Number(price) > 0;
@@ -1486,13 +1489,26 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }}
           />
         </View>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Ingredients & Allergens</Text>
+          <TextInput
+            value={ingredients}
+            onChangeText={setIngredients}
+            placeholder="Contains peanuts, dairy, gluten..."
+            placeholderTextColor={TEXT_MUTED}
+            multiline
+            numberOfLines={2}
+            style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+          />
+        </View>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
           <TouchableOpacity
             onPress={() => {
-              onCreate({ name: name.trim(), price: Number(price), description: description.trim(), file, preview });
+              onCreate({ name: name.trim(), price: Number(price), description: description.trim(), ingredients: ingredients.trim(), file, preview });
               setName('');
               setPrice('');
               setDescription('');
+              setIngredients('');
               setFile(null);
               setPreview(null);
             }}
@@ -1513,12 +1529,13 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
   );
 }
 
-function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave: (p: { id: number; name?: string; price?: number | string; description?: string; file?: File | null; preview?: string }) => void; onDelete: (id: number) => void; saving: boolean }) {
+function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave: (p: { id: number; name?: string; price?: number | string; description?: string; ingredients?: string; file?: File | null; preview?: string }) => void; onDelete: (id: number) => void; saving: boolean }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [name, setName] = useState(dish.name || '');
   const [price, setPrice] = useState(String(dish.price ?? ''));
   const [description, setDescription] = useState(dish.description || '');
+  const [ingredients, setIngredients] = useState(dish.ingredients || '');
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(dish.image || dish.thumbnail || '');
 
@@ -1574,6 +1591,18 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
               style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
             />
           </View>
+          <View style={{ gap: 8 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Ingredients & Allergens</Text>
+            <TextInput
+              value={ingredients}
+              onChangeText={setIngredients}
+              placeholder="List ingredients and allergens"
+              placeholderTextColor={TEXT_MUTED}
+              multiline
+              numberOfLines={2}
+              style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+            />
+          </View>
           <View style={{ 
             flexDirection: isMobile ? 'column' : 'row', 
             gap: 16, 
@@ -1599,7 +1628,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
               gap: 8
             }}>
               <TouchableOpacity
-                onPress={() => onSave({ id: dish.id, name: name.trim(), price: price, description: description.trim(), file, preview })}
+                onPress={() => onSave({ id: dish.id, name: name.trim(), price: price, description: description.trim(), ingredients: ingredients.trim(), file, preview })}
                 disabled={saving}
                 style={{ 
                   backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
