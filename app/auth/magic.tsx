@@ -5,6 +5,10 @@ import { usePathname } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { getEmailRedirect, redirectAfterLogin } from '../../lib/authRedirect';
 
+// Supabase allowed redirect URLs needed:
+// - Web: ${window.location.origin}/auth/callback (e.g., http://localhost:8081/auth/callback, https://yourdomain.com/auth/callback)
+// - Native: homechef://auth/callback
+
 export default function MagicLogin() {
   const [email, setEmail] = useState('');
   const [sent, setSent] = useState(false);
