@@ -37,6 +37,7 @@ export type Chef = {
   rating_count: number | null; // integer
   created_at: string | null; // timestamptz
   cuisine: string | null; // cuisine specialty from application
+  user_id?: string | null; // FK -> auth.users.id
 };
 
 // ============================================================================
@@ -54,6 +55,10 @@ export type Dish = {
   thumbnail: string | null;
   featured: boolean; // default false
   created_at: string | null; // timestamptz
+};
+
+export type DishWithChef = Dish & {
+  chefs: Chef | null;
 };
 
 // ============================================================================
@@ -154,4 +159,3 @@ export type CreateOrderInput = {
   status?: OrderStatus;
   items: CreateOrderItem[];
 };
-

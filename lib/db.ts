@@ -10,6 +10,7 @@ import type {
   Profile,
   Chef,
   Dish,
+  DishWithChef,
   DishRating,
   DishRatingStats,
   ChefReview,
@@ -187,6 +188,24 @@ export async function getDishById(id: number): Promise<Dish | null> {
   }
 
   return data as Dish | null;
+}
+
+/**
+ * Get dish by ID with joined Chef data
+ */
+export async function getDishWithChef(id: number): Promise<DishWithChef | null> {
+  const { data, error } = await supabase
+    .from('dishes')
+    .select('*, chefs(*)')
+    .eq('id', id)
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching dish with chef:', error);
+    return null;
+  }
+
+  return data as DishWithChef | null;
 }
 
 // ============================================================================

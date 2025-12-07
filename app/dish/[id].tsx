@@ -3,9 +3,9 @@ import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Ale
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
-import { getDishById, getDishRatings, getChefById } from "../../lib/db";
+import { getDishById, getDishRatings, getChefById, getDishWithChef } from "../../lib/db";
 import { submitDishRating, getDishRatingSummary } from "../../lib/reviews";
-import type { Dish } from "../../lib/types";
+import type { Dish, DishWithChef } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import { Screen } from "../../components/Screen";
@@ -35,7 +35,7 @@ export default function DishDetail() {
     return tail ? Number(tail) : NaN;
   }, [raw]);
 
-  const [dish, setDish] = useState<Dish | null>(null);
+  const [dish, setDish] = useState<DishWithChef | null>(null);
   const [chef, setChef] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [avgRating, setAvgRating] = useState(0);
@@ -59,14 +59,15 @@ export default function DishDetail() {
     let mounted = true;
     
     (async () => {
-      setLoading(true);
+      // We don't set loading to true here if dish is already loaded (e.g. revalidation)
+      // but since this runs on mount or id change, we usually want loading true.
+      // However, for speed, we can start fetching immediately.
+      if (!dish) setLoading(true);
+      
       try {
-        // Fetch dish and ratings in parallel
-        const [dishData, ratingStats] = await Promise.all([
-          getDishById(dishId),
-          getDishRatings(dishId)
-        ]);
-
+        // Fetch dish first for faster TTI
+        const dishData = await getDishWithChef(dishId);
+        
         if (!mounted) return;
 
         if (!dishData) {
@@ -75,20 +76,30 @@ export default function DishDetail() {
           return;
         }
 
+        // Render dish immediately
         setDish(dishData);
-        setRatingCount(ratingStats.count);
-        setAvgRating(ratingStats.average);
+        setLoading(false); // Stop loading spinner as soon as we have the dish
 
-        // Then fetch chef info if needed
-        if (dishData.chef_id) {
+        // Set chef info from joined data
+        if (dishData.chefs) {
+          setChef(dishData.chefs);
+        } else if (dishData.chef_id) {
           const chefData = await getChefById(Number(dishData.chef_id));
           if (mounted && chefData) {
             setChef(chefData);
           }
         }
+
+        // Fetch ratings in background
+        getDishRatings(dishId).then(ratingStats => {
+          if (mounted) {
+            setRatingCount(ratingStats.count);
+            setAvgRating(ratingStats.average);
+          }
+        });
+
       } catch (e) {
         console.error("Error loading dish details:", e);
-      } finally {
         if (mounted) setLoading(false);
       }
     })();
