@@ -613,16 +613,16 @@ export default function ChefDashboard() {
   }
 
   const navItems = [
-    { key: 'dashboard' as const, label: 'Overview', icon: '📊' },
-    { key: 'menu' as const, label: 'Menu', icon: '📖' },
-    { key: 'orders' as const, label: 'Orders', icon: '📋' },
-    { key: 'reviews' as const, label: 'Reviews', icon: '⭐' },
-    { key: 'payouts' as const, label: 'Payment', icon: '💳' },
+    { key: 'dashboard' as const, label: 'Overview', icon: <Image source={require('../../assets/controls.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
+    { key: 'menu' as const, label: 'Menu', icon: <Image source={require('../../assets/notebook.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
+    { key: 'orders' as const, label: 'Orders', icon: <Image source={require('../../assets/add.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
+    { key: 'reviews' as const, label: 'Reviews', icon: <Image source={require('../../assets/edit.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
+    { key: 'payouts' as const, label: 'Payment', icon: <Image source={require('../../assets/credit-card.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
   ];
 
   const footerNavItems = [
-    { key: 'profile' as const, label: 'Profile', icon: '⚙️', action: 'profile' as const },
-    { key: 'logout' as const, label: 'Logout', icon: '🚪', action: 'logout' as const },
+    { key: 'profile' as const, label: 'Profile', icon: <Image source={require('../../assets/settings.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />, action: 'profile' as const },
+    { key: 'logout' as const, label: 'Logout', icon: <Image source={require('../../assets/logout.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />, action: 'logout' as const },
   ];
 
   const Sidebar = (
@@ -657,7 +657,7 @@ export default function ChefDashboard() {
                 pressed && styles.navItemPressed,
               ]}
             >
-              <View style={styles.navIconWrap}><Text style={styles.navIcon}>{item.icon}</Text></View>
+              <View style={styles.navIconWrap}>{typeof item.icon === 'string' ? <Text style={styles.navIcon}>{item.icon}</Text> : item.icon}</View>
               <Text
                 numberOfLines={1}
                 ellipsizeMode="tail"
@@ -689,7 +689,7 @@ export default function ChefDashboard() {
                   pressed && styles.navItemPressed,
                 ]}
               >
-                <View style={styles.navIconWrap}><Text style={styles.navIcon}>{item.icon}</Text></View>
+                <View style={styles.navIconWrap}>{typeof item.icon === 'string' ? <Text style={styles.navIcon}>{item.icon}</Text> : item.icon}</View>
                 <Text
                   numberOfLines={1}
                   ellipsizeMode="tail"

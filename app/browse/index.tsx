@@ -363,7 +363,7 @@ export default function BrowsePage() {
         })}
       >
         <View style={{ alignItems: 'center', marginBottom: 20 }}>
-          <Text style={styles.title}>Explore Meals Near You</Text>
+          <Text style={styles.title}>Explore meals near you</Text>
           <Text style={styles.subtitle}>Find your next favorite homemade dish</Text>
         </View>
 
@@ -553,10 +553,10 @@ const styles = StyleSheet.create({
     fontSize: 28,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
-    color: '#0f172a',
+    color: '#33393A',
   },
   subtitle: {
-    color: '#475569',
+    color: '#33393A',
     marginTop: 4,
     textAlign: 'center',
   },

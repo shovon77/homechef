@@ -307,7 +307,7 @@ const styles = StyleSheet.create({
   logoText: {
     fontSize: 24,
     fontWeight: '900',
-    color: TEXT_DARK,
+    color: '#33393A',
     letterSpacing: -0.015,
     lineHeight: 28,
     fontFamily: theme.typography.fontFamily.display,

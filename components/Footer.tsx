@@ -78,7 +78,7 @@ const styles = StyleSheet.create({
   brand: {
     fontWeight: '900',
     fontSize: 24,
-    color: '#0f172a',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.display,
     letterSpacing: -0.015,
     lineHeight: 28,

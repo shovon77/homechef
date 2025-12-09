@@ -75,7 +75,11 @@ export default function CartScreen() {
         {items.length === 0 ? (
           <View style={styles.emptyCart}>
             <View style={styles.emptyCartIcon}>
-              <Text style={styles.emptyCartEmoji}>🛒</Text>
+              <Image
+                source={require('../assets/shopping-cart.png')}
+                style={styles.emptyCartImage}
+                resizeMode="contain"
+              />
             </View>
             <Text style={styles.emptyCartTitle}>Your Cart is Empty</Text>
             <Text style={styles.emptyCartText}>
@@ -444,8 +448,9 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xl,
     marginBottom: theme.spacing.md,
   },
-  emptyCartEmoji: {
-    fontSize: 64,
+  emptyCartImage: {
+    width: 64,
+    height: 64,
   },
   emptyCartTitle: {
     color: TEXT_DARK,
