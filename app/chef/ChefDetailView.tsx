@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -12,76 +12,152 @@ import Screen from '../../components/Screen';
 import { theme, elev } from '../../lib/theme';
 
 // Colors from HTML design
-const PRIMARY_COLOR = '#19e680';
+const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#18181b'; // zinc-900
 const TEXT_MUTED = '#71717a'; // zinc-500
 const TEXT_MUTED_DARK = '#52525b'; // zinc-600
 const BORDER_LIGHT = '#e4e4e7'; // zinc-200
 const BORDER_DARK = '#3f3f46'; // zinc-700
-const STAR_COLOR = '#ffb700'; // yellow-500
+const STAR_COLOR = '#FE734C'; // Updated to match brand color
 
 export default function ChefDetailView() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, name, photo, location: locParam, rating: ratingParam, rating_count: rcParam, cuisine } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
-  const numericFromAny = (() => {
+  
+  const chefId = useMemo(() => {
     const m = raw.match(/(\d+)/);
     if (m) return Number(m[1]);
     const tail = raw.replace(/[^0-9]+/g, '');
     return tail ? Number(tail) : NaN;
-  })();
+  }, [raw]);
 
-  const [chefId, setChefId] = useState<number | null>(null);
-  const [chef, setChef] = useState<Chef | null>(null);
+  // Optimistically initialize chef from params to speed up initial render
+  const initialChef = useMemo(() => {
+    if (!chefId) return null;
+    if (name) {
+      return {
+        id: chefId,
+        name: String(name),
+        photo: String(photo || ''),
+        avatar: String(photo || ''),
+        location: String(locParam || ''),
+        rating: Number(ratingParam) || 0,
+        rating_count: Number(rcParam) || 0,
+        cuisine: String(cuisine || ''),
+        bio: '', // Will be fetched
+        status: 'active', // Assumed
+        created_at: '',
+        email: '',
+        phone: ''
+      } as Chef;
+    }
+    return null;
+  }, [chefId, name, photo, locParam, ratingParam, rcParam, cuisine]);
+
+  const [chef, setChef] = useState<Chef | null>(initialChef);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [reviews, setReviews] = useState<ChefReview[]>([]);
   const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(!initialChef); // Only load if we don't have initial data
+
+  // Loading States for individual sections
+  const [isFetchingDishes, setIsFetchingDishes] = useState(true);
+  const [isFetchingReviews, setIsFetchingReviews] = useState(true);
+
+  // Missing State Variables
   const [activeTab, setActiveTab] = useState<'dishes' | 'reviews'>('dishes');
-  const [reviewRating, setReviewRating] = useState(5);
-  const [reviewComment, setReviewComment] = useState("");
-  const [submittingReview, setSubmittingReview] = useState(false);
   const [dishesPage, setDishesPage] = useState(1);
   const [dishesTotal, setDishesTotal] = useState(0);
   const [dishesLoading, setDishesLoading] = useState(false);
-  const DISHES_PER_PAGE = isMobile ? 3 : 16; // 3x1 on mobile, 4x4 on desktop
-  const GRID_COLUMNS = isMobile ? 3 : 4;
-  const { addToCart } = useCart();
+  
+  // Review Form State
   const { user } = useRole();
+  const { addToCart } = useCart();
+  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewComment, setReviewComment] = useState("");
+  const [submittingReview, setSubmittingReview] = useState(false);
 
+  // Consolidated data fetching
   useEffect(() => {
-    setError(null);
-    if (Number.isFinite(numericFromAny) && numericFromAny > 0) {
-      setChefId(numericFromAny);
-    } else {
-      setChefId(1);
+    if (!chefId) {
+      if (raw) setLoading(false);
+      return;
     }
-  }, [raw]);
 
-  useEffect(() => {
-    if (!chefId) return;
-    (async () => {
+    let mounted = true;
+    
+    const fetchChef = async () => {
       try {
+        if (!initialChef) setLoading(true);
+        setError(null);
+        
         const chefData = await getChefById(chefId);
+        
+        if (!mounted) return;
+
         if (!chefData) {
-          setError('Chef not found');
+          if (!initialChef) setError('Chef not found');
+          setLoading(false);
           return;
         }
+
         setChef(chefData);
-
-        const reviewsData = await getChefReviewsHelper(chefId);
-        setReviews(reviewsData);
-      } catch (e:any) {
-        setError(e.message || String(e));
+      } catch (e: any) {
+        if (mounted && !chef && !initialChef) setError(e.message || String(e));
+      } finally {
+        if (mounted && !initialChef) setLoading(false);
       }
-    })();
-  }, [chefId]);
+    };
 
-  // Load dishes with pagination
+    const fetchDishes = async () => {
+      if(mounted) setIsFetchingDishes(true);
+      try {
+        const { data, count } = await supabase
+          .from('dishes')
+          .select('*', { count: 'exact' })
+          .eq('chef_id', chefId)
+          .order('id', { ascending: true })
+          .range(0, (isMobile ? 3 : 16) - 1);
+          
+        if (mounted && data) {
+          setDishes(data);
+          setDishesTotal(count || 0);
+        }
+      } catch(e) {
+        console.error("Error fetching dishes", e);
+      } finally {
+        if(mounted) setIsFetchingDishes(false);
+      }
+    };
+
+    const fetchReviews = async () => {
+      if(mounted) setIsFetchingReviews(true);
+      try {
+        const reviewsData = await getChefReviewsHelper(chefId);
+        if (mounted) setReviews(reviewsData);
+      } catch(e) {
+        console.error("Error fetching reviews", e);
+      } finally {
+        if(mounted) setIsFetchingReviews(false);
+      }
+    };
+
+    // Trigger all fetches in parallel, independently
+    fetchChef();
+    fetchDishes();
+    fetchReviews();
+
+    return () => { mounted = false; };
+  }, [chefId, isMobile]); // Re-fetch if chefId changes
+
+  // Pagination for dishes (subsequent pages)
   useEffect(() => {
-    if (!chefId) return;
+    if (!chefId || dishesPage === 1) return; // Skip first page as it's handled above
+
     let cancelled = false;
     (async () => {
       setDishesLoading(true);
@@ -90,10 +166,9 @@ export default function ChefDetailView() {
         const from = (dishesPage - 1) * perPage;
         const to = from + perPage - 1;
 
-        // Query dishes by chef_id
-        const { data, error, count } = await supabase
+        const { data, error } = await supabase
           .from('dishes')
-          .select('*', { count: 'exact' })
+          .select('*')
           .eq('chef_id', chefId)
           .order('id', { ascending: true })
           .range(from, to);
@@ -101,21 +176,15 @@ export default function ChefDetailView() {
         if (cancelled) return;
         if (error) throw error;
 
+        // Note: This logic replaces dishes. If you want "Load More" style, append instead.
         setDishes(data || []);
-        setDishesTotal(count || 0);
       } catch (e: any) {
-        if (!cancelled) {
-          console.error('Error loading dishes:', e);
-          setError(e.message || String(e));
-        }
+        if (!cancelled) console.error('Error loading page:', e);
       } finally {
         if (!cancelled) setDishesLoading(false);
       }
     })();
-
-    return () => {
-      cancelled = true;
-    };
+    return () => { cancelled = true; };
   }, [chefId, dishesPage, isMobile]);
 
   const avatar = chef?.photo || chef?.avatar || '';
@@ -188,11 +257,11 @@ export default function ChefDetailView() {
       </Screen>
     );
   }
-  if (!chefId || !chef) {
+  if (loading || (!chef && !error)) {
     return (
       <Screen>
         <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
-          <Text style={{ color:TEXT_MUTED }}>Loading chef…</Text>
+          <Text style={{ color:TEXT_MUTED }}>Loading chef...</Text>
         </View>
       </Screen>
     );
@@ -297,8 +366,11 @@ export default function ChefDetailView() {
             <View style={styles.contentScroll}>
               {activeTab === 'dishes' ? (
                 <>
-                  {dishesLoading ? (
-                    <View style={styles.loader}><Text style={styles.emptyText}>Loading dishes...</Text></View>
+                  {isFetchingDishes ? (
+                    <View style={styles.loader}>
+                      <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+                      <Text style={styles.loadingText}>Loading dishes...</Text>
+                    </View>
                   ) : dishes.length === 0 ? (
                     <Text style={styles.emptyText}>No dishes yet.</Text>
                   ) : (
@@ -418,7 +490,12 @@ export default function ChefDetailView() {
                   )}
 
                   {/* Reviews list */}
-                  {reviews.length === 0 ? (
+                  {isFetchingReviews ? (
+                    <View style={styles.loader}>
+                      <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+                      <Text style={styles.loadingText}>Loading reviews...</Text>
+                    </View>
+                  ) : reviews.length === 0 ? (
                     <Text style={styles.emptyText}>No reviews yet.</Text>
                   ) : (
                     <View style={styles.reviewsList}>
@@ -818,7 +895,7 @@ const styles = StyleSheet.create({
     }),
   },
   addToCartButtonText: {
-    color: TEXT_DARK,
+    color: '#FFFFFF',
     fontSize: Platform.select({
       web: theme.typography.fontSize.sm,
       default: 10,
@@ -890,7 +967,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   submitButtonText: {
-    color: TEXT_DARK,
+    color: '#FFFFFF',
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -954,6 +1031,12 @@ const styles = StyleSheet.create({
   loader: {
     paddingVertical: theme.spacing['4xl'],
     alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  loadingText: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
   },
   pagination: {
     flexDirection: 'row',

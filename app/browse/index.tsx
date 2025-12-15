@@ -10,7 +10,7 @@ import { SortIcon } from '../../components/SortIcon';
 
 const PER_PAGE = 25; // 5x5 grid layout
 const GRID_COLUMNS = 5;
-const PRIMARY_COLOR = '#88B361';
+const PRIMARY_COLOR = '#FE734C';
 
 function cleanSearchQuery(q: string) {
   let cleaned = q.toLowerCase().trim();
@@ -148,7 +148,7 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,price,image,rating,chef_id, chefs!inner(status, name)', { count: 'exact' })
+            .select('id,name,description,price,image,rating,chef_id, chefs!inner(status, name)', { count: 'exact' })
             .eq('chefs.status', 'active');
 
           // Extract search parameters using AI or fallback
@@ -397,7 +397,7 @@ export default function BrowsePage() {
                   onPress={() => setShowSortMenu(!showSortMenu)}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
                 >
-                  <SortIcon size={24} color="#475569" />
+                  <SortIcon size={24} color="#FE734C" />
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
                     {sortBy === 'none' ? 'Sort' :
                      sortBy === 'popular' ? 'Popularity' :
@@ -457,10 +457,10 @@ export default function BrowsePage() {
               <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <DishCard 
                   dish={dish} 
-                  style={{ backgroundColor: '#88B361' }} 
-                  chefNameColor="#FFFFFF"
-                  ratingColor="#FFD700"
-                  priceColor="#FFFFFF"
+                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FE734C', ...elev('lg') }} 
+                  chefNameColor="#555555"
+                  ratingColor="#FE734C"
+                  priceColor="#FE734C"
                 />
               </View>
             ))}
@@ -471,9 +471,9 @@ export default function BrowsePage() {
               <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <ChefCard 
                   chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
-                  style={{ backgroundColor: '#88B361' }}
-                  nameColor="#FFFFFF"
-                  ratingColor="#FFD700"
+                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FE734C', ...elev('lg') }}
+                  nameColor="#FE734C"
+                  ratingColor="#FE734C"
                 />
               </View>
             ))}
@@ -569,13 +569,15 @@ const styles = StyleSheet.create({
     paddingHorizontal: 18,
     paddingVertical: 10,
     borderRadius: 999,
-    backgroundColor: '#e2f5ee',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#FE734C',
   },
   tabActive: {
-    backgroundColor: '#88B361',
+    backgroundColor: '#FE734C',
   },
   tabText: {
-    color: '#065f46',
+    color: '#FE734C',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },

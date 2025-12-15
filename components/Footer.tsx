@@ -59,7 +59,7 @@ const styles = StyleSheet.create({
   container: {
     width: '100%',
     borderTopWidth: 1,
-    borderTopColor: '#e5e7eb',
+    borderTopColor: '#FE734C',
     backgroundColor: '#F2F0EF',
     paddingHorizontal: 16,
     paddingTop: 16,

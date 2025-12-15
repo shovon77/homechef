@@ -321,7 +321,18 @@ export default function HomePage() {
             >
               {chefs.map((chef, i) => (
                 <View key={`${normalizeId(chef.id)}-${i}`} style={styles.featuredChefCardWrapper}>
-                  <Link href={{ pathname: "/chef/[id]", params: { id: normalizeId(chef.id) } }} asChild>
+                  <Link href={{ 
+                    pathname: "/chef/[id]", 
+                    params: { 
+                      id: normalizeId(chef.id),
+                      name: chef.name,
+                      photo: chef.photo || chef.avatar || "",
+                      location: chef.location || "",
+                      rating: chef.rating?.toString() || "",
+                      rating_count: chef.rating_count?.toString() || "",
+                      cuisine: chef.cuisine || ""
+                    } 
+                  }} asChild>
                     <TouchableOpacity activeOpacity={0.9} style={styles.featuredChefCard}>
                       <Image
                         source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
@@ -914,6 +925,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
     ...elev('md'),
+    borderWidth: 2,
+    borderColor: '#FE734C',
   },
   circularDishImageContainer: {
     width: 180, // Slightly smaller to fit padding

@@ -31,21 +31,27 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
     chef?.avatar ||
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
 
+  const ratingVal = toNumber(chef?.rating, 0);
+
   return (
     <View style={[styles.card, style]}>
       <Link href={`/chef/${chef.id}`} asChild>
         <Pressable style={styles.pressable} activeOpacity={0.9}>
           <Image source={{ uri: avatar }} style={styles.avatar} />
-          <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]}>{chef.name}</Text>
-          <Text style={styles.cuisine}>{chef.cuisine || 'Chef'}</Text>
-          {chef.location && (
-            <Text style={styles.location} numberOfLines={1}>
-              📍 {chef.location}
-            </Text>
-          )}
-          <View style={styles.rating}>
-            <Text style={[styles.starIcon, ratingColor ? { color: ratingColor } : undefined]}>★</Text>
-            <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
+          <View style={styles.info}>
+            <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]} numberOfLines={1}>{chef.name}</Text>
+            <Text style={styles.cuisine} numberOfLines={1}>{chef.cuisine || 'Chef'}</Text>
+            {chef.location && (
+              <Text style={styles.location} numberOfLines={1}>
+                📍 {chef.location}
+              </Text>
+            )}
+            {ratingVal > 0 && (
+              <View style={styles.rating}>
+                <Text style={[styles.starIcon, ratingColor ? { color: ratingColor } : undefined]}>★</Text>
+                <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
+              </View>
+            )}
           </View>
         </Pressable>
       </Link>
@@ -55,24 +61,28 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
 
 const styles = StyleSheet.create({
   card: {
-    flex: 1,
-    alignItems: "center",
-    gap: theme.spacing.md,
-    padding: theme.spacing['2xl'],
+    width: "100%",
     backgroundColor: '#F4F4F4',
     borderRadius: theme.radius.xl,
-    textAlign: "center",
+    overflow: 'hidden',
   },
   pressable: {
-    alignItems: "center",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
     width: "100%",
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
   },
   avatar: {
-    width: 96,
-    height: 96,
-    borderRadius: 48,
-    borderWidth: 4,
-    borderColor: `${PRIMARY_COLOR}80`, // primary/50
+    width: 100,
+    height: 100,
+    borderRadius: theme.radius.md,
+    backgroundColor: theme.colors.surface,
+  },
+  info: {
+    flex: 1,
+    gap: 4,
+    justifyContent: 'center',
   },
   name: {
     color: '#333333',
@@ -88,14 +98,14 @@ const styles = StyleSheet.create({
   location: {
     color: '#777777',
     fontSize: theme.typography.fontSize.xs,
-    marginTop: theme.spacing.xs / 2,
-    textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 2,
   },
   rating: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.xs / 2,
-    marginTop: theme.spacing.sm,
+    marginTop: 4,
   },
   starIcon: {
     fontSize: theme.typography.fontSize.lg,
@@ -105,7 +115,6 @@ const styles = StyleSheet.create({
     color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
   },
 });

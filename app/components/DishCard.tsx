@@ -23,7 +23,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
   return (
     <View style={[styles.card, cardStyle(), style]}>
       <Link href={`/dish/${dish.id}`} asChild>
-        <TouchableOpacity activeOpacity={0.8}>
+        <TouchableOpacity activeOpacity={0.8} style={styles.imageContainer}>
           <Image
             source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
             style={styles.image}
@@ -31,23 +31,26 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
         </TouchableOpacity>
       </Link>
       <View style={styles.content}>
-        <View>
+        <View style={{ gap: 2 }}>
           <Text style={styles.name} numberOfLines={1}>{dish.name}</Text>
+          {dish.description ? <Text style={styles.description} numberOfLines={2}>{dish.description}</Text> : null}
           {chefName && <Text style={[styles.chefName, chefNameColor ? { color: chefNameColor } : undefined]} numberOfLines={1}>by {chefName}</Text>}
+          {avg > 0 && <View style={{ marginTop: 2 }}><Stars value={toNumber(avg, 0)} size={16} color={ratingColor} /></View>}
         </View>
-        <Stars value={toNumber(avg, 0)} size={16} color={ratingColor} />
-        <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
-          {formatCad(dish.price)}
-        </Text>
-        <Button
-          title="Add to cart"
-          variant="primary"
-          size="sm"
-          onPress={() => addToCart({
-            id: dish.id, name: dish.name, price: Number(dish.price||0), quantity: 1, image: dish.image, chef_id: dish.chef_id
-          })}
-          style={styles.button}
-        />
+        <View style={styles.footer}>
+          <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
+            {formatCad(dish.price)}
+          </Text>
+          <Button
+            title="Add"
+            variant="primary"
+            size="sm"
+            onPress={() => addToCart({
+              id: dish.id, name: dish.name, price: Number(dish.price||0), quantity: 1, image: dish.image, chef_id: dish.chef_id
+            })}
+            style={styles.button}
+          />
+        </View>
       </View>
     </View>
   );
@@ -57,27 +60,41 @@ const styles = StyleSheet.create({
   card: {
     width: "100%",
     overflow: "hidden",
+    flexDirection: 'row',
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  imageContainer: {
+    width: 100,
+    height: 100,
+    borderRadius: theme.radius.md,
+    overflow: 'hidden',
   },
   image: {
     width: "100%",
-    height: 150,
+    height: "100%",
     backgroundColor: theme.colors.surface,
   },
   content: {
-    padding: theme.spacing.md,
-    gap: theme.spacing.sm,
+    flex: 1,
+    justifyContent: 'space-between',
   },
   name: {
-    color: theme.colors.text,
+    color: '#FE734C',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.base,
+  },
+  description: {
+    color: '#555555',
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    lineHeight: 18,
   },
   chefName: {
     color: theme.colors.textMuted,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
-    marginTop: 2,
   },
   price: {
     color: theme.colors.primary,
@@ -85,7 +102,14 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.lg,
   },
+  footer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginTop: 8,
+  },
   button: {
-    marginTop: theme.spacing.xs,
+    marginTop: 0,
+    minWidth: 70,
   },
 });

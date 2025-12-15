@@ -12,31 +12,35 @@ import { theme } from '../lib/theme'
 // Web-only imports for animations
 let motion: any = null;
 let Compass: any = null;
+let Menu: any = null;
+let X: any = null;
 if (Platform.OS === 'web') {
   try {
     motion = require('framer-motion');
     const lucide = require('lucide-react');
     Compass = lucide.Compass;
+    Menu = lucide.Menu;
+    X = lucide.X;
   } catch (e) {
     // Fallback if not available
   }
 }
 
 // Colors matching homepage and navbar design
-const PRIMARY_COLOR = '#88B361';
+const PRIMARY_COLOR = '#FE734C';
 const BG_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b18';
 const BORDER_LIGHT = '#E5E7EB';
 const MAXW = 1280; // max-w-7xl
 
-// Animated ExploreLink component (web-only with fallback for native)
-function ExploreLink() {
-  const pathname = usePathname?.() || '';
-  const isActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
+// Generic NavButton component with animation support
+function NavButton({ href, label, isActive, icon: Icon }: { href: string, label: string, isActive: boolean, icon?: any }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const activeColor = '#FE734C'; // Updated brand color
 
   // Web version with framer-motion animations
-  if (Platform.OS === 'web' && motion && Compass) {
+  if (Platform.OS === 'web' && motion) {
     const MotionDiv = motion.div;
     const MotionSpan = motion.span;
     
@@ -45,8 +49,8 @@ function ExploreLink() {
     const containerStyle = {
       display: 'inline-flex',
       alignItems: 'center',
-      gap: '8px',
-      paddingInline: '10px',
+      gap: isMobile ? '4px' : '8px',
+      paddingInline: isMobile ? '4px' : '10px',
       paddingBlock: '6px',
       borderRadius: '10px',
       position: 'relative',
@@ -71,7 +75,7 @@ function ExploreLink() {
     };
     
     return (
-      <Link href="/browse" style={linkStyle} aria-current={isActive ? 'page' : undefined} role="link">
+      <Link href={href} style={linkStyle} aria-current={isActive ? 'page' : undefined} role="link">
         <MotionDiv
           initial={false}
           whileHover={{ scale: 1.05 }}
@@ -79,10 +83,10 @@ function ExploreLink() {
           transition={{ type: 'spring', stiffness: 350, damping: 22 }}
           style={containerStyle}
         >
-          <Compass size={18} strokeWidth={2.2} color={isActive ? activeColor : TEXT_DARK} />
-          <span style={textStyle}>Explore</span>
+          {Icon && <Icon size={18} strokeWidth={2.2} color={isActive ? activeColor : TEXT_DARK} />}
+          <span style={textStyle}>{label}</span>
           <MotionSpan
-            layoutId="nav-underline"
+            layoutId={`nav-underline-${label}`} // Unique layoutId per button
             initial={{ width: 0, opacity: 0, x: -8 }}
             animate={{
               width: isActive ? '100%' : '0%',
@@ -99,10 +103,11 @@ function ExploreLink() {
 
   // Native fallback (regular link) - style arrays are OK for React Native components
   return (
-    <Link href="/browse" asChild>
+    <Link href={href} asChild>
       <TouchableOpacity 
         style={StyleSheet.flatten([
           styles.navLink,
+          isMobile && { paddingHorizontal: 4, paddingVertical: 4 },
           isActive && { borderBottomWidth: 2, borderBottomColor: activeColor }
         ])}
       >
@@ -110,7 +115,7 @@ function ExploreLink() {
           styles.navLinkText, 
           isActive && { color: activeColor, fontWeight: '600' }
         ])}>
-          Explore
+          {label}
         </Text>
       </TouchableOpacity>
     </Link>
@@ -125,8 +130,28 @@ export default function NavBar() {
   const { items } = useCart()
   const loggedIn = !!user
   const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
+  const pathname = usePathname?.() || '';
+  const isExploreActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
+  const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
+  
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
+  const [isMenuOpen, setIsMenuOpen] = useState(false)
+
+  // Native Icon Fallbacks
+  const MenuIcon = () => (
+    <View style={{ width: 24, height: 24, justifyContent: 'space-around', paddingVertical: 4 }}>
+      <View style={{ height: 2, backgroundColor: '#FE734C', borderRadius: 1 }} />
+      <View style={{ height: 2, backgroundColor: '#FE734C', borderRadius: 1 }} />
+      <View style={{ height: 2, backgroundColor: '#FE734C', borderRadius: 1 }} />
+    </View>
+  )
+  const CloseIcon = () => (
+    <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: '#FE734C', transform: [{ rotate: '45deg' }] }} />
+      <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: '#FE734C', transform: [{ rotate: '-45deg' }] }} />
+    </View>
+  )
 
   useEffect(() => {
     let mounted = true
@@ -159,19 +184,19 @@ export default function NavBar() {
 
   return (
     <View style={styles.header}>
-      <View style={[styles.container, isMobile && styles.containerMobile]}>
+      <View style={StyleSheet.flatten([styles.container, isMobile && styles.containerMobile])}>
         {/* Left Section: Logo */}
         <Link href="/" asChild>
           <TouchableOpacity 
-            style={styles.logoContainer}
+            style={StyleSheet.flatten([styles.logoContainer, isMobile && styles.logoContainerMobile])}
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
           >
             <Image 
               source={require('../assets/HClogo2.png')}
-              style={styles.logoImage}
+              style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile])}
               resizeMode="contain"
             />
-            <Text style={[styles.logoText, isMobile && styles.logoTextMobile]}>
+            <Text style={StyleSheet.flatten([styles.logoText, isMobile && styles.logoTextMobile])}>
               <Text style={{ color: '#33393A' }}>Your</Text>
               <Text style={{ color: '#FE734C' }}>HomeChef</Text>
             </Text>
@@ -179,8 +204,8 @@ export default function NavBar() {
         </Link>
 
         {/* Center Section: Navigation */}
-        <View style={[styles.navCenter, isMobile && styles.navCenterMobile]}>
-          <ExploreLink />
+        <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
+          <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
           {hasActiveOrder ? (
             <Link href="/orders/track" asChild>
               <TouchableOpacity style={[styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
@@ -191,78 +216,149 @@ export default function NavBar() {
           ) : null}
           {/* Dashboard button: only show for admin or chef */}
           {(isAdmin || isChef) && (
-            <TouchableOpacity 
-              onPress={() => router.push(isAdmin ? '/admin' : '/chef')}
-              style={styles.navLink}
-            >
-              <Text style={styles.navLinkText}>{isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'}</Text>
-            </TouchableOpacity>
+            <NavButton 
+              href={isAdmin ? '/admin' : '/chef'} 
+              label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
+              isActive={isDashboardActive} 
+            />
           )}
         </View>
 
         {/* Right Section: Actions */}
-        <View style={[styles.rightSection, isMobile && styles.rightSectionMobile]}>
-          {loggedIn ? (
+        <View style={StyleSheet.flatten([styles.rightSection, isMobile && styles.rightSectionMobile])}>
+          {isMobile ? (
             <>
-              <TouchableOpacity
-                onPress={() => {
-                  // Role-aware profile routing
-                  if (isAdmin) {
-                    router.push('/admin');
-                  } else if (isChef) {
-                    router.push('/chef');
-                  } else {
-                    router.push('/profile');
-                  }
-                }}
-                style={isMobile ? styles.iconButton : styles.primaryButton}
+              <Link href="/cart" asChild>
+                <TouchableOpacity style={styles.cartButton}>
+                  <Image 
+                    source={require('../assets/shopping-cart.png')} 
+                    style={styles.cartIconImage}
+                    resizeMode="contain"
+                  />
+                  {cartQty > 0 && (
+                    <View style={styles.cartBadge}>
+                      <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </Link>
+              <TouchableOpacity 
+                onPress={() => setIsMenuOpen(!isMenuOpen)}
+                style={styles.iconButton}
               >
-                {isMobile ? (
-                  <Image source={require('../assets/user.png')} style={styles.iconButtonImage} resizeMode="contain" />
+                {isMenuOpen ? (
+                  Platform.OS === 'web' && X ? <X color="#FE734C" size={24} /> : <CloseIcon />
                 ) : (
-                  <Text style={styles.primaryButtonText}>Profile</Text>
-                )}
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={async () => { 
-                  await supabase.auth.signOut(); 
-                  router.push('/auth');
-                }}
-                style={isMobile ? styles.iconButton : styles.secondaryButton}
-              >
-                {isMobile ? (
-                  <Image source={require('../assets/logout.png')} style={styles.iconButtonImage} resizeMode="contain" />
-                ) : (
-                  <Text style={styles.secondaryButtonText}>Logout</Text>
+                  Platform.OS === 'web' && Menu ? <Menu color="#FE734C" size={24} /> : <MenuIcon />
                 )}
               </TouchableOpacity>
             </>
           ) : (
             <>
-              <Link href="/auth" asChild>
-                <TouchableOpacity style={isMobile ? styles.secondaryButtonMobile : styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>Login</Text>
+              {loggedIn ? (
+                <>
+                  <TouchableOpacity
+                    onPress={() => {
+                      // Role-aware profile routing
+                      if (isAdmin) {
+                        router.push('/admin');
+                      } else if (isChef) {
+                        // Navigate to the Profile tab in the Chef Dashboard
+                        router.push('/chef?tab=profile');
+                      } else {
+                        router.push('/profile');
+                      }
+                    }}
+                    style={styles.primaryButton}
+                  >
+                    <Text style={styles.primaryButtonText}>Profile</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    onPress={async () => { 
+                      await supabase.auth.signOut(); 
+                      router.push('/auth');
+                    }}
+                    style={styles.secondaryButton}
+                  >
+                    <Text style={styles.secondaryButtonText}>Logout</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (
+                <Link href="/auth" asChild>
+                  <TouchableOpacity style={styles.secondaryButton}>
+                    <Text style={styles.secondaryButtonText}>Login</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
+
+              <Link href="/cart" asChild>
+                <TouchableOpacity style={styles.cartButton}>
+                  <Image 
+                    source={require('../assets/shopping-cart.png')} 
+                    style={styles.cartIconImage}
+                    resizeMode="contain"
+                  />
+                  {cartQty > 0 && (
+                    <View style={styles.cartBadge}>
+                      <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                    </View>
+                  )}
                 </TouchableOpacity>
               </Link>
             </>
           )}
-
-          <Link href="/cart" asChild>
-            <TouchableOpacity style={styles.cartButton}>
-              <Image 
-                source={require('../assets/shopping-cart.png')} 
-                style={styles.cartIconImage}
-                resizeMode="contain"
-              />
-              {cartQty > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </Link>
         </View>
       </View>
+
+      {/* Mobile Menu Overlay */}
+      {isMobile && isMenuOpen && (
+        <View style={styles.mobileMenu}>
+          {loggedIn ? (
+            <>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsMenuOpen(false);
+                  if (isAdmin) {
+                    router.push('/admin');
+                  } else if (isChef) {
+                    router.push('/chef?tab=profile');
+                  } else {
+                    router.push('/profile');
+                  }
+                }}
+                style={styles.mobileMenuItem}
+              >
+                <Image source={require('../assets/user.png')} style={styles.menuIcon} resizeMode="contain" />
+                <Text style={styles.mobileMenuText}>Profile</Text>
+              </TouchableOpacity>
+              
+
+              <TouchableOpacity
+                onPress={async () => { 
+                  setIsMenuOpen(false);
+                  await supabase.auth.signOut(); 
+                  router.push('/auth');
+                }}
+                style={[styles.mobileMenuItem, { borderBottomWidth: 0 }]}
+              >
+                <Image source={require('../assets/logout.png')} style={styles.menuIcon} resizeMode="contain" />
+                <Text style={[styles.mobileMenuText, { color: '#FE734C' }]}>Logout</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+            <Link href="/auth" asChild>
+              <TouchableOpacity 
+                style={[styles.mobileMenuItem, { borderBottomWidth: 0 }]}
+                onPress={() => setIsMenuOpen(false)}
+              >
+                {/* Assuming user icon for login or could import another one */}
+                 <Image source={require('../assets/user.png')} style={styles.menuIcon} resizeMode="contain" />
+                <Text style={styles.mobileMenuText}>Login</Text>
+              </TouchableOpacity>
+            </Link>
+          )}
+        </View>
+      )}
     </View>
   )
 }
@@ -280,15 +376,15 @@ const styles = StyleSheet.create({
       },
     }),
     borderBottomWidth: 1,
-    borderBottomColor: BORDER_LIGHT,
+    borderBottomColor: '#FE734C',
   },
   container: {
     width: '100%',
+    height: '100%',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 16,
-    paddingVertical: 16,
   },
   logoContainer: {
     flexDirection: 'row',
@@ -392,8 +488,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   cartIconImage: {
-    width: 24,
-    height: 24,
+    width: 20,
+    height: 20,
     tintColor: '#FE734C',
   },
   cartBadge: {
@@ -419,18 +515,27 @@ const styles = StyleSheet.create({
   },
   // Mobile styles
   containerMobile: {
-    paddingHorizontal: 12,
+    paddingHorizontal: 8,
+  },
+  logoContainerMobile: {
+    gap: 4,
+    marginLeft: -4, // Pull logo slightly left
+  },
+  logoImageMobile: {
+    width: 24,
+    height: 24,
   },
   logoTextMobile: {
     fontSize: 14,
     lineHeight: 20,
   },
   navCenterMobile: {
-    position: 'relative',
-    left: 'auto',
-    transform: [],
-    flex: 1,
+    position: 'absolute',
+    left: '50%',
+    transform: [{ translateX: '-50%' }],
     justifyContent: 'center',
+    alignItems: 'center',
+    gap: 6,
   },
   rightSectionMobile: {
     gap: 8,
@@ -446,6 +551,7 @@ const styles = StyleSheet.create({
   iconButtonImage: {
     width: 20,
     height: 20,
+    tintColor: '#FE734C',
   },
   secondaryButtonMobile: {
     height: 36,
@@ -456,5 +562,41 @@ const styles = StyleSheet.create({
     borderColor: '#FE734C',
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  mobileMenu: {
+    position: 'absolute',
+    top: NAVBAR_HEIGHT,
+    right: 0,
+    width: '50%',
+    backgroundColor: '#FFFFFF',
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+    borderLeftWidth: 1,
+    borderLeftColor: BORDER_LIGHT,
+    padding: 16,
+    ...Platform.select({
+      ios: { shadowColor: '#000', shadowOffset: { width: -2, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
+      android: { elevation: 4 },
+      web: { boxShadow: '-4px 4px 6px -1px rgba(0, 0, 0, 0.1)' },
+    }),
+  },
+  mobileMenuItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    gap: 12,
+  },
+  menuIcon: {
+    width: 20,
+    height: 20,
+    tintColor: '#FE734C',
+  },
+  mobileMenuText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#33393A',
+    fontFamily: theme.typography.fontFamily.body,
   },
 })

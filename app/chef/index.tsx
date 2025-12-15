@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
 import FilePicker from '../../components/FilePicker';
@@ -15,7 +15,7 @@ import PayoutSettings from '../../components/chef/PayoutSettings';
 import { formatCad, cents } from '../../lib/money';
 
 // Colors matching homepage
-const PRIMARY_COLOR = '#2C4E4B';
+const PRIMARY_COLOR = '#FE734C';
 const ACCENT_COLOR = '#FFA500';
 const BG_LIGHT = '#FFFFFF';
 const BG_PAGE = '#F2F0EF';
@@ -30,6 +30,7 @@ type OrderRow = { id: number; user_id: string; status: string; total_cents: numb
 
 export default function ChefDashboard() {
   const router = useRouter();
+  const { tab } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [loading, setLoading] = useState(true);
@@ -38,6 +39,12 @@ export default function ChefDashboard() {
   const [dishes, setDishes] = useState<DishRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
   const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts' | 'profile'>('dashboard');
+
+  useEffect(() => {
+    if (tab && typeof tab === 'string' && ['dashboard', 'menu', 'orders', 'reviews', 'payouts', 'profile'].includes(tab)) {
+      setActiveTab(tab as any);
+    }
+  }, [tab]);
   const [orderStatusFilter, setOrderStatusFilter] = useState<'requested' | 'pending' | 'ready' | 'paid' | 'completed' | 'cancelled' | 'rejected'>('requested');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -613,16 +620,16 @@ export default function ChefDashboard() {
   }
 
   const navItems = [
-    { key: 'dashboard' as const, label: 'Overview', icon: <Image source={require('../../assets/controls.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
-    { key: 'menu' as const, label: 'Menu', icon: <Image source={require('../../assets/notebook.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
-    { key: 'orders' as const, label: 'Orders', icon: <Image source={require('../../assets/add.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
-    { key: 'reviews' as const, label: 'Reviews', icon: <Image source={require('../../assets/edit.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
-    { key: 'payouts' as const, label: 'Payment', icon: <Image source={require('../../assets/credit-card.png')} style={{ width: 24, height: 24 }} resizeMode="contain" /> },
+    { key: 'dashboard' as const, label: 'Overview', iconSource: require('../../assets/controls.png') },
+    { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
+    { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
+    { key: 'reviews' as const, label: 'Reviews', iconSource: require('../../assets/edit.png') },
+    { key: 'payouts' as const, label: 'Payment', iconSource: require('../../assets/credit-card.png') },
   ];
 
   const footerNavItems = [
-    { key: 'profile' as const, label: 'Profile', icon: <Image source={require('../../assets/settings.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />, action: 'profile' as const },
-    { key: 'logout' as const, label: 'Logout', icon: <Image source={require('../../assets/logout.png')} style={{ width: 24, height: 24 }} resizeMode="contain" />, action: 'logout' as const },
+    { key: 'profile' as const, label: 'Profile', iconSource: require('../../assets/settings.png'), action: 'profile' as const },
+    { key: 'logout' as const, label: 'Logout', iconSource: require('../../assets/logout.png'), action: 'logout' as const },
   ];
 
   const Sidebar = (
@@ -641,7 +648,12 @@ export default function ChefDashboard() {
               <Text style={styles.sidebarIcon}>🍽️</Text>
             )}
           </View>
-          <Text style={styles.sidebarTitle}>ChefDash</Text>
+          <View style={{ flex: 1 }}>
+            <Text style={styles.sidebarTitle}>{chef?.name || 'Chef'}</Text>
+            {chef?.location ? (
+              <Text style={styles.sidebarSubtitle}>{chef.location}</Text>
+            ) : null}
+          </View>
         </View>
         )}
 
@@ -657,7 +669,13 @@ export default function ChefDashboard() {
                 pressed && styles.navItemPressed,
               ]}
             >
-              <View style={styles.navIconWrap}>{typeof item.icon === 'string' ? <Text style={styles.navIcon}>{item.icon}</Text> : item.icon}</View>
+              <View style={styles.navIconWrap}>
+                <Image 
+                  source={item.iconSource} 
+                  style={[styles.navIcon, { tintColor: activeTab === item.key ? '#FFFFFF' : '#FE734C' }]} 
+                  resizeMode="contain" 
+                />
+              </View>
               <Text
                 numberOfLines={1}
                 ellipsizeMode="tail"
@@ -689,7 +707,13 @@ export default function ChefDashboard() {
                   pressed && styles.navItemPressed,
                 ]}
               >
-                <View style={styles.navIconWrap}>{typeof item.icon === 'string' ? <Text style={styles.navIcon}>{item.icon}</Text> : item.icon}</View>
+                <View style={styles.navIconWrap}>
+                <Image 
+                  source={item.iconSource} 
+                  style={[styles.navIcon, { tintColor: isActive ? '#FFFFFF' : '#FE734C' }]} 
+                  resizeMode="contain" 
+                />
+              </View>
                 <Text
                   numberOfLines={1}
                   ellipsizeMode="tail"
@@ -815,11 +839,11 @@ export default function ChefDashboard() {
                 paddingVertical: 8,
                 paddingHorizontal: 16,
                 borderRadius: 6,
-                backgroundColor: orderStatusFilter === status ? BG_LIGHT : 'transparent',
+                backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
                 minWidth: 100,
               }}
             >
-              <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+              <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                 {status.charAt(0).toUpperCase() + status.slice(1)} Orders
               </Text>
             </TouchableOpacity>
@@ -902,15 +926,15 @@ export default function ChefDashboard() {
                             Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
                           }
                         }}
-                        style={{ backgroundColor: '#10B981', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                        style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
                       </TouchableOpacity>
                       <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
                     </View>
                   ) : order.status === 'ready' ? (
-                    <View style={{ backgroundColor: '#DCFCE7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                      <Text style={{ color: '#15803D', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                    <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+                      <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
                     </View>
                   ) : null}
                 </View>
@@ -1040,25 +1064,25 @@ export default function ChefDashboard() {
             ) : order.status === 'pending' ? (
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 <TouchableOpacity
-                  onPress={async () => {
-                    try {
-                      await handleOrderStatus(order.id, 'ready');
-                      Alert.alert('Success', 'Order marked as ready!');
-                    } catch (err: any) {
-                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                    }
-                  }}
-                  style={{ backgroundColor: '#10B981', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
-                </TouchableOpacity>
-                <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
-              </View>
-            ) : order.status === 'ready' ? (
-              <View style={{ backgroundColor: '#DCFCE7', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                <Text style={{ color: '#15803D', fontSize: 12, fontWeight: '700' }}>Ready</Text>
-              </View>
-            ) : null}
+                onPress={async () => {
+                  try {
+                    await handleOrderStatus(order.id, 'ready');
+                    Alert.alert('Success', 'Order marked as ready!');
+                  } catch (err: any) {
+                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                  }
+                }}
+                style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+              </TouchableOpacity>
+              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+            </View>
+          ) : order.status === 'ready' ? (
+            <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+            </View>
+          ) : null}
           </View>
         </View>
       ))}
@@ -1312,7 +1336,7 @@ const styles = StyleSheet.create({
   },
   sidebarHeader: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     marginBottom: 24,
   },
   sidebarIconWrap: {
@@ -1339,6 +1363,12 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     fontFamily: theme.typography.fontFamily.display,
   },
+  sidebarSubtitle: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 2,
+  },
   sidebarSection: {
     marginBottom: 24,
   },
@@ -1358,7 +1388,7 @@ const styles = StyleSheet.create({
     minHeight: 44,
   },
   navItemActive: {
-    backgroundColor: PRIMARY_COLOR + '20',
+    backgroundColor: PRIMARY_COLOR,
   },
   navItemPressed: {
     opacity: 0.85,
@@ -1371,7 +1401,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   navIcon: {
-    fontSize: 18,
+    width: 24,
+    height: 24,
   },
   navLabel: {
     flexShrink: 1,
@@ -1381,7 +1412,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
   },
   navLabelActive: {
-    color: PRIMARY_COLOR,
+    color: '#FFFFFF',
     fontWeight: '800',
   },
   content: {

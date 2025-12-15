@@ -94,6 +94,7 @@ export type ChefReview = {
   rating: number; // integer, 1-5
   comment: string | null;
   created_at: string | null; // timestamptz
+  user_name?: string | null; // Added for UI display
 };
 
 // ============================================================================

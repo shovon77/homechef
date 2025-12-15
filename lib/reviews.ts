@@ -216,7 +216,7 @@ export async function getChefReviews(
 
   let query = supabase
     .from('chef_reviews')
-    .select('id, chef_id, rating, comment, created_at')
+    .select('id, chef_id, rating, comment, created_at, user_id') // Added user_id
     .eq('chef_id', chefId)
     .order('created_at', { ascending: false });
 
@@ -224,14 +224,35 @@ export async function getChefReviews(
     query = query.range(offset, offset + limit - 1);
   }
 
-  const { data, error } = await query;
+  const { data: reviews, error } = await query;
 
   if (error) {
     console.error('Error fetching chef reviews:', error);
     return [];
   }
 
-  return (data || []) as ChefReview[];
+  // If we have reviews, fetch the user names from profiles
+  if (reviews && reviews.length > 0) {
+    const userIds = [...new Set(reviews.map((r: any) => r.user_id).filter(Boolean))];
+    
+    if (userIds.length > 0) {
+      const { data: profiles } = await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .in('id', userIds);
+      
+      if (profiles) {
+        const profileMap = new Map(profiles.map((p: any) => [p.id, p.name || p.email || 'Anonymous']));
+        
+        return reviews.map((r: any) => ({
+          ...r,
+          user_name: r.user_id ? profileMap.get(r.user_id) : 'Anonymous',
+        })) as ChefReview[];
+      }
+    }
+  }
+
+  return (reviews || []).map((r: any) => ({ ...r, user_name: 'Anonymous' })) as ChefReview[];
 }
 
 /**

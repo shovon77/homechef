@@ -12,7 +12,7 @@ import { Screen } from "../../components/Screen";
 import { formatCad } from "../../lib/money";
 
 // Colors from HTML design
-const PRIMARY_COLOR = '#88B361';
+const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b14';
 const TEXT_MUTED = '#71717a';
@@ -297,7 +297,17 @@ export default function DishDetail() {
             <Text style={styles.dishTitle}>{dish.name}</Text>
             
             {chefId ? (
-              <Link href={{ pathname: "/chef/[id]", params: { id: String(chefId) } }} asChild>
+              <Link href={{ 
+                pathname: "/chef/[id]", 
+                params: { 
+                  id: String(chefId),
+                  name: chefName,
+                  photo: chef?.photo || chef?.avatar || "",
+                  location: chef?.location || "",
+                  rating: chef?.rating?.toString() || "",
+                  rating_count: chef?.rating_count?.toString() || "",
+                } 
+              }} asChild>
                 <TouchableOpacity style={styles.chefLink}>
                   <Text style={styles.chefIcon}>🏪</Text>
                   <Text style={styles.chefLinkText}>By {chefName}</Text>
@@ -355,7 +365,7 @@ export default function DishDetail() {
 
         {/* Tabs Section */}
         <View style={styles.tabsSection}>
-          <View style={styles.tabsContainer}>
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer} contentContainerStyle={{ flexDirection: 'row' }}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'description' && styles.tabActive]}
               onPress={() => setActiveTab('description')}
@@ -380,7 +390,7 @@ export default function DishDetail() {
                 Customer Reviews
               </Text>
             </TouchableOpacity>
-          </View>
+          </ScrollView>
 
           <View style={styles.tabContent}>
             {activeTab === 'description' && (
@@ -523,7 +533,7 @@ const styles = StyleSheet.create({
       default: 'column',
     }),
     gap: Platform.select({
-      web: theme.spacing['4xl'],
+      web: theme.spacing['2xl'], // Reduced from 4xl
       default: theme.spacing['2xl'],
     }),
     marginBottom: theme.spacing['4xl'],
@@ -693,7 +703,6 @@ const styles = StyleSheet.create({
     borderTopColor: BORDER_LIGHT,
   },
   tabsContainer: {
-    flexDirection: 'row',
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
   },
@@ -795,7 +804,7 @@ const styles = StyleSheet.create({
     opacity: 0.7,
   },
   submitButtonText: {
-    color: TEXT_DARK,
+    color: '#FFFFFF',
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
