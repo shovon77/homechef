@@ -141,12 +141,12 @@ export default function HomePage() {
         Animated.timing(fadeAnim, {
           toValue: 0,
           duration: 500, // Fade out
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
         Animated.timing(fadeAnim, {
           toValue: 1,
           duration: 500, // Fade in
-          useNativeDriver: true,
+          useNativeDriver: Platform.OS !== 'web',
         }),
       ]).start();
 
@@ -310,40 +310,6 @@ export default function HomePage() {
             </View>
           </View>
 
-          {/* How It Works section */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>How It Works</Text>
-            <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
-              <View style={styles.howItWorksCard}>
-                <View style={styles.howItWorksIconContainer}>
-                  <Text style={styles.howItWorksIcon}>🔍</Text>
-                </View>
-                <Text style={styles.howItWorksTitle}>1. Discover</Text>
-                <Text style={styles.howItWorksText}>
-                  Browse authentic dishes made by talented home chefs in your local area.
-                </Text>
-              </View>
-              <View style={styles.howItWorksCard}>
-                <View style={styles.howItWorksIconContainer}>
-                  <Text style={styles.howItWorksIcon}>🛒</Text>
-                </View>
-                <Text style={styles.howItWorksTitle}>2. Order</Text>
-                <Text style={styles.howItWorksText}>
-                  Select your meal, customize your order, and schedule a delivery time that works for you.
-                </Text>
-              </View>
-              <View style={styles.howItWorksCard}>
-                <View style={styles.howItWorksIconContainer}>
-                  <Text style={styles.howItWorksIcon}>🍽️</Text>
-                </View>
-                <Text style={styles.howItWorksTitle}>3. Enjoy</Text>
-                <Text style={styles.howItWorksText}>
-                  Receive your delicious, freshly prepared homemade meal right at your doorstep.
-                </Text>
-              </View>
-            </View>
-          </View>
-
           {/* Featured Chefs section - matches HTML design */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Star Chefs</Text>
@@ -378,6 +344,58 @@ export default function HomePage() {
               ))}
             </ScrollView>
           </View>
+
+          {/* How It Works section */}
+          <View style={styles.section}>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>How It Works</Text>
+            <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
+              <View style={styles.howItWorksCard}>
+                <View style={styles.howItWorksIconContainer}>
+                  <Image 
+                    source={require('../assets/search.png')} 
+                    style={{ width: 24, height: 24, tintColor: '#FFFFFF' }} 
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={styles.howItWorksContent}>
+                  <Text style={styles.howItWorksTitle}>1. Discover</Text>
+                  <Text style={styles.howItWorksText}>
+                    Browse homemade food from local home chefs. The Platform does not inspect or prepare meals.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.howItWorksCard}>
+                <View style={styles.howItWorksIconContainer}>
+                  <Image 
+                    source={require('../assets/shopping-cart.png')} 
+                    style={{ width: 24, height: 24, tintColor: '#FFFFFF' }} 
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={styles.howItWorksContent}>
+                  <Text style={styles.howItWorksTitle}>2. Order</Text>
+                  <Text style={styles.howItWorksText}>
+                    Choose a dish, select a pickup time, and pay online. Orders are made directly with the chef.
+                  </Text>
+                </View>
+              </View>
+              <View style={styles.howItWorksCard}>
+                <View style={styles.howItWorksIconContainer}>
+                  <Image 
+                    source={require('../assets/add.png')} 
+                    style={{ width: 24, height: 24, tintColor: '#FFFFFF' }} 
+                    resizeMode="contain"
+                  />
+                </View>
+                <View style={styles.howItWorksContent}>
+                  <Text style={styles.howItWorksTitle}>3. Pickup</Text>
+                  <Text style={styles.howItWorksText}>
+                    Collect your order at the scheduled time. Handle and consume food safely.
+                  </Text>
+                </View>
+              </View>
+            </View>
+          </View>
         </View>
       </Screen>
 
@@ -391,6 +409,7 @@ export default function HomePage() {
               <Image 
                 source={require('../assets/search.png')} 
                 style={styles.searchIconImage} 
+                resizeMode="contain"
               />
             </TouchableOpacity>
             <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -422,6 +441,7 @@ export default function HomePage() {
               <Image 
                 source={require('../assets/microphone.png')} 
                 style={styles.micIconImage} 
+                resizeMode="contain"
               />
             </TouchableOpacity>
         </View>
@@ -547,12 +567,19 @@ const styles = StyleSheet.create({
       default: '100%',
     }),
     shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
+      },
+      default: {
+        shadowOffset: {
+          width: 0,
+          height: 4,
+        },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
   },
   floatingSearchInput: {
     flex: 1,
@@ -598,12 +625,12 @@ const styles = StyleSheet.create({
   searchIconImage: {
     width: 24,
     height: 24,
-    resizeMode: 'contain',
+    tintColor: '#FE734C',
   },
   micIconImage: {
     width: 24,
     height: 24,
-    resizeMode: 'contain',
+    tintColor: '#FE734C',
   },
   searchInput: {
     flex: 1,
@@ -759,50 +786,48 @@ const styles = StyleSheet.create({
   },
   // How It Works
   howItWorksGrid: {
-    flexDirection: Platform.select({
-      web: "row",
-      default: "column",
-    }),
+    flexDirection: "column",
     gap: theme.spacing['2xl'],
     paddingHorizontal: theme.spacing.md,
   },
   howItWorksCard: {
     flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
     gap: theme.spacing.md,
-    padding: theme.spacing['2xl'],
-    backgroundColor: '#F4F4F4',
-    borderRadius: 9999, // Make it circular
-    aspectRatio: 1, // Ensure it's a perfect circle
-    textAlign: "center",
+    padding: theme.spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    borderWidth: 1,
+    borderColor: '#FE734C',
+    ...elev('lg'), // 3D style effect
   },
   howItWorksIconContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
-    backgroundColor: `${PRIMARY_COLOR}33`, // primary/20
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+    backgroundColor: '#FE734C', // Orange background
     justifyContent: "center",
     alignItems: "center",
   },
-  howItWorksIcon: {
-    fontFamily: theme.typography.fontFamily.display,
-    fontSize: 32,
+  howItWorksContent: {
+    flex: 1,
+    gap: 4,
   },
   howItWorksTitle: {
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
     color: '#333333',
-    fontFamily: theme.typography.fontFamily.display,
-    fontSize: 20,
-    fontFamily: theme.typography.fontFamily.display,
+    fontSize: 18,
     fontWeight: theme.typography.fontWeight.bold,
+    textAlign: 'left',
   },
   howItWorksText: {
     fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
     fontSize: theme.typography.fontSize.base,
-    lineHeight: theme.typography.fontSize.base * 1.5,
-    textAlign: "center",
+    lineHeight: theme.typography.fontSize.base * 1.4,
+    textAlign: 'left',
   },
   // Featured Chefs
   featuredChefCardWrapper: {
@@ -814,16 +839,19 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.md,
     padding: theme.spacing['2xl'],
-    backgroundColor: '#F4F4F4',
+    backgroundColor: '#FFFFFF', // Changed to white for better shadow contrast
     borderRadius: theme.radius.xl,
     textAlign: "center",
+    borderWidth: 2,
+    borderColor: '#FE734C',
+    ...elev('lg'), // Added 3D effect
   },
   featuredChefAvatar: {
     width: 96,
     height: 96,
     borderRadius: 48,
     borderWidth: 4,
-    borderColor: `${PRIMARY_COLOR}80`, // primary/50
+    borderColor: '#FE734C',
   },
   featuredChefName: {
     fontFamily: theme.typography.fontFamily.body,
@@ -869,9 +897,10 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
   },
   sectionTitleMobile: {
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
     fontSize: 24,
     paddingHorizontal: 0,
+    fontWeight: theme.typography.fontWeight.bold,
   },
   howItWorksGridMobile: {
     flexDirection: "column",
@@ -881,14 +910,19 @@ const styles = StyleSheet.create({
   circularDishCard: {
     alignItems: 'center',
     gap: theme.spacing.sm,
+    padding: theme.spacing.md,
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    ...elev('md'),
   },
   circularDishImageContainer: {
-    width: 200,
-    height: 200,
-    borderRadius: 100,
+    width: 180, // Slightly smaller to fit padding
+    height: 180,
+    borderRadius: 90,
     overflow: 'hidden',
-    ...elev('md'),
     backgroundColor: '#fff',
+    borderWidth: 2,
+    borderColor: '#FE734C',
   },
   circularDishImage: {
     width: '100%',

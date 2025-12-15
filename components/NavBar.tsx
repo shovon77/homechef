@@ -33,7 +33,7 @@ const MAXW = 1280; // max-w-7xl
 function ExploreLink() {
   const pathname = usePathname?.() || '';
   const isActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
-  const activeColor = '#88B361'; // Brand green
+  const activeColor = '#FE734C'; // Updated brand color
 
   // Web version with framer-motion animations
   if (Platform.OS === 'web' && motion && Compass) {
@@ -66,7 +66,7 @@ function ExploreLink() {
       bottom: '-4px',
       height: '2.5px',
       borderRadius: '2px',
-      background: 'linear-gradient(90deg, rgba(136,179,97,1) 0%, rgba(136,179,97,1) 100%)',
+      background: 'linear-gradient(90deg, rgba(254,115,76,1) 0%, rgba(254,115,76,1) 100%)',
       pointerEvents: 'none' as const,
     };
     
@@ -171,7 +171,10 @@ export default function NavBar() {
               style={styles.logoImage}
               resizeMode="contain"
             />
-            {!isMobile && <Text style={styles.logoText}>HomeChef</Text>}
+            <Text style={[styles.logoText, isMobile && styles.logoTextMobile]}>
+              <Text style={{ color: '#33393A' }}>Your</Text>
+              <Text style={{ color: '#FE734C' }}>HomeChef</Text>
+            </Text>
           </TouchableOpacity>
         </Link>
 
@@ -281,13 +284,11 @@ const styles = StyleSheet.create({
   },
   container: {
     width: '100%',
-    maxWidth: MAXW,
-    alignSelf: 'center',
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 24, // px-6
-    paddingVertical: 16, // py-4
+    paddingHorizontal: 16,
+    paddingVertical: 16,
   },
   logoContainer: {
     flexDirection: 'row',
@@ -298,6 +299,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     backgroundColor: 'transparent',
+    tintColor: '#FE734C',
   },
   logoText: {
     fontSize: 24,
@@ -312,7 +314,7 @@ const styles = StyleSheet.create({
       web: {
         position: 'absolute',
         left: '50%',
-        transform: [{ translateX: -50 }],
+        transform: [{ translateX: '-50%' }],
         overflow: 'visible', // Ensure underline isn't clipped
       },
       default: {
@@ -348,7 +350,7 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: '#FE734C',
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -366,16 +368,16 @@ const styles = StyleSheet.create({
     height: 40,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: BG_LIGHT,
+    backgroundColor: '#FE734C',
     borderWidth: 1,
-    borderColor: BORDER_LIGHT,
+    borderColor: '#FE734C',
     alignItems: 'center',
     justifyContent: 'center',
   },
   secondaryButtonText: {
     fontSize: 14,
     fontWeight: '700',
-    color: TEXT_DARK,
+    color: '#FFFFFF',
     letterSpacing: 0.015,
     lineHeight: 20,
     fontFamily: theme.typography.fontFamily.body,
@@ -392,6 +394,7 @@ const styles = StyleSheet.create({
   cartIconImage: {
     width: 24,
     height: 24,
+    tintColor: '#FE734C',
   },
   cartBadge: {
     position: 'absolute',
@@ -417,6 +420,10 @@ const styles = StyleSheet.create({
   // Mobile styles
   containerMobile: {
     paddingHorizontal: 12,
+  },
+  logoTextMobile: {
+    fontSize: 14,
+    lineHeight: 20,
   },
   navCenterMobile: {
     position: 'relative',
@@ -444,9 +451,9 @@ const styles = StyleSheet.create({
     height: 36,
     paddingHorizontal: 10,
     borderRadius: 8,
-    backgroundColor: BG_LIGHT,
+    backgroundColor: '#FE734C',
     borderWidth: 1,
-    borderColor: BORDER_LIGHT,
+    borderColor: '#FE734C',
     alignItems: 'center',
     justifyContent: 'center',
   },

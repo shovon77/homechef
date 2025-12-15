@@ -29,9 +29,12 @@ export default function Footer() {
             style={styles.brandLogo}
             resizeMode="contain"
           />
-          <Text style={styles.brand}>HomeChef</Text>
+          <Text style={styles.brand}>
+            <Text style={{ color: '#33393A' }}>Your</Text>
+            <Text style={{ color: '#FE734C' }}>HomeChef</Text>
+          </Text>
         </View>
-        <Text style={styles.copy}>Your marketplace for authentic homemade meals.</Text>
+        <Text style={styles.copy}>YourHomeChef is a marketplace connecting independent home chefs with local customers. All food is prepared by the chefs.</Text>
       </View>
       <View style={styles.links}>
         <TouchableOpacity onPress={() => router.push('/about')}>
@@ -47,7 +50,7 @@ export default function Footer() {
           <Text style={styles.link}>Terms of Service</Text>
         </TouchableOpacity>
       </View>
-      <Text style={styles.legal}>© 2025 HomeChef. All rights reserved.</Text>
+      <Text style={styles.legal}>© 2025 YourHomeChef. All rights reserved.</Text>
     </View>
   )
 }
@@ -74,6 +77,7 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     backgroundColor: 'transparent',
+    tintColor: '#FE734C',
   },
   brand: {
     fontWeight: '900',
@@ -94,8 +98,9 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   link: {
-    color: '#88B361',
+    color: '#FE734C',
     fontFamily: theme.typography.fontFamily.body,
+    fontWeight: 'bold',
   },
   legal: {
     marginTop: 6,
