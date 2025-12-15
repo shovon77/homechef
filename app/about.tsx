@@ -135,6 +135,7 @@ const styles = StyleSheet.create({
   brandName: {
     fontWeight: theme.typography.fontWeight.bold,
     fontSize: theme.typography.fontSize.lg,
+    lineHeight: theme.typography.fontSize.lg * 1.5,
     marginTop: theme.spacing.sm,
     fontFamily: theme.typography.fontFamily.display,
   },

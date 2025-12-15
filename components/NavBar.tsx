@@ -236,11 +236,6 @@ export default function NavBar() {
             </>
           ) : (
             <>
-              <Link href="/auth/chef" asChild>
-                <TouchableOpacity style={isMobile ? styles.secondaryButtonMobile : styles.primaryButton}>
-                  <Text style={isMobile ? styles.secondaryButtonText : styles.primaryButtonText}>{isMobile ? 'Chef' : 'Sign up as Chef'}</Text>
-                </TouchableOpacity>
-              </Link>
               <Link href="/auth" asChild>
                 <TouchableOpacity style={isMobile ? styles.secondaryButtonMobile : styles.secondaryButton}>
                   <Text style={styles.secondaryButtonText}>Login</Text>
