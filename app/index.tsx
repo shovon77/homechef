@@ -280,7 +280,7 @@ export default function HomePage() {
             <View style={styles.heroOverlay} />
             <View style={styles.heroContent}>
               <Text style={[styles.heroTitle, isMobile && styles.heroTitleMobile]} adjustsFontSizeToFit>
-                Authentic Homemade Meals.
+                Authentic homemade meals
               </Text>
               <Text style={[styles.heroSubtitle, isMobile && styles.heroSubtitleMobile]}>
                 Discover and order from the best home chefs in your neighborhood.

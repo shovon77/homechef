@@ -20,7 +20,7 @@ const ACCENT_COLOR = '#FFA500';
 const BG_LIGHT = '#FFFFFF';
 const BG_PAGE = '#F2F0EF';
 const BG_GRAY = '#F4F4F4';
-const TEXT_DARK = '#333333';
+const TEXT_DARK = '#33393A';
 const TEXT_MUTED = '#555555';
 const BORDER_LIGHT = '#EAECF0';
 
