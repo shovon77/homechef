@@ -262,6 +262,27 @@ export default function ChefDashboard() {
 
   async function deleteDish(id: number) {
     if (!chef) return;
+
+    if (Platform.OS === 'web') {
+      if (window.confirm('Are you sure you want to delete this dish?')) {
+        setSaving(true);
+        setMsg(null);
+        setErr(null);
+        try {
+          const { error } = await supabase.from('dishes').delete().eq('id', id);
+          if (error) throw error;
+          setDishes(prev => prev.filter(d => d.id !== id));
+          setMsg('Dish deleted ✓');
+          setTimeout(() => setMsg(null), 3000);
+        } catch (e: any) {
+          setErr('Delete failed: ' + (e.message || String(e)));
+        } finally {
+          setSaving(false);
+        }
+      }
+      return;
+    }
+
     Alert.alert('Delete Dish', 'Are you sure you want to delete this dish?', [
       { text: 'Cancel', style: 'cancel' },
       {
@@ -987,11 +1008,11 @@ export default function ChefDashboard() {
               paddingVertical: 8,
               paddingHorizontal: 16,
               borderRadius: 6,
-              backgroundColor: orderStatusFilter === status ? BG_LIGHT : 'transparent',
+              backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
               minWidth: 100,
             }}
           >
-            <Text style={{ color: orderStatusFilter === status ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+            <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
               {status.charAt(0).toUpperCase() + status.slice(1)}
             </Text>
           </TouchableOpacity>
@@ -1675,16 +1696,14 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
                 onPress={() => onDelete(dish.id)}
                 disabled={saving}
                 style={{ 
-                  backgroundColor: BG_LIGHT, 
-                  borderWidth: 1, 
-                  borderColor: '#d1d5db', 
+                  backgroundColor: '#DC2626', 
                   paddingVertical: 10, 
                   paddingHorizontal: 16, 
                   borderRadius: 8,
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: TEXT_DARK, fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Delete</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>

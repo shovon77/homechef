@@ -208,8 +208,8 @@ export default function NavBar() {
           <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
           {hasActiveOrder ? (
             <Link href="/orders/track" asChild>
-              <TouchableOpacity style={[styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }]}>
-                <Text style={[styles.navLinkText, { fontWeight: '700' }]}>{isMobile ? '' : 'Track Order'}</Text>
+              <TouchableOpacity style={StyleSheet.flatten([styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }])}>
+                <Text style={StyleSheet.flatten([styles.navLinkText, { fontWeight: '700' }])}>{isMobile ? '' : 'Track Order'}</Text>
                 {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
               </TouchableOpacity>
             </Link>
@@ -339,16 +339,16 @@ export default function NavBar() {
                   await supabase.auth.signOut(); 
                   router.push('/auth');
                 }}
-                style={[styles.mobileMenuItem, { borderBottomWidth: 0 }]}
+                style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
               >
                 <Image source={require('../assets/logout.png')} style={styles.menuIcon} resizeMode="contain" />
-                <Text style={[styles.mobileMenuText, { color: '#FE734C' }]}>Logout</Text>
+                <Text style={StyleSheet.flatten([styles.mobileMenuText, { color: '#FE734C' }])}>Logout</Text>
               </TouchableOpacity>
             </>
           ) : (
             <Link href="/auth" asChild>
               <TouchableOpacity 
-                style={[styles.mobileMenuItem, { borderBottomWidth: 0 }]}
+                style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
                 onPress={() => setIsMenuOpen(false)}
               >
                 {/* Assuming user icon for login or could import another one */}

@@ -9,7 +9,7 @@ import { Screen } from '../../components/Screen';
 import { theme } from '../../lib/theme';
 
 // Colors from HTML design
-const PRIMARY_COLOR = '#2A9D8F';
+const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F4F4F4';
 const CARD_LIGHT = '#FFFFFF';
 const BORDER_LIGHT = '#e2e8f0';
@@ -31,6 +31,7 @@ export default function ChefSignup() {
   const [location, setLocation] = useState('');
   const [experience, setExperience] = useState('');
   const [specialties, setSpecialties] = useState('');
+  const [agreed, setAgreed] = useState(false);
   
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -71,7 +72,7 @@ export default function ChefSignup() {
   }, []);
 
   const canProceedToStep2 = fullName && email && password;
-  const canSubmit = bio && location;
+  const canSubmit = bio && location && agreed;
 
   function handleNext() {
     if (step === 1 && canProceedToStep2) {
@@ -372,6 +373,23 @@ export default function ChefSignup() {
                     </View>
                   </View>
 
+                  {/* Participation Agreement Checkbox */}
+                  <TouchableOpacity 
+                    style={styles.checkboxContainer} 
+                    onPress={() => setAgreed(!agreed)}
+                    activeOpacity={0.8}
+                  >
+                    <View style={[styles.checkbox, agreed && styles.checkboxChecked]}>
+                      {agreed && <Text style={styles.checkmark}>✓</Text>}
+                    </View>
+                    <Text style={styles.checkboxLabel}>
+                      I agree to the <Text style={styles.link} onPress={(e) => {
+                        e.stopPropagation();
+                        router.push('/participation-agreement');
+                      }}>Participation Agreement</Text>
+                    </Text>
+                  </TouchableOpacity>
+
                   {/* Action Buttons */}
                   <View style={styles.actions}>
                     <TouchableOpacity
@@ -432,14 +450,14 @@ const styles = StyleSheet.create({
   title: {
     color: TEXT_LIGHT,
     fontSize: Platform.select({ web: 48, default: 36 }),
-    fontWeight: theme.typography.fontWeight.black as any,
+    fontWeight: theme.typography.fontWeight.black as any, fontFamily: theme.typography.fontFamily.display,
     letterSpacing: -0.02,
     textAlign: 'center',
     marginBottom: theme.spacing.md,
   },
   subtitle: {
     color: TEXT_MUTED,
-    fontSize: theme.typography.fontSize.lg,
+    fontSize: theme.typography.fontSize.lg, fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
   },
   card: {
@@ -463,8 +481,8 @@ const styles = StyleSheet.create({
   },
   progressText: {
     color: TEXT_LIGHT,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.medium as any,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.medium as any, fontFamily: theme.typography.fontFamily.body,
   },
   progressBar: {
     width: '100%',
@@ -484,7 +502,7 @@ const styles = StyleSheet.create({
   sectionTitle: {
     color: TEXT_LIGHT,
     fontSize: theme.typography.fontSize['2xl'],
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display,
     paddingBottom: theme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
@@ -524,8 +542,8 @@ const styles = StyleSheet.create({
   },
   label: {
     color: TEXT_LIGHT,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.medium as any,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display,
   },
   input: {
     width: '100%',
@@ -536,7 +554,7 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND_LIGHT,
     paddingHorizontal: theme.spacing.md,
     color: TEXT_LIGHT,
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
   },
   textArea: {
     height: 120,
@@ -567,7 +585,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingRight: 48,
     color: TEXT_LIGHT,
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
   },
   passwordToggle: {
     position: 'absolute',
@@ -586,12 +604,12 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
   },
   trustIcon: {
-    fontSize: theme.typography.fontSize.base,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
     marginRight: theme.spacing.xs,
   },
   trustText: {
     color: TEXT_MUTED,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body,
   },
   actions: {
     flexDirection: 'row',
@@ -616,8 +634,8 @@ const styles = StyleSheet.create({
   },
   backButtonText: {
     color: TEXT_LIGHT,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.medium as any,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.medium as any, fontFamily: theme.typography.fontFamily.body,
   },
   nextButton: {
     flexDirection: 'row',
@@ -636,19 +654,19 @@ const styles = StyleSheet.create({
   },
   nextButtonText: {
     color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display,
   },
   nextButtonIcon: {
     color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontSize: theme.typography.fontSize.lg, fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display,
   },
   message: {
     marginTop: theme.spacing.md,
     padding: theme.spacing.md,
     borderRadius: theme.radius.md,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
   },
   messageSuccess: {
@@ -669,13 +687,51 @@ const styles = StyleSheet.create({
   },
   noticeText: {
     color: '#92400e',
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body,
     marginBottom: theme.spacing.xs,
   },
   noticeLink: {
     color: PRIMARY_COLOR,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display,
+    textDecorationLine: 'underline',
+  },
+  checkboxContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.md,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: BACKGROUND_LIGHT,
+    marginRight: 12,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  checkboxChecked: {
+    backgroundColor: PRIMARY_COLOR,
+    borderColor: PRIMARY_COLOR,
+  },
+  checkmark: {
+    color: '#FFFFFF',
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  checkboxLabel: {
+    flex: 1,
+    color: TEXT_LIGHT,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  link: {
+    color: PRIMARY_COLOR,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.display,
     textDecorationLine: 'underline',
   },
 });

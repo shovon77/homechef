@@ -3,7 +3,7 @@
 import React, { useRef, useEffect } from 'react'
 import { Platform, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
 
-const PRIMARY_COLOR = '#295141'; // Talo green from design
+const PRIMARY_COLOR = '#FE734C'; // Talo green from design
 
 type Props = {
   label?: string

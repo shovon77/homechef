@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   cartItemRight: {
     alignItems: 'flex-end',
@@ -314,7 +314,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   quantityControls: {
     flexDirection: 'row',
@@ -332,8 +332,8 @@ const styles = StyleSheet.create({
   quantityButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.medium as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.display,
   },
   quantityInput: {
     width: 24,
@@ -430,7 +430,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   emptyCart: {
     alignItems: 'center',
@@ -451,6 +451,7 @@ const styles = StyleSheet.create({
   emptyCartImage: {
     width: 64,
     height: 64,
+    tintColor: PRIMARY_COLOR,
   },
   emptyCartTitle: {
     color: TEXT_DARK,
@@ -460,11 +461,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.display,
   },
   emptyCartText: {
-    color: TEXT_MUTED,
+    color: PRIMARY_COLOR,
+    fontWeight: 'bold',
     fontSize: theme.typography.fontSize.base,
     textAlign: 'center',
     marginBottom: theme.spacing.xl,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   emptyCartButton: {
     backgroundColor: PRIMARY_COLOR,
@@ -478,7 +480,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   // Mobile Styles
   containerMobile: {

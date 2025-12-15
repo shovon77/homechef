@@ -832,11 +832,13 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     resizeMode: 'contain',
+    tintColor: '#FE734C',
   },
   micIconImage: {
     width: 24,
     height: 24,
     resizeMode: 'contain',
+    tintColor: '#FE734C',
   },
   cuisineCard: {
     backgroundColor: '#FFFFFF',
