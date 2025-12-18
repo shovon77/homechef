@@ -1,11 +1,11 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
 import FilePicker from '../../components/FilePicker';
-import { toggleChefActive, toggleChefFeatured, updateOrderStatus, approveChefApplication, rejectChefApplication } from '../../lib/adminActions';
+import { toggleChefActive, toggleChefFeatured, updateOrderStatus, approveChefApplication, rejectChefApplication, updateUserProfile } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
 import { getChefsPaginated, getOrders } from '../../lib/db';
@@ -18,10 +18,10 @@ const palette = {
   background: '#F2F0EF',
   surface: '#FFFFFF',
   border: '#E2E8F0',
-  text: '#0F172A',
+  text: '#33393A',
   muted: '#64748B',
-  primary: '#3E7C64',
-  primaryDark: '#2D5C48',
+  primary: '#FE734C',
+  primaryDark: '#D9583B',
   successBg: '#E7F6EC',
   successText: '#1E794F',
   warningBg: '#FEF3C7',
@@ -34,6 +34,10 @@ const palette = {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
+  const tabKeys = ['overview', 'chef-requests', 'chefs', 'users', 'orders'];
+  const initialTabIdx = tabKeys.indexOf(tab || 'overview');
+  const safeInitial = initialTabIdx >= 0 ? initialTabIdx : 0;
   const { isAdmin, loading: adminLoading, user, profile } = useRole();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
@@ -186,6 +190,21 @@ export default function AdminPage() {
     } else {
       Alert.alert('Error', result.error || 'Failed to reject application');
     }
+  }
+
+  async function handleDeactivateUser(id: string) {
+    Alert.alert('Deactivate User', 'Are you sure you want to deactivate this user?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Deactivate', style: 'destructive', onPress: async () => {
+        const result = await updateUserProfile(id, { role: 'banned' });
+        if (result.ok) {
+          setUsers(us => us.map(u => u.id === id ? { ...u, role: 'banned' } : u));
+          Alert.alert('Success', 'User deactivated');
+        } else {
+          setErr(result.error || 'Failed to deactivate user');
+        }
+      }}
+    ]);
   }
 
   async function runAutoReject() {
@@ -732,9 +751,22 @@ export default function AdminPage() {
         <>
           {paginatedUsers.map((u) => (
             <View key={u.id} style={styles.card}>
-              <Text style={styles.cardTitle}>{u.name || u.email || u.id}</Text>
-              <Text style={styles.cardMeta}>{u.email || 'No email'}</Text>
-              <Text style={styles.cardId}>ID: {u.id}</Text>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{u.name || u.email || u.id}</Text>
+                  <Text style={styles.cardMeta}>{u.email || 'No email'}</Text>
+                  <Text style={styles.cardId}>ID: {u.id}</Text>
+                  {u.role === 'banned' && <Text style={{ color: palette.dangerText, fontWeight: '700', marginTop: 4 }}>Banned</Text>}
+                </View>
+                {u.role !== 'banned' && (
+                  <TouchableOpacity
+                    onPress={() => handleDeactivateUser(u.id)}
+                    style={styles.primaryButton}
+                  >
+                    <Text style={styles.primaryButtonText}>Deactivate</Text>
+                  </TouchableOpacity>
+                )}
+              </View>
             </View>
           ))}
 
@@ -916,17 +948,10 @@ export default function AdminPage() {
       <View style={styles.panel}>
         <View style={styles.headerRow}>
           <View>
-            <Text style={styles.headerTitle}>Admin Dashboard</Text>
+            <Text style={styles.headerTitle}>Welcome, {profile?.name ? profile.name.split(' ')[0] : 'Admin'}!</Text>
             <Text style={styles.headerSubtitle}>Monitor requests, chefs, users, and orders at a glance.</Text>
           </View>
           <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={runAutoReject}
-              disabled={autoRejecting}
-              style={[styles.actionButton, styles.firstActionButton, styles.warningButton, autoRejecting && styles.disabledButton]}
-            >
-              <Text style={styles.warningButtonText}>{autoRejecting ? 'Running…' : 'Run auto-reject now'}</Text>
-            </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 loadAll();
@@ -946,7 +971,8 @@ export default function AdminPage() {
         ) : null}
         <Tabs
           activeColor={palette.primary}
-          initial={0}
+          initial={safeInitial}
+          onTabChange={(key) => router.setParams({ tab: key })}
           tabs={[
             { key: 'overview', title: 'Overview', content: OverviewTab },
             { key: 'chef-requests', title: 'Chef Requests', content: ChefRequestsTab },

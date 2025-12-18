@@ -1,5 +1,5 @@
 'use client';
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView } from 'react-native';
 import { theme } from '../lib/theme';
 
@@ -15,6 +15,10 @@ type TabsProps = {
 
 export function Tabs({ tabs, initial = 0, onTabChange, activeColor, indicatorColor }: TabsProps) {
   const [idx, setIdx] = useState(initial);
+  
+  useEffect(() => {
+    setIdx(initial);
+  }, [initial]);
   const resolvedActiveColor = activeColor ?? theme.colors.text;
   const resolvedIndicatorColor = indicatorColor ?? theme.colors.primary;
   return (
@@ -56,8 +60,6 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   tabBarWrapper: {
-    borderBottomWidth: 1,
-    borderBottomColor: theme.colors.border,
     marginBottom: theme.spacing.lg,
   },
   tabBarContent: {
@@ -77,7 +79,7 @@ const styles = StyleSheet.create({
     // Active state handled by indicator
   },
   tabText: {
-    color: theme.colors.subtle,
+    color: '#33393A',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: theme.typography.letterSpacing.wide,

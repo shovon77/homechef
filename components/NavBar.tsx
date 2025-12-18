@@ -261,7 +261,7 @@ export default function NavBar() {
                     onPress={() => {
                       // Role-aware profile routing
                       if (isAdmin) {
-                        router.push('/admin');
+                        router.push('/profile');
                       } else if (isChef) {
                         // Navigate to the Profile tab in the Chef Dashboard
                         router.push('/chef?tab=profile');
@@ -319,7 +319,7 @@ export default function NavBar() {
                 onPress={() => {
                   setIsMenuOpen(false);
                   if (isAdmin) {
-                    router.push('/admin');
+                    router.push('/profile');
                   } else if (isChef) {
                     router.push('/chef?tab=profile');
                   } else {

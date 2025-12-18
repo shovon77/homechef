@@ -31,10 +31,10 @@ export default function AuthCallback() {
       try {
         // Web: Handle PKCE flow with code exchange
         if (Platform.OS === 'web' && params.code) {
+          const code = Array.isArray(params.code) ? params.code[0] : params.code;
+          
           setMsg('Exchanging code for session…');
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession({
-            code: params.code as string,
-          });
+          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
 
           if (exchangeError) {
             throw exchangeError;
