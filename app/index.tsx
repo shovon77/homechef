@@ -277,15 +277,6 @@ export default function HomePage() {
               style={styles.heroBackgroundImage}
               resizeMode="cover"
             />
-            <View style={styles.heroOverlay} />
-            <View style={styles.heroContent}>
-              <Text style={[styles.heroTitle, isMobile && styles.heroTitleMobile]} adjustsFontSizeToFit>
-                Authentic homemade meals
-              </Text>
-              <Text style={[styles.heroSubtitle, isMobile && styles.heroSubtitleMobile]}>
-                Discover and order from the best home chefs in your neighborhood.
-              </Text>
-            </View>
           </View>
 
           {/* Featured Dishes section - Infinite Scroll */}
