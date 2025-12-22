@@ -350,7 +350,7 @@ export default function HomePage() {
                       {chef.location && (
                         <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, gap: 4 }}>
                           <Image 
-                            source={require('../design/placeholder.png')} 
+                            source={require('../assets/placeholder.png')} 
                             style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
                             resizeMode="contain" 
                           />

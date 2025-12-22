@@ -313,7 +313,7 @@ export default function NavBar() {
       {isMobile && loggedIn && profile?.location ? (
         <View style={styles.mobileLocationBar}>
           <Image 
-            source={require('../design/placeholder.png')} 
+            source={require('../assets/placeholder.png')} 
             style={styles.mobileLocationIcon} 
             resizeMode="contain" 
           />
