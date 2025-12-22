@@ -126,7 +126,7 @@ export default function NavBar() {
   const router = useRouter()
   const { width } = useWindowDimensions()
   const isMobile = width < 768
-  const { isAdmin, isChef, user } = useRole()
+  const { isAdmin, isChef, user, profile } = useRole()
   const { items } = useCart()
   const loggedIn = !!user
   const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
@@ -256,59 +256,72 @@ export default function NavBar() {
           ) : (
             <>
               {loggedIn ? (
-                <>
-                  <TouchableOpacity
-                    onPress={() => {
-                      // Role-aware profile routing
-                      if (isAdmin) {
+            <>
+              <TouchableOpacity
+                onPress={() => {
+                  // Role-aware profile routing
+                  if (isAdmin) {
                         router.push('/profile');
-                      } else if (isChef) {
+                  } else if (isChef) {
                         // Navigate to the Profile tab in the Chef Dashboard
                         router.push('/chef?tab=profile');
-                      } else {
-                        router.push('/profile');
-                      }
-                    }}
+                  } else {
+                    router.push('/profile');
+                  }
+                }}
                     style={styles.primaryButton}
-                  >
-                    <Text style={styles.primaryButtonText}>Profile</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={async () => { 
-                      await supabase.auth.signOut(); 
-                      router.push('/auth');
-                    }}
+              >
+                  <Text style={styles.primaryButtonText}>Profile</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={async () => { 
+                  await supabase.auth.signOut(); 
+                  router.push('/auth');
+                }}
                     style={styles.secondaryButton}
-                  >
-                    <Text style={styles.secondaryButtonText}>Logout</Text>
-                  </TouchableOpacity>
-                </>
-              ) : (
-                <Link href="/auth" asChild>
+              >
+                  <Text style={styles.secondaryButtonText}>Logout</Text>
+              </TouchableOpacity>
+            </>
+          ) : (
+              <Link href="/auth" asChild>
                   <TouchableOpacity style={styles.secondaryButton}>
-                    <Text style={styles.secondaryButtonText}>Login</Text>
-                  </TouchableOpacity>
-                </Link>
-              )}
-
-              <Link href="/cart" asChild>
-                <TouchableOpacity style={styles.cartButton}>
-                  <Image 
-                    source={require('../assets/shopping-cart.png')} 
-                    style={styles.cartIconImage}
-                    resizeMode="contain"
-                  />
-                  {cartQty > 0 && (
-                    <View style={styles.cartBadge}>
-                      <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                    </View>
-                  )}
+                  <Text style={styles.secondaryButtonText}>Login</Text>
                 </TouchableOpacity>
               </Link>
+          )}
+
+          <Link href="/cart" asChild>
+            <TouchableOpacity style={styles.cartButton}>
+              <Image 
+                source={require('../assets/shopping-cart.png')} 
+                style={styles.cartIconImage}
+                resizeMode="contain"
+              />
+              {cartQty > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Link>
             </>
           )}
         </View>
       </View>
+
+      {isMobile && loggedIn && profile?.location ? (
+        <View style={styles.mobileLocationBar}>
+          <Image 
+            source={require('../design/placeholder.png')} 
+            style={styles.mobileLocationIcon} 
+            resizeMode="contain" 
+          />
+          <Text style={styles.mobileLocationText} numberOfLines={1}>
+            {profile.location}
+          </Text>
+        </View>
+      ) : null}
 
       {/* Mobile Menu Overlay */}
       {isMobile && isMenuOpen && (
@@ -365,7 +378,6 @@ export default function NavBar() {
 
 const styles = StyleSheet.create({
   header: {
-    height: NAVBAR_HEIGHT,
     ...Platform.select({
       web: {
         zIndex: 1000,
@@ -380,7 +392,7 @@ const styles = StyleSheet.create({
   },
   container: {
     width: '100%',
-    height: '100%',
+    height: NAVBAR_HEIGHT,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -598,5 +610,24 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
+  },
+  mobileLocationBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 8,
+    gap: 4,
+    width: '100%',
+  },
+  mobileLocationIcon: {
+    width: 14,
+    height: 14,
+    tintColor: '#FE734C',
+  },
+  mobileLocationText: {
+    fontSize: 12,
+    color: '#33393A',
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '700',
   },
 })

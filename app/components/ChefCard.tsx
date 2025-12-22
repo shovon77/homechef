@@ -41,14 +41,21 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
           <View style={styles.info}>
             <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]} numberOfLines={1}>{chef.name}</Text>
             <Text style={styles.cuisine} numberOfLines={1}>{chef.cuisine || 'Chef'}</Text>
-            {chef.location && (
-              <Text style={styles.location} numberOfLines={1}>
-                📍 {chef.location}
+          {chef.location && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
+              <Image 
+                source={require('../../design/placeholder.png')} 
+                style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
+                resizeMode="contain" 
+              />
+              <Text style={[styles.location, { marginTop: 0 }]} numberOfLines={1}>
+                {chef.location?.split(',')[0]}
               </Text>
-            )}
+            </View>
+          )}
             {ratingVal > 0 && (
-              <View style={styles.rating}>
-                <Text style={[styles.starIcon, ratingColor ? { color: ratingColor } : undefined]}>★</Text>
+          <View style={styles.rating}>
+            <Text style={[styles.starIcon, ratingColor ? { color: ratingColor } : undefined]}>★</Text>
                 <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
               </View>
             )}

@@ -1085,25 +1085,25 @@ export default function ChefDashboard() {
             ) : order.status === 'pending' ? (
               <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
                 <TouchableOpacity
-                onPress={async () => {
-                  try {
-                    await handleOrderStatus(order.id, 'ready');
-                    Alert.alert('Success', 'Order marked as ready!');
-                  } catch (err: any) {
-                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                  }
-                }}
+                  onPress={async () => {
+                    try {
+                      await handleOrderStatus(order.id, 'ready');
+                      Alert.alert('Success', 'Order marked as ready!');
+                    } catch (err: any) {
+                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                    }
+                  }}
                 style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-              >
-                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
-              </TouchableOpacity>
-              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
-            </View>
-          ) : order.status === 'ready' ? (
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                </TouchableOpacity>
+                <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+              </View>
+            ) : order.status === 'ready' ? (
             <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
               <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
-            </View>
-          ) : null}
+              </View>
+            ) : null}
           </View>
         </View>
       ))}

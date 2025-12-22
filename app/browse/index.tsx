@@ -71,8 +71,15 @@ export default function BrowsePage() {
   
   const gridColumns = isMobile ? 1 : isTablet ? 3 : 5;
   
-  const { q } = useLocalSearchParams();
+  const { q, tab: paramTab } = useLocalSearchParams<{ q?: string, tab?: string }>();
   const [tab, setTab] = useState<'dishes' | 'chefs' | 'cuisines'>('dishes');
+
+  useEffect(() => {
+    const t = Array.isArray(paramTab) ? paramTab[0] : paramTab;
+    if (t === 'chefs' || t === 'cuisines' || t === 'dishes') {
+      setTab(t);
+    }
+  }, [paramTab]);
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);

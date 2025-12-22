@@ -19,6 +19,8 @@ const ACCENT_COLOR = '#FFA500';
 
 // Circular dish card for featured section
 function CircularDishCard({ dish }: { dish: Dish }) {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [rating, setRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
   const [chefInfo, setChefInfo] = useState<{ name?: string; photo?: string } | null>(null);
 
@@ -40,7 +42,7 @@ function CircularDishCard({ dish }: { dish: Dish }) {
   return (
     <Link href={`/dish/${dish.id}`} asChild>
       <TouchableOpacity activeOpacity={0.9} style={styles.circularDishCard}>
-        <View style={styles.circularDishImageContainer}>
+        <View style={[styles.circularDishImageContainer, isMobile && styles.circularDishImageContainerMobile]}>
           <Image
             source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
             style={styles.circularDishImage}
@@ -120,7 +122,7 @@ export default function HomePage() {
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
-  const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT");
+  const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
   
@@ -158,7 +160,7 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, []);
 
-  const CARD_WIDTH = 240;
+  const CARD_WIDTH = isMobile ? 200 : 240;
   const GAP = 24;
   const TOTAL_ITEM_WIDTH = CARD_WIDTH + GAP;
 
@@ -202,7 +204,15 @@ export default function HomePage() {
       supabase.from('app_settings').select('value').eq('key', 'banner_url').single()
         .then(({ data }) => {
           if (mounted && data?.value) {
-            setBannerUrl(data.value);
+            let url = data.value;
+            if (url.includes('googleusercontent.com')) {
+               if (url.match(/=s\d+$/)) {
+                 url = url.replace(/=s\d+$/, '=s3000');
+               } else if (!url.includes('=')) {
+                 url += '=s3000';
+               }
+            }
+            setBannerUrl(url);
           }
         });
 
@@ -271,13 +281,19 @@ export default function HomePage() {
     >
         <View style={[styles.container, isMobile && styles.containerMobile]}>
           {/* Hero section - matches HTML design */}
-          <View style={[styles.hero, isMobile && styles.heroMobile]}>
-            <Image
-              source={{ uri: bannerUrl }}
-              style={styles.heroBackgroundImage}
-              resizeMode="cover"
-            />
-          </View>
+          <Link href="/browse?tab=chefs" asChild>
+            <TouchableOpacity activeOpacity={0.95} style={StyleSheet.flatten([styles.hero, isMobile && styles.heroMobile])}>
+              <Image
+                source={{ uri: bannerUrl }}
+                style={[
+                  styles.heroBackgroundImage,
+                  Platform.OS === 'web' && { objectPosition: 'left center' } as any,
+                  isMobile && { width: '140%' }
+                ]}
+                resizeMode="cover"
+              />
+            </TouchableOpacity>
+          </Link>
 
           {/* Featured Dishes section - Infinite Scroll */}
           <View style={styles.section}>
@@ -303,7 +319,7 @@ export default function HomePage() {
 
           {/* Featured Chefs section - matches HTML design */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Star Chefs</Text>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Popular near you</Text>
             <ScrollView 
               horizontal 
               showsHorizontalScrollIndicator={false}
@@ -311,7 +327,7 @@ export default function HomePage() {
               contentContainerStyle={styles.horizontalScrollContent}
             >
               {chefs.map((chef, i) => (
-                <View key={`${normalizeId(chef.id)}-${i}`} style={styles.featuredChefCardWrapper}>
+                <View key={`${normalizeId(chef.id)}-${i}`} style={[styles.featuredChefCardWrapper, isMobile && styles.featuredChefCardWrapperMobile]}>
                   <Link href={{ 
                     pathname: "/chef/[id]", 
                     params: { 
@@ -324,17 +340,24 @@ export default function HomePage() {
                       cuisine: chef.cuisine || ""
                     } 
                   }} asChild>
-                    <TouchableOpacity activeOpacity={0.9} style={styles.featuredChefCard}>
+                    <TouchableOpacity activeOpacity={0.9} style={StyleSheet.flatten([styles.featuredChefCard, isMobile && styles.featuredChefCardMobile])}>
                       <Image
                         source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
-                        style={styles.featuredChefAvatar}
+                        style={[styles.featuredChefAvatar, isMobile && styles.featuredChefAvatarMobile]}
                       />
                       <Text style={styles.featuredChefName}>{chef.name}</Text>
                       <Text style={styles.featuredChefCuisine}>{chef.cuisine || 'Chef'}</Text>
                       {chef.location && (
-                        <Text style={styles.featuredChefLocation} numberOfLines={1}>
-                          📍 {chef.location}
-                        </Text>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, gap: 4 }}>
+                          <Image 
+                            source={require('../design/placeholder.png')} 
+                            style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
+                            resizeMode="contain" 
+                          />
+                          <Text style={[styles.featuredChefLocation, { marginTop: 0 }]} numberOfLines={1}>
+                            {chef.location?.split(',')[0]}
+                          </Text>
+                        </View>
                       )}
                       <View style={styles.featuredChefRating}>
                         <Text style={styles.starIcon}>★</Text>
@@ -470,19 +493,20 @@ const styles = StyleSheet.create({
   },
   // Hero section
   hero: {
-    minHeight: Platform.select({
-      web: 275,
-      default: 240,
+    ...Platform.select({
+      web: {
+        width: '100%',
+        aspectRatio: 3,
+      },
+      default: {
+        width: '100%',
+        aspectRatio: 1.5,
+      },
     }),
     borderRadius: theme.radius.xl,
     overflow: "hidden",
-    marginBottom: theme.spacing['3xl'],
+    marginBottom: theme.spacing.lg,
     position: "relative",
-    flexDirection: "column",
-    justifyContent: "center",
-    alignItems: "center",
-    gap: theme.spacing.lg,
-    padding: theme.spacing.md,
   },
   heroBackgroundImage: {
     position: "absolute",
@@ -690,7 +714,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: -0.015,
     paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.xl,
+    paddingTop: theme.spacing.md,
     paddingBottom: theme.spacing.md,
   },
   // Featured Dishes
@@ -833,8 +857,21 @@ const styles = StyleSheet.create({
   },
   // Featured Chefs
   featuredChefCardWrapper: {
-    width: 192, // w-48
+    width: 240,
     flexShrink: 0,
+  },
+  featuredChefCardWrapperMobile: {
+    width: 200,
+  },
+  featuredChefCardMobile: {
+    padding: theme.spacing.md,
+    gap: theme.spacing.sm,
+  },
+  featuredChefAvatarMobile: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    borderWidth: 2,
   },
   featuredChefCard: {
     flex: 1,
@@ -884,6 +921,7 @@ const styles = StyleSheet.create({
   // Mobile Styles
   containerMobile: {
     paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
   },
   heroMobile: {
     minHeight: 200,
@@ -927,6 +965,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff',
     borderWidth: 2,
     borderColor: '#FE734C',
+  },
+  circularDishImageContainerMobile: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
   },
   circularDishImage: {
     width: '100%',

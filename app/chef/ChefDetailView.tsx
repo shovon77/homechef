@@ -94,9 +94,9 @@ export default function ChefDetailView() {
       try {
         if (!initialChef) setLoading(true);
         setError(null);
-        
+
         const chefData = await getChefById(chefId);
-        
+
         if (!mounted) return;
 
         if (!chefData) {
@@ -105,7 +105,7 @@ export default function ChefDetailView() {
           return;
         }
 
-        setChef(chefData);
+          setChef(chefData);
       } catch (e: any) {
         if (mounted && !chef && !initialChef) setError(e.message || String(e));
       } finally {

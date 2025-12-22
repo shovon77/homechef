@@ -38,18 +38,18 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
           {avg > 0 && <View style={{ marginTop: 2 }}><Stars value={toNumber(avg, 0)} size={16} color={ratingColor} /></View>}
         </View>
         <View style={styles.footer}>
-          <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
-            {formatCad(dish.price)}
-          </Text>
-          <Button
+        <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
+          {formatCad(dish.price)}
+        </Text>
+        <Button
             title="Add"
-            variant="primary"
-            size="sm"
-            onPress={() => addToCart({
-              id: dish.id, name: dish.name, price: Number(dish.price||0), quantity: 1, image: dish.image, chef_id: dish.chef_id
-            })}
-            style={styles.button}
-          />
+          variant="primary"
+          size="sm"
+          onPress={() => addToCart({
+            id: dish.id, name: dish.name, price: Number(dish.price||0), quantity: 1, image: dish.image, chef_id: dish.chef_id
+          })}
+          style={styles.button}
+        />
         </View>
       </View>
     </View>

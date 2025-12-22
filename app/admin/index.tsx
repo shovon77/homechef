@@ -753,9 +753,9 @@ export default function AdminPage() {
             <View key={u.id} style={styles.card}>
               <View style={styles.cardHeader}>
                 <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{u.name || u.email || u.id}</Text>
-                  <Text style={styles.cardMeta}>{u.email || 'No email'}</Text>
-                  <Text style={styles.cardId}>ID: {u.id}</Text>
+              <Text style={styles.cardTitle}>{u.name || u.email || u.id}</Text>
+              <Text style={styles.cardMeta}>{u.email || 'No email'}</Text>
+              <Text style={styles.cardId}>ID: {u.id}</Text>
                   {u.role === 'banned' && <Text style={{ color: palette.dangerText, fontWeight: '700', marginTop: 4 }}>Banned</Text>}
                 </View>
                 {u.role !== 'banned' && (
