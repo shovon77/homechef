@@ -38,7 +38,7 @@ export default async function handler(req: { method: string; body: any; headers:
     // Get the origin from the request to build success/cancel URLs
     const origin = req.headers.origin || 
                    req.headers.referer?.split('/').slice(0, 3).join('/') || 
-                   'http://localhost:8081';
+                   'https://yourhomechef.ca';
 
     // Create line items for Stripe
     const lineItems = items.map((item: { id: number; name?: string | null; price?: number | null; qty: number; image?: string | null }) => ({

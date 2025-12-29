@@ -110,14 +110,14 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError(null);
     try {
-      // Get base URL: prefer env var, then detect from window.location (for production), fallback to localhost
+      // Get base URL: prefer env var, then detect from window.location (for production), fallback to production domain
       let baseUrl = ENV.WEB_BASE_URL;
       if (!baseUrl || baseUrl === 'http://localhost:8081') {
         if (Platform.OS === 'web' && typeof window !== 'undefined') {
           // Use current origin in production
           baseUrl = window.location.origin;
         } else {
-          baseUrl = 'http://localhost:8081';
+          baseUrl = 'https://yourhomechef.ca';
         }
       }
       baseUrl = baseUrl.replace(/\/$/, '');

@@ -30,7 +30,7 @@ export async function POST(request: Request): Promise<Response> {
     // Get the origin from the request to build success/cancel URLs
     const origin = request.headers.get('origin') || 
                    request.headers.get('referer')?.split('/').slice(0, 3).join('/') || 
-                   'http://localhost:8081';
+                   'https://yourhomechef.ca';
 
     // Create line items for Stripe
     const lineItems = items.map((item: { id: number; name?: string | null; price?: number | null; qty: number; image?: string | null }) => ({

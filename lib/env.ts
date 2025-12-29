@@ -2,7 +2,7 @@ const ENV = {
   SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
   SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
   STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
-  WEB_BASE_URL: process.env.EXPO_PUBLIC_WEB_BASE_URL ?? 'http://localhost:8081',
+  WEB_BASE_URL: process.env.EXPO_PUBLIC_WEB_BASE_URL ?? 'https://yourhomechef.ca',
 };
 
 export function validateEnv() {

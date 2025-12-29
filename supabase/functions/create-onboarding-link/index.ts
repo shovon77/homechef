@@ -1,7 +1,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { stripe } from '../_shared/stripe.ts';
 
-const SITE_URL = Deno.env.get('SITE_URL') ?? Deno.env.get('PUBLIC_SITE_URL') ?? 'http://localhost:8081';
+const SITE_URL = Deno.env.get('SITE_URL') ?? Deno.env.get('PUBLIC_SITE_URL') ?? 'https://yourhomechef.ca';
 const DEFAULT_CONNECT_COUNTRY = Deno.env.get('DEFAULT_CONNECT_COUNTRY') ?? 'CA';
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
