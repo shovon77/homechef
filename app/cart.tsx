@@ -1,14 +1,17 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, StyleSheet, useWindowDimensions } from "react-native";
+import { View, Text, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, StyleSheet, useWindowDimensions, Modal, ActivityIndicator } from "react-native";
 import { theme } from "../lib/theme";
 import { Link } from "expo-router";
 import { useResponsiveColumns } from "../utils/responsive";
 import { useCart } from "../context/CartContext";
-import { getChefById } from "../lib/db";
+import { getChefById, getProfile } from "../lib/db";
 import { Screen } from "../components/Screen";
 import { safeToFixed } from "../lib/number";
 import { formatCad } from "../lib/money";
 import { useRouter } from "expo-router";
+import { supabase } from "../lib/supabase";
+import { useRole } from "../hooks/useRole";
+import LocationPicker from "../components/LocationPicker";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -20,9 +23,14 @@ const BORDER_COLOR = '#e7f3f0';
 export default function CartScreen() {
   const router = useRouter();
   const { items, setQuantity, removeFromCart, total } = useCart();
+  const { user } = useRole();
   const [chefNames, setChefNames] = useState<Map<number | null, string>>(new Map());
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [location, setLocation] = useState("");
+  const [savingLocation, setSavingLocation] = useState(false);
+  const [isLocationInputFocused, setIsLocationInputFocused] = useState(false);
 
   const subtotal = total;
 
@@ -44,6 +52,52 @@ export default function CartScreen() {
       setChefNames(namesMap);
     });
   }, [items]);
+
+  // Load current location
+  useEffect(() => {
+    if (user) {
+      loadLocation();
+    }
+  }, [user]);
+
+  async function loadLocation() {
+    if (!user) return;
+    try {
+      const prof = await getProfile(user.id);
+      if (prof) {
+        setLocation(prof.location || "");
+      }
+    } catch (e: any) {
+      console.error("Error loading location:", e);
+    }
+  }
+
+  async function handleSaveLocation() {
+    if (!user) {
+      Alert.alert("Error", "Please log in to set your location.");
+      return;
+    }
+
+    setSavingLocation(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ location: location.trim() || null })
+        .eq("id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "Failed to update location");
+      }
+
+      setShowLocationModal(false);
+      Alert.alert("Success", "Location updated successfully!");
+    } catch (e: any) {
+      console.error("Error saving location:", e);
+      Alert.alert("Error", e.message || "Failed to save location. Please try again.");
+    } finally {
+      setSavingLocation(false);
+    }
+  }
 
   const handleCheckout = () => {
     if (items.length === 0) {
@@ -87,6 +141,92 @@ export default function CartScreen() {
                 </TouchableOpacity>
               </Link>
             </View>
+            <View style={styles.emptyCartFooterContainer}>
+              <View style={styles.emptyCartFooterLine}>
+                <TouchableOpacity onPress={() => {
+                  if (user) {
+                    setShowLocationModal(true);
+                  } else {
+                    Alert.alert("Login Required", "Please log in to set your location.");
+                    router.push('/auth');
+                  }
+                }}>
+                  <Text style={[styles.emptyCartFooterText, styles.emptyCartFooterLink]} numberOfLines={1}>
+                    Set your location to find nearby chefs
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={styles.emptyCartFooterText} numberOfLines={1}>
+                All meals are prepared by independent chefs
+              </Text>
+            </View>
+
+            {/* Location Modal */}
+            <Modal
+              visible={showLocationModal}
+              animationType="slide"
+              transparent={true}
+              onRequestClose={() => {
+                setShowLocationModal(false);
+                setIsLocationInputFocused(false);
+              }}
+            >
+              <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                  <View style={styles.modalHeader}>
+                    <Text style={styles.modalTitle}>Set Your Location</Text>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setShowLocationModal(false);
+                        setIsLocationInputFocused(false);
+                      }}
+                      style={styles.modalCloseButton}
+                    >
+                      <Text style={styles.modalCloseText}>✕</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <ScrollView 
+                    style={styles.modalBody}
+                    contentContainerStyle={styles.modalBodyContent}
+                    keyboardShouldPersistTaps="handled"
+                  >
+                    <LocationPicker
+                      value={location}
+                      onChange={setLocation}
+                      placeholder="Search for your location..."
+                      style={styles.locationPicker}
+                      onFocus={() => setIsLocationInputFocused(true)}
+                      onBlur={() => setIsLocationInputFocused(false)}
+                    />
+                    <Text style={styles.modalHint}>Select your location from the dropdown</Text>
+                  </ScrollView>
+                  {!isLocationInputFocused && (
+                  <View style={styles.modalFooter}>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonSecondary]}
+                      onPress={() => {
+                        setShowLocationModal(false);
+                        setIsLocationInputFocused(false);
+                      }}
+                    >
+                      <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[styles.modalButton, styles.modalButtonPrimary, savingLocation && styles.modalButtonDisabled]}
+                      onPress={handleSaveLocation}
+                      disabled={savingLocation}
+                    >
+                      {savingLocation ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={styles.modalButtonTextPrimary}>Save</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
+                  )}
+                </View>
+              </View>
+            </Modal>
           </View>
         ) : (
           <View style={[styles.desktopLayout, isMobile && styles.mobileLayout]}>
@@ -101,11 +241,15 @@ export default function CartScreen() {
                     <View key={String(item.id)} style={styles.cartItem}>
                       <View style={styles.cartItemContent}>
                         <View style={styles.cartItemLeft}>
-                          <Image
-                            source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
-                            style={styles.cartItemImage}
-                            resizeMode="cover"
-                          />
+                          <Link href={`/dish/${item.id}?quantity=${item.quantity}`} asChild>
+                            <TouchableOpacity>
+                              <Image
+                                source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
+                                style={styles.cartItemImage}
+                                resizeMode="cover"
+                              />
+                            </TouchableOpacity>
+                          </Link>
                           <View style={styles.cartItemInfo}>
                             <Text style={styles.cartItemName}>{item.name || "Item"}</Text>
                             {chefName && (
@@ -240,7 +384,7 @@ const styles = StyleSheet.create({
   },
   cartItemInfo: {
     flex: 1,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     gap: theme.spacing.xs / 2,
   },
   cartItemName: {
@@ -262,8 +406,8 @@ const styles = StyleSheet.create({
   cartItemPriceDesktop: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
   },
   quantityControls: {
     flexDirection: 'row',
@@ -364,13 +508,16 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_700Bold',
   },
   checkoutButton: {
-    width: '100%',
+    alignSelf: 'center',
+    minWidth: 200,
+    maxWidth: 300,
     height: 48,
     backgroundColor: PRIMARY_COLOR,
     borderRadius: theme.radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
     marginTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.xl,
   },
   checkoutButtonDisabled: {
     opacity: 0.7,
@@ -435,6 +582,138 @@ const styles = StyleSheet.create({
   },
   emptyCartButtonText: {
     color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  emptyCartFooterContainer: {
+    marginTop: theme.spacing.xl,
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+  },
+  emptyCartFooterLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.xs,
+    flexWrap: 'nowrap',
+  },
+  emptyCartFooterIcon: {
+    width: 16,
+    height: 16,
+    tintColor: '#FE734C',
+  },
+  emptyCartFooterText: {
+    color: '#33393A',
+    fontSize: 16,
+    textAlign: 'center',
+    fontFamily: 'OpenSans_700Bold',
+    lineHeight: 16 * 1.5,
+    flexShrink: 1,
+  },
+  emptyCartFooterLink: {
+    textDecorationLine: 'underline',
+    color: PRIMARY_COLOR,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: theme.spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    width: '100%',
+    maxWidth: 500,
+    maxHeight: '80%',
+    flexDirection: 'column',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      },
+      default: {
+        elevation: 10,
+      },
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: theme.spacing.xl,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_COLOR,
+  },
+  modalTitle: {
+    fontSize: theme.typography.fontSize.xl,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: 'OpenSans_700Bold',
+    color: TEXT_DARK,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: TEXT_DARK,
+    fontWeight: '300',
+  },
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: theme.spacing.xl,
+    paddingBottom: theme.spacing['4xl'],
+  },
+  locationPicker: {
+    marginBottom: theme.spacing.sm,
+  },
+  modalHint: {
+    fontSize: theme.typography.fontSize.sm,
+    color: PRIMARY_COLOR,
+    fontFamily: 'OpenSans_400Regular',
+    marginTop: theme.spacing.xs,
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: theme.spacing.md,
+    padding: theme.spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_COLOR,
+  },
+  modalButton: {
+    paddingHorizontal: theme.spacing.xl,
+    paddingVertical: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+    minWidth: 100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  modalButtonPrimary: {
+    backgroundColor: PRIMARY_COLOR,
+  },
+  modalButtonSecondary: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
+  },
+  modalButtonDisabled: {
+    opacity: 0.6,
+  },
+  modalButtonTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  modalButtonTextSecondary: {
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',

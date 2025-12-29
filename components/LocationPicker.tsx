@@ -7,6 +7,8 @@ type LocationPickerProps = {
   onChange: (location: string) => void;
   placeholder?: string;
   style?: any;
+  onFocus?: () => void;
+  onBlur?: () => void;
 };
 
 type PlacePrediction = {
@@ -18,7 +20,7 @@ type PlacePrediction = {
   };
 };
 
-export default function LocationPicker({ value, onChange, placeholder = "Search for a location...", style }: LocationPickerProps) {
+export default function LocationPicker({ value, onChange, placeholder = "Search for a location...", style, onFocus, onBlur }: LocationPickerProps) {
   const [query, setQuery] = useState(value || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -136,8 +138,12 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
             if (predictions.length > 0) {
               setShowSuggestions(true);
             }
+            onFocus?.();
           }}
-          onBlur={handleBlur}
+          onBlur={() => {
+            handleBlur();
+            onBlur?.();
+          }}
         />
         {loading && (
           <View style={styles.loaderContainer}>

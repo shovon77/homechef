@@ -23,7 +23,7 @@ const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_
 
 export default function DishDetail() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, quantity: quantityParam } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
@@ -35,6 +35,15 @@ export default function DishDetail() {
     return tail ? Number(tail) : NaN;
   }, [raw]);
 
+  // Parse quantity from URL params
+  const initialQuantity = useMemo(() => {
+    if (quantityParam) {
+      const qty = Number(Array.isArray(quantityParam) ? quantityParam[0] : quantityParam);
+      return isNaN(qty) || qty < 1 ? 1 : qty;
+    }
+    return 1;
+  }, [quantityParam]);
+
   const [dish, setDish] = useState<DishWithChef | null>(null);
   const [chef, setChef] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -45,7 +54,7 @@ export default function DishDetail() {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [isDishOwner, setIsDishOwner] = useState(false);
-  const [quantity, setQuantity] = useState(1);
+  const [quantity, setQuantity] = useState(initialQuantity);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'reviews'>('ingredients');
   const [chefNotes, setChefNotes] = useState("");
   const [showChefNotes, setShowChefNotes] = useState(false);
@@ -172,6 +181,11 @@ export default function DishDetail() {
       setIsDishOwner(false);
     }
   }, [chef, user]);
+
+  // Sync quantity with URL param when it changes
+  useEffect(() => {
+    setQuantity(initialQuantity);
+  }, [initialQuantity]);
 
   const handleAddToCart = () => {
     if (!dish) return;
