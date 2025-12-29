@@ -19,6 +19,7 @@ const BACKGROUND_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b18';
 const TEXT_MUTED = '#88B361';
 const BORDER_COLOR = '#e7f3f0';
+const BORDER_LIGHT = '#E5E7EB';
 
 export default function CartScreen() {
   const router = useRouter();
@@ -29,8 +30,12 @@ export default function CartScreen() {
   const isMobile = width < 768;
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [location, setLocation] = useState("");
+  const [currentLocation, setCurrentLocation] = useState("");
+  const [manualInputLocation, setManualInputLocation] = useState("");
   const [savingLocation, setSavingLocation] = useState(false);
   const [isLocationInputFocused, setIsLocationInputFocused] = useState(false);
+  const [gettingLocation, setGettingLocation] = useState(false);
+  const [selectedLocation, setSelectedLocation] = useState("");
 
   const subtotal = total;
 
@@ -60,13 +65,30 @@ export default function CartScreen() {
     }
   }, [user]);
 
+  // Load location when modal opens
+  useEffect(() => {
+    if (showLocationModal && user) {
+      loadLocation();
+    }
+  }, [showLocationModal, user]);
+
   async function loadLocation() {
     if (!user) return;
     try {
       const prof = await getProfile(user.id);
       if (prof) {
-        setLocation(prof.location || "");
+        const savedLocation = prof.location || "";
+        setLocation(savedLocation);
+        setCurrentLocation(savedLocation);
+        // Initialize manual input with current location so it shows in the picker
+        setManualInputLocation(savedLocation);
+      } else {
+        // If no saved location, clear the manual input
+        setManualInputLocation("");
+        setCurrentLocation("");
       }
+      // Clear any selected location when modal opens
+      setSelectedLocation("");
     } catch (e: any) {
       console.error("Error loading location:", e);
     }
@@ -82,13 +104,14 @@ export default function CartScreen() {
     try {
       const { error } = await supabase
         .from("profiles")
-        .update({ location: location.trim() || null })
+        .update({ location: currentLocation.trim() || null })
         .eq("id", user.id);
 
       if (error) {
         throw new Error(error.message || "Failed to update location");
       }
 
+      setLocation(currentLocation);
       setShowLocationModal(false);
       Alert.alert("Success", "Location updated successfully!");
     } catch (e: any) {
@@ -96,6 +119,148 @@ export default function CartScreen() {
       Alert.alert("Error", e.message || "Failed to save location. Please try again.");
     } finally {
       setSavingLocation(false);
+    }
+  }
+
+  function handleLocationChange(value: string) {
+    const trimmedValue = value.trim();
+    
+    // Always update manual input to keep LocationPicker in sync
+    setManualInputLocation(value);
+    
+    // When a location is selected from dropdown, the LocationPicker calls this function.
+    // We treat any non-empty value as a valid selection to show the Save button.
+    if (trimmedValue) {
+      setSelectedLocation(trimmedValue);
+      setCurrentLocation(trimmedValue);
+    } else {
+      // Input cleared
+      setSelectedLocation("");
+      setCurrentLocation("");
+    }
+  }
+
+  async function handleSaveSelectedLocation() {
+    if (!user || !selectedLocation.trim()) {
+      Alert.alert("Error", "Please select a location first.");
+      return;
+    }
+
+    setSavingLocation(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ location: selectedLocation.trim() })
+        .eq("id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "Failed to update location");
+      }
+
+      // Update all location states after successful save
+      setLocation(selectedLocation.trim());
+      setCurrentLocation(selectedLocation.trim());
+      setManualInputLocation(selectedLocation.trim());
+      setSelectedLocation(""); // Clear selected location after save
+      Alert.alert("Success", "Location saved successfully!");
+    } catch (e: any) {
+      console.error("Error saving location:", e);
+      Alert.alert("Error", e.message || "Failed to save location. Please try again.");
+    } finally {
+      setSavingLocation(false);
+    }
+  }
+
+  async function handleEnableLocation() {
+    if (!navigator.geolocation) {
+      Alert.alert("Error", "Geolocation is not supported by your browser.");
+      return;
+    }
+
+    setGettingLocation(true);
+    try {
+      // Get current position
+      const position = await new Promise<GeolocationPosition>((resolve, reject) => {
+        navigator.geolocation.getCurrentPosition(resolve, reject, {
+          enableHighAccuracy: true,
+          timeout: 10000,
+          maximumAge: 0,
+        });
+      });
+
+      const { latitude, longitude } = position.coords;
+
+      // Reverse geocode using Google Geocoding API via Supabase function
+      try {
+        const { data, error } = await supabase.functions.invoke('google-geocode', {
+          body: { lat: latitude, lng: longitude },
+        });
+
+        if (error) {
+          throw new Error(error.message || "Failed to get address");
+        }
+
+        if (data?.results && data.results.length > 0) {
+          const address = data.results[0].formatted_address;
+          setCurrentLocation(address);
+          // Automatically save to user profile
+          if (user) {
+            try {
+              const { error: saveError } = await supabase
+                .from("profiles")
+                .update({ location: address })
+                .eq("id", user.id);
+              
+              if (saveError) {
+                console.error("Error auto-saving location:", saveError);
+              } else {
+                setLocation(address);
+              }
+            } catch (saveErr: any) {
+              console.error("Error auto-saving location:", saveErr);
+            }
+          }
+          Alert.alert("Success", "Location detected and saved successfully!");
+        } else {
+          throw new Error("No address found for this location");
+        }
+      } catch (geocodeError: any) {
+        // Fallback: use coordinates if geocoding fails
+        console.error("Geocoding error:", geocodeError);
+        const fallbackAddress = `${latitude}, ${longitude}`;
+        setCurrentLocation(fallbackAddress);
+        // Automatically save fallback address to user profile
+        if (user) {
+          try {
+            const { error: saveError } = await supabase
+              .from("profiles")
+              .update({ location: fallbackAddress })
+              .eq("id", user.id);
+            
+            if (saveError) {
+              console.error("Error auto-saving location:", saveError);
+            } else {
+              setLocation(fallbackAddress);
+            }
+          } catch (saveErr: any) {
+            console.error("Error auto-saving location:", saveErr);
+          }
+        }
+        Alert.alert("Partial Success", "Location detected but couldn't get full address. You can edit it manually.");
+      }
+    } catch (error: any) {
+      console.error("Error getting location:", error);
+      if (error.code === 1) {
+        Alert.alert("Permission Denied", "Please enable location permissions in your browser settings.");
+      } else if (error.code === 2) {
+        Alert.alert("Error", "Unable to determine your location. Please try again.");
+      } else if (error.code === 3) {
+        Alert.alert("Timeout", "Location request timed out. Please try again.");
+      } else {
+        Alert.alert("Error", error.message || "Failed to get your location. Please try again.");
+      }
+    } finally {
+      setGettingLocation(false);
     }
   }
 
@@ -174,7 +339,10 @@ export default function CartScreen() {
               <View style={styles.modalOverlay}>
                 <View style={styles.modalContent}>
                   <View style={styles.modalHeader}>
-                    <Text style={styles.modalTitle}>Set Your Location</Text>
+                    <View style={styles.modalTitleContainer}>
+                      <Text style={styles.modalTitle}>Find food near you!</Text>
+                      <Text style={styles.modalSubtitle}>Your location helps show nearby chefs & pickups.</Text>
+                    </View>
                     <TouchableOpacity
                       onPress={() => {
                         setShowLocationModal(false);
@@ -190,39 +358,61 @@ export default function CartScreen() {
                     contentContainerStyle={styles.modalBodyContent}
                     keyboardShouldPersistTaps="handled"
                   >
+                    {currentLocation ? (
+                      <View style={styles.currentLocationContainer}>
+                        <Text style={styles.currentLocationLabel}>Current location:</Text>
+                        <Text style={styles.currentLocationText}>{currentLocation}</Text>
+                      </View>
+                    ) : null}
+                    <Text style={styles.locationInputTitle}>Enter location manually</Text>
                     <LocationPicker
-                      value={location}
-                      onChange={setLocation}
-                      placeholder="Search for your location..."
+                      value={manualInputLocation || ""}
+                      onChange={handleLocationChange}
+                      placeholder="Search"
                       style={styles.locationPicker}
                       onFocus={() => setIsLocationInputFocused(true)}
                       onBlur={() => setIsLocationInputFocused(false)}
                     />
-                    <Text style={styles.modalHint}>Select your location from the dropdown</Text>
                   </ScrollView>
-                  {!isLocationInputFocused && (
-                  <View style={styles.modalFooter}>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonSecondary]}
-                      onPress={() => {
-                        setShowLocationModal(false);
-                        setIsLocationInputFocused(false);
-                      }}
-                    >
-                      <Text style={styles.modalButtonTextSecondary}>Cancel</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={[styles.modalButton, styles.modalButtonPrimary, savingLocation && styles.modalButtonDisabled]}
-                      onPress={handleSaveLocation}
-                      disabled={savingLocation}
-                    >
-                      {savingLocation ? (
-                        <ActivityIndicator size="small" color="#FFFFFF" />
+                  {(selectedLocation || !isLocationInputFocused) && (
+                    <View style={styles.modalFooter}>
+                      {selectedLocation ? (
+                        <TouchableOpacity
+                          style={[styles.saveLocationButton, savingLocation && styles.saveLocationButtonDisabled]}
+                          onPress={handleSaveSelectedLocation}
+                          disabled={savingLocation}
+                        >
+                          {savingLocation ? (
+                            <ActivityIndicator size="small" color="#FFFFFF" />
+                          ) : (
+                            <Text style={styles.saveLocationButtonText}>Save</Text>
+                          )}
+                        </TouchableOpacity>
                       ) : (
-                        <Text style={styles.modalButtonTextPrimary}>Save</Text>
+                        <>
+                          <TouchableOpacity
+                            style={[styles.enableLocationButton, gettingLocation && styles.enableLocationButtonDisabled]}
+                            onPress={handleEnableLocation}
+                            disabled={gettingLocation}
+                          >
+                            {gettingLocation ? (
+                              <ActivityIndicator size="small" color="#FFFFFF" />
+                            ) : (
+                              <Text style={styles.enableLocationButtonText}>Enable location</Text>
+                            )}
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.dontAllowButton}
+                            onPress={() => {
+                              setShowLocationModal(false);
+                              setIsLocationInputFocused(false);
+                            }}
+                          >
+                            <Text style={styles.dontAllowButtonText}>Don't allow</Text>
+                          </TouchableOpacity>
+                        </>
                       )}
-                    </TouchableOpacity>
-                  </View>
+                    </View>
                   )}
                 </View>
               </View>
@@ -641,16 +831,27 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'center',
+    alignItems: 'flex-start',
     padding: theme.spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER_COLOR,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  modalTitleContainer: {
+    flex: 1,
+    marginRight: theme.spacing.md,
   },
   modalTitle: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
     color: TEXT_DARK,
+    marginBottom: theme.spacing.xs,
+  },
+  modalSubtitle: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'OpenSans_400Regular',
+    color: PRIMARY_COLOR,
+    lineHeight: theme.typography.fontSize.sm * 1.4,
   },
   modalCloseButton: {
     width: 32,
@@ -668,7 +869,53 @@ const styles = StyleSheet.create({
   },
   modalBodyContent: {
     padding: theme.spacing.xl,
-    paddingBottom: theme.spacing['4xl'],
+    paddingBottom: theme.spacing.xl,
+  },
+  currentLocationContainer: {
+    marginBottom: theme.spacing.lg,
+    padding: theme.spacing.md,
+    backgroundColor: 'transparent',
+    borderRadius: theme.radius.lg,
+  },
+  currentLocationLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'OpenSans_400Regular',
+    color: '#33393A',
+    marginBottom: theme.spacing.xs,
+  },
+  currentLocationText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'OpenSans_400Regular',
+    color: PRIMARY_COLOR,
+    lineHeight: theme.typography.fontSize.base * 1.4,
+  },
+  enableLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
+    flex: 1,
+    minWidth: 150,
+  },
+  enableLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  enableLocationButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  locationInputTitle: {
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: 'OpenSans_700Bold',
+    color: TEXT_DARK,
+    marginBottom: theme.spacing.sm,
+    paddingLeft: 16,
   },
   locationPicker: {
     marginBottom: theme.spacing.sm,
@@ -681,39 +928,44 @@ const styles = StyleSheet.create({
   },
   modalFooter: {
     flexDirection: 'row',
-    justifyContent: 'flex-end',
-    gap: theme.spacing.md,
+    justifyContent: 'center',
     padding: theme.spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: BORDER_COLOR,
+    borderTopColor: BORDER_LIGHT,
+    gap: theme.spacing.md,
   },
-  modalButton: {
+  dontAllowButton: {
     paddingHorizontal: theme.spacing.xl,
     paddingVertical: theme.spacing.md,
     borderRadius: theme.radius.lg,
-    minWidth: 100,
+    backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
+    flex: 1,
+    minWidth: 150,
   },
-  modalButtonPrimary: {
-    backgroundColor: PRIMARY_COLOR,
-  },
-  modalButtonSecondary: {
-    backgroundColor: 'transparent',
-    borderWidth: 1,
-    borderColor: BORDER_COLOR,
-  },
-  modalButtonDisabled: {
-    opacity: 0.6,
-  },
-  modalButtonTextPrimary: {
+  dontAllowButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
   },
-  modalButtonTextSecondary: {
-    color: TEXT_DARK,
+  saveLocationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
+    flex: 1,
+    minWidth: 150,
+  },
+  saveLocationButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveLocationButtonText: {
+    color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',

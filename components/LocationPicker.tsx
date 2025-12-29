@@ -28,7 +28,8 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
-    // Update query when value prop changes
+    // Update query when value prop changes from parent
+    // This ensures the input displays the correct value when parent updates it
     setQuery(value || '');
   }, [value]);
 
@@ -46,10 +47,11 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
     }
 
     // If query matches current value, don't search
-    if (query === value) {
-      setShowSuggestions(false);
-      return;
-    }
+    // This prevents searching for the initial value or when selecting a suggestion
+    // if (query === value) {
+    //   setShowSuggestions(false);
+    //   return;
+    // }
 
     // Debounce API calls
     debounceTimer.current = setTimeout(async () => {
@@ -101,21 +103,25 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
         clearTimeout(debounceTimer.current);
       }
     };
-  }, [query, value]);
+    // Only depend on query to prevent search cancellation when parent updates value
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
 
   const handleSelectPlace = (prediction: PlacePrediction) => {
-    setQuery(prediction.description);
+    const selectedValue = prediction.description;
+    // Close suggestions first
     setShowSuggestions(false);
     setPredictions([]);
-    onChange(prediction.description);
+    // Call onChange to update parent, which will update value prop
+    onChange(selectedValue);
+    // Update internal query state to match
+    setQuery(selectedValue);
   };
 
   const handleInputChange = (text: string) => {
     setQuery(text);
-    // If user clears the input, clear the value
-    if (!text.trim()) {
-      onChange('');
-    }
+    // Always notify parent when input changes so "Save" button can appear
+    onChange(text);
   };
 
   const handleBlur = () => {
