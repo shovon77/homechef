@@ -58,19 +58,9 @@ export default function CartScreen() {
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
       <View style={{ paddingBottom: 32 }}>
         <View style={[styles.container, isMobile && styles.containerMobile]}>
-        {/* Breadcrumbs */}
-        <View style={styles.breadcrumbs}>
-          <Link href="/" asChild>
-            <TouchableOpacity>
-              <Text style={styles.breadcrumbLink}>Home</Text>
-            </TouchableOpacity>
-          </Link>
-          <Text style={styles.breadcrumbSeparator}>/</Text>
-          <Text style={styles.breadcrumbCurrent}>Cart</Text>
-        </View>
-
+        {/* Breadcrumbs - REMOVED */}
         {/* Page Heading */}
-        <Text style={styles.pageTitle}>Your Cart</Text>
+        <Text style={styles.pageTitle}>Cart summary</Text>
 
         {items.length === 0 ? (
           <View style={styles.emptyCart}>
@@ -81,15 +71,22 @@ export default function CartScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.emptyCartTitle}>Your Cart is Empty</Text>
+            <Text style={styles.emptyCartTitle}>Your cart if empty</Text>
             <Text style={styles.emptyCartText}>
-              Looks like you haven't added any dishes yet. Let's find something delicious!
+              Find homemade meals near you
             </Text>
-            <Link href="/browse" asChild>
-              <TouchableOpacity style={styles.emptyCartButton}>
-                <Text style={styles.emptyCartButtonText}>Find a Meal</Text>
-              </TouchableOpacity>
-            </Link>
+            <View style={styles.emptyCartButtons}>
+              <Link href="/browse?tab=dishes" asChild>
+                <TouchableOpacity style={styles.emptyCartButton}>
+                  <Text style={styles.emptyCartButtonText}>Explore homemade meals</Text>
+                </TouchableOpacity>
+              </Link>
+              <Link href="/browse?tab=chefs" asChild>
+                <TouchableOpacity style={styles.emptyCartButton}>
+                  <Text style={styles.emptyCartButtonText}>Browse popular chefs</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
           </View>
         ) : (
           <View style={[styles.desktopLayout, isMobile && styles.mobileLayout]}>
@@ -114,19 +111,14 @@ export default function CartScreen() {
                             {chefName && (
                               <Text style={styles.cartItemChef}>By {chefName}</Text>
                             )}
-                            {isMobile && (
-                              <Text style={styles.cartItemPriceMobile}>{itemPrice}</Text>
-                            )}
                           </View>
                         </View>
                         <View style={styles.cartItemRight}>
-                          {!isMobile && (
-                            <Text style={styles.cartItemPriceDesktop}>{itemPrice}</Text>
-                          )}
+                          <Text style={styles.cartItemPriceDesktop}>{itemPrice}</Text>
                           <View style={styles.quantityControls}>
                             <TouchableOpacity
                               style={styles.quantityButton}
-                              onPress={() => setQuantity(item.id, Math.max(1, item.quantity - 1))}
+                              onPress={() => setQuantity(item.id, item.quantity - 1)}
                             >
                               <Text style={styles.quantityButtonText}>-</Text>
                             </TouchableOpacity>
@@ -134,8 +126,8 @@ export default function CartScreen() {
                               style={styles.quantityInput}
                               value={String(item.quantity)}
                               onChangeText={(text) => {
-                                const qty = parseInt(text) || 1;
-                                setQuantity(item.id, Math.max(1, qty));
+                                const qty = parseInt(text) || 0;
+                                setQuantity(item.id, Math.max(0, qty));
                               }}
                               keyboardType="numeric"
                               selectTextOnFocus
@@ -145,12 +137,6 @@ export default function CartScreen() {
                               onPress={() => setQuantity(item.id, item.quantity + 1)}
                             >
                               <Text style={styles.quantityButtonText}>+</Text>
-                            </TouchableOpacity>
-                            <TouchableOpacity
-                              style={styles.deleteButton}
-                              onPress={() => removeFromCart(item.id)}
-                            >
-                              <Text style={styles.deleteIcon}>🗑️</Text>
                             </TouchableOpacity>
                           </View>
                         </View>
@@ -164,17 +150,11 @@ export default function CartScreen() {
             {/* Order Summary Column */}
             <View style={[styles.orderSummaryColumn, isMobile && styles.orderSummaryColumnMobile]}>
               <View style={styles.orderSummaryCard}>
-                <Text style={styles.orderSummaryTitle}>Order Summary</Text>
                 <View style={styles.orderSummaryDetails}>
                   <View style={styles.orderSummaryRow}>
                     <Text style={styles.orderSummaryLabel}>Subtotal</Text>
                     <Text style={styles.orderSummaryValue}>{formatCad(subtotal)}</Text>
                   </View>
-                </View>
-                <View style={styles.orderSummaryDivider} />
-                <View style={styles.orderSummaryTotal}>
-                  <Text style={styles.orderSummaryTotalLabel}>Total</Text>
-                  <Text style={styles.orderSummaryTotalValue}>{formatCad(subtotal)}</Text>
                 </View>
                 <TouchableOpacity
                   style={[styles.checkoutButton, items.length === 0 && styles.checkoutButtonDisabled]}
@@ -182,7 +162,7 @@ export default function CartScreen() {
                   disabled={items.length === 0}
                 >
                   <Text style={styles.checkoutButtonText}>
-                    Proceed to Checkout
+                    Checkout
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -207,36 +187,12 @@ const styles = StyleSheet.create({
     }),
     paddingVertical: theme.spacing['2xl'],
   },
-  breadcrumbs: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-    marginBottom: theme.spacing.lg,
-  },
-  breadcrumbLink: {
-    color: TEXT_MUTED,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium as any,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  breadcrumbSeparator: {
-    color: TEXT_MUTED,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium as any,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  breadcrumbCurrent: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium as any,
-    fontFamily: theme.typography.fontFamily.body,
-  },
   pageTitle: {
     color: TEXT_DARK,
-    fontSize: 36,
+    fontSize: 24,
     fontWeight: theme.typography.fontWeight.black as any,
-    fontFamily: theme.typography.fontFamily.display,
-    lineHeight: 36 * 1.2,
+    fontFamily: 'OpenSans_700Bold',
+    lineHeight: 24 * 1.2,
     letterSpacing: -0.033,
     marginBottom: theme.spacing['2xl'],
   },
@@ -250,8 +206,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
   },
   cartItemsColumn: {
-    flex: 1,
-    minWidth: 0,
+    width: Platform.select({ web: 400, default: '100%' }),
   },
   cartItemsList: {
     backgroundColor: '#FFFFFF',
@@ -292,19 +247,13 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_400Regular',
   },
   cartItemChef: {
-    color: TEXT_MUTED,
+    color: PRIMARY_COLOR,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal as any,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  cartItemPriceMobile: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_400Regular',
   },
   cartItemRight: {
     alignItems: 'flex-end',
@@ -314,7 +263,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   quantityControls: {
     flexDirection: 'row',
@@ -333,7 +282,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   quantityInput: {
     width: 24,
@@ -341,7 +290,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_400Regular',
     padding: 0,
     backgroundColor: 'transparent',
   },
@@ -373,7 +322,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   orderSummaryDetails: {
     gap: theme.spacing.md,
@@ -383,14 +332,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   orderSummaryLabel: {
-    color: TEXT_MUTED,
+    color: PRIMARY_COLOR,
     fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_400Regular',
   },
   orderSummaryValue: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_400Regular',
   },
   orderSummaryDivider: {
     height: 1,
@@ -406,13 +355,13 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   orderSummaryTotalValue: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   checkoutButton: {
     width: '100%',
@@ -430,7 +379,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   emptyCart: {
     alignItems: 'center',
@@ -443,7 +392,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
   },
   emptyCartIcon: {
-    backgroundColor: BORDER_COLOR,
+    backgroundColor: 'transparent',
     borderRadius: 9999,
     padding: theme.spacing.xl,
     marginBottom: theme.spacing.md,
@@ -458,7 +407,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize['2xl'],
     fontWeight: theme.typography.fontWeight.bold as any,
     marginBottom: theme.spacing.sm,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   emptyCartText: {
     color: PRIMARY_COLOR,
@@ -466,7 +415,13 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     textAlign: 'center',
     marginBottom: theme.spacing.xl,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  emptyCartButtons: {
+    flexDirection: 'column',
+    gap: theme.spacing.md,
+    alignItems: 'center',
+    width: '100%',
   },
   emptyCartButton: {
     backgroundColor: PRIMARY_COLOR,
@@ -475,12 +430,14 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     alignItems: 'center',
     justifyContent: 'center',
+    minWidth: 200,
+    maxWidth: 300,
   },
   emptyCartButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: 'OpenSans_700Bold',
   },
   // Mobile Styles
   containerMobile: {
