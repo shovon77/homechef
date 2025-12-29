@@ -15,7 +15,7 @@ export async function POST(request: Request): Promise<Response> {
     // Dynamic import of Stripe (requires: npm install stripe)
     const Stripe = (await import('stripe')).default;
     const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2024-12-18.acacia',
+      apiVersion: '2025-12-15.clover',
     });
 
     const { items } = await request.json();
