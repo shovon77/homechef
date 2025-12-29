@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionUser.email 
           ? supabase
               .from('chefs')
-              .select('id')
+              .select('id, location')
               .eq('email', sessionUser.email)
               .maybeSingle()
           : Promise.resolve({ data: null })
@@ -68,6 +68,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const profile = profileResult.data as Profile | null;
       const chefData = chefResult.data;
+
+      // Use chef location if profile location is missing
+      if (profile && !profile.location && chefData?.location) {
+        profile.location = chefData.location;
+      }
 
       // Compute isAdmin
       const isAdminFromProfile = profile?.is_admin === true;

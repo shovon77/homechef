@@ -25,6 +25,8 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [isFocused, setIsFocused] = useState(false);
+  const isFocusedRef = useRef(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
@@ -79,7 +81,12 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
         // Handle different response formats
         if (data?.predictions && Array.isArray(data.predictions) && data.predictions.length > 0) {
           setPredictions(data.predictions);
-          setShowSuggestions(true);
+          // Only show suggestions if input is focused and user has typed something
+          if (isFocusedRef.current && query.trim()) {
+            setShowSuggestions(true);
+          } else {
+            setShowSuggestions(false);
+          }
         } else if (data?.status && data.status !== 'OK') {
           console.warn('Google Places API status:', data.status);
           setPredictions([]);
@@ -132,7 +139,7 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
   };
 
   return (
-    <View style={[styles.container, style]}>
+    <View style={[styles.container, showSuggestions && predictions.length > 0 && styles.containerWithSuggestions, style]}>
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -141,12 +148,17 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
           placeholder={placeholder}
           placeholderTextColor="#94a3b8"
           onFocus={() => {
-            if (predictions.length > 0) {
+            setIsFocused(true);
+            isFocusedRef.current = true;
+            // Only show suggestions if there are predictions and user has typed something
+            if (predictions.length > 0 && query.trim()) {
               setShowSuggestions(true);
             }
             onFocus?.();
           }}
           onBlur={() => {
+            setIsFocused(false);
+            isFocusedRef.current = false;
             handleBlur();
             onBlur?.();
           }}
@@ -191,6 +203,17 @@ const styles = StyleSheet.create({
   container: {
     position: 'relative',
     zIndex: 1,
+    ...Platform.select({
+      web: {
+        zIndex: 100,
+      },
+      default: {
+        zIndex: 100,
+      },
+    }),
+  },
+  containerWithSuggestions: {
+    marginBottom: 210, // Add space for the dropdown (maxHeight: 200 + marginTop: 4 + some buffer)
   },
   inputContainer: {
     position: 'relative',
@@ -227,12 +250,13 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
+        zIndex: 9999,
       },
       default: {
-        elevation: 4,
+        elevation: 10,
+        zIndex: 9999,
       },
     }),
-    zIndex: 1000,
   },
   suggestionItem: {
     padding: 12,

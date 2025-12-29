@@ -206,26 +206,17 @@ export default function NavBar() {
     }
   }, [showLocationModal, user]);
 
-  async function loadLocation() {
-    if (!user) return;
-    try {
-      const prof = await getProfile(user.id);
-      if (prof) {
-        const savedLocation = prof.location || "";
-        setLocation(savedLocation);
-        setCurrentLocation(savedLocation);
-        // Initialize manual input with current location so it shows in the picker
-        setManualInputLocation(savedLocation);
-      } else {
-        // If no saved location, clear the manual input
-        setManualInputLocation("");
-        setCurrentLocation("");
-      }
-      // Clear any selected location when modal opens
-      setSelectedLocation("");
-    } catch (e: any) {
-      console.error("Error loading location:", e);
-    }
+  function loadLocation() {
+    if (!user || !profile) return;
+    
+    const savedLocation = profile.location || "";
+    setLocation(savedLocation);
+    setCurrentLocation(savedLocation);
+    // Initialize manual input with current location so it shows in the picker
+    setManualInputLocation(savedLocation);
+    
+    // Clear any selected location when modal opens
+    setSelectedLocation("");
   }
 
   async function handleSaveLocation() {
@@ -472,6 +463,27 @@ export default function NavBar() {
           ) : (
             <>
               {loggedIn ? (
+                <TouchableOpacity 
+                  onPress={() => setShowLocationModal(true)}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 12 }}
+                >
+                  <Image 
+                    source={require('../assets/placeholder.png')} 
+                    style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
+                    resizeMode="contain" 
+                  />
+                  <Text style={{ 
+                    fontSize: 14, 
+                    color: PRIMARY_COLOR, 
+                    fontFamily: theme.typography.fontFamily.body,
+                    fontWeight: '500',
+                    textDecorationLine: 'underline'
+                  }}>
+                    {profile?.location || "Set Location"}
+                  </Text>
+                </TouchableOpacity>
+              ) : null}
+              {loggedIn ? (
             <>
               <TouchableOpacity
                 onPress={() => {
@@ -526,7 +538,7 @@ export default function NavBar() {
         </View>
       </View>
 
-      {isMobile && loggedIn && profile?.location ? (
+      {isMobile && loggedIn ? (
         <View style={styles.mobileLocationBar}>
           <Image 
             source={require('../assets/placeholder.png')} 
@@ -535,7 +547,7 @@ export default function NavBar() {
           />
           <TouchableOpacity onPress={() => setShowLocationModal(true)}>
             <Text style={[styles.mobileLocationText, styles.mobileLocationLink]} numberOfLines={1}>
-              {profile.location}
+              {profile?.location || "Set Location"}
             </Text>
           </TouchableOpacity>
         </View>
