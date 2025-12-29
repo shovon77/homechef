@@ -3,9 +3,9 @@ import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Ale
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
-import { getDishById, getDishRatings, getChefById, getDishWithChef } from "../../lib/db";
+import { getDishById, getDishRatings, getChefById, getDishWithChef, getDishReviews } from "../../lib/db";
 import { submitDishRating, getDishRatingSummary } from "../../lib/reviews";
-import type { Dish, DishWithChef } from "../../lib/types";
+import type { Dish, DishWithChef, DishRating } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import { Screen } from "../../components/Screen";
@@ -40,12 +40,14 @@ export default function DishDetail() {
   const [loading, setLoading] = useState(true);
   const [avgRating, setAvgRating] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
+  const [reviews, setReviews] = useState<DishRating[]>([]);
   const [userRating, setUserRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [isDishOwner, setIsDishOwner] = useState(false);
   const [quantity, setQuantity] = useState(1);
-  const [activeTab, setActiveTab] = useState<'description' | 'ingredients' | 'reviews'>('description');
+  const [activeTab, setActiveTab] = useState<'ingredients' | 'reviews'>('ingredients');
+  const [chefNotes, setChefNotes] = useState("");
   const { addToCart } = useCart();
   const { isAdmin, user } = useRole();
 
@@ -95,6 +97,13 @@ export default function DishDetail() {
           if (mounted) {
             setRatingCount(ratingStats.count);
             setAvgRating(ratingStats.average);
+          }
+        });
+
+        // Fetch reviews in background
+        getDishReviews(dishId).then(reviewsData => {
+          if (mounted) {
+            setReviews(reviewsData);
           }
         });
 
@@ -172,8 +181,10 @@ export default function DishDetail() {
       quantity: quantity, 
       image: dish.image || undefined,
       chef_id: dish.chef_id || null,
+      notes: chefNotes.trim() || undefined,
     });
     if (result.success) {
+      setChefNotes(""); // Clear notes after adding
       Alert.alert("Success", "Added to cart!");
     }
   };
@@ -201,6 +212,10 @@ export default function DishDetail() {
       setRatingCount(summary.count);
       setAvgRating(summary.avg);
       
+      // Refresh reviews
+      const updatedReviews = await getDishReviews(dishId);
+      setReviews(updatedReviews);
+
       const { data: userRatingData } = await supabase
         .from("dish_ratings")
         .select("rating, stars, comment")
@@ -266,19 +281,7 @@ export default function DishDetail() {
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
       <View style={{ paddingBottom: 32 }}>
         <View style={styles.container}>
-        {/* Breadcrumbs */}
-        <View style={styles.breadcrumbs}>
-          <Link href="/" asChild>
-            <TouchableOpacity>
-              <Text style={styles.breadcrumbLink}>Home</Text>
-            </TouchableOpacity>
-          </Link>
-          <Text style={styles.breadcrumbSeparator}>/</Text>
-          <Text style={styles.breadcrumbLink}>{dish.category || 'Dishes'}</Text>
-          <Text style={styles.breadcrumbSeparator}>/</Text>
-          <Text style={styles.breadcrumbCurrent}>{dish.name}</Text>
-        </View>
-
+        {/* Breadcrumbs - REMOVED */}
         {/* Main Content Grid */}
         <View style={[styles.grid, isMobile && styles.gridMobile]}>
           {/* Left Column: Image Gallery */}
@@ -309,7 +312,14 @@ export default function DishDetail() {
                 } 
               }} asChild>
                 <TouchableOpacity style={styles.chefLink}>
-                  <Text style={styles.chefIcon}>🏪</Text>
+                  {chef?.photo || chef?.avatar ? (
+                    <Image 
+                      source={{ uri: chef.photo || chef.avatar }} 
+                      style={styles.chefAvatar} 
+                    />
+                  ) : (
+                    <Text style={styles.chefIcon}>🏪</Text>
+                  )}
                   <Text style={styles.chefLinkText}>By {chefName}</Text>
                 </TouchableOpacity>
               </Link>
@@ -360,6 +370,19 @@ export default function DishDetail() {
                 <Text style={styles.addToCartButtonText}>Add to cart</Text>
               </TouchableOpacity>
             </View>
+
+            {/* Chef Notes Input */}
+            <View style={styles.notesContainer}>
+              <Text style={styles.notesLabel}>Chef notes</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={chefNotes}
+                onChangeText={setChefNotes}
+                placeholder="Add notes for the chef (e.g., no onions)"
+                placeholderTextColor={TEXT_MUTED}
+                multiline
+              />
+            </View>
           </View>
         </View>
 
@@ -367,19 +390,11 @@ export default function DishDetail() {
         <View style={styles.tabsSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer} contentContainerStyle={{ flexDirection: 'row' }}>
             <TouchableOpacity
-              style={[styles.tab, activeTab === 'description' && styles.tabActive]}
-              onPress={() => setActiveTab('description')}
-            >
-              <Text style={[styles.tabText, activeTab === 'description' && styles.tabTextActive]}>
-                Description
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
               style={[styles.tab, activeTab === 'ingredients' && styles.tabActive]}
               onPress={() => setActiveTab('ingredients')}
             >
               <Text style={[styles.tabText, activeTab === 'ingredients' && styles.tabTextActive]}>
-                Ingredients & Allergens
+                Allergens & Ingredients
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
@@ -393,22 +408,12 @@ export default function DishDetail() {
           </ScrollView>
 
           <View style={styles.tabContent}>
-            {activeTab === 'description' && (
-              <View style={styles.descriptionContent}>
-                {dish.description ? (
-                  <Text style={styles.descriptionText}>{dish.description}</Text>
-                ) : (
-                  <Text style={styles.emptyText}>No description available.</Text>
-                )}
-              </View>
-            )}
-
             {activeTab === 'ingredients' && (
               <View style={styles.ingredientsContent}>
                 {dish.ingredients ? (
                   <Text style={styles.descriptionText}>{dish.ingredients}</Text>
                 ) : (
-                  <Text style={styles.emptyText}>Ingredients and allergen information coming soon.</Text>
+                  <Text style={styles.emptyText}>Allergens and ingredients information coming soon.</Text>
                 )}
               </View>
             )}
@@ -475,6 +480,26 @@ export default function DishDetail() {
                   </View>
                 )}
 
+                {/* Reviews List */}
+                <View style={styles.reviewsList}>
+                  {reviews.map((review) => (
+                    <View key={review.id} style={styles.reviewItem}>
+                      <View style={styles.reviewHeader}>
+                        <Text style={styles.reviewerName}>{review.user_name || 'Anonymous'}</Text>
+                        <Text style={styles.reviewDate}>
+                          {new Date(review.created_at || Date.now()).toLocaleDateString()}
+                        </Text>
+                      </View>
+                      <View style={styles.reviewStars}>
+                        {renderStars(review.rating || review.stars || 0)}
+                      </View>
+                      {review.comment ? (
+                        <Text style={styles.reviewComment}>{review.comment}</Text>
+                      ) : null}
+                    </View>
+                  ))}
+                </View>
+
                 {!user && (
                   <Text style={styles.signInPrompt}>
                     Please sign in to leave a review.
@@ -483,6 +508,12 @@ export default function DishDetail() {
               </View>
             )}
           </View>
+        </View>
+
+        <View style={styles.footerWarning}>
+          <Text style={styles.footerWarningText}>
+            The food is prepared by an independent home chef. Please handle it safely after pickup.
+          </Text>
         </View>
         </View>
       </View>
@@ -533,14 +564,13 @@ const styles = StyleSheet.create({
       default: 'column',
     }),
     gap: Platform.select({
-      web: theme.spacing['2xl'], // Reduced from 4xl
-      default: theme.spacing['2xl'],
+      web: theme.spacing['2xl'],
+      default: 0,
     }),
     marginBottom: theme.spacing['4xl'],
   },
   imageColumn: {
     flex: 1,
-    gap: theme.spacing.md,
   },
   mainImageContainer: {
     width: '100%',
@@ -550,6 +580,7 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     alignSelf: 'flex-start', // Or center
+    marginBottom: -50, // Increased negative margin to effectively hide the gap
     ...elev('lg'),
   },
   mainImage: {
@@ -558,7 +589,7 @@ const styles = StyleSheet.create({
   },
   infoColumn: {
     flex: 1,
-    paddingTop: theme.spacing.md,
+    paddingTop: 0, // Removed paddingTop to reduce spacing
   },
   dishTitle: {
     color: TEXT_DARK,
@@ -582,6 +613,12 @@ const styles = StyleSheet.create({
   },
   chefIcon: {
     fontSize: theme.typography.fontSize.lg,
+  },
+  chefAvatar: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: '#eee',
   },
   chefLinkText: {
     color: TEXT_GRAY,
@@ -729,9 +766,6 @@ const styles = StyleSheet.create({
   tabContent: {
     paddingVertical: theme.spacing['2xl'],
   },
-  descriptionContent: {
-    gap: theme.spacing.md,
-  },
   descriptionText: {
     color: TEXT_GRAY,
     fontSize: theme.typography.fontSize.base,
@@ -842,6 +876,80 @@ const styles = StyleSheet.create({
   // Mobile styles
   gridMobile: {
     flexDirection: 'column',
+    gap: 0, // Reduced gap to 0 for mobile view
+  },
+  reviewsList: {
     gap: theme.spacing.lg,
+    marginTop: theme.spacing.lg,
+  },
+  reviewItem: {
+    padding: theme.spacing.lg,
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    gap: theme.spacing.sm,
+  },
+  reviewHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reviewerName: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  reviewDate: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.xs,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  reviewStars: {
+    flexDirection: 'row',
+  },
+  reviewComment: {
+    color: TEXT_GRAY,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+  },
+  footerWarning: {
+    marginTop: theme.spacing['4xl'],
+    paddingTop: theme.spacing.lg,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_LIGHT,
+    alignItems: 'flex-start', // Changed from center to flex-start for left alignment
+  },
+  footerWarningText: {
+    color: TEXT_MUTED,
+    fontSize: 16,
+    fontFamily: 'OpenSans_400Regular',
+    textAlign: 'left', // Changed from center to left
+    maxWidth: 600,
+    lineHeight: 24,
+  },
+  notesContainer: {
+    marginTop: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  notesLabel: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  notesInput: {
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    backgroundColor: '#FFFFFF',
+    minHeight: 80,
+    textAlignVertical: 'top',
   },
 });

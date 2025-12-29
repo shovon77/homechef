@@ -242,6 +242,39 @@ export async function getDishRatings(dishId: number): Promise<DishRatingStats> {
   };
 }
 
+/**
+ * Get dish reviews with user names
+ */
+export async function getDishReviews(dishId: number, limit = 100): Promise<DishRating[]> {
+  const { data: ratings, error } = await supabase
+    .from('dish_ratings')
+    .select('*')
+    .eq('dish_id', dishId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (error || !ratings) {
+    console.error('Error fetching dish reviews:', error);
+    return [];
+  }
+
+  // Fetch profiles for names
+  const userIds = [...new Set(ratings.map((r: any) => r.user_id).filter(Boolean))];
+  const { data: profiles } = userIds.length > 0
+    ? await supabase
+        .from('profiles')
+        .select('id, name, email')
+        .in('id', userIds)
+    : { data: [] };
+
+  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p.name || p.email]));
+
+  return ratings.map((r: any) => ({
+    ...r,
+    user_name: profileMap.get(r.user_id) || 'Anonymous',
+  })) as DishRating[];
+}
+
 // ============================================================================
 // Chef Reviews
 // ============================================================================
@@ -493,6 +526,7 @@ export async function createOrder(input: CreateOrderInput): Promise<Order | null
     dish_id: item.dish_id,
     quantity: item.quantity,
     unit_price_cents: item.unit_price_cents,
+    notes: item.notes,
   }));
 
   const { error: itemsError } = await supabase

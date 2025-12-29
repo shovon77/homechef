@@ -68,9 +68,12 @@ export type DishWithChef = Dish & {
 export type DishRating = {
   id: number; // BIGINT
   dish_id: number; // BIGINT FK -> dishes.id
+  user_id?: string; // uuid FK -> auth.users.id
   rating: number; // integer, 1-5
   stars: number; // integer, 1-5
+  comment: string | null;
   created_at: string | null; // timestamptz
+  user_name?: string | null; // Added for UI display
 };
 
 export type DishRatingStats = {
@@ -121,6 +124,7 @@ export type OrderItem = {
   dish_id: number | null; // integer FK -> dishes.id
   quantity: number; // integer, default 1
   unit_price_cents: number; // integer, default 0
+  notes?: string | null; // Special instructions
 };
 
 // Order with joined order_items and user email
@@ -152,6 +156,7 @@ export type CreateOrderItem = {
   dish_id: number;
   quantity: number;
   unit_price_cents: number;
+  notes?: string;
 };
 
 export type CreateOrderInput = {

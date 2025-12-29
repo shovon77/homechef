@@ -18,6 +18,7 @@ export type CartItem = {
   quantity: number;
   image?: string;
   chef_id?: number | null; // Store chef_id for single-chef constraint
+  notes?: string;
 };
 
 type CartContextType = {
@@ -172,7 +173,11 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       const found = prev.find(p => p.id === item.id);
       if (found) {
         return prev.map(p =>
-          p.id === item.id ? { ...p, quantity: p.quantity + (item.quantity || 1) } : p
+          p.id === item.id ? { 
+            ...p, 
+            quantity: p.quantity + (item.quantity || 1),
+            notes: item.notes !== undefined ? item.notes : p.notes // Update notes if provided
+          } : p
         );
       }
       return [...prev, { ...item, quantity: item.quantity || 1 }];
