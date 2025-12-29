@@ -48,6 +48,7 @@ export default function DishDetail() {
   const [quantity, setQuantity] = useState(1);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'reviews'>('ingredients');
   const [chefNotes, setChefNotes] = useState("");
+  const [showChefNotes, setShowChefNotes] = useState(false);
   const { addToCart } = useCart();
   const { isAdmin, user } = useRole();
 
@@ -373,15 +374,25 @@ export default function DishDetail() {
 
             {/* Chef Notes Input */}
             <View style={styles.notesContainer}>
-              <Text style={styles.notesLabel}>Chef notes</Text>
-              <TextInput
-                style={styles.notesInput}
-                value={chefNotes}
-                onChangeText={setChefNotes}
-                placeholder="Add notes for the chef (e.g., no onions)"
-                placeholderTextColor={TEXT_MUTED}
-                multiline
-              />
+              <TouchableOpacity
+                style={styles.notesButton}
+                onPress={() => setShowChefNotes(!showChefNotes)}
+              >
+                <Text style={styles.notesButtonIcon}>
+                  {showChefNotes ? '−' : '+'}
+                </Text>
+                <Text style={styles.notesButtonText}>Chef notes</Text>
+              </TouchableOpacity>
+              {showChefNotes && (
+                <TextInput
+                  style={styles.notesInput}
+                  value={chefNotes}
+                  onChangeText={setChefNotes}
+                  placeholder="Add notes for the chef (e.g., no onions)"
+                  placeholderTextColor={TEXT_MUTED}
+                  multiline
+                />
+              )}
             </View>
           </View>
         </View>
@@ -736,8 +747,14 @@ const styles = StyleSheet.create({
   tabsSection: {
     marginTop: theme.spacing['4xl'],
     paddingTop: theme.spacing['2xl'],
-    borderTopWidth: 1,
-    borderTopColor: BORDER_LIGHT,
+    borderTopWidth: Platform.select({
+      web: 1,
+      default: 0, // Remove top border on mobile
+    }),
+    borderTopColor: Platform.select({
+      web: BORDER_LIGHT,
+      default: 'transparent',
+    }),
   },
   tabsContainer: {
     borderBottomWidth: 1,
@@ -932,17 +949,46 @@ const styles = StyleSheet.create({
   },
   notesContainer: {
     marginTop: theme.spacing.sm,
+    marginBottom: Platform.select({
+      web: theme.spacing.lg,
+      default: theme.spacing['2xl'], // Increased spacing on mobile to prevent overflow
+    }),
+    gap: theme.spacing.xs,
+    width: '100%',
+  },
+  notesButton: {
+    alignSelf: 'flex-start',
+    paddingTop: theme.spacing.sm,
+    paddingBottom: 0,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.md,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: theme.spacing.xs,
   },
-  notesLabel: {
-    color: TEXT_MUTED,
+  notesButtonIcon: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.lg,
+    fontFamily: 'OpenSans_400Regular',
+    fontWeight: theme.typography.fontWeight.bold,
+    width: 20,
+    textAlign: 'center',
+  },
+  notesButtonText: {
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_400Regular',
     fontWeight: theme.typography.fontWeight.bold,
   },
   notesInput: {
-    borderWidth: 1,
-    borderColor: BORDER_LIGHT,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderBottomWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    borderColor: 'transparent',
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
     color: TEXT_DARK,
@@ -951,5 +997,39 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     minHeight: 80,
     textAlignVertical: 'top',
+    width: '100%',
+    maxWidth: '100%',
+    ...Platform.select({
+      ios: {
+        borderWidth: 0,
+        borderTopWidth: 0,
+        borderBottomWidth: 0,
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
+        borderColor: 'transparent',
+      },
+      android: {
+        borderWidth: 0,
+        borderTopWidth: 0,
+        borderBottomWidth: 0,
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
+        borderColor: 'transparent',
+        underlineColorAndroid: 'transparent',
+      },
+      web: {
+        borderWidth: 0,
+        borderColor: 'transparent',
+        outline: 'none',
+      },
+      default: {
+        borderWidth: 0,
+        borderTopWidth: 0,
+        borderBottomWidth: 0,
+        borderLeftWidth: 0,
+        borderRightWidth: 0,
+        borderColor: 'transparent',
+      },
+    }),
   },
 });
