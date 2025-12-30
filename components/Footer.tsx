@@ -1,12 +1,14 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, Image } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, Image, useWindowDimensions } from 'react-native'
 import { useRouter } from 'expo-router'
 import { theme } from '../lib/theme'
 
-export const FOOTER_HEIGHT = 88
+export const FOOTER_HEIGHT = 62
 
 export default function Footer() {
   const router = useRouter()
+  const { width } = useWindowDimensions()
+  const isMobile = width < 768
 
   const handleContact = () => {
     const email = 'support@homechef.com'
@@ -25,14 +27,16 @@ export default function Footer() {
       <View style={styles.inner}>
         <View style={styles.brandContainer}>
           <Image 
-            source={require('../assets/HClogo2.png')}
-            style={styles.brandLogo}
+            source={require('../assets/AppLogoWordFinal2026.png')}
+            style={[
+              styles.brandLogo,
+              { 
+                width: isMobile ? Math.min(400, width - 40) : 560,
+                height: isMobile ? (Math.min(400, width - 40) / 5) : 112 
+              }
+            ]}
             resizeMode="contain"
           />
-          <Text style={styles.brand}>
-            <Text style={{ color: '#33393A' }}>Your</Text>
-            <Text style={{ color: '#FE734C' }}>HomeChef</Text>
-          </Text>
         </View>
         <Text style={styles.copy}>YourHomeChef is a marketplace connecting independent home chefs with local customers. All food is prepared by the chefs.</Text>
       </View>
@@ -62,37 +66,27 @@ const styles = StyleSheet.create({
     borderTopColor: '#FE734C',
     backgroundColor: '#F2F0EF',
     paddingHorizontal: 16,
-    paddingTop: 16,
-    paddingBottom: 16,
+    paddingTop: 11,
+    paddingBottom: 11,
   },
   inner: {
-    gap: 6,
+    gap: 4,
   },
   brandContainer: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginLeft: -100,
   },
   brandLogo: {
-    width: 40,
-    height: 40,
     backgroundColor: 'transparent',
-    tintColor: '#FE734C',
-  },
-  brand: {
-    fontWeight: '900',
-    fontSize: 24,
-    color: '#33393A',
-    fontFamily: theme.typography.fontFamily.display,
-    letterSpacing: -0.015,
-    lineHeight: 28,
   },
   copy: {
     color: '#334155',
     fontFamily: theme.typography.fontFamily.body,
   },
   links: {
-    marginTop: 6,
+    marginTop: 4,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
@@ -103,7 +97,7 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   legal: {
-    marginTop: 6,
+    marginTop: 4,
     color: '#64748b',
     fontSize: 12,
     fontFamily: theme.typography.fontFamily.body,

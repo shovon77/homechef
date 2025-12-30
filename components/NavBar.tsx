@@ -399,14 +399,10 @@ export default function NavBar() {
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
           >
             <Image 
-              source={require('../assets/HClogo2.png')}
+              source={require('../assets/AppLogoWordFinal2026.png')}
               style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile])}
               resizeMode="contain"
             />
-            <Text style={StyleSheet.flatten([styles.logoText, isMobile && styles.logoTextMobile])}>
-              <Text style={{ color: '#33393A' }}>Your</Text>
-              <Text style={{ color: '#FE734C' }}>HomeChef</Text>
-            </Text>
           </TouchableOpacity>
         </Link>
 
@@ -724,27 +720,21 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    marginLeft: -58,
   },
   logoImage: {
-    width: 40,
-    height: 40,
+    width: 364,
+    height: 73,
     backgroundColor: 'transparent',
-    tintColor: '#FE734C',
-  },
-  logoText: {
-    fontSize: 24,
-    fontWeight: '900',
-    color: '#33393A',
-    letterSpacing: -0.015,
-    lineHeight: 28,
-    fontFamily: theme.typography.fontFamily.display,
+    marginTop: -9, // Visual correction for alignment
   },
   navCenter: {
     ...Platform.select({
       web: {
         position: 'absolute',
         left: '50%',
-        transform: [{ translateX: '-50%' }],
+        top: '50%',
+        transform: [{ translateX: '-50%' }, { translateY: '-50%' }],
         overflow: 'visible', // Ensure underline isn't clipped
       },
       default: {
@@ -853,19 +843,17 @@ const styles = StyleSheet.create({
   },
   logoContainerMobile: {
     gap: 4,
-    marginLeft: -4, // Pull logo slightly left
+    marginLeft: -58, // Pull logo left
   },
   logoImageMobile: {
-    width: 24,
-    height: 24,
-  },
-  logoTextMobile: {
-    fontSize: 14,
-    lineHeight: 20,
+    width: 260,
+    height: 52,
   },
   navCenterMobile: {
     position: 'absolute',
     left: '50%',
+    top: 0,
+    bottom: 0,
     transform: [{ translateX: '-50%' }],
     justifyContent: 'center',
     alignItems: 'center',
