@@ -1,10 +1,10 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image } from 'react-native';
-import { useRouter } from 'expo-router';
+import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image, Alert } from 'react-native';
+import { useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
-import { getAuthRedirect } from '../../lib/authRedirect';
+import { getAuthRedirect, getEmailRedirect } from '../../lib/authRedirect';
 import { redirectAfterLogin } from '../../lib/authRedirect';
 import Screen from '../../components/Screen';
 import { useRole } from '../../hooks/useRole';
@@ -29,6 +29,7 @@ export default function AuthPage() {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
+  const [resettingPassword, setResettingPassword] = useState(false);
 
   const { loading, user, isChef, isAdmin, role } = useRole();
 
@@ -80,6 +81,34 @@ export default function AuthPage() {
     }
   }
 
+  async function doResetPassword() {
+    if (!email || !email.includes('@')) {
+      Alert.alert('Error', 'Please enter a valid email address first.');
+      return;
+    }
+
+    setResettingPassword(true);
+    setErr(null);
+    try {
+      const redirectTo = getEmailRedirect();
+      const { error } = await supabase.auth.resetPasswordForEmail(email, {
+        redirectTo: redirectTo,
+      });
+      
+      if (error) throw error;
+      
+      Alert.alert(
+        'Password Reset Email Sent',
+        'Check your email for a password reset link. Click the link to reset your password.',
+        [{ text: 'OK' }]
+      );
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to send password reset email. Please try again.');
+    } finally {
+      setResettingPassword(false);
+    }
+  }
+
   if (loading && !user) {
     // Initial load state, keep blank or spinner
     return null; 
@@ -100,32 +129,28 @@ export default function AuthPage() {
         shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8},
         elevation:2, gap:16
       }}>
-        {/* Brand */}
-        <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
-          <Image 
-            source={require('../../assets/HClogo2.png')}
-            style={{ width:40, height:40, tintColor: C.primary }}
-            resizeMode="contain"
-          />
-          <Text style={{ fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-            <Text style={{ color: C.text }}>Your</Text>
-            <Text style={{ color: C.primary }}>HomeChef</Text>
+        {/* Welcome Text */}
+        <Text style={{ color:C.text, fontSize:28, fontWeight:'900', fontFamily: theme.typography.fontFamily.display, marginBottom: 2 }}>
+          {mode === 'signin' ? (
+            <>
+              Welcome back<Text style={{ color:C.primary }}>!</Text>
+            </>
+          ) : (
+            <>
+              Welcome<Text style={{ color:C.primary }}>!</Text>
+            </>
+          )}
+        </Text>
+        {mode === 'signup' && (
+          <Text style={{ color:C.subtext, fontFamily: theme.typography.fontFamily.body, marginBottom: 1 }}>
+            Order homemade meals or share your dishes
           </Text>
-        </View>
-
-        <View style={{ flexDirection:'row', alignItems:'center', gap:8 }}>
-          <View style={{ width:10, height:10, borderRadius:5, backgroundColor:'#FE734C' }} />
-          <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>{mode === 'signin' ? 'Sign in' : 'Create account'}</Text>
-        </View>
-
-        <Text style={{ color:C.text, fontSize:28, fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>
-          {mode === 'signin' ? 'Welcome back' : 'Join HomeChef'}
-        </Text>
-        <Text style={{ color:C.subtext, fontFamily: theme.typography.fontFamily.body }}>
-          {mode === 'signin'
-            ? 'Log in to order homemade meals or list your own dishes.'
-            : 'Create an account to order or become a chef and start selling.'}
-        </Text>
+        )}
+        {mode === 'signin' && (
+          <Text style={{ color:C.subtext, fontFamily: theme.typography.fontFamily.body, marginBottom: 16 }}>
+            Continue ordering or managing your dishes
+          </Text>
+        )}
 
         {/* Google Button with real icon */}
         <View>
@@ -175,6 +200,13 @@ export default function AuthPage() {
           <View style={{ gap:6 }}>
             <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
               <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Password</Text>
+              {mode === 'signin' && (
+                <TouchableOpacity onPress={doResetPassword} disabled={resettingPassword}>
+                  <Text style={{ color:C.primary, fontSize:12, fontFamily: theme.typography.fontFamily.body, textDecorationLine: 'underline' }}>
+                    {resettingPassword ? 'Sending...' : 'Forgot password?'}
+                  </Text>
+                </TouchableOpacity>
+              )}
             </View>
             <TextInput
               value={password}
@@ -194,29 +226,37 @@ export default function AuthPage() {
             disabled={busy}
             style={{
               backgroundColor: busy ? '#FFCCBC' : C.primary,
-              paddingVertical:13, borderRadius:12, alignItems:'center'
+              paddingVertical:13, 
+              paddingHorizontal:24,
+              borderRadius:12, 
+              alignItems:'center',
+              alignSelf: 'center',
+              minWidth: 120,
+              maxWidth: 200
             }}>
             <Text style={{ color:'#FFFFFF', fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>
-              {busy ? 'Please wait…' : (mode === 'signin' ? 'Sign in' : 'Create account')}
+              {busy ? 'Please wait…' : (mode === 'signin' ? 'Login' : 'Sign-up')}
             </Text>
           </TouchableOpacity>
 
           {/* Toggle sign-in / sign-up */}
           <TouchableOpacity onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
             <Text style={{ color:C.link, textAlign:'center', marginTop:6, fontFamily: theme.typography.fontFamily.body }}>
-              {mode === 'signin' ? 'New to HomeChef? Create an account' : 'Already have an account? Sign in'}
-            </Text>
-          </TouchableOpacity>
-
-          {/* Chef sign-up */}
-          <TouchableOpacity onPress={() => router.push('/auth/chef')} style={{ marginTop:6 }}>
-            <Text style={{ color:C.text, textAlign:'center', fontFamily: theme.typography.fontFamily.body }}>
-              Want to sell dishes? <Text style={{ color:C.primaryHi, fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>Sign up as a Chef</Text>
+              {mode === 'signin' ? 'New to YourHomeChef? Sign-up' : 'Already have a profile? Login.'}
             </Text>
           </TouchableOpacity>
         </View>
 
         {err ? <Text style={{ color:'tomato', marginTop:4, fontFamily: theme.typography.fontFamily.body }}>{err}</Text> : null}
+
+        {/* Terms of Service */}
+        <Text style={{ color:C.subtext, fontSize:12, textAlign:'center', marginTop:16, fontFamily: theme.typography.fontFamily.body }}>
+          By continuing, you agree to our{' '}
+          <Link href="/terms" asChild>
+            <Text style={{ color:C.primary, textDecorationLine: 'underline' }}>Terms of Service</Text>
+          </Link>
+          .
+        </Text>
       </Animated.View>
     </Screen>
   );

@@ -135,6 +135,7 @@ export default function NavBar() {
   const pathname = usePathname?.() || '';
   const isExploreActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
   const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
+  const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
@@ -407,29 +408,39 @@ export default function NavBar() {
         </Link>
 
         {/* Center Section: Navigation */}
-        <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
-          <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
-          {hasActiveOrder ? (
-            <Link href="/orders/track" asChild>
-              <TouchableOpacity style={StyleSheet.flatten([styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }])}>
-                <Text style={StyleSheet.flatten([styles.navLinkText, { fontWeight: '700' as any }])}>{isMobile ? '' : 'Track Order'}</Text>
-                {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
-              </TouchableOpacity>
-            </Link>
-          ) : null}
-          {/* Dashboard button: only show for admin or chef */}
-          {(isAdmin || isChef) && (
-            <NavButton 
-              href={isAdmin ? '/admin' : '/chef'} 
-              label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
-              isActive={isDashboardActive} 
-            />
-          )}
-        </View>
+        {!isAuthPage && (
+          <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
+            <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
+            {hasActiveOrder ? (
+              <Link href="/orders/track" asChild>
+                <TouchableOpacity style={StyleSheet.flatten([styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }])}>
+                  <Text style={StyleSheet.flatten([styles.navLinkText, { fontWeight: '700' as any }])}>{isMobile ? '' : 'Track Order'}</Text>
+                  {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
+                </TouchableOpacity>
+              </Link>
+            ) : null}
+            {/* Dashboard button: only show for admin or chef */}
+            {(isAdmin || isChef) && (
+              <NavButton 
+                href={isAdmin ? '/admin' : '/chef'} 
+                label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
+                isActive={isDashboardActive} 
+              />
+            )}
+          </View>
+        )}
 
         {/* Right Section: Actions */}
         <View style={StyleSheet.flatten([styles.rightSection, isMobile && styles.rightSectionMobile])}>
-          {isMobile ? (
+          {isAuthPage ? (
+            <Link href="/faq" asChild>
+              <TouchableOpacity style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>FAQ</Text>
+              </TouchableOpacity>
+            </Link>
+          ) : (
+            <>
+              {isMobile ? (
             <>
               <Link href="/cart" asChild>
                 <TouchableOpacity style={styles.cartButton}>
@@ -529,6 +540,8 @@ export default function NavBar() {
               )}
             </TouchableOpacity>
           </Link>
+            </>
+          )}
             </>
           )}
         </View>
