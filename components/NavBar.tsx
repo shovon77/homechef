@@ -794,7 +794,7 @@ export default function NavBar() {
       {/* Location Modal */}
       <Modal
         visible={showLocationModal}
-        animationType="slide"
+        animationType="fade"
         transparent={true}
         onRequestClose={() => {
           setShowLocationModal(false);
@@ -1165,7 +1165,7 @@ const styles = StyleSheet.create({
   },
   modalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.10)',
     justifyContent: 'center',
     alignItems: 'center',
     padding: theme.spacing.lg,

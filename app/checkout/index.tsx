@@ -679,7 +679,7 @@ const styles = StyleSheet.create({
   },
   pickerModalOverlay: {
     flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    backgroundColor: 'rgba(0, 0, 0, 0.10)',
     justifyContent: 'flex-end',
   },
   pickerModalContent: {
