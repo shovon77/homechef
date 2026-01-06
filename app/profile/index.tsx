@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput, ScrollView, useWindowDimensions } from "react-native";
-import { useRouter, Link } from "expo-router";
+import { useRouter, Link, useLocalSearchParams } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
 import { useRole } from "../../hooks/useRole";
@@ -22,31 +22,43 @@ type UserOrderSummary = {
   pickup_at: string | null;
   chef_id: number | null;
   chef_name?: string | null;
+  chef_location?: string | null;
+  dish_names?: string[];
+  total_quantity?: number;
 };
 
 export default function ProfilePage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { tab } = useLocalSearchParams<{ tab?: string }>();
   const { loading: roleLoading, user, isAdmin, isChef } = useRole();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
-  const [name, setName] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
   const [email, setEmail] = useState("");
+  const [phone, setPhone] = useState("");
   const [photoUrl, setPhotoUrl] = useState<string | null>(null);
   const [location, setLocation] = useState("");
-  const [activeTab, setActiveTab] = useState<"active" | "past">("active");
-  const [activeNavTab, setActiveNavTab] = useState<"orders" | "settings">("orders");
+  const [activeTab, setActiveTab] = useState<"all" | "upcoming" | "completed" | "declined">("all");
+  const [activeNavTab, setActiveNavTab] = useState<"orders" | "settings">(tab === "settings" ? "settings" : "orders");
   const [orders, setOrders] = useState<UserOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
 
   const filteredOrders = useMemo(() => {
-    const upcoming = ['requested', 'pending', 'ready', 'paid'];
-    const past = ['completed', 'cancelled', 'rejected'];
-    const allowed = activeTab === 'active' ? upcoming : past;
-    return orders.filter(order => allowed.includes(order.status));
+    if (activeTab === 'all') {
+      return orders;
+    } else if (activeTab === 'upcoming') {
+      return orders.filter(order => ['requested', 'pending', 'ready', 'paid'].includes(order.status));
+    } else if (activeTab === 'completed') {
+      return orders.filter(order => order.status === 'completed');
+    } else if (activeTab === 'declined') {
+      return orders.filter(order => ['cancelled', 'rejected'].includes(order.status));
+    }
+    return orders;
   }, [orders, activeTab]);
 
   useEffect(() => {
@@ -61,6 +73,15 @@ export default function ProfilePage() {
     }
   }, [user, roleLoading]);
 
+  // Update activeNavTab when tab parameter changes
+  useEffect(() => {
+    if (tab === "settings") {
+      setActiveNavTab("settings");
+    } else if (tab === "orders" || !tab) {
+      setActiveNavTab("orders");
+    }
+  }, [tab]);
+
   async function loadProfile() {
     if (!user) return;
     setLoading(true);
@@ -68,8 +89,12 @@ export default function ProfilePage() {
       const prof = await getProfile(user.id);
       if (prof) {
         setProfile(prof);
-        setName(prof.name || "");
+        // Parse name into first and last name
+        const nameParts = (prof.name || "").trim().split(" ");
+        setFirstName(nameParts[0] || "");
+        setLastName(nameParts.slice(1).join(" ") || "");
         setEmail(prof.email || "");
+        setPhone((prof as any).phone || "");
         setPhotoUrl(prof.photo_url || null);
         setLocation(prof.location || "");
       }
@@ -94,27 +119,73 @@ export default function ProfilePage() {
 
       const rows = data || [];
       const chefIds = [...new Set(rows.map(r => r.chef_id).filter((id): id is number => typeof id === 'number'))];
-      let chefMap = new Map<number, string>();
+      const orderIds = rows.map(r => r.id);
+      
+      let chefMap = new Map<number, { name: string; location: string | null }>();
+      let orderItemsMap = new Map<number, Array<{ dish_name: string; quantity: number }>>();
 
+      // Fetch chef names and locations
       if (chefIds.length > 0) {
         const { data: chefsData, error: chefsError } = await supabase
           .from('chefs')
-          .select('id,name')
+          .select('id,name,location')
           .in('id', chefIds);
         if (!chefsError && chefsData) {
-          chefMap = new Map(chefsData.map((c: any) => [c.id, c.name || `Chef #${c.id}`]));
+          chefMap = new Map(chefsData.map((c: any) => [c.id, { name: c.name || `Chef #${c.id}`, location: c.location || null }]));
         }
       }
 
-      const enriched: UserOrderSummary[] = rows.map(row => ({
-        id: row.id,
-        status: row.status,
-        total_cents: row.total_cents ?? 0,
-        created_at: row.created_at,
-        pickup_at: row.pickup_at ?? null,
-        chef_id: row.chef_id ?? null,
-        chef_name: row.chef_id ? chefMap.get(row.chef_id) ?? null : null,
-      }));
+      // Fetch order items with dish names
+      if (orderIds.length > 0) {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('order_items')
+          .select('order_id,dish_id,quantity')
+          .in('order_id', orderIds);
+        
+        if (!itemsError && itemsData) {
+          const dishIds = [...new Set(itemsData.map((it: any) => it.dish_id).filter((id): id is number => typeof id === 'number'))];
+          
+          if (dishIds.length > 0) {
+            const { data: dishesData, error: dishesError } = await supabase
+              .from('dishes')
+              .select('id,name')
+              .in('id', dishIds);
+            
+            if (!dishesError && dishesData) {
+              const dishMap = new Map(dishesData.map((d: any) => [d.id, d.name]));
+              
+              itemsData.forEach((item: any) => {
+                if (!orderItemsMap.has(item.order_id)) {
+                  orderItemsMap.set(item.order_id, []);
+                }
+                const dishName = dishMap.get(item.dish_id) || 'Unknown Dish';
+                orderItemsMap.get(item.order_id)!.push({
+                  dish_name: dishName,
+                  quantity: item.quantity || 1,
+                });
+              });
+            }
+          }
+        }
+      }
+
+      const enriched: UserOrderSummary[] = rows.map(row => {
+        const items = orderItemsMap.get(row.id) || [];
+        const chefInfo = row.chef_id ? chefMap.get(row.chef_id) : null;
+        
+        return {
+          id: row.id,
+          status: row.status,
+          total_cents: row.total_cents ?? 0,
+          created_at: row.created_at,
+          pickup_at: row.pickup_at ?? null,
+          chef_id: row.chef_id ?? null,
+          chef_name: chefInfo?.name ?? null,
+          chef_location: chefInfo?.location ?? null,
+          dish_names: items.map(i => i.dish_name),
+          total_quantity: items.reduce((sum, i) => sum + i.quantity, 0),
+        };
+      });
 
       setOrders(enriched);
     } catch (e: any) {
@@ -126,18 +197,22 @@ export default function ProfilePage() {
 
   async function handleSave() {
     if (!user) return;
-    if (!name.trim()) {
-      Alert.alert("Validation", "Name cannot be empty");
+    if (!firstName.trim()) {
+      Alert.alert("Validation", "First name cannot be empty");
       return;
     }
 
     setSaving(true);
     try {
-      console.log("Attempting to update profile:", { userId: user.id, name: name.trim(), photoUrl });
+      // Combine first and last name
+      const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
       
-      // Build update object with name, location, and photo_url if changed
-      const updateData: { name: string; location?: string | null; photo_url?: string | null } = {
-        name: name.trim(),
+      console.log("Attempting to update profile:", { userId: user.id, name: fullName, phone, photoUrl });
+      
+      // Build update object with name, phone, location, and photo_url if changed
+      const updateData: { name: string; phone?: string | null; location?: string | null; photo_url?: string | null } = {
+        name: fullName,
+        phone: phone.trim() || null,
         location: location.trim() || null,
       };
       
@@ -240,6 +315,56 @@ export default function ProfilePage() {
     );
   }
 
+  async function handleDeleteAccount() {
+    Alert.alert(
+      "Deactivate Account",
+      "Are you sure you want to deactivate your account? Your data will be preserved but you will be signed out.",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Deactivate",
+          style: "destructive",
+          onPress: async () => {
+            if (!user) return;
+            try {
+              // Deactivate account by setting is_active to false (if field exists)
+              // If the field doesn't exist, we'll just sign out without deleting records
+              const { error: profileError } = await supabase
+                .from("profiles")
+                .update({ 
+                  is_active: false,
+                  deactivated_at: new Date().toISOString()
+                })
+                .eq("id", user.id);
+              
+              if (profileError) {
+                // If is_active/deactivated_at fields don't exist, that's okay
+                // We'll just sign out without updating - records are preserved
+                console.log("Profile update error (fields may not exist, which is fine):", profileError);
+              }
+              
+              // Sign out the user (this doesn't delete any database records)
+              await supabase.auth.signOut();
+              router.replace("/auth");
+              Alert.alert("Success", "Account deactivated successfully");
+            } catch (e: any) {
+              console.error("Deactivate account error:", e);
+              // Even if update fails, sign out the user (records are still preserved)
+              try {
+                await supabase.auth.signOut();
+                router.replace("/auth");
+                Alert.alert("Success", "You have been signed out");
+              } catch (signOutError: any) {
+                console.error("Sign out error:", signOutError);
+                Alert.alert("Error", "Failed to sign out. Please try again.");
+              }
+            }
+          }
+        }
+      ]
+    );
+  }
+
   function getStatusInfo(status: OrderStatus | string) {
     switch (status) {
       case 'requested':
@@ -295,8 +420,7 @@ export default function ProfilePage() {
     );
   }
 
-  const initials = name
-    .split(" ")
+  const initials = [firstName, lastName].filter(Boolean)
     .map((n) => n[0])
     .join("")
     .toUpperCase()
@@ -337,17 +461,21 @@ export default function ProfilePage() {
             >
               <TouchableOpacity 
                 style={[styles.navItem, activeNavTab === "orders" && styles.navItemActive]}
-                onPress={() => setActiveNavTab("orders")}
+                onPress={() => {
+                  setActiveNavTab("orders");
+                  router.push("/profile");
+                }}
               >
-                <Text style={styles.navIcon}>📄</Text>
-                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>My Orders</Text>
+                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>Your Orders</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.navItem, activeNavTab === "settings" && styles.navItemActive]}
-                onPress={() => setActiveNavTab("settings")}
+                onPress={() => {
+                  setActiveNavTab("settings");
+                  router.push("/profile?tab=settings");
+                }}
               >
-                <Text style={styles.navIcon}>⚙️</Text>
-                <Text style={[styles.navText, activeNavTab === "settings" && styles.navTextActive]}>Account Settings</Text>
+                <Text style={[styles.navText, activeNavTab === "settings" && styles.navTextActive]}>Account</Text>
               </TouchableOpacity>
             </ScrollView>
           </View>
@@ -365,26 +493,38 @@ export default function ProfilePage() {
         <View style={styles.mainContent}>
           {activeNavTab === "orders" ? (
             <>
-              <View style={styles.header}>
-                <Text style={styles.pageTitle}>My Orders</Text>
-              </View>
-
               {/* Tabs */}
               <View style={styles.tabs}>
                 <TouchableOpacity
-                  style={[styles.tab, activeTab === "active" && styles.tabActive]}
-                  onPress={() => setActiveTab("active")}
+                  style={[styles.tab, activeTab === "all" && styles.tabActive]}
+                  onPress={() => setActiveTab("all")}
                 >
-                  <Text style={[styles.tabText, activeTab === "active" && styles.tabTextActive]}>
-                    Active Orders
+                  <Text style={[styles.tabText, activeTab === "all" && styles.tabTextActive]}>
+                    All
                   </Text>
                 </TouchableOpacity>
                 <TouchableOpacity
-                  style={[styles.tab, activeTab === "past" && styles.tabActive]}
-                  onPress={() => setActiveTab("past")}
+                  style={[styles.tab, activeTab === "upcoming" && styles.tabActive]}
+                  onPress={() => setActiveTab("upcoming")}
                 >
-                  <Text style={[styles.tabText, activeTab === "past" && styles.tabTextActive]}>
-                    Past Orders
+                  <Text style={[styles.tabText, activeTab === "upcoming" && styles.tabTextActive]}>
+                    Upcoming
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === "completed" && styles.tabActive]}
+                  onPress={() => setActiveTab("completed")}
+                >
+                  <Text style={[styles.tabText, activeTab === "completed" && styles.tabTextActive]}>
+                    Completed
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.tab, activeTab === "declined" && styles.tabActive]}
+                  onPress={() => setActiveTab("declined")}
+                >
+                  <Text style={[styles.tabText, activeTab === "declined" && styles.tabTextActive]}>
+                    Declined
                   </Text>
                 </TouchableOpacity>
               </View>
@@ -397,9 +537,8 @@ export default function ProfilePage() {
                   </View>
                 ) : filteredOrders.length === 0 ? (
                   <View style={styles.emptyContainer}>
-                    <Text style={styles.emptyText}>
-                      {activeTab === "active" ? "No upcoming orders" : "No past orders"}
-                    </Text>
+                    <Text style={styles.emptyText}>No orders yet</Text>
+                    <Text style={styles.emptySubtext}>Pickup homemade meals near you</Text>
                   </View>
                 ) : (
                   <View style={styles.ordersListContent}>
@@ -410,7 +549,18 @@ export default function ProfilePage() {
                           <View style={styles.orderContent}>
                             <View style={styles.orderInfo}>
                               <Text style={styles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
-                              <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                              {order.dish_names && order.dish_names.length > 0 && (
+                                <Text style={styles.orderDishInfo}>
+                                  {order.dish_names[0]}{order.dish_names.length > 1 ? ` +${order.dish_names.length - 1} more` : ''}
+                                  {order.total_quantity ? ` × ${order.total_quantity}` : ''}
+                                </Text>
+                              )}
+                              {order.chef_location && (
+                                <Text style={styles.orderLocation}>Pickup location: {order.chef_location}</Text>
+                              )}
+                              {order.pickup_at && (
+                                <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                              )}
                               <Text style={styles.orderChef}>Placed: {formatLocal(order.created_at)}</Text>
                               <View style={styles.orderStatus}>
                                 <Text style={styles.statusIcon}>{statusInfo.icon}</Text>
@@ -420,20 +570,13 @@ export default function ProfilePage() {
                               </View>
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 12 }}>
-                              <Text style={styles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
-                              <View style={{ flexDirection: 'row', gap: 8 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
                                 <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
                                   <TouchableOpacity style={styles.orderButtonPrimary}>
-                                    <Text style={styles.orderButtonTextPrimary}>Track</Text>
+                                    <Text style={styles.orderButtonTextPrimary}>View details</Text>
                                   </TouchableOpacity>
                                 </Link>
-                                {order.chef_id ? (
-                                  <Link href={`/chef/${order.chef_id}`} asChild>
-                                    <TouchableOpacity style={styles.orderButtonSecondary}>
-                                      <Text style={styles.orderButtonTextSecondary}>View Chef</Text>
-                                    </TouchableOpacity>
-                                  </Link>
-                                ) : null}
+                                <Text style={styles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
                               </View>
                             </View>
                           </View>
@@ -447,63 +590,6 @@ export default function ProfilePage() {
           ) : (
             <View style={styles.settingsContent}>
               <View style={styles.header}>
-                <Text style={styles.pageTitle}>Account Settings</Text>
-              </View>
-
-              <View style={styles.settingsCard}>
-                <View style={styles.settingsSection}>
-                  <Text style={styles.settingsSectionTitle}>Profile Photo</Text>
-                  <View style={styles.avatarSection}>
-                    {photoUrl ? (
-                      <Image source={{ uri: photoUrl }} style={styles.settingsAvatar} />
-                    ) : (
-                      <View style={[styles.settingsAvatar, styles.avatarPlaceholder]}>
-                        <Text style={styles.avatarInitials}>{initials}</Text>
-                      </View>
-                    )}
-                    <View style={{ marginTop: 12 }}>
-                      <FilePicker 
-                        label={uploadingAvatar ? "Uploading..." : "Change Photo"} 
-                        onFile={handleAvatarPick} 
-                        accept="image/*" 
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                <View style={styles.settingsSection}>
-                  <Text style={styles.settingsSectionTitle}>Name</Text>
-                  <TextInput
-                    value={name}
-                    onChangeText={setName}
-                    placeholder="Enter your name"
-                    placeholderTextColor="#94a3b8"
-                    style={styles.settingsInput}
-                  />
-                </View>
-
-                <View style={styles.settingsSection}>
-                  <Text style={styles.settingsSectionTitle}>Email</Text>
-                  <TextInput
-                    value={email}
-                    editable={false}
-                    style={[styles.settingsInput, styles.settingsInputReadOnly]}
-                    placeholderTextColor="#94a3b8"
-                  />
-                  <Text style={styles.settingsHint}>Email cannot be changed</Text>
-                </View>
-
-                <View style={styles.settingsSection}>
-                  <Text style={styles.settingsSectionTitle}>Location</Text>
-                  <LocationPicker
-                    value={location}
-                    onChange={setLocation}
-                    placeholder="Search for your location..."
-                    style={styles.locationPicker}
-                  />
-                  <Text style={styles.settingsHint}>Select your location from the dropdown</Text>
-                </View>
-
                 <TouchableOpacity
                   style={[styles.saveButton, saving && styles.saveButtonDisabled]}
                   onPress={handleSave}
@@ -515,6 +601,78 @@ export default function ProfilePage() {
                     <Text style={styles.saveButtonText}>Save Changes</Text>
                   )}
                 </TouchableOpacity>
+              </View>
+
+              <View style={styles.settingsCard}>
+                <View style={styles.nameRow}>
+                  <View style={styles.nameField}>
+                    <Text style={styles.settingsSectionTitle}>First name</Text>
+                    <TextInput
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      placeholder="Enter your first name"
+                      placeholderTextColor="#94a3b8"
+                      style={styles.settingsInput}
+                    />
+                  </View>
+                  <View style={styles.nameField}>
+                    <Text style={styles.settingsSectionTitle}>Last name</Text>
+                    <TextInput
+                      value={lastName}
+                      onChangeText={setLastName}
+                      placeholder="Enter your last name"
+                      placeholderTextColor="#94a3b8"
+                      style={styles.settingsInput}
+                    />
+                  </View>
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Email</Text>
+                  <TextInput
+                    value={email}
+                    editable={false}
+                    style={[styles.settingsInput, styles.settingsInputReadOnly]}
+                    placeholderTextColor="#94a3b8"
+                  />
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Phone</Text>
+                  <TextInput
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="Enter your phone number"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="phone-pad"
+                    style={styles.settingsInput}
+                  />
+                </View>
+
+                <View style={styles.settingsSection}>
+                  <Text style={styles.settingsSectionTitle}>Location</Text>
+                  <LocationPicker
+                    value={location}
+                    onChange={setLocation}
+                    placeholder="Search for your location..."
+                    style={styles.locationPicker}
+                  />
+                </View>
+
+                <View style={styles.actionButtons}>
+                  <TouchableOpacity
+                    style={styles.logoutButton}
+                    onPress={handleLogout}
+                  >
+                    <Text style={styles.logoutButtonText}>Logout</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={styles.deleteButton}
+                    onPress={handleDeleteAccount}
+                  >
+                    <Text style={styles.deleteButtonText}>Delete</Text>
+                  </TouchableOpacity>
+                </View>
               </View>
             </View>
           )}
@@ -581,6 +739,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
   },
   profileInfo: {
     flex: 1,
@@ -591,12 +750,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.base * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   profileEmail: {
     color: '#3E6A55',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   navMenu: {
     gap: theme.spacing.xs,
@@ -611,7 +772,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.lg,
   },
   navItemActive: {
-    backgroundColor: 'rgba(62, 106, 85, 0.2)', // primary/20
+    backgroundColor: theme.colors.primary,
   },
   navIcon: {
     fontSize: 20,
@@ -621,9 +782,11 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   navTextActive: {
-    color: '#101828',
+    color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
   },
   logoutButton: {
     flexDirection: "row",
@@ -637,12 +800,14 @@ const styles = StyleSheet.create({
   logoutIcon: {
     fontSize: 20,
     color: '#EF4444',
+    fontFamily: theme.typography.fontFamily.body,
   },
   logoutText: {
     color: '#EF4444',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   mainContent: {
     flex: 1,
@@ -651,6 +816,9 @@ const styles = StyleSheet.create({
   header: {
     padding: theme.spacing.md,
     paddingBottom: theme.spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   pageTitle: {
     color: '#101828',
@@ -658,6 +826,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: 36 * 1.2,
     letterSpacing: -0.033,
+    fontFamily: theme.typography.fontFamily.display,
   },
   tabs: {
     flexDirection: "row",
@@ -680,9 +849,11 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
+    fontFamily: theme.typography.fontFamily.body,
   },
   tabTextActive: {
     color: '#101828',
+    fontFamily: theme.typography.fontFamily.body,
   },
   ordersList: {
     flex: 1,
@@ -705,6 +876,13 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#667085',
     fontSize: theme.typography.fontSize.base,
+    marginBottom: theme.spacing.xs,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  emptySubtext: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderCard: {
     flexDirection: Platform.select({
@@ -728,22 +906,39 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
   },
   orderId: {
+    color: theme.colors.primary,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderDishInfo: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderLocation: {
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderDishName: {
     color: '#101828',
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.fontSize.lg * 1.2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderChef: {
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderStatus: {
     flexDirection: "row",
@@ -753,10 +948,12 @@ const styles = StyleSheet.create({
   },
   statusIcon: {
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   statusText: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderButton: {
     paddingVertical: 10,
@@ -766,6 +963,9 @@ const styles = StyleSheet.create({
   },
   orderButtonPrimary: {
     backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.lg,
   },
   orderButtonSecondary: {
     backgroundColor: 'rgba(62, 106, 85, 0.2)',
@@ -774,12 +974,17 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderButtonTextPrimary: {
     color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderButtonTextSecondary: {
     color: '#101828',
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderImageContainer: {
     width: Platform.select({
@@ -805,6 +1010,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.fontSize.lg * 1.2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   settingsContent: {
     flex: 1,
@@ -824,6 +1030,7 @@ const styles = StyleSheet.create({
     color: '#101828',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
   },
   avatarSection: {
     flexDirection: 'row',
@@ -857,6 +1064,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     color: '#101828',
     backgroundColor: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
   },
   settingsInputReadOnly: {
     backgroundColor: '#F9FAFB',
@@ -870,13 +1078,20 @@ const styles = StyleSheet.create({
   locationPicker: {
     marginTop: 0,
   },
+  nameRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  nameField: {
+    flex: 1,
+  },
   saveButton: {
     backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
     borderRadius: theme.radius.lg,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: theme.spacing.md,
   },
   saveButtonDisabled: {
     opacity: 0.6,
@@ -885,6 +1100,42 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.xl,
+  },
+  logoutButton: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
   },
   // Mobile Styles
   containerMobile: {

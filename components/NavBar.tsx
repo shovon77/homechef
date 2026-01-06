@@ -673,12 +673,12 @@ export default function NavBar() {
                 onPress={() => {
                   // Role-aware profile routing
                   if (isAdmin) {
-                        router.push('/profile');
+                        router.push('/profile?tab=settings');
                   } else if (isChef) {
                         // Navigate to the Profile tab in the Chef Dashboard
                         router.push('/chef?tab=profile');
                   } else {
-                    router.push('/profile');
+                    router.push('/profile?tab=settings');
                   }
                 }}
                     style={styles.primaryButton}
@@ -750,11 +750,11 @@ export default function NavBar() {
                 onPress={() => {
                   setIsMenuOpen(false);
                   if (isAdmin) {
-                    router.push('/profile');
+                    router.push('/profile?tab=settings');
                   } else if (isChef) {
                     router.push('/chef?tab=profile');
                   } else {
-                    router.push('/profile');
+                    router.push('/profile?tab=settings');
                   }
                 }}
                 style={styles.mobileMenuItem}
