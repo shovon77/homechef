@@ -91,6 +91,7 @@ export default function BrowsePage() {
   
   const [sortBy, setSortBy] = useState(initialSort);
   const [showSortMenu, setShowSortMenu] = useState(false);
+  const [dropdownReady, setDropdownReady] = useState(false);
   const sortMenuRef = useRef<View>(null);
   const sortButtonRef = useRef<View>(null);
   const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
@@ -113,18 +114,10 @@ export default function BrowsePage() {
     }
   }, [paramSort, tab]);
 
-  // Calculate dropdown position when menu opens (web only)
+  // Reset dropdown ready state when menu closes
   useEffect(() => {
-    if (showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
-      // @ts-ignore - web-specific
-      const button = sortButtonRef.current as any;
-      if (button && typeof button.getBoundingClientRect === 'function') {
-        const rect = button.getBoundingClientRect();
-        setDropdownPosition({
-          top: rect.bottom + 8,
-          right: window.innerWidth - rect.right,
-        });
-      }
+    if (!showSortMenu) {
+      setDropdownReady(false);
     }
   }, [showSortMenu]);
 
@@ -597,7 +590,7 @@ export default function BrowsePage() {
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
       {/* Render dropdown outside ScrollView for proper z-index */}
-      {showSortMenu && Platform.OS === 'web' && (
+      {showSortMenu && Platform.OS === 'web' && dropdownReady && (
         <View 
           ref={sortMenuRef} 
           style={[
@@ -673,9 +666,24 @@ export default function BrowsePage() {
           {tab === 'dishes' && (
             <View style={{ position: 'relative', marginLeft: 10, flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
               <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <TouchableOpacity 
+                  <TouchableOpacity 
                   activeOpacity={0.7}
-                  onPress={() => setShowSortMenu(!showSortMenu)}
+                  onPress={() => {
+                    if (!showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
+                      // Calculate position synchronously before showing dropdown for smooth animation
+                      // @ts-ignore - web-specific
+                      const button = sortButtonRef.current as any;
+                      if (button && typeof button.getBoundingClientRect === 'function') {
+                        const rect = button.getBoundingClientRect();
+                        setDropdownPosition({
+                          top: rect.bottom + 8,
+                          right: window.innerWidth - rect.right,
+                        });
+                        setDropdownReady(true);
+                      }
+                    }
+                    setShowSortMenu(!showSortMenu);
+                  }}
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}
                 >
                   <SortIcon size={20} color="#FE734C" />
