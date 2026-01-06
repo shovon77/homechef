@@ -138,6 +138,8 @@ export default function NavBar() {
   const isExploreActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
   const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
+  const isCartPage = pathname.startsWith('/cart');
+  const isCheckoutPage = pathname.startsWith('/checkout');
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
@@ -585,8 +587,8 @@ export default function NavBar() {
                 </TouchableOpacity>
               </Link>
             ) : null}
-            {/* Dashboard button: only show for admin or chef */}
-            {(isAdmin || isChef) && (
+            {/* Dashboard button: only show for admin or chef, but not on cart or checkout page */}
+            {(isAdmin || isChef) && !isCartPage && !isCheckoutPage && (
               <NavButton 
                 href={isAdmin ? '/admin' : '/chef'} 
                 label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
@@ -608,20 +610,29 @@ export default function NavBar() {
             <>
               {isMobile ? (
             <>
-              <Link href="/cart" asChild>
-                <TouchableOpacity style={styles.cartButton}>
-                  <Image 
-                    source={require('../assets/shopping-cart.png')} 
-                    style={styles.cartIconImage as any}
-                    resizeMode="contain"
-                  />
-                  {cartQty > 0 && (
-                    <View style={styles.cartBadge}>
-                      <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                    </View>
-                  )}
-                </TouchableOpacity>
-              </Link>
+              {!isCartPage && !isCheckoutPage && (
+                <Link href="/cart" asChild>
+                  <TouchableOpacity style={styles.cartButton}>
+                    <Image 
+                      source={require('../assets/shopping-cart.png')} 
+                      style={styles.cartIconImage as any}
+                      resizeMode="contain"
+                    />
+                    {cartQty > 0 && (
+                      <View style={styles.cartBadge}>
+                        <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                </Link>
+              )}
+              {(isCartPage || isCheckoutPage) && (
+                <Link href="/faq" asChild>
+                  <TouchableOpacity style={styles.iconButton}>
+                    <Text style={styles.faqButtonText}>FAQ</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
               <TouchableOpacity 
                 onPress={() => setIsMenuOpen(!isMenuOpen)}
                 style={styles.iconButton}
@@ -692,20 +703,22 @@ export default function NavBar() {
               </Link>
           )}
 
-          <Link href="/cart" asChild>
-            <TouchableOpacity style={styles.cartButton}>
-              <Image 
-                source={require('../assets/shopping-cart.png')} 
-                style={styles.cartIconImage as any}
-                resizeMode="contain"
-              />
-              {cartQty > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </Link>
+          {!isCartPage && !isCheckoutPage && (
+            <Link href="/cart" asChild>
+              <TouchableOpacity style={styles.cartButton}>
+                <Image 
+                  source={require('../assets/shopping-cart.png')} 
+                  style={styles.cartIconImage as any}
+                  resizeMode="contain"
+                />
+                {cartQty > 0 && (
+                  <View style={styles.cartBadge}>
+                    <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            </Link>
+          )}
             </>
           )}
             </>
@@ -1070,6 +1083,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F3F4F6',
     borderRadius: 18,
+  },
+  faqButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: '#FE734C',
   },
   iconButtonImage: {
     width: 20,

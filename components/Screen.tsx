@@ -40,11 +40,19 @@ export default function Screen({
           <NavBar />
         </View>
       )}
-      <ScrollView contentContainerStyle={[{ flexGrow: 1 }, scrollViewContentStyle]}>
-        <View style={content}>
-          {children}
+      <ScrollView 
+        contentContainerStyle={[
+          { flexGrow: 1 }, 
+          scrollViewContentStyle
+        ]}
+        style={{ flex: 1 }}
+      >
+        <View style={[content, { minHeight: '100%', justifyContent: 'space-between' }]}>
+          <View style={{ flex: 1 }}>
+            {children}
+          </View>
+          {!noFooter && <Footer />}
         </View>
-        {!noFooter && <Footer />}
         {/* Spacer for fixed bottom elements */}
         {fixedFooterHeight > 0 && <View style={{ height: fixedFooterHeight }} />}
       </ScrollView>
