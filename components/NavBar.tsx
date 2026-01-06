@@ -140,6 +140,7 @@ export default function NavBar() {
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
   const isCartPage = pathname.startsWith('/cart');
   const isCheckoutPage = pathname.startsWith('/checkout');
+  const isChefSignupPage = pathname.startsWith('/auth/chef');
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
@@ -587,8 +588,8 @@ export default function NavBar() {
                 </TouchableOpacity>
               </Link>
             ) : null}
-            {/* Dashboard button: only show for admin or chef, but not on cart or checkout page */}
-            {(isAdmin || isChef) && !isCartPage && !isCheckoutPage && (
+            {/* Dashboard button: only show for admin or chef, but not on cart, checkout, or chef signup page */}
+            {(isAdmin || isChef) && !isCartPage && !isCheckoutPage && !isChefSignupPage && (
               <NavButton 
                 href={isAdmin ? '/admin' : '/chef'} 
                 label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
@@ -600,7 +601,7 @@ export default function NavBar() {
 
         {/* Right Section: Actions */}
         <View style={StyleSheet.flatten([styles.rightSection, isMobile && styles.rightSectionMobile])}>
-          {isAuthPage ? (
+          {(isAuthPage && !isChefSignupPage) ? (
             <Link href="/faq" asChild>
               <TouchableOpacity style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>FAQ</Text>
@@ -610,7 +611,7 @@ export default function NavBar() {
             <>
               {isMobile ? (
             <>
-              {!isCartPage && !isCheckoutPage && (
+              {!isCartPage && !isCheckoutPage && !isChefSignupPage && (
                 <Link href="/cart" asChild>
                   <TouchableOpacity style={styles.cartButton}>
                     <Image 
@@ -626,7 +627,7 @@ export default function NavBar() {
                   </TouchableOpacity>
                 </Link>
               )}
-              {(isCartPage || isCheckoutPage) && (
+              {(isCartPage || isCheckoutPage || isChefSignupPage) && (
                 <Link href="/faq" asChild>
                   <TouchableOpacity style={styles.iconButton}>
                     <Text style={styles.faqButtonText}>FAQ</Text>
@@ -703,7 +704,7 @@ export default function NavBar() {
               </Link>
           )}
 
-          {!isCartPage && !isCheckoutPage && (
+          {!isCartPage && !isCheckoutPage && !isChefSignupPage && (
             <Link href="/cart" asChild>
               <TouchableOpacity style={styles.cartButton}>
                 <Image 
@@ -716,6 +717,13 @@ export default function NavBar() {
                     <Text style={styles.cartBadgeText}>{cartQty}</Text>
                   </View>
                 )}
+              </TouchableOpacity>
+            </Link>
+          )}
+          {(isCartPage || isCheckoutPage || isChefSignupPage) && (
+            <Link href="/faq" asChild>
+              <TouchableOpacity style={styles.secondaryButton}>
+                <Text style={styles.secondaryButtonText}>FAQ</Text>
               </TouchableOpacity>
             </Link>
           )}
