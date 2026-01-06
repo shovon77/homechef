@@ -1,12 +1,14 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image, Animated } from 'react-native';
-import { useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
+import { useAuth } from '../../context/AuthContext';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
 import { theme, elev } from '../../lib/theme';
 import { SortIcon } from '../../components/SortIcon';
+import { useLocationModal } from '../../context/LocationModalContext';
 
 const PER_PAGE = 25; // 5x5 grid layout
 const GRID_COLUMNS = 5;
@@ -66,13 +68,28 @@ type Chef = {
 
 export default function BrowsePage() {
   const { width } = useWindowDimensions();
+  const { profile, loading: authLoading } = useAuth();
+  const router = useRouter();
+  const { setShowLocationModal } = useLocationModal();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   
   const gridColumns = isMobile ? 1 : isTablet ? 3 : 5;
   
-  const { q, tab: paramTab } = useLocalSearchParams<{ q?: string, tab?: string }>();
+  const { q, tab: paramTab, sort: paramSort } = useLocalSearchParams<{ q?: string, tab?: string, sort?: string }>();
   const [tab, setTab] = useState<'dishes' | 'chefs' | 'cuisines'>('dishes');
+  
+  // Initialize sortBy from URL param if present, or default to 'nearest' for dishes tab
+  const initialSort = (() => {
+    const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
+    if (s === 'none' || s === 'price_asc' || s === 'price_desc' || s === 'popular' || s === 'newest' || s === 'nearest') {
+      return s;
+    }
+    // Always default to 'nearest' (dishes tab is default)
+    return 'nearest';
+  })();
+  
+  const [sortBy, setSortBy] = useState(initialSort);
 
   useEffect(() => {
     const t = Array.isArray(paramTab) ? paramTab[0] : paramTab;
@@ -80,6 +97,29 @@ export default function BrowsePage() {
       setTab(t);
     }
   }, [paramTab]);
+  
+  useEffect(() => {
+    const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
+    if (s === 'none' || s === 'price_asc' || s === 'price_desc' || s === 'popular' || s === 'newest' || s === 'nearest') {
+      setSortBy(s);
+    } else if (!s) {
+      // If no sort param, default based on tab
+      const currentTab = tab || 'dishes';
+      setSortBy(currentTab === 'dishes' ? 'nearest' : 'none');
+    }
+  }, [paramSort, tab]);
+  
+  // Ensure "nearest" sort is applied when dishes tab is active and no sort is specified in URL
+  // Only set if sortBy is 'none' or undefined to allow user to change it
+  // Don't override if paramSort is explicitly set (including 'nearest')
+  useEffect(() => {
+    const currentTab = tab || 'dishes';
+    const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
+    if (currentTab === 'dishes' && !s && (sortBy === 'none' || !sortBy)) {
+      setSortBy('nearest');
+    }
+  }, [tab, paramSort]);
+  
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -89,7 +129,6 @@ export default function BrowsePage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 800);
-  const [sortBy, setSortBy] = useState('none');
   const [showSortMenu, setShowSortMenu] = useState(false);
 
   // Animated placeholder logic
@@ -144,6 +183,11 @@ export default function BrowsePage() {
   }, [tab, debouncedQuery, sortBy]);
 
   useEffect(() => {
+    // If auth is still loading, wait for it to complete
+    if (authLoading) {
+      return;
+    }
+    
     let cancelled = false;
     (async () => {
       setLoading(true);
@@ -155,7 +199,7 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,description,price,image,rating,chef_id, chefs!inner(status, name)', { count: 'exact' })
+            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location)', { count: 'exact' })
             .eq('chefs.status', 'active');
 
           // Extract search parameters using AI or fallback
@@ -189,17 +233,47 @@ export default function BrowsePage() {
             }
           }
 
-          if (sortBy === 'price_asc') {
-            request = request.order('price', { ascending: true });
-          } else if (sortBy === 'price_desc') {
-            request = request.order('price', { ascending: false });
-          } else if (sortBy === 'popular') {
-            request = request.order('rating', { ascending: false });
+          // Apply sorting - prioritize URL param, then sortBy state, then default to 'nearest' for dishes tab
+          const sortParam = Array.isArray(paramSort) ? paramSort[0] : paramSort;
+          let effectiveSort: string;
+          
+          // If URL has explicit sort param (including 'nearest'), use it
+          if (sortParam && (sortParam === 'none' || sortParam === 'price_asc' || sortParam === 'price_desc' || sortParam === 'popular' || sortParam === 'newest' || sortParam === 'nearest')) {
+            effectiveSort = sortParam;
+          } else if (sortBy && sortBy !== 'none') {
+            // Use sortBy state if it's set and not 'none'
+            effectiveSort = sortBy;
+          } else if (tab === 'dishes') {
+            // Default to 'nearest' for dishes tab if no sort is specified
+            effectiveSort = 'nearest';
           } else {
+            // Fallback to 'none' for other tabs
+            effectiveSort = 'none';
+          }
+          
+          if (effectiveSort === 'price_asc') {
+            request = request.order('price', { ascending: true });
+          } else if (effectiveSort === 'price_desc') {
+            request = request.order('price', { ascending: false });
+          } else if (effectiveSort === 'popular') {
+            request = request.order('rating', { ascending: false });
+          } else if (effectiveSort === 'newest') {
+            request = request.order('created_at', { ascending: false });
+          } else if (effectiveSort === 'nearest') {
+            // For nearest sort, fetch more dishes to calculate distances
+            // We'll filter by distance client-side after geocoding
+            request = request.order('created_at', { ascending: false });
+            // Fetch more dishes for distance calculation (up to 200)
+            request = request.range(0, 199);
+          } else {
+            // Fallback: always sort by created_at
             request = request.order('created_at', { ascending: false });
           }
 
-          request = request.range(from, to);
+          // Only apply pagination if not using nearest sort (nearest handles pagination after filtering)
+          if (effectiveSort !== 'nearest') {
+            request = request.range(from, to);
+          }
 
           if (maxPrice) {
              request = request.lte('price', maxPrice);
@@ -221,11 +295,126 @@ export default function BrowsePage() {
             request = request.or(searchFilter);
           }
 
-          const { data, error, count } = await request;
+          let { data, error, count } = await request;
           if (cancelled) return;
           if (error) throw error;
-          setDishes((data as any) ?? []);
-          setTotal(count ?? (data?.length ?? 0));
+          
+          // If nearest sort, calculate distances and filter
+          if (effectiveSort === 'nearest' && profile?.location && data && Array.isArray(data) && data.length > 0) {
+            try {
+              console.log('Calculating distances for nearest sort. User location:', profile.location);
+              console.log('Total dishes to process:', data.length);
+              
+              // Geocode user location
+              const { data: userGeoData, error: userGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                body: { address: profile.location },
+              });
+              
+              console.log('User geocoding result:', { userGeoData, userGeoError });
+              
+              if (userGeoError) {
+                console.error('User geocoding error:', userGeoError);
+                setDishes([]);
+                setTotal(0);
+                return;
+              }
+              
+              if (userGeoData?.lat && userGeoData?.lng) {
+                const userLat = userGeoData.lat;
+                const userLng = userGeoData.lng;
+                
+                console.log('User coordinates:', { lat: userLat, lng: userLng });
+                
+                // Helper function to calculate distance using Haversine formula
+                const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+                  const R = 6371; // Earth's radius in km
+                  const dLat = (lat2 - lat1) * Math.PI / 180;
+                  const dLng = (lng2 - lng1) * Math.PI / 180;
+                  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                  return R * c;
+                };
+                
+                // Geocode chef locations and calculate distances
+                const dishesWithDistance = await Promise.all(
+                  (data as any[]).map(async (dish: any) => {
+                    if (!dish.chefs?.location) {
+                      console.log('Dish missing chef location:', dish.id);
+                      return { dish, distance: Infinity };
+                    }
+                    
+                    try {
+                      const { data: chefGeoData, error: chefGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                        body: { address: dish.chefs.location },
+                      });
+                      
+                      if (!chefGeoError && chefGeoData?.lat && chefGeoData?.lng) {
+                        const distance = calculateDistance(userLat, userLng, chefGeoData.lat, chefGeoData.lng);
+                        console.log(`Dish ${dish.id} - Chef location: ${dish.chefs.location}, Distance: ${distance.toFixed(2)}km`);
+                        return { dish, distance };
+                      } else {
+                        console.log('Chef geocoding failed:', { chefLocation: dish.chefs.location, chefGeoError, chefGeoData });
+                      }
+                    } catch (err) {
+                      console.error('Error geocoding chef location:', err, dish.chefs.location);
+                    }
+                    
+                    return { dish, distance: Infinity };
+                  })
+                );
+                
+                // Filter dishes within 50km and sort by distance
+                const nearbyDishes = dishesWithDistance
+                  .filter(({ distance }) => {
+                    const isNearby = distance <= 50;
+                    if (!isNearby) {
+                      console.log(`Dish filtered out - distance: ${distance.toFixed(2)}km`);
+                    }
+                    return isNearby;
+                  })
+                  .sort((a, b) => a.distance - b.distance)
+                  .map(({ dish }) => dish);
+                
+                console.log(`Filtered ${nearbyDishes.length} dishes within 50km out of ${dishesWithDistance.length} total`);
+                
+                // Apply pagination
+                const paginatedDishes = nearbyDishes.slice(from, to + 1);
+                
+                setDishes(paginatedDishes);
+                setTotal(nearbyDishes.length);
+              } else {
+                console.error('Failed to geocode user location:', { userGeoError, userGeoData });
+                // If geocoding fails, don't show any dishes for nearest sort
+                setDishes([]);
+                setTotal(0);
+              }
+            } catch (distError) {
+              console.error('Error calculating distances:', distError);
+              // If error, don't show any dishes for nearest sort
+              setDishes([]);
+              setTotal(0);
+            }
+          } else if (effectiveSort === 'nearest') {
+            // Nearest sort selected but no user location or no data
+            // Only warn if auth has finished loading (to avoid false warnings on page refresh)
+            if (!authLoading) {
+              console.warn('Nearest sort selected but missing requirements:', { 
+                hasProfile: !!profile, 
+                hasLocation: !!profile?.location, 
+                hasData: !!data,
+                authLoading 
+              });
+            }
+            // If no location, show empty list (user should set location)
+            setDishes([]);
+            setTotal(0);
+          } else {
+            // For other sorts, use data as-is
+            setDishes((data as any) ?? []);
+            setTotal(count ?? (data?.length ?? 0));
+          }
         } else if (tab === 'chefs') {
           let request = supabase
             .from('chefs')
@@ -295,7 +484,7 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, page, debouncedQuery, sortBy]);
+  }, [tab, page, debouncedQuery, sortBy, profile?.location, authLoading]);
 
   const go = (next: number) => {
     setPage(Math.max(1, Math.min(totalPages, next)));
@@ -407,6 +596,8 @@ export default function BrowsePage() {
                   <SortIcon size={24} color="#FE734C" />
                   <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
                     {sortBy === 'none' ? 'Sort' :
+                     sortBy === 'newest' ? 'Newest' :
+                     sortBy === 'nearest' ? 'Nearest' :
                      sortBy === 'popular' ? 'Popularity' :
                      sortBy === 'price_asc' ? 'Price low to high' :
                      'Price high to low'}
@@ -415,7 +606,13 @@ export default function BrowsePage() {
 
                 {sortBy !== 'none' && (
                   <TouchableOpacity 
-                    onPress={() => setSortBy('none')}
+                    onPress={() => {
+                      setSortBy('none');
+                      // Update URL to persist sort selection
+                      const currentTab = tab || 'dishes';
+                      const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                      router.push(`/browse?tab=${currentTab}${currentQuery}`);
+                    }}
                     hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                   >
                     <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
@@ -427,6 +624,8 @@ export default function BrowsePage() {
                 <View style={styles.dropdownMenu}>
                   {[
                     { label: 'None', value: 'none' },
+                    { label: 'Newest', value: 'newest' },
+                    { label: 'Nearest', value: 'nearest' },
                     { label: 'Popularity', value: 'popular' },
                     { label: 'Price low to high', value: 'price_asc' },
                     { label: 'Price high to low', value: 'price_desc' },
@@ -437,6 +636,10 @@ export default function BrowsePage() {
                       onPress={() => {
                         setSortBy(opt.value);
                         setShowSortMenu(false);
+                        // Update URL to persist sort selection
+                        const currentTab = tab || 'dishes';
+                        const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                        router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
                       }}
                     >
                       <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
@@ -457,7 +660,26 @@ export default function BrowsePage() {
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
         ) : list.length === 0 ? (
-          <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
+          tab === 'dishes' ? (
+            <View style={styles.emptyStateContainer}>
+              <Text style={styles.emptyStateTitle}>No chefs nearby (yet!)</Text>
+              <Text style={styles.emptyStateSubtitle}>Try another area or check back soon.</Text>
+              <TouchableOpacity
+                style={styles.changeLocationButton}
+                onPress={() => setShowLocationModal(true)}
+              >
+                <Text style={styles.changeLocationButtonText}>Change location</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={styles.browseAllButton}
+                onPress={() => router.push('/browse?tab=chefs')}
+              >
+                <Text style={styles.browseAllButtonText}>Browse all chefs</Text>
+              </TouchableOpacity>
+            </View>
+          ) : (
+            <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
+          )
         ) : tab === 'dishes' ? (
           <View style={styles.grid}>
             {dishes.map((dish) => (
@@ -840,6 +1062,68 @@ const styles = StyleSheet.create({
     height: 24,
     resizeMode: 'contain',
     tintColor: '#FE734C',
+  },
+  emptyStateContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    padding: 32,
+  },
+  emptyStateTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#101828',
+    marginBottom: 8,
+    textAlign: 'center',
+  },
+  emptyStateSubtitle: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 24,
+    textAlign: 'center',
+  },
+  changeLocationButton: {
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    marginBottom: 12,
+    minWidth: 200,
+  },
+  changeLocationButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  browseAllButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 200,
+  },
+  browseAllButtonText: {
+    color: PRIMARY_COLOR,
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  exploreButton: {
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    minWidth: 200,
+    marginTop: 8,
+  },
+  exploreButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    textAlign: 'center',
   },
   micIconImage: {
     width: 24,

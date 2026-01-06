@@ -12,6 +12,7 @@ import { formatCad } from "../../lib/money";
 export default function DishCard({ dish, style, chefNameColor, ratingColor, priceColor }: { dish: any; style?: StyleProp<ViewStyle>; chefNameColor?: string; ratingColor?: string; priceColor?: string }) {
   const [avg, setAvg] = useState(0);
   const { addToCart } = useCart();
+  const [quantity, setQuantity] = useState(1);
   const chefName = dish.chefs?.name || dish.chef;
 
   useEffect(() => {
@@ -38,18 +39,32 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
           {avg > 0 && <View style={{ marginTop: 2 }}><Stars value={toNumber(avg, 0)} size={16} color={ratingColor} /></View>}
         </View>
         <View style={styles.footer}>
-        <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
-          {formatCad(dish.price)}
-        </Text>
-        <Button
-            title="Add"
-          variant="primary"
-          size="sm"
-          onPress={() => addToCart({
-            id: dish.id, name: dish.name, price: Number(dish.price||0), quantity: 1, image: dish.image, chef_id: dish.chef_id
-          })}
-          style={styles.button}
-        />
+          <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
+            {formatCad(dish.price)}
+          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <View style={styles.quantityControl}>
+              <TouchableOpacity onPress={() => setQuantity(q => Math.max(1, q - 1))} style={styles.quantityBtn}>
+                <Text style={styles.quantityBtnText}>-</Text>
+              </TouchableOpacity>
+              <Text style={styles.quantityText}>{quantity}</Text>
+              <TouchableOpacity onPress={() => setQuantity(q => q + 1)} style={styles.quantityBtn}>
+                <Text style={styles.quantityBtnText}>+</Text>
+              </TouchableOpacity>
+            </View>
+            <Button
+              title="Add"
+              variant="primary"
+              size="sm"
+              onPress={() => {
+                addToCart({
+                  id: dish.id, name: dish.name, price: Number(dish.price || 0), quantity: quantity, image: dish.image, chef_id: dish.chef_id
+                });
+                setQuantity(1);
+              }}
+              style={styles.button}
+            />
+          </View>
         </View>
       </View>
     </View>
@@ -110,6 +125,32 @@ const styles = StyleSheet.create({
   },
   button: {
     marginTop: 0,
-    minWidth: 70,
+    minWidth: 60,
+  },
+  quantityControl: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F2F2F2',
+    borderRadius: 8,
+    height: 32,
+  },
+  quantityBtn: {
+    width: 28,
+    height: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primary,
+  },
+  quantityText: {
+    fontSize: 14,
+    fontWeight: '600',
+    paddingHorizontal: 4,
+    minWidth: 20,
+    textAlign: 'center',
+    color: '#333',
   },
 });

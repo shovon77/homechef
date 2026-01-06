@@ -5,6 +5,7 @@ import { supabase } from '../lib/supabase';
 type LocationPickerProps = {
   value: string;
   onChange: (location: string) => void;
+  onPlaceSelect?: (placeId: string, description: string) => void;
   placeholder?: string;
   style?: any;
   onFocus?: () => void;
@@ -20,7 +21,7 @@ type PlacePrediction = {
   };
 };
 
-export default function LocationPicker({ value, onChange, placeholder = "Search for a location...", style, onFocus, onBlur }: LocationPickerProps) {
+export default function LocationPicker({ value, onChange, onPlaceSelect, placeholder = "Search for a location...", style, onFocus, onBlur }: LocationPickerProps) {
   const [query, setQuery] = useState(value || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -28,11 +29,15 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
   const [isFocused, setIsFocused] = useState(false);
   const isFocusedRef = useRef(false);
   const debounceTimer = useRef<NodeJS.Timeout | null>(null);
+  const selectingRef = useRef(false);
 
   useEffect(() => {
     // Update query when value prop changes from parent
     // This ensures the input displays the correct value when parent updates it
-    setQuery(value || '');
+    // Only update if not currently selecting to avoid conflicts
+    if (!selectingRef.current) {
+      setQuery(value || '');
+    }
   }, [value]);
 
   useEffect(() => {
@@ -81,10 +86,11 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
         // Handle different response formats
         if (data?.predictions && Array.isArray(data.predictions) && data.predictions.length > 0) {
           setPredictions(data.predictions);
-          // Only show suggestions if input is focused and user has typed something
-          if (isFocusedRef.current && query.trim()) {
+          // Show suggestions if input is focused and user has typed something
+          // Don't check selectingRef here as we want to show suggestions while typing
+          if (isFocusedRef.current && query.trim() && !selectingRef.current) {
             setShowSuggestions(true);
-          } else {
+          } else if (!isFocusedRef.current || selectingRef.current) {
             setShowSuggestions(false);
           }
         } else if (data?.status && data.status !== 'OK') {
@@ -115,17 +121,37 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
   }, [query]);
 
   const handleSelectPlace = (prediction: PlacePrediction) => {
+    selectingRef.current = true;
     const selectedValue = prediction.description;
-    // Close suggestions first
+    // Update internal query state immediately so it shows in the input
+    setQuery(selectedValue);
+    // Close suggestions immediately
     setShowSuggestions(false);
     setPredictions([]);
     // Call onChange to update parent, which will update value prop
     onChange(selectedValue);
-    // Update internal query state to match
-    setQuery(selectedValue);
+    // Call onPlaceSelect if provided to pass place_id (async, don't wait)
+    if (onPlaceSelect) {
+      // Use setTimeout to ensure this doesn't block the UI update
+      setTimeout(() => {
+        onPlaceSelect(prediction.place_id, selectedValue);
+        // Reset selecting flag after a short delay to allow value prop to sync
+        setTimeout(() => {
+          selectingRef.current = false;
+        }, 100);
+      }, 0);
+    } else {
+      setTimeout(() => {
+        selectingRef.current = false;
+      }, 100);
+    }
   };
 
   const handleInputChange = (text: string) => {
+    // Reset selectingRef when user starts typing (manual input)
+    if (selectingRef.current) {
+      selectingRef.current = false;
+    }
     setQuery(text);
     // Always notify parent when input changes so "Save" button can appear
     onChange(text);
@@ -134,12 +160,14 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
   const handleBlur = () => {
     // Delay hiding suggestions to allow for selection
     setTimeout(() => {
-      setShowSuggestions(false);
+      if (!isFocusedRef.current && !selectingRef.current) {
+        setShowSuggestions(false);
+      }
     }, 200);
   };
 
   return (
-    <View style={[styles.container, showSuggestions && predictions.length > 0 && styles.containerWithSuggestions, style]}>
+    <View style={[styles.container, showSuggestions && predictions.length > 0 && styles.containerWithSuggestions, style]} pointerEvents="box-none">
       <View style={styles.inputContainer}>
         <TextInput
           style={styles.input}
@@ -150,7 +178,11 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
           onFocus={() => {
             setIsFocused(true);
             isFocusedRef.current = true;
-            // Only show suggestions if there are predictions and user has typed something
+            // Show suggestions if there are predictions and user has typed something
+            // Reset selectingRef in case it got stuck
+            if (selectingRef.current) {
+              selectingRef.current = false;
+            }
             if (predictions.length > 0 && query.trim()) {
               setShowSuggestions(true);
             }
@@ -168,33 +200,32 @@ export default function LocationPicker({ value, onChange, placeholder = "Search 
             <ActivityIndicator size="small" color="#3E6A55" />
           </View>
         )}
-      </View>
-      
-      {showSuggestions && predictions.length > 0 && (
-        <View style={styles.suggestionsContainer}>
-          <FlatList
-            data={predictions}
-            keyExtractor={(item) => item.place_id}
-            renderItem={({ item }) => (
-              <TouchableOpacity
-                style={styles.suggestionItem}
-                onPress={() => handleSelectPlace(item)}
-              >
-                <Text style={styles.suggestionMainText}>
-                  {item.structured_formatting?.main_text || item.description}
-                </Text>
-                {item.structured_formatting?.secondary_text && (
-                  <Text style={styles.suggestionSecondaryText}>
-                    {item.structured_formatting.secondary_text}
+        {showSuggestions && predictions.length > 0 && (
+          <View style={styles.suggestionsContainer}>
+            <FlatList
+              data={predictions}
+              keyExtractor={(item) => item.place_id}
+              renderItem={({ item }) => (
+                <TouchableOpacity
+                  style={styles.suggestionItem}
+                  onPress={() => handleSelectPlace(item)}
+                >
+                  <Text style={styles.suggestionMainText}>
+                    {item.structured_formatting?.main_text || item.description}
                   </Text>
-                )}
-              </TouchableOpacity>
-            )}
-            nestedScrollEnabled
-            keyboardShouldPersistTaps="handled"
-          />
-        </View>
-      )}
+                  {item.structured_formatting?.secondary_text && (
+                    <Text style={styles.suggestionSecondaryText}>
+                      {item.structured_formatting.secondary_text}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+              )}
+              nestedScrollEnabled
+              keyboardShouldPersistTaps="handled"
+            />
+          </View>
+        )}
+      </View>
     </View>
   );
 }
@@ -205,10 +236,10 @@ const styles = StyleSheet.create({
     zIndex: 1,
     ...Platform.select({
       web: {
-        zIndex: 100,
+        zIndex: 10000,
       },
       default: {
-        zIndex: 100,
+        zIndex: 10000,
       },
     }),
   },
@@ -217,6 +248,7 @@ const styles = StyleSheet.create({
   },
   inputContainer: {
     position: 'relative',
+    zIndex: 1,
   },
   input: {
     borderWidth: 1,
@@ -250,11 +282,11 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1), 0 2px 4px -1px rgba(0, 0, 0, 0.06)',
-        zIndex: 9999,
+        zIndex: 99999,
       },
       default: {
-        elevation: 10,
-        zIndex: 9999,
+        elevation: 50,
+        zIndex: 99999,
       },
     }),
   },
@@ -262,6 +294,7 @@ const styles = StyleSheet.create({
     padding: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
   },
   suggestionMainText: {
     fontSize: 16,

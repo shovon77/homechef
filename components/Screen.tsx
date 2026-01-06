@@ -35,8 +35,12 @@ export default function Screen({
 
   return (
     <View style={baseStyle}>
+      {!noHeader && (
+        <View style={{ zIndex: 100 }}>
+          <NavBar />
+        </View>
+      )}
       <ScrollView contentContainerStyle={[{ flexGrow: 1 }, scrollViewContentStyle]}>
-        {!noHeader && <NavBar />}
         <View style={content}>
           {children}
         </View>

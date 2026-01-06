@@ -9,6 +9,7 @@ import NavBar from '../components/NavBar';
 import Footer from '../components/Footer';
 import { CartProvider } from '../context/CartContext';
 import { AuthProvider } from '../context/AuthContext';
+import { LocationModalProvider } from '../context/LocationModalContext';
 import { redirectAfterLogin } from '../lib/authRedirect';
 import { 
   useFonts, 
@@ -48,9 +49,11 @@ export default function RootLayout() {
   return (
     <AuthProvider>
       <CartProvider>
-        <View style={{ flex: 1, backgroundColor: 'white' }}>
-          <Stack screenOptions={{ headerShown: false }} />
-        </View>
+        <LocationModalProvider>
+          <View style={{ flex: 1, backgroundColor: 'white' }}>
+            <Stack screenOptions={{ headerShown: false }} />
+          </View>
+        </LocationModalProvider>
       </CartProvider>
     </AuthProvider>
   );

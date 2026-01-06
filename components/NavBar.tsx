@@ -1,11 +1,12 @@
 // components/NavBar.tsx
 'use client'
 import React, { useEffect, useState } from 'react'
-import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView } from 'react-native'
+import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native'
 import { Link, useRouter, usePathname } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { useRole } from '../hooks/useRole'
 import { useCart } from '../context/CartContext'
+import { useLocationModal } from '../context/LocationModalContext'
 import { NAVBAR_HEIGHT } from '../constants/layout'
 import { theme } from '../lib/theme'
 import { getProfile } from '../lib/db'
@@ -128,8 +129,9 @@ export default function NavBar() {
   const router = useRouter()
   const { width } = useWindowDimensions()
   const isMobile = width < 768
-  const { isAdmin, isChef, user, profile } = useRole()
+  const { isAdmin, isChef, user, profile, refreshRole } = useRole()
   const { items } = useCart()
+  const { showLocationModal, setShowLocationModal } = useLocationModal()
   const loggedIn = !!user
   const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
   const pathname = usePathname?.() || '';
@@ -140,10 +142,15 @@ export default function NavBar() {
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
-  const [showLocationModal, setShowLocationModal] = useState(false)
+  const [locationView, setLocationView] = useState<'default' | 'manual_form'>('default')
   const [location, setLocation] = useState("")
   const [currentLocation, setCurrentLocation] = useState("")
   const [manualInputLocation, setManualInputLocation] = useState("")
+  
+  // Manual form state
+  const [streetAddress, setStreetAddress] = useState("")
+  const [postalCode, setPostalCode] = useState("")
+
   const [savingLocation, setSavingLocation] = useState(false)
   const [isLocationInputFocused, setIsLocationInputFocused] = useState(false)
   const [gettingLocation, setGettingLocation] = useState(false)
@@ -204,6 +211,9 @@ export default function NavBar() {
   useEffect(() => {
     if (showLocationModal && user) {
       loadLocation();
+      setLocationView('default');
+      setStreetAddress("");
+      setPostalCode("");
     }
   }, [showLocationModal, user]);
 
@@ -297,6 +307,146 @@ export default function NavBar() {
     }
   }
 
+  async function handlePlaceSelect(placeId: string, description: string) {
+    console.log('handlePlaceSelect called with:', { placeId, description });
+    
+    // Update street address immediately
+    setStreetAddress(description);
+    
+    // Try to extract postal code - first try regex, then geocoding
+    try {
+      // First, try to extract postal code from description using improved regex patterns
+      // Canadian postal code: A1A 1A1 or A1A1A1
+      // US ZIP code: 12345 or 12345-6789
+      // UK postcode: SW1A 1AA or SW1A1AA
+      const patterns = [
+        /\b([A-Z]\d[A-Z]\s?\d[A-Z]\d)\b/i,  // Canadian: A1A 1A1
+        /\b(\d{5}(-\d{4})?)\b/,              // US: 12345 or 12345-6789
+        /\b([A-Z]{1,2}\d{1,2}[A-Z]?\s?\d[A-Z]{2})\b/i, // UK: SW1A 1AA
+      ];
+      
+      for (const pattern of patterns) {
+        const match = description.match(pattern);
+        if (match) {
+          const extractedPostalCode = match[1].toUpperCase().replace(/\s/g, '');
+          console.log('Extracted postal code from description:', extractedPostalCode);
+          setPostalCode(extractedPostalCode);
+          return;
+        }
+      }
+      
+      // If not found in description, try geocoding to get full address components
+      console.log('Postal code not in description, trying geocoding for:', description);
+      
+      try {
+        // Use forward geocoding to get coordinates
+        const { data: geoData, error: geoError } = await supabase.functions.invoke('google-geocode-forward', {
+          body: { address: description },
+        });
+
+        if (geoError) {
+          console.error('Geocoding error:', geoError);
+          // Don't set postal code to empty, let user enter manually
+          return;
+        }
+
+        if (geoData?.lat && geoData?.lng) {
+          // Use reverse geocoding to get full address components with postal code
+          const { data: reverseGeoData, error: reverseGeoError } = await supabase.functions.invoke('google-geocode', {
+            body: { lat: geoData.lat, lng: geoData.lng },
+          });
+
+        if (!reverseGeoError && reverseGeoData?.results && reverseGeoData.results.length > 0) {
+            const addressComponents = reverseGeoData.results[0].address_components || [];
+            console.log('Address components from reverse geocoding:', addressComponents);
+            
+            // Look for postal_code in address components
+            const postalCodeComponent = addressComponents.find(
+              (component: any) => component.types && component.types.includes('postal_code')
+            );
+            
+            if (postalCodeComponent) {
+              const postalCode = postalCodeComponent.long_name || postalCodeComponent.short_name || "";
+              console.log('Found postal code from geocoding:', postalCode);
+              setPostalCode(postalCode);
+              return;
+            }
+          }
+        }
+      } catch (geoErr) {
+        console.error('Geocoding function error:', geoErr);
+        // If geocoding fails, postal code will remain empty for manual entry
+      }
+      
+      // If all methods fail, leave postal code empty (user can enter manually)
+      console.log('No postal code found using any method');
+    } catch (err) {
+      console.error("Error getting postal code:", err);
+    }
+  }
+
+  function handleStreetAddressChange(value: string) {
+    // Only update if the value is different to avoid unnecessary re-renders
+    // This prevents clearing the value when onPlaceSelect updates it
+    if (value !== streetAddress) {
+      setStreetAddress(value);
+      // Only clear postal code if the address is being cleared or manually edited
+      // Don't clear if it's being set from a place selection (that will be handled by handlePlaceSelect)
+      if (!value.trim()) {
+        setPostalCode("");
+      }
+      // Note: We don't clear postal code when value changes because handlePlaceSelect
+      // will be called separately to update it when a place is selected
+    }
+  }
+
+  async function handleSaveManualForm() {
+    if (!user) {
+      Alert.alert("Error", "Please log in to save your location.");
+      return;
+    }
+
+    if (!streetAddress.trim()) {
+      Alert.alert("Error", "Please enter a street address.");
+      return;
+    }
+
+    const fullAddress = postalCode.trim() 
+      ? `${streetAddress.trim()}, ${postalCode.trim()}`
+      : streetAddress.trim();
+    
+    setSavingLocation(true);
+    try {
+      const { error } = await supabase
+        .from("profiles")
+        .update({ location: fullAddress })
+        .eq("id", user.id);
+
+      if (error) {
+        throw new Error(error.message || "Failed to update location");
+      }
+
+      // Update all location-related state
+      setLocation(fullAddress);
+      setCurrentLocation(fullAddress);
+      setManualInputLocation(fullAddress);
+      
+      // Refresh profile to update navbar immediately
+      await refreshRole();
+      
+      // Close the modal
+      setShowLocationModal(false);
+      
+      // Navigate to browse page with dishes tab and nearest sort
+      router.push('/browse?tab=dishes&sort=nearest');
+    } catch (e: any) {
+      console.error("Error saving location:", e);
+      Alert.alert("Error", e.message || "Failed to save location. Please try again.");
+    } finally {
+      setSavingLocation(false);
+    }
+  }
+
   async function handleEnableLocation() {
     if (!navigator.geolocation) {
       Alert.alert("Error", "Geolocation is not supported by your browser.");
@@ -339,14 +489,22 @@ export default function NavBar() {
               
               if (saveError) {
                 console.error("Error auto-saving location:", saveError);
+                Alert.alert("Error", "Failed to save location. Please try again.");
               } else {
                 setLocation(address);
+                setCurrentLocation(address);
+                // Refresh profile to update navbar immediately
+                await refreshRole();
+                setShowLocationModal(false);
+                Alert.alert("Success", "Location detected and saved successfully!");
               }
             } catch (saveErr: any) {
               console.error("Error auto-saving location:", saveErr);
+              Alert.alert("Error", "Failed to save location. Please try again.");
             }
+          } else {
+            Alert.alert("Success", "Location detected and saved successfully!");
           }
-          Alert.alert("Success", "Location detected and saved successfully!");
         } else {
           throw new Error("No address found for this location");
         }
@@ -365,14 +523,22 @@ export default function NavBar() {
             
             if (saveError) {
               console.error("Error auto-saving location:", saveError);
+              Alert.alert("Error", "Failed to save location. Please try again.");
             } else {
               setLocation(fallbackAddress);
+              setCurrentLocation(fallbackAddress);
+              // Refresh profile to update navbar immediately
+              await refreshRole();
+              setShowLocationModal(false);
+              Alert.alert("Partial Success", "Location detected but couldn't get full address. You can edit it manually.");
             }
           } catch (saveErr: any) {
             console.error("Error auto-saving location:", saveErr);
+            Alert.alert("Error", "Failed to save location. Please try again.");
           }
+        } else {
+          Alert.alert("Partial Success", "Location detected but couldn't get full address. You can edit it manually.");
         }
-        Alert.alert("Partial Success", "Location detected but couldn't get full address. You can edit it manually.");
       }
     } catch (error: any) {
       console.error("Error getting location:", error);
@@ -626,8 +792,9 @@ export default function NavBar() {
           <View style={styles.modalContent}>
             <View style={styles.modalHeader}>
               <View style={styles.modalTitleContainer}>
-                <Text style={styles.modalTitle}>Find food near you!</Text>
-                <Text style={styles.modalSubtitle}>Your location helps show nearby chefs & pickups.</Text>
+                <Text style={styles.modalTitle}>
+                  {locationView === 'manual_form' ? 'Enter your location' : 'Find food near you!'}
+                </Text>
               </View>
               <TouchableOpacity
                 onPress={() => {
@@ -641,64 +808,85 @@ export default function NavBar() {
             </View>
             <ScrollView 
               style={styles.modalBody}
-              contentContainerStyle={styles.modalBodyContent}
+              contentContainerStyle={locationView === 'default' ? {} : styles.modalBodyContent}
               keyboardShouldPersistTaps="handled"
             >
-              {currentLocation ? (
-                <View style={styles.currentLocationContainer}>
-                  <Text style={styles.currentLocationLabel}>Current location:</Text>
-                  <Text style={styles.currentLocationText}>{currentLocation}</Text>
-                </View>
-              ) : null}
-              <Text style={styles.locationInputTitle}>Enter location manually</Text>
-              <LocationPicker
-                value={manualInputLocation || ""}
-                onChange={handleLocationChange}
-                placeholder="Search"
-                style={styles.locationPicker}
-                onFocus={() => setIsLocationInputFocused(true)}
-                onBlur={() => setIsLocationInputFocused(false)}
-              />
-            </ScrollView>
-            {(selectedLocation || !isLocationInputFocused) && (
-              <View style={styles.modalFooter}>
-                {selectedLocation ? (
+              {locationView === 'default' ? null : (
+                <View style={styles.manualFormContainer}>
+                  <View style={[styles.inputGroup, { zIndex: 10000 }]}>
+                    <Text style={styles.inputLabel}>Street Address</Text>
+                    <LocationPicker
+                      value={streetAddress}
+                      onChange={handleStreetAddressChange}
+                      onPlaceSelect={handlePlaceSelect}
+                      placeholder="Search for your address..."
+                      style={[styles.locationPicker, { zIndex: 10000 }]}
+                    />
+                  </View>
+                  <View style={styles.inputGroup}>
+                    <Text style={styles.inputLabel}>Postal Code</Text>
+                    <TextInput
+                      style={styles.manualInput}
+                      value={postalCode}
+                      onChangeText={setPostalCode}
+                      placeholder="Enter postal code"
+                      placeholderTextColor="#9CA3AF"
+                    />
+                  </View>
+                  
                   <TouchableOpacity
-                    style={[styles.saveLocationButton, savingLocation && styles.saveLocationButtonDisabled]}
-                    onPress={handleSaveSelectedLocation}
+                    style={styles.showFoodButton}
+                    onPress={handleSaveManualForm}
                     disabled={savingLocation}
                   >
-                    {savingLocation ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={styles.saveLocationButtonText}>Save</Text>
-                    )}
-                  </TouchableOpacity>
-                ) : (
-                  <>
-                    <TouchableOpacity
-                      style={[styles.enableLocationButton, gettingLocation && styles.enableLocationButtonDisabled]}
-                      onPress={handleEnableLocation}
-                      disabled={gettingLocation}
-                    >
-                      {gettingLocation ? (
+                     {savingLocation ? (
                         <ActivityIndicator size="small" color="#FFFFFF" />
                       ) : (
-                        <Text style={styles.enableLocationButtonText}>Enable location</Text>
+                        <Text style={styles.showFoodButtonText}>Show food nearby</Text>
                       )}
-                    </TouchableOpacity>
-                    <TouchableOpacity
-                      style={styles.dontAllowButton}
-                      onPress={() => {
-                        setShowLocationModal(false);
-                        setIsLocationInputFocused(false);
-                      }}
-                    >
-                      <Text style={styles.dontAllowButtonText}>Don't allow</Text>
-                    </TouchableOpacity>
-                  </>
-                )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity
+                    style={styles.useCurrentLocationLink}
+                    onPress={handleEnableLocation}
+                  >
+                    <Text style={styles.useCurrentLocationLinkText}>Use my current location instead</Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+            </ScrollView>
+            {locationView === 'default' && (
+              <View style={styles.modalFooter}>
+                <TouchableOpacity
+                  style={[styles.enableLocationButton, gettingLocation && styles.enableLocationButtonDisabled]}
+                  onPress={handleEnableLocation}
+                  disabled={gettingLocation}
+                >
+                  {gettingLocation ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={styles.enableLocationButtonText}>Enable location</Text>
+                  )}
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.manualEntryButton}
+                  onPress={() => setLocationView('manual_form')}
+                >
+                  <Text style={styles.manualEntryButtonText}>Enter location manually</Text>
+                </TouchableOpacity>
               </View>
+            )}
+            
+            {locationView === 'default' && (
+              <TouchableOpacity
+                style={styles.dontAllowButtonLink}
+                onPress={() => {
+                  setShowLocationModal(false);
+                  setIsLocationInputFocused(false);
+                }}
+              >
+                <Text style={styles.dontAllowButtonLinkText}>Don't allow</Text>
+              </TouchableOpacity>
             )}
           </View>
         </View>
@@ -995,13 +1183,13 @@ const styles = StyleSheet.create({
   modalTitle: {
     fontSize: theme.typography.fontSize.xl,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: theme.typography.fontFamily.display,
     color: TEXT_DARK,
     marginBottom: theme.spacing.xs,
   },
   modalSubtitle: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'OpenSans_400Regular',
+    fontFamily: theme.typography.fontFamily.body,
     color: PRIMARY_COLOR,
     lineHeight: theme.typography.fontSize.sm * 1.4,
   },
@@ -1031,13 +1219,13 @@ const styles = StyleSheet.create({
   },
   currentLocationLabel: {
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'OpenSans_400Regular',
+    fontFamily: theme.typography.fontFamily.body,
     color: '#33393A',
     marginBottom: theme.spacing.xs,
   },
   currentLocationText: {
     fontSize: theme.typography.fontSize.base,
-    fontFamily: 'OpenSans_400Regular',
+    fontFamily: theme.typography.fontFamily.body,
     color: PRIMARY_COLOR,
     lineHeight: theme.typography.fontSize.base * 1.4,
   },
@@ -1049,8 +1237,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
     backgroundColor: PRIMARY_COLOR,
-    flex: 1,
-    minWidth: 150,
+    width: '100%',
   },
   enableLocationButtonDisabled: {
     opacity: 0.6,
@@ -1059,21 +1246,101 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: theme.typography.fontFamily.display,
   },
   locationInputTitle: {
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: theme.typography.fontFamily.display,
     color: TEXT_DARK,
     marginBottom: theme.spacing.sm,
     paddingLeft: 16,
+  },
+  manualEntryButton: {
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+  },
+  manualEntryButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  dontAllowButtonLink: {
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    alignItems: 'center',
+    alignSelf: 'center',
+    marginBottom: theme.spacing.md,
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
+    borderRadius: theme.radius.lg,
+  },
+  dontAllowButtonLinkText: {
+    color: '#9CA3AF',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: '600' as any,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  manualFormContainer: {
+    gap: 16,
+  },
+  inputGroup: {
+    gap: 6,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600' as any,
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  manualInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: 8,
+    padding: 12,
+    fontSize: 16,
+    color: TEXT_DARK,
+    backgroundColor: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  showFoodButton: {
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 14,
+    borderRadius: 8,
+    alignItems: 'center',
+    marginTop: 8,
+    alignSelf: 'center',
+    paddingHorizontal: 24,
+    minWidth: 200,
+    maxWidth: 250,
+  },
+  showFoodButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700' as any,
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  useCurrentLocationLink: {
+    paddingVertical: 12,
+    alignItems: 'center',
+  },
+  useCurrentLocationLinkText: {
+    color: PRIMARY_COLOR,
+    fontSize: 14,
+    fontWeight: '600' as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   locationPicker: {
     marginBottom: theme.spacing.sm,
   },
   modalFooter: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     justifyContent: 'center',
     padding: theme.spacing.xl,
     borderTopWidth: 1,
@@ -1094,7 +1361,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: theme.typography.fontFamily.display,
   },
   saveLocationButton: {
     flexDirection: 'row',
@@ -1114,6 +1381,6 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: theme.typography.fontFamily.display,
   },
 })
