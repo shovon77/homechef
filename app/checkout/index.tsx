@@ -28,6 +28,7 @@ export default function CheckoutPage() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [chefName, setChefName] = useState<string | null>(null);
+  const [chefLocation, setChefLocation] = useState<string | null>(null);
   const [dateInput, setDateInput] = useState('');
   const [timeInput, setTimeInput] = useState('');
   const [submitting, setSubmitting] = useState(false);
@@ -38,9 +39,13 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (cartChefId) {
-      getChefById(cartChefId).then(chef => setChefName(chef?.name ?? null));
+      getChefById(cartChefId).then(chef => {
+        setChefName(chef?.name ?? null);
+        setChefLocation(chef?.location ?? null);
+      });
     } else {
       setChefName(null);
+      setChefLocation(null);
     }
   }, [cartChefId]);
 
@@ -323,6 +328,38 @@ export default function CheckoutPage() {
             >
               <Text style={styles.dateTimePickerButtonText}>Date/Time</Text>
                 </TouchableOpacity>
+          </View>
+
+          <View style={styles.pickupLocationRow}>
+            <Text style={styles.pickupLocationLabel}>Pickup location</Text>
+            <View style={styles.pickupLocationValueContainer}>
+              {chefLocation ? (
+                (() => {
+                  // Parse location string - format: "Street Address, City, Province/Postal Code"
+                  const parts = chefLocation.split(',').map(p => p.trim());
+                  const streetAddress = parts[0] || '';
+                  const city = parts[1] || '';
+                  const remaining = parts.slice(2).join(', ') || '';
+                  
+                  // First line: Street Address, City
+                  // Second line: Remaining (province/postal code)
+                  const firstLine = [streetAddress, city].filter(Boolean).join(', ');
+                  const secondLine = remaining;
+                  
+                  return (
+                    <>
+                      {firstLine && <Text style={styles.pickupLocationValue}>{firstLine}</Text>}
+                      {secondLine && <Text style={styles.pickupLocationValue}>{secondLine}</Text>}
+                      {!firstLine && !secondLine && (
+                        <Text style={styles.pickupLocationValue}>{chefLocation}</Text>
+                      )}
+                    </>
+                  );
+                })()
+              ) : (
+                <Text style={styles.pickupLocationValue}>Location not available</Text>
+              )}
+            </View>
           </View>
 
           {/* Display selected date and time */}
@@ -791,5 +828,29 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'OpenSans_400Regular',
+  },
+  pickupLocationRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingTop: 8,
+    borderTopWidth: 1,
+    borderTopColor: BORDER,
+  },
+  pickupLocationLabel: {
+    color: TEXT_DARK,
+    fontSize: 18,
+    fontWeight: '800' as any,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  pickupLocationValueContainer: {
+    flex: 1,
+    alignItems: 'flex-end',
+  },
+  pickupLocationValue: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'OpenSans_400Regular',
+    textAlign: 'right',
   },
 });
