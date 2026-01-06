@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState, useRef } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image, Animated } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image, Animated, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
@@ -90,6 +90,10 @@ export default function BrowsePage() {
   })();
   
   const [sortBy, setSortBy] = useState(initialSort);
+  const [showSortMenu, setShowSortMenu] = useState(false);
+  const sortMenuRef = useRef<View>(null);
+  const sortButtonRef = useRef<View>(null);
+  const [dropdownPosition, setDropdownPosition] = useState({ top: 0, right: 0 });
 
   useEffect(() => {
     const t = Array.isArray(paramTab) ? paramTab[0] : paramTab;
@@ -108,6 +112,49 @@ export default function BrowsePage() {
       setSortBy(currentTab === 'dishes' ? 'nearest' : 'none');
     }
   }, [paramSort, tab]);
+
+  // Calculate dropdown position when menu opens (web only)
+  useEffect(() => {
+    if (showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
+      // @ts-ignore - web-specific
+      const button = sortButtonRef.current as any;
+      if (button && typeof button.getBoundingClientRect === 'function') {
+        const rect = button.getBoundingClientRect();
+        setDropdownPosition({
+          top: rect.bottom + 8,
+          right: window.innerWidth - rect.right,
+        });
+      }
+    }
+  }, [showSortMenu]);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    if (!showSortMenu) return;
+
+    const handleClickOutside = (event: any) => {
+      if (sortMenuRef.current && sortButtonRef.current) {
+        // @ts-ignore - web-specific
+        const menuNode = sortMenuRef.current as any;
+        const buttonNode = sortButtonRef.current as any;
+        if (menuNode && buttonNode && 
+            !menuNode.contains?.(event.target) && 
+            !buttonNode.contains?.(event.target)) {
+          setShowSortMenu(false);
+        }
+      }
+    };
+
+    if (Platform.OS === 'web') {
+      // Use a small delay to avoid immediate closure
+      setTimeout(() => {
+        document.addEventListener('mousedown', handleClickOutside);
+      }, 0);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+      };
+    }
+  }, [showSortMenu]);
   
   // Ensure "nearest" sort is applied when dishes tab is active and no sort is specified in URL
   // Only set if sortBy is 'none' or undefined to allow user to change it
@@ -129,7 +176,6 @@ export default function BrowsePage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 800);
-  const [showSortMenu, setShowSortMenu] = useState(false);
 
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -550,6 +596,47 @@ export default function BrowsePage() {
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
+      {/* Render dropdown outside ScrollView for proper z-index */}
+      {showSortMenu && Platform.OS === 'web' && (
+        <View 
+          ref={sortMenuRef} 
+          style={[
+            styles.dropdownMenu,
+            {
+              top: dropdownPosition.top,
+              right: dropdownPosition.right,
+            }
+          ]}
+          // @ts-ignore - web-specific
+          onClick={(e: any) => e.stopPropagation()}
+        >
+          {[
+            { label: 'None', value: 'none' },
+            { label: 'Newest', value: 'newest' },
+            { label: 'Nearest', value: 'nearest' },
+            { label: 'Popularity', value: 'popular' },
+            { label: 'Price low to high', value: 'price_asc' },
+            { label: 'Price high to low', value: 'price_desc' },
+          ].map((opt) => (
+            <Pressable
+              key={opt.value}
+              style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
+              onPress={(e) => {
+                e.stopPropagation();
+                setSortBy(opt.value);
+                setShowSortMenu(false);
+                const currentTab = tab || 'dishes';
+                const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+              }}
+            >
+              <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
+                {opt.label}
+              </Text>
+            </Pressable>
+          ))}
+        </View>
+      )}
       <Screen 
         contentStyle={{ paddingHorizontal: 24, paddingTop: 24 }}
         style={{ backgroundColor: '#F2F0EF' }}
@@ -563,7 +650,7 @@ export default function BrowsePage() {
           <Text style={styles.subtitle}>Find your next favorite homemade dish</Text>
         </View>
 
-        <View style={styles.tabs}>
+        <View style={[styles.tabs, { overflow: 'visible' }]}>
           <Pressable
             onPress={() => setTab('dishes')}
             style={[styles.tab, styles.tabSpacing, tab === 'dishes' && styles.tabActive]}
@@ -578,29 +665,27 @@ export default function BrowsePage() {
           </Pressable>
           <Pressable
             onPress={() => setTab('cuisines')}
-            style={[styles.tab, tab === 'cuisines' && styles.tabActive]}
+            style={[styles.tab, styles.tabSpacing, tab === 'cuisines' && styles.tabActive]}
           >
             <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
           </Pressable>
-        </View>
-
-        {tab === 'dishes' && (
-          <View style={[styles.sortContainer, { zIndex: 10 }]}>
-            <View style={{ position: 'relative' }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          
+          {tab === 'dishes' && (
+            <View style={{ position: 'relative', marginLeft: 10, flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
+              <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                 <TouchableOpacity 
                   activeOpacity={0.7}
                   onPress={() => setShowSortMenu(!showSortMenu)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}
                 >
-                  <SortIcon size={24} color="#FE734C" />
-                  <Text style={{ fontSize: 14, fontWeight: '600', color: '#475569' }}>
+                  <SortIcon size={20} color="#FE734C" />
+                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
                     {sortBy === 'none' ? 'Sort' :
                      sortBy === 'newest' ? 'Newest' :
                      sortBy === 'nearest' ? 'Nearest' :
                      sortBy === 'popular' ? 'Popularity' :
-                     sortBy === 'price_asc' ? 'Price low to high' :
-                     'Price high to low'}
+                     sortBy === 'price_asc' ? 'Price ↑' :
+                     'Price ↓'}
                   </Text>
                 </TouchableOpacity>
 
@@ -620,8 +705,13 @@ export default function BrowsePage() {
                 )}
               </View>
               
-              {showSortMenu && (
-                <View style={styles.dropdownMenu}>
+              {showSortMenu && Platform.OS !== 'web' && (
+                <View 
+                  ref={sortMenuRef} 
+                  style={styles.dropdownMenu}
+                  onStartShouldSetResponder={() => true}
+                  onResponderGrant={() => {}}
+                >
                   {[
                     { label: 'None', value: 'none' },
                     { label: 'Newest', value: 'newest' },
@@ -633,10 +723,10 @@ export default function BrowsePage() {
                     <Pressable
                       key={opt.value}
                       style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
-                      onPress={() => {
+                      onPress={(e) => {
+                        e.stopPropagation();
                         setSortBy(opt.value);
                         setShowSortMenu(false);
-                        // Update URL to persist sort selection
                         const currentTab = tab || 'dishes';
                         const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
                         router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
@@ -650,8 +740,8 @@ export default function BrowsePage() {
                 </View>
               )}
             </View>
-          </View>
-        )}
+          )}
+        </View>
 
         {/* Old search bar removed */}
 
@@ -793,6 +883,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignSelf: 'center',
     marginBottom: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexWrap: 'nowrap',
   },
   tab: {
     paddingHorizontal: 18,
@@ -801,6 +894,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: '#FE734C',
+    flexShrink: 0,
   },
   tabActive: {
     backgroundColor: '#FE734C',
@@ -921,26 +1015,59 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   dropdownMenu: {
-    position: 'absolute',
-    top: '100%',
-    left: 0,
-    marginTop: 8,
-    minWidth: 180,
-    backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#e2e8f0',
-    padding: 4,
-    ...elev('lg'),
-    zIndex: 100,
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+        minWidth: 180,
+        maxWidth: 220,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        padding: 4,
+        boxShadow: '-4px 4px 6px -1px rgba(0, 0, 0, 0.1)',
+        zIndex: 99999,
+        pointerEvents: 'auto',
+      },
+      default: {
+        position: 'absolute',
+        top: '100%',
+        right: 0,
+        marginTop: 8,
+        minWidth: 180,
+        maxWidth: 220,
+        backgroundColor: '#FFFFFF',
+        borderRadius: 12,
+        borderWidth: 1,
+        borderColor: '#e2e8f0',
+        padding: 4,
+        zIndex: 10000,
+        ...Platform.select({
+          ios: { 
+            shadowColor: '#000', 
+            shadowOffset: { width: -2, height: 2 }, 
+            shadowOpacity: 0.1, 
+            shadowRadius: 4,
+          },
+          android: { 
+            elevation: 10,
+          },
+        }),
+      },
+    }),
   },
   dropdownItem: {
     paddingHorizontal: 12,
     paddingVertical: 10,
     borderRadius: 8,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer',
+      },
+    }),
   },
   dropdownItemActive: {
-    backgroundColor: '#f0fdf4',
+    backgroundColor: '#fff5f2',
   },
   dropdownItemText: {
     color: '#475569',
@@ -949,7 +1076,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   dropdownItemTextActive: {
-    color: '#10b981',
+    color: PRIMARY_COLOR,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
