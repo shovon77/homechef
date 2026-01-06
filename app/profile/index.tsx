@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput, ScrollView, useWindowDimensions } from "react-native";
-import { useRouter, Link, useLocalSearchParams } from "expo-router";
+import { useRouter, Link, useLocalSearchParams, usePathname } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
 import { useRole } from "../../hooks/useRole";
@@ -427,7 +427,7 @@ export default function ProfilePage() {
     .slice(0, 2) || email[0]?.toUpperCase() || "?";
 
   return (
-    <Screen scroll contentPadding={16} style={{ backgroundColor: '#FFFFFF' }}>
+    <Screen scroll contentPadding={16} style={{ backgroundColor: '#F2F0EF' }}>
       <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Left Sidebar */}
         <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
@@ -463,7 +463,9 @@ export default function ProfilePage() {
                 style={[styles.navItem, activeNavTab === "orders" && styles.navItemActive]}
                 onPress={() => {
                   setActiveNavTab("orders");
-                  router.push("/profile");
+                  if (tab === "settings") {
+                    router.push("/profile");
+                  }
                 }}
               >
                 <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>Your Orders</Text>
@@ -472,7 +474,9 @@ export default function ProfilePage() {
                 style={[styles.navItem, activeNavTab === "settings" && styles.navItemActive]}
                 onPress={() => {
                   setActiveNavTab("settings");
-                  router.push("/profile?tab=settings");
+                  if (tab !== "settings") {
+                    router.push("/profile?tab=settings");
+                  }
                 }}
               >
                 <Text style={[styles.navText, activeNavTab === "settings" && styles.navTextActive]}>Account</Text>
@@ -689,7 +693,7 @@ const styles = StyleSheet.create({
       web: "row",
       default: "column",
     }),
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F0EF',
     padding: Platform.select({
       web: theme.spacing['3xl'],
       default: theme.spacing.md,
@@ -811,7 +815,7 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: '#F2F0EF',
   },
   header: {
     padding: theme.spacing.md,
@@ -876,6 +880,7 @@ const styles = StyleSheet.create({
   emptyText: {
     color: '#667085',
     fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.xs,
     fontFamily: theme.typography.fontFamily.body,
   },

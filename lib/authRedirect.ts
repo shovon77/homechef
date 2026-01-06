@@ -41,7 +41,7 @@ export type RoleInfo = {
   role?: string | null;
 };
 
-export function redirectAfterLogin(info: RoleInfo = {}, fallback: string = '/browse') {
+export function redirectAfterLogin(info: RoleInfo = {}, fallback: string = '/intro') {
   const isAdmin = Boolean(info?.is_admin) || info?.role === 'admin';
   const isChef = Boolean(info?.is_chef) || info?.role === 'chef';
 
@@ -55,6 +55,7 @@ export function redirectAfterLogin(info: RoleInfo = {}, fallback: string = '/bro
     return;
   }
 
-  router.replace(fallback);
+  // Regular users go to intro page
+  router.replace('/intro');
 }
 
