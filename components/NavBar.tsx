@@ -768,7 +768,7 @@ export default function NavBar() {
                 style={styles.mobileMenuItem}
               >
                 <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                <Text style={styles.mobileMenuText}>Profile</Text>
+                <Text style={StyleSheet.flatten([styles.mobileMenuText, { color: PRIMARY_COLOR }])}>Profile</Text>
               </TouchableOpacity>
               
 

@@ -323,38 +323,74 @@ export default function ChefSignup() {
       const chefLocation = address || location || null;
       const chefCuisine = cuisineType.length > 0 ? cuisineType.join(', ') : null;
       
-      // Generate a random password for signup (user will reset it via email)
-      const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12) + 'A1!';
+      // 1) Check if user is already logged in
+      const { data: { session: existingSession }, error: sessionError } = await supabase.auth.getSession();
       
-      // 1) signUp or signIn
-      const su = await supabase.auth.signUp({ 
-        email, 
-        password: tempPassword,
-        options: {
-          emailRedirectTo: `${window.location.origin}/auth?mode=reset`
-        }
-      });
+      let session = existingSession;
       
-      if (su.error && !/registered/i.test(su.error.message ?? '')) {
-        throw su.error;
-      }
-      
-      if (su.error && /registered/i.test(su.error.message ?? '')) {
-        // If user already exists, send magic link
-        const { error: magicLinkError } = await supabase.auth.signInWithOtp({ email });
-        if (magicLinkError) throw magicLinkError;
-        Alert.alert('Check your email', 'We sent you a magic link to sign in.');
-        return;
-      }
-
-      // 2) ensure session
-      const session = await ensureSession(supabase, email, tempPassword);
+      // 2) If not logged in, try to sign up or sign in
       if (!session) {
-        // If session not established, send magic link
-        const { error: magicLinkError } = await supabase.auth.signInWithOtp({ email });
-        if (magicLinkError) throw magicLinkError;
-        Alert.alert('Check your email', 'We sent you a magic link to complete your signup.');
-        return;
+        // Generate a random password for signup (user will reset it via email)
+        const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12) + 'A1!';
+        
+        // Try to sign up
+        const su = await supabase.auth.signUp({ 
+          email, 
+          password: tempPassword,
+          options: {
+            emailRedirectTo: `${window.location.origin}/auth?mode=reset`
+          }
+        });
+        
+        // If user already exists (422 error), prompt them to sign in first
+        if (su.error) {
+          const errorCode = su.error.status || 0;
+          const errorMessage = su.error.message || '';
+          
+          if (errorCode === 422 || /user.*already.*registered|email.*already.*exists/i.test(errorMessage)) {
+            Alert.alert(
+              'Account Already Exists',
+              'An account with this email already exists. Please sign in first, then complete the chef onboarding.',
+              [
+                { text: 'OK', onPress: () => router.push('/auth') }
+              ]
+            );
+            return;
+          }
+          
+          // For other errors, show the error
+          throw su.error;
+        }
+        
+        // If signup succeeded, try to establish session
+        if (su.data?.user && !su.data.session) {
+          // User created but no session - try to sign in with password
+          const sessionResult = await ensureSession(supabase, email, tempPassword);
+          if (sessionResult) {
+            session = {
+              access_token: sessionResult.access_token,
+              refresh_token: sessionResult.refresh_token,
+              user: sessionResult.user,
+            } as any;
+          } else {
+            // Session not established - user needs to verify email
+            Alert.alert(
+              'Check Your Email',
+              'We sent you a verification email. Please verify your email address, then sign in to complete the chef onboarding.',
+              [
+                { text: 'OK', onPress: () => router.push('/auth') }
+              ]
+            );
+            return;
+          }
+        } else if (su.data?.session) {
+          session = su.data.session;
+        }
+      }
+      
+      // 3) Verify we have a session
+      if (!session || !session.user) {
+        throw new Error('Unable to establish user session. Please sign in first.');
       }
 
       // 3) ensure profile
@@ -419,7 +455,7 @@ export default function ChefSignup() {
         chefId = newChef.id;
       }
 
-      // 5) Update profile to mark user as chef
+      // 6) Update profile to mark user as chef
       const { error: profileUpdateError } = await supabase
         .from('profiles')
         .update({ is_chef: true })
@@ -430,7 +466,7 @@ export default function ChefSignup() {
         // Continue anyway - not critical
       }
 
-      // 6) Create all dishes
+      // 7) Create all dishes
       for (const dish of dishes) {
         try {
           // Insert dish record
@@ -483,7 +519,7 @@ export default function ChefSignup() {
         }
       }
 
-      // 7) Navigate to chef dashboard
+      // 8) Navigate to chef dashboard
       router.replace('/chef');
     } catch (e: any) {
       console.error('Chef onboarding submit failed:', e);

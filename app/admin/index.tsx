@@ -54,22 +54,82 @@ export default function AdminPage() {
   const [chefRequests, setChefRequests] = useState<any[]>([]);
   const [chefReqSearch, setChefReqSearch] = useState('');
   const [autoRejecting, setAutoRejecting] = useState(false);
+  const [expandedSections, setExpandedSections] = useState<{ [chefId: number]: { [section: string]: boolean } }>({});
   const [bannerUrl, setBannerUrl] = useState('');
   const [originalBannerUrl, setOriginalBannerUrl] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const [uploading, setUploading] = useState(false);
 
   async function fetchChefRequests() {
-    const { data, error } = await supabase
-      .from('chef_applications')
-      .select('id, user_id, name, email, phone, location, short_bio, experience, cuisine_specialty, status, created_at')
-      .eq('status', 'submitted')
+    // Fetch pending chefs that have a profile record (linked via user_id)
+    // First, get all pending chefs with user_id
+    const { data: pendingChefs, error: chefsError } = await supabase
+      .from('chefs')
+      .select('id, name, email, phone, location, bio, cuisine, status, created_at, user_id, pickup_availability')
+      .eq('status', 'pending')
+      .not('user_id', 'is', null)
       .order('created_at', { ascending: false });
-    if (error) {
-      console.error('fetchChefRequests', error);
+    
+    if (chefsError) {
+      console.error('fetchChefRequests - chefs query', chefsError);
       return [];
     }
-    return data ?? [];
+    
+    if (!pendingChefs || pendingChefs.length === 0) {
+      return [];
+    }
+    
+    // Get all user_ids from pending chefs
+    const userIds = pendingChefs.map(c => c.user_id).filter(Boolean) as string[];
+    
+    if (userIds.length === 0) {
+      return [];
+    }
+    
+    // Check which user_ids have profiles
+    const { data: profiles, error: profilesError } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('id', userIds);
+    
+    if (profilesError) {
+      console.error('fetchChefRequests - profiles query', profilesError);
+      return [];
+    }
+    
+    // Create a set of user_ids that have profiles
+    const profileUserIds = new Set((profiles || []).map(p => p.id));
+    
+    // Filter chefs to only include those with profiles
+    const chefsWithProfiles = pendingChefs.filter(chef => chef.user_id && profileUserIds.has(chef.user_id));
+    
+    // Fetch dishes for each chef
+    const chefIds = chefsWithProfiles.map(c => c.id);
+    if (chefIds.length > 0) {
+      const { data: dishesData } = await supabase
+        .from('dishes')
+        .select('id, chef_id, name, price, portion, description, ingredients, image, thumbnail')
+        .in('chef_id', chefIds);
+      
+      // Group dishes by chef_id
+      const dishesByChef = new Map<number, any[]>();
+      (dishesData || []).forEach(dish => {
+        if (dish.chef_id) {
+          if (!dishesByChef.has(dish.chef_id)) {
+            dishesByChef.set(dish.chef_id, []);
+          }
+          dishesByChef.get(dish.chef_id)!.push(dish);
+        }
+      });
+      
+      // Add dishes to each chef
+      return chefsWithProfiles.map(chef => ({
+        ...chef,
+        dishes: dishesByChef.get(chef.id) || []
+      }));
+    }
+    
+    return chefsWithProfiles.map(chef => ({ ...chef, dishes: [] }));
   }
 
   async function loadAll() {
@@ -170,26 +230,45 @@ export default function AdminPage() {
     }
   }
 
-  async function approveChefRequest(id: string) {
-    // Call the full approve function to set user as chef and create chef entry
-    const result = await approveChefApplication(id);
+  async function approveChefRequest(id: number) {
+    // Activate the chef (change status from 'pending' to 'active')
+    const result = await toggleChefActive(id, true);
     if (result.ok) {
-      Alert.alert('Success', 'Application approved');
+      Alert.alert('Success', 'Chef activated');
       setChefRequests(prev => prev.filter(r => r.id !== id));
-      loadAll(); // Reload to show new chef
+      loadAll(); // Reload to show updated chef
     } else {
-      Alert.alert('Error', result.error || 'Failed to approve application');
+      Alert.alert('Error', result.error || 'Failed to activate chef');
     }
   }
 
-  async function rejectChefRequest(id: string) {
-    const result = await rejectChefApplication(id);
-    if (result.ok) {
-      Alert.alert('Success', 'Application rejected');
-      setChefRequests(prev => prev.filter(r => r.id !== id));
-    } else {
-      Alert.alert('Error', result.error || 'Failed to reject application');
-    }
+  async function rejectChefRequest(id: number) {
+    Alert.alert(
+      'Reject Chef',
+      'Are you sure you want to reject this chef? This will remove them from the pending list.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Reject',
+          style: 'destructive',
+          onPress: async () => {
+            // Delete the chef record or set status to rejected
+            const { error } = await supabase
+              .from('chefs')
+              .delete()
+              .eq('id', id);
+            
+            if (error) {
+              Alert.alert('Error', error.message || 'Failed to reject chef');
+            } else {
+              Alert.alert('Success', 'Chef rejected');
+              setChefRequests(prev => prev.filter(r => r.id !== id));
+              loadAll();
+            }
+          }
+        }
+      ]
+    );
   }
 
   async function handleDeactivateUser(id: string) {
@@ -387,6 +466,8 @@ export default function AdminPage() {
       (r.email ?? '').toLowerCase().includes(q) ||
       (r.phone ?? '').toLowerCase().includes(q) ||
       (r.location ?? '').toLowerCase().includes(q) ||
+      (r.bio ?? '').toLowerCase().includes(q) ||
+      (r.cuisine ?? '').toLowerCase().includes(q) ||
       String(r.id).toLowerCase().includes(q)
     );
   }, [chefRequests, chefReqSearch]);
@@ -498,52 +579,134 @@ export default function AdminPage() {
       ) : filteredChefRequests.length === 0 ? (
         <View style={styles.emptyState}><Text style={styles.emptyText}>{chefReqSearch ? 'No requests found matching your search.' : 'No pending requests.'}</Text></View>
       ) : (
-        filteredChefRequests.map((req) => (
-          <View key={req.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{req.name || 'Unnamed Request'}</Text>
-                <Text style={styles.cardMeta}>{req.email || 'No email'}</Text>
-                {req.phone ? <Text style={styles.cardMeta}>📞 {req.phone}</Text> : null}
-                {req.location ? <Text style={styles.cardMeta}>📍 {req.location}</Text> : null}
-                {req.created_at ? (
-                  <Text style={styles.cardTimestamp}>Submitted: {new Date(req.created_at).toLocaleString()}</Text>
-                ) : null}
-                <Text style={styles.cardId}>ID: {String(req.id).substring(0, 8)}...</Text>
+        filteredChefRequests.map((req) => {
+          const isExpanded = (section: string) => expandedSections[req.id]?.[section] ?? false;
+          const toggleSection = (section: string) => {
+            setExpandedSections(prev => ({
+              ...prev,
+              [req.id]: {
+                ...prev[req.id],
+                [section]: !isExpanded(section)
+              }
+            }));
+          };
+
+          // Group pickup slots by day for display
+          const slotsByDay: { [day: string]: string[] } = {};
+          if (req.pickup_availability && Array.isArray(req.pickup_availability)) {
+            req.pickup_availability.forEach((slot: any) => {
+              if (!slotsByDay[slot.day]) {
+                slotsByDay[slot.day] = [];
+              }
+              slotsByDay[slot.day].push(slot.timeWindow);
+            });
+          }
+
+          return (
+            <View key={req.id} style={styles.card}>
+              <View style={styles.cardHeader}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cardTitle}>{req.name || 'Unnamed Request'}</Text>
+                  {req.created_at ? (
+                    <Text style={styles.cardTimestamp}>Submitted: {new Date(req.created_at).toLocaleString()}</Text>
+                  ) : null}
+                  <Text style={styles.cardId}>ID: {String(req.id)}</Text>
+                </View>
+                <View style={[styles.statusPill, styles.statusPending]}>
+                  <Text style={[styles.statusPillText, styles.statusTextPending]}>Pending</Text>
+                </View>
               </View>
-              <View style={[styles.statusPill, styles.statusPending]}>
-                <Text style={[styles.statusPillText, styles.statusTextPending]}>Pending</Text>
+
+              {/* Chef profile basics - Collapsible */}
+              <View style={styles.reviewSection}>
+                <TouchableOpacity 
+                  style={styles.reviewSectionHeader}
+                  onPress={() => toggleSection('basics')}
+                >
+                  <Text style={styles.reviewSectionTitle}>Chef profile basics</Text>
+                  <Text style={styles.expandIcon}>{isExpanded('basics') ? '▼' : '▶'}</Text>
+                </TouchableOpacity>
+                {isExpanded('basics') && (
+                  <View style={styles.reviewSectionContent}>
+                    <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Email:</Text> {req.email || 'Not set'}</Text>
+                    {req.phone ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Phone:</Text> {req.phone}</Text> : null}
+                    {req.location ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Address:</Text> {req.location}</Text> : null}
+                    {req.bio ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Brief Description:</Text> {req.bio}</Text> : null}
+                    {req.cuisine ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Cuisine Type:</Text> {req.cuisine}</Text> : null}
+                  </View>
+                )}
+              </View>
+
+              {/* Availability & pickup - Collapsible */}
+              {req.pickup_availability && Array.isArray(req.pickup_availability) && req.pickup_availability.length > 0 ? (
+                <View style={styles.reviewSection}>
+                  <TouchableOpacity 
+                    style={styles.reviewSectionHeader}
+                    onPress={() => toggleSection('availability')}
+                  >
+                    <Text style={styles.reviewSectionTitle}>Availability & pickup</Text>
+                    <Text style={styles.expandIcon}>{isExpanded('availability') ? '▼' : '▶'}</Text>
+                  </TouchableOpacity>
+                  {isExpanded('availability') && (
+                    <View style={styles.reviewSectionContent}>
+                      {Object.entries(slotsByDay).map(([day, timeWindows]) => (
+                        <Text key={day} style={styles.reviewItem}>
+                          <Text style={styles.reviewLabel}>{day}:</Text> {timeWindows.join(', ')}
+                        </Text>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              {/* Dishes - Collapsible */}
+              {req.dishes && req.dishes.length > 0 ? (
+                <View style={styles.reviewSection}>
+                  <TouchableOpacity 
+                    style={styles.reviewSectionHeader}
+                    onPress={() => toggleSection('dishes')}
+                  >
+                    <Text style={styles.reviewSectionTitle}>Dishes ({req.dishes.length})</Text>
+                    <Text style={styles.expandIcon}>{isExpanded('dishes') ? '▼' : '▶'}</Text>
+                  </TouchableOpacity>
+                  {isExpanded('dishes') && (
+                    <View style={styles.reviewSectionContent}>
+                      {req.dishes.map((dish: any) => (
+                        <View key={dish.id} style={styles.dishItem}>
+                          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
+                            {(dish.image || dish.thumbnail) && (
+                              <Image 
+                                source={{ uri: dish.image || dish.thumbnail }} 
+                                style={styles.dishImage}
+                                resizeMode="cover"
+                              />
+                            )}
+                            <View style={{ flex: 1 }}>
+                              <Text style={[styles.reviewItem, { fontWeight: '700', marginBottom: 4 }]}>{dish.name}</Text>
+                              <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Price:</Text> ${Number(dish.price).toFixed(2)}</Text>
+                              {dish.portion ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Portion:</Text> {dish.portion}</Text> : null}
+                            </View>
+                          </View>
+                          {dish.description ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Description:</Text> {dish.description}</Text> : null}
+                          {dish.ingredients ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Ingredients:</Text> {dish.ingredients}</Text> : null}
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              ) : null}
+
+              <View style={styles.cardActionsRow}>
+                <TouchableOpacity style={[styles.chipButton, styles.approveButton]} onPress={() => approveChefRequest(req.id)}>
+                  <Text style={[styles.chipButtonText, styles.approveButtonText]}>✓ Approve</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={[styles.chipButton, styles.rejectButton]} onPress={() => rejectChefRequest(req.id)}>
+                  <Text style={[styles.chipButtonText, styles.rejectButtonText]}>✗ Reject</Text>
+                </TouchableOpacity>
               </View>
             </View>
-
-            {req.short_bio ? (
-              <View style={styles.dividerSection}>
-                <Text style={styles.sectionLabel}>Bio</Text>
-                <Text style={styles.sectionBody}>{req.short_bio}</Text>
-              </View>
-            ) : null}
-
-            {req.experience || req.cuisine_specialty ? (
-              <View style={styles.dividerSection}>
-                {req.experience ? (
-                  <Text style={styles.sectionBody}><Text style={styles.sectionLabelInline}>Experience:</Text> {req.experience}</Text>
-                ) : null}
-                {req.cuisine_specialty ? (
-                  <Text style={styles.sectionBody}><Text style={styles.sectionLabelInline}>Specialties:</Text> {req.cuisine_specialty}</Text>
-                ) : null}
-              </View>
-            ) : null}
-
-            <View style={styles.cardActionsRow}>
-              <TouchableOpacity style={[styles.chipButton, styles.approveButton]} onPress={() => approveChefRequest(req.id)}>
-                <Text style={[styles.chipButtonText, styles.approveButtonText]}>✓ Approve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.chipButton, styles.rejectButton]} onPress={() => rejectChefRequest(req.id)}>
-                <Text style={[styles.chipButtonText, styles.rejectButtonText]}>✗ Reject</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-        ))
+          );
+        })
       )}
     </ScrollView>
   );
@@ -1192,7 +1355,7 @@ const styles = StyleSheet.create({
     fontSize: 12,
   },
   statusPending: {
-    backgroundColor: palette.warningBg,
+    backgroundColor: '#FFF5F2',
   },
   statusSuccess: {
     backgroundColor: palette.successBg,
@@ -1207,7 +1370,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#DBEAFE',
   },
   statusTextPending: {
-    color: palette.warningText,
+    color: palette.primary,
   },
   statusTextSuccess: {
     color: palette.successText,
@@ -1267,18 +1430,18 @@ const styles = StyleSheet.create({
     color: palette.text,
   },
   approveButton: {
-    backgroundColor: palette.successBg,
-    borderColor: palette.successText,
+    backgroundColor: 'transparent',
+    borderColor: palette.primary,
   },
   approveButtonText: {
-    color: palette.successText,
+    color: palette.primary,
   },
   rejectButton: {
-    backgroundColor: palette.dangerBg,
-    borderColor: palette.dangerText,
+    backgroundColor: 'transparent',
+    borderColor: palette.primary,
   },
   rejectButtonText: {
-    color: palette.dangerText,
+    color: palette.primary,
   },
   paginationRow: {
     flexDirection: 'row',
@@ -1446,6 +1609,55 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 14,
     lineHeight: 20,
+  },
+  reviewSection: {
+    backgroundColor: '#F8FAFC',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  reviewSectionHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    backgroundColor: palette.surface,
+  },
+  reviewSectionTitle: {
+    fontSize: 16,
+    fontWeight: '700',
+    color: palette.primary,
+  },
+  expandIcon: {
+    fontSize: 12,
+    color: palette.primary,
+  },
+  reviewSectionContent: {
+    padding: 16,
+    gap: 8,
+  },
+  reviewItem: {
+    fontSize: 14,
+    color: palette.muted,
+    lineHeight: 20,
+  },
+  reviewLabel: {
+    fontWeight: '700',
+    color: palette.text,
+  },
+  dishItem: {
+    paddingBottom: 12,
+    marginBottom: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  dishImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: palette.border,
   },
   chartCard: {
     backgroundColor: palette.surface,
