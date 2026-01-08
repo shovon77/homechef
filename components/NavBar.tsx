@@ -136,6 +136,7 @@ export default function NavBar() {
   const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
   const pathname = usePathname?.() || '';
   const isExploreActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
+  const isOrderActive = pathname.startsWith('/orders');
   const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
   const isCartPage = pathname.startsWith('/cart');
@@ -582,8 +583,16 @@ export default function NavBar() {
             <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
             {hasActiveOrder ? (
               <Link href="/orders/track" asChild>
-                <TouchableOpacity style={StyleSheet.flatten([styles.navLink, { flexDirection: 'row', alignItems: 'center', gap: 6 }])}>
-                  <Text style={StyleSheet.flatten([styles.navLinkText, { fontWeight: '700' as any }])}>{isMobile ? '' : 'Track Order'}</Text>
+                <TouchableOpacity style={StyleSheet.flatten([
+                  styles.navLink, 
+                  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+                  isOrderActive && { borderBottomWidth: 2, borderBottomColor: PRIMARY_COLOR }
+                ])}>
+                  <Text style={StyleSheet.flatten([
+                    styles.navLinkText, 
+                    { fontWeight: '700' as any },
+                    isOrderActive && { color: PRIMARY_COLOR, fontWeight: '600' as any }
+                  ])}>Order</Text>
                   {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
                 </TouchableOpacity>
               </Link>
@@ -684,7 +693,7 @@ export default function NavBar() {
                 }}
                     style={styles.primaryButton}
               >
-                  <Text style={styles.primaryButtonText}>Profile</Text>
+                  <Text style={[styles.primaryButtonText, { color: PRIMARY_COLOR }]}>Profile</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
@@ -958,16 +967,18 @@ const styles = StyleSheet.create({
         top: '50%',
         transform: [{ translateX: '-50%' }, { translateY: '-50%' }] as any,
         overflow: 'visible', // Ensure underline isn't clipped
+        marginLeft: 60, // Push buttons to the right, away from logo (reduced by 50%)
       },
       default: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
+        marginLeft: 40, // Push buttons to the right on mobile (reduced by 50%)
       },
     }),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 2.4, // Reduced by 70% from 8
   },
   navLink: {
     paddingVertical: 8,
@@ -1079,7 +1090,8 @@ const styles = StyleSheet.create({
     transform: [{ translateX: '-50%' }],
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 6,
+    gap: 1.8, // Reduced by 70% from 6
+    marginLeft: 40, // Push buttons to the right, away from logo (reduced by 50%)
   },
   rightSectionMobile: {
     gap: 8,

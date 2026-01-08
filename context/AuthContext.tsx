@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
         sessionUser.email 
           ? supabase
               .from('chefs')
-              .select('id, location')
+              .select('id, location, status, is_active')
               .eq('email', sessionUser.email)
               .maybeSingle()
           : Promise.resolve({ data: null })
@@ -79,10 +79,20 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const isAdminFromEmail = isLocalAdmin(sessionUser);
       const isAdmin = isAdminFromProfile || isAdminFromEmail;
 
-      // Compute isChef
+      // Compute isChef - only true if profile.is_chef is true AND chef is active
       let isChef = profile?.is_chef === true;
-      if (!isChef && chefData) {
-        isChef = true;
+      if (isChef && chefData) {
+        // Check if chef is inactive - if so, user is not a chef
+        const chefIsInactive = chefData.status === 'inactive' || chefData.is_active === false;
+        if (chefIsInactive) {
+          isChef = false;
+        }
+      } else if (!isChef && chefData) {
+        // If profile doesn't say is_chef but chef record exists, check if it's active
+        const chefIsActive = chefData.status !== 'inactive' && chefData.is_active !== false;
+        if (chefIsActive) {
+          isChef = true;
+        }
       }
 
       // Determine role

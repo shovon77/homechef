@@ -20,6 +20,8 @@ export default function IntroPage() {
   const isMobile = width < 768;
   const { loading, user, isAdmin, isChef } = useRole();
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [hasActiveOrder, setHasActiveOrder] = useState(false);
+  const [hasReadyOrder, setHasReadyOrder] = useState(false);
 
   // Redirect admins and chefs away from intro page
   useEffect(() => {
@@ -34,6 +36,43 @@ export default function IntroPage() {
       }
     }
   }, [loading, user, isAdmin, isChef, router]);
+
+  // Check for active orders
+  useEffect(() => {
+    let mounted = true;
+    (async () => {
+      if (!user) {
+        if (mounted) {
+          setHasActiveOrder(false);
+          setHasReadyOrder(false);
+        }
+        return;
+      }
+      try {
+        const { data, error } = await supabase
+          .from('orders')
+          .select('status')
+          .eq('user_id', user.id)
+          .in('status', ['requested', 'pending', 'ready', 'paid']);
+        if (mounted && !error) {
+          const statuses = (data ?? []).map((row: any) => row.status);
+          setHasActiveOrder(statuses.length > 0);
+          setHasReadyOrder(statuses.includes('ready'));
+        } else if (mounted) {
+          setHasActiveOrder(false);
+          setHasReadyOrder(false);
+        }
+      } catch (err) {
+        if (mounted) {
+          setHasActiveOrder(false);
+          setHasReadyOrder(false);
+        }
+      }
+    })();
+    return () => {
+      mounted = false;
+    };
+  }, [user]);
 
   // Native Icon Fallbacks
   const MenuIcon = () => (
@@ -66,6 +105,18 @@ export default function IntroPage() {
             </TouchableOpacity>
           </Link>
 
+          {/* Center Section: Order (if active) */}
+          {hasActiveOrder && (
+            <View style={styles.centerSection}>
+              <Link href="/orders/track" asChild>
+                <TouchableOpacity style={styles.orderButton}>
+                  <Text style={styles.orderButtonText}>Order</Text>
+                  {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR, marginLeft: 6 }} /> : null}
+                </TouchableOpacity>
+              </Link>
+            </View>
+          )}
+
           {/* Right Section: FAQ and Menu */}
           <View style={styles.rightSection}>
             <Link href="/faq" asChild>
@@ -93,7 +144,7 @@ export default function IntroPage() {
                   onPress={() => setIsMenuOpen(false)}
                   style={styles.mobileMenuItem}
                 >
-                  <Text style={styles.mobileMenuText}>Profile</Text>
+                  <Text style={[styles.mobileMenuText, { color: PRIMARY_COLOR }]}>Profile</Text>
                 </TouchableOpacity>
               </Link>
               <TouchableOpacity
@@ -318,6 +369,15 @@ const styles = StyleSheet.create({
     }),
     marginTop: -9,
   },
+  centerSection: {
+    position: 'absolute',
+    left: '50%',
+    top: '50%',
+    transform: [{ translateX: '-50%' }, { translateY: '-50%' }] as any,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 50, // Push Order button to the right, away from logo
+  },
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -335,6 +395,20 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontWeight: '600',
     color: PRIMARY_COLOR,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+  },
+  orderButtonText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
   },
   mobileMenu: {

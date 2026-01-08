@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState, useMemo, useCallback } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
 import FilePicker from '../../components/FilePicker';
@@ -13,6 +13,10 @@ import { updateOrderStatus } from '../../lib/orders';
 import { callFn } from '../../lib/fn';
 import PayoutSettings from '../../components/chef/PayoutSettings';
 import { formatCad, cents } from '../../lib/money';
+import { useRole } from '../../hooks/useRole';
+import { getProfile } from '../../lib/db';
+import type { Profile, OrderStatus } from '../../lib/types';
+import { formatLocal as formatLocalOrder } from '../../lib/datetime';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#FE734C';
@@ -52,6 +56,30 @@ export default function ChefDashboard() {
   const [bio, setBio] = useState('');
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState('');
+  const { user, profile, refreshRole } = useRole();
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [email, setEmail] = useState('');
+  const [phone, setPhone] = useState('');
+  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
+  const [chefLogoUrl, setChefLogoUrl] = useState<string | null>(null);
+  const [uploadingChefLogo, setUploadingChefLogo] = useState(false);
+  const [activeNavTab, setActiveNavTab] = useState<'orders' | 'settings'>('orders');
+  const [activeOrderTab, setActiveOrderTab] = useState<'all' | 'upcoming' | 'completed' | 'declined'>('all');
+  const [userOrders, setUserOrders] = useState<Array<{
+    id: number;
+    status: string;
+    total_cents: number;
+    created_at: string;
+    pickup_at: string | null;
+    chef_id: number | null;
+    chef_name?: string | null;
+    chef_location?: string | null;
+    dish_names?: string[];
+    total_quantity?: number;
+  }>>([]);
+  const [ordersLoading, setOrdersLoading] = useState(false);
+  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
@@ -94,6 +122,20 @@ export default function ChefDashboard() {
         setBio(me.bio || '');
         setPhoto(me.photo || undefined);
         setLocation(me.location || '');
+        setChefLogoUrl(me.photo || null);
+        
+        // Load user profile for profile tab
+        if (auth.user) {
+          const prof = await getProfile(auth.user.id);
+          if (prof) {
+            const nameParts = (prof.name || "").trim().split(" ");
+            setFirstName(nameParts[0] || "");
+            setLastName(nameParts.slice(1).join(" ") || "");
+            setEmail(prof.email || "");
+            setPhone((prof as any).phone || "");
+            setPhotoUrl(prof.photo_url || null);
+          }
+        }
 
         // Load dishes
         const d = await supabase.from('dishes').select('*').eq('chef_id', me.id).order('id', { ascending: true });
@@ -123,6 +165,13 @@ export default function ChefDashboard() {
     }
   }, [activeTab, chef]);
 
+  // Load user orders when profile tab is active
+  useEffect(() => {
+    if (activeTab === 'profile' && activeNavTab === 'orders' && user) {
+      loadUserOrders();
+    }
+  }, [activeTab, activeNavTab, user]);
+
   async function saveProfile() {
     if (!chef) return;
     setSaving(true);
@@ -143,6 +192,382 @@ export default function ChefDashboard() {
       setErr('Save failed: ' + (e.message || String(e)));
     } finally {
       setSaving(false);
+    }
+  }
+
+  async function loadUserOrders() {
+    if (!user) return;
+    setOrdersLoading(true);
+    try {
+      const { data, error } = await supabase
+        .from('orders')
+        .select('id,status,total_cents,created_at,pickup_at,chef_id')
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      const rows = data || [];
+      const chefIds = [...new Set(rows.map(r => r.chef_id).filter((id): id is number => typeof id === 'number'))];
+      const orderIds = rows.map(r => r.id);
+      
+      let chefMap = new Map<number, { name: string; location: string | null }>();
+      let orderItemsMap = new Map<number, Array<{ dish_name: string; quantity: number }>>();
+
+      // Fetch chef names and locations
+      if (chefIds.length > 0) {
+        const { data: chefsData, error: chefsError } = await supabase
+          .from('chefs')
+          .select('id,name,location')
+          .in('id', chefIds);
+        if (!chefsError && chefsData) {
+          chefMap = new Map(chefsData.map((c: any) => [c.id, { name: c.name || `Chef #${c.id}`, location: c.location || null }]));
+        }
+      }
+
+      // Fetch order items with dish names
+      if (orderIds.length > 0) {
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('order_items')
+          .select('order_id,dish_id,quantity')
+          .in('order_id', orderIds);
+        
+        if (!itemsError && itemsData) {
+          const dishIds = [...new Set(itemsData.map((it: any) => it.dish_id).filter((id): id is number => typeof id === 'number'))];
+          
+          if (dishIds.length > 0) {
+            const { data: dishesData, error: dishesError } = await supabase
+              .from('dishes')
+              .select('id,name')
+              .in('id', dishIds);
+            
+            if (!dishesError && dishesData) {
+              const dishMap = new Map(dishesData.map((d: any) => [d.id, d.name]));
+              
+              itemsData.forEach((item: any) => {
+                if (!orderItemsMap.has(item.order_id)) {
+                  orderItemsMap.set(item.order_id, []);
+                }
+                const dishName = dishMap.get(item.dish_id) || 'Unknown Dish';
+                orderItemsMap.get(item.order_id)!.push({
+                  dish_name: dishName,
+                  quantity: item.quantity || 1,
+                });
+              });
+            }
+          }
+        }
+      }
+
+      const enriched = rows.map(row => {
+        const items = orderItemsMap.get(row.id) || [];
+        const chefInfo = row.chef_id ? chefMap.get(row.chef_id) : null;
+        
+        return {
+          id: row.id,
+          status: row.status,
+          total_cents: row.total_cents ?? 0,
+          created_at: row.created_at,
+          pickup_at: row.pickup_at ?? null,
+          chef_id: row.chef_id ?? null,
+          chef_name: chefInfo?.name ?? null,
+          chef_location: chefInfo?.location ?? null,
+          dish_names: items.map(i => i.dish_name),
+          total_quantity: items.reduce((sum, i) => sum + i.quantity, 0),
+        };
+      });
+
+      setUserOrders(enriched);
+    } catch (e: any) {
+      console.error('Error loading orders:', e);
+    } finally {
+      setOrdersLoading(false);
+    }
+  }
+
+  const filteredUserOrders = useMemo(() => {
+    if (activeOrderTab === 'all') {
+      return userOrders;
+    } else if (activeOrderTab === 'upcoming') {
+      return userOrders.filter(order => ['requested', 'pending', 'ready', 'paid'].includes(order.status));
+    } else if (activeOrderTab === 'completed') {
+      return userOrders.filter(order => order.status === 'completed');
+    } else if (activeOrderTab === 'declined') {
+      return userOrders.filter(order => ['cancelled', 'rejected'].includes(order.status));
+    }
+    return userOrders;
+  }, [userOrders, activeOrderTab]);
+
+  function getStatusInfo(status: OrderStatus | string) {
+    switch (status) {
+      case 'requested':
+        return { label: 'Requested', icon: '⏳', color: '#3E6A55' };
+      case 'pending':
+        return { label: 'Preparing', icon: '👨‍🍳', color: '#D97706' };
+      case 'ready':
+        return { label: 'Ready for Pickup', icon: '🛍️', color: '#2D6966' };
+      case 'paid':
+        return { label: 'Awaiting Pickup', icon: '🚚', color: '#3E6A55' };
+      case 'completed':
+        return { label: 'Completed', icon: '✓', color: '#3E6A55' };
+      case 'rejected':
+        return { label: 'Rejected', icon: '✕', color: '#EF4444' };
+      case 'cancelled':
+        return { label: 'Cancelled', icon: '✕', color: '#EF4444' };
+      default:
+        return { label: String(status), icon: '•', color: '#667085' };
+    }
+  }
+
+  async function handleSaveProfile() {
+    if (!user) return;
+    if (!firstName.trim()) {
+      Alert.alert("Validation", "First name cannot be empty");
+      return;
+    }
+
+    setSaving(true);
+    try {
+      const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
+      
+      const updateData: { name: string; phone?: string | null; location?: string | null; photo_url?: string | null } = {
+        name: fullName,
+        phone: phone.trim() || null,
+        location: location.trim() || null,
+      };
+      
+      if (photoUrl !== null && photoUrl !== profile?.photo_url) {
+        updateData.photo_url = photoUrl;
+      }
+
+      const { data, error } = await supabase
+        .from("profiles")
+        .update(updateData)
+        .eq("id", user.id)
+        .select();
+
+      if (error) {
+        throw new Error(error.message || `Update failed: ${error.code || 'Unknown error'}`);
+      }
+
+      Alert.alert("Success", "Profile updated successfully");
+      // Reload profile data
+      if (user) {
+        const prof = await getProfile(user.id);
+        if (prof) {
+          const nameParts = (prof.name || "").trim().split(" ");
+          setFirstName(nameParts[0] || "");
+          setLastName(nameParts.slice(1).join(" ") || "");
+          setEmail(prof.email || "");
+          setPhone((prof as any).phone || "");
+          setPhotoUrl(prof.photo_url || null);
+          setLocation(prof.location || "");
+        }
+      }
+    } catch (e: any) {
+      console.error("Profile update exception:", e);
+      const errorMsg = e?.message || e?.details || "Failed to update profile";
+      Alert.alert("Error", errorMsg);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleAvatarPickProfile(file: File) {
+    if (!user) return;
+    setUploadingAvatar(true);
+    try {
+      const { publicUrl } = await uploadToBucket('public-assets', file, `users/${user.id}/avatar`);
+      setPhotoUrl(publicUrl);
+      const { error } = await supabase
+        .from('profiles')
+        .update({ photo_url: publicUrl })
+        .eq('id', user.id);
+      if (error) throw error;
+      Alert.alert("Success", "Avatar uploaded and saved successfully!");
+    } catch (e: any) {
+      console.error("Avatar upload error:", e);
+      Alert.alert("Error", e?.message || "Failed to upload avatar");
+    } finally {
+      setUploadingAvatar(false);
+    }
+  }
+
+  async function handleChefLogoPick(file: File) {
+    if (!chef) return;
+    setUploadingChefLogo(true);
+    try {
+      const { publicUrl } = await uploadToBucket('public-assets', file, `chefs/${chef.id}/logo`);
+      setChefLogoUrl(publicUrl);
+      const { error } = await supabase
+        .from('chefs')
+        .update({ photo: publicUrl })
+        .eq('id', chef.id);
+      if (error) throw error;
+      setChef({ ...chef, photo: publicUrl });
+      Alert.alert("Success", "Chef logo uploaded and saved successfully!");
+    } catch (e: any) {
+      console.error("Chef logo upload error:", e);
+      Alert.alert("Error", e?.message || "Failed to upload chef logo");
+    } finally {
+      setUploadingChefLogo(false);
+    }
+  }
+
+  async function handleLogout() {
+    Alert.alert(
+      "Log Out",
+      "Are you sure you want to log out?",
+      [
+        { text: "Cancel", style: "cancel" },
+        {
+          text: "Log Out",
+          style: "destructive",
+          onPress: async () => {
+            await supabase.auth.signOut();
+            router.replace("/auth");
+          },
+        },
+      ]
+    );
+  }
+
+  async function handleDeactivateChefAccount() {
+    console.log("handleDeactivateChefAccount called", { chef: !!chef, user: !!user });
+    
+    if (!chef || !user) {
+      Alert.alert("Error", "Chef or user information is missing. Please try again.");
+      return;
+    }
+
+    // Use window.confirm for web compatibility, Alert.alert for native
+    const confirmed = Platform.OS === 'web' 
+      ? window.confirm("Are you sure you want to deactivate your chef account? Your chef profile will be deactivated and you will become a regular user. You won't be able to access chef features or receive orders. Your data will be preserved.")
+      : await new Promise<boolean>((resolve) => {
+          Alert.alert(
+            "Deactivate Chef Account",
+            "Are you sure you want to deactivate your chef account? Your chef profile will be deactivated and you will become a regular user. You won't be able to access chef features or receive orders. Your data will be preserved.",
+            [
+              { text: "Cancel", style: "cancel", onPress: () => resolve(false) },
+              {
+                text: "Deactivate",
+                style: "destructive",
+                onPress: () => resolve(true),
+              },
+            ]
+          );
+        });
+
+    if (!confirmed) {
+      return;
+    }
+
+    try {
+      console.log("Deactivate confirmed, starting deactivation process");
+      
+      // Deactivate chef account by setting status to 'inactive' or similar
+      const { error: chefError } = await supabase
+        .from("chefs")
+        .update({ 
+          status: 'inactive'
+        })
+        .eq("id", chef.id);
+      
+      if (chefError) {
+        console.error("Chef deactivation error:", chefError);
+        // If status field doesn't exist, try updating is_active if it exists
+        const { error: altError } = await supabase
+          .from("chefs")
+          .update({ 
+            is_active: false
+          })
+          .eq("id", chef.id);
+        
+        if (altError) {
+          console.log("Chef status update error (fields may not exist, which is fine):", altError);
+        }
+      }
+      
+      // Update user profile to remove chef status - this is critical
+      const { error: profileError } = await supabase
+        .from("profiles")
+        .update({ 
+          is_chef: false
+        })
+        .eq("id", user.id);
+      
+      if (profileError) {
+        console.error("Profile update error:", profileError);
+        throw new Error("Failed to update user profile. Please try again.");
+      }
+      
+      // Mark chef record as inactive instead of deleting
+      // This preserves the data for potential reactivation
+      const { error: chefStatusError } = await supabase
+        .from("chefs")
+        .update({ 
+          status: 'inactive'
+        })
+        .eq("id", chef.id);
+      
+      if (chefStatusError) {
+        console.error("Chef status update error:", chefStatusError);
+        // If status field doesn't exist, try is_active field
+        const { error: altError } = await supabase
+          .from("chefs")
+          .update({ 
+            is_active: false
+          })
+          .eq("id", chef.id);
+        
+        if (altError) {
+          console.warn("Could not update chef status, but profile was updated. You may need to run the migration script.");
+        }
+      }
+      
+      // Wait a moment for the database to commit the changes
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      // Refresh the role to get the updated profile
+      if (refreshRole) {
+        await refreshRole();
+        console.log("Role refreshed after deactivation");
+      }
+      
+      // Wait a bit more to ensure role is refreshed
+      await new Promise(resolve => setTimeout(resolve, 500));
+      
+      if (Platform.OS === 'web') {
+        alert("Chef account deactivated successfully. You are now a regular user. You can reactivate your chef account later by contacting support.");
+      } else {
+        Alert.alert(
+          "Success", 
+          "Chef account deactivated successfully. You are now a regular user. You can reactivate your chef account later by contacting support.",
+          [
+            {
+              text: "OK",
+              onPress: () => {
+                // Sign out and redirect to auth to refresh user role
+                supabase.auth.signOut().then(() => {
+                  router.replace("/auth");
+                });
+              }
+            }
+          ]
+        );
+      }
+      
+      // Sign out and redirect to auth to refresh user role
+      await supabase.auth.signOut();
+      router.replace("/auth");
+    } catch (e: any) {
+      console.error("Deactivate chef account error:", e);
+      const errorMsg = e?.message || "Failed to deactivate chef account. Please try again.";
+      if (Platform.OS === 'web') {
+        alert(`Error: ${errorMsg}`);
+      } else {
+        Alert.alert("Error", errorMsg);
+      }
     }
   }
 
@@ -1255,69 +1680,285 @@ export default function ChefDashboard() {
     </View>
   );
 
+  const initials = [firstName, lastName].filter(Boolean)
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2) || email[0]?.toUpperCase() || "?";
+
   const ProfileTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
-      {msg && (
-        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
+    <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
+      <View style={[profileStyles.container, isMobile && profileStyles.containerMobile]}>
+        {/* Left Sidebar */}
+        <View style={[profileStyles.sidebar, isMobile && profileStyles.sidebarMobile]}>
+          <View style={[profileStyles.sidebarContent, isMobile && profileStyles.sidebarContentMobile]}>
+            {/* Profile Header */}
+            {!isMobile && (
+            <View style={profileStyles.profileHeader}>
+              {photoUrl ? (
+                <Image
+                  source={{ uri: photoUrl }}
+                  style={profileStyles.avatar}
+                />
+              ) : (
+                <View style={[profileStyles.avatar, profileStyles.avatarPlaceholder]}>
+                  <Text style={profileStyles.avatarInitials}>{initials}</Text>
         </View>
       )}
-      {err && (
-        <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+              <View style={profileStyles.profileInfo}>
+                <Text style={profileStyles.profileName}>{[firstName, lastName].filter(Boolean).join(" ") || "User"}</Text>
+                <Text style={profileStyles.profileEmail}>{email || "No email"}</Text>
+              </View>
         </View>
       )}
 
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Profile Settings</Text>
+            {/* Navigation Menu - Horizontal Scroll on Mobile */}
+            <ScrollView 
+              horizontal={isMobile} 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={[isMobile && profileStyles.navMenuMobileContent]}
+              style={[profileStyles.navMenu, isMobile && profileStyles.navMenuMobile]}
+            >
+              <TouchableOpacity 
+                style={[profileStyles.navItem, activeNavTab === "orders" && profileStyles.navItemActive]}
+                onPress={() => setActiveNavTab("orders")}
+              >
+                <Text style={[profileStyles.navText, activeNavTab === "orders" && profileStyles.navTextActive]}>Your Orders</Text>
+              </TouchableOpacity>
+              <TouchableOpacity 
+                style={[profileStyles.navItem, activeNavTab === "settings" && profileStyles.navItemActive]}
+                onPress={() => setActiveNavTab("settings")}
+              >
+                <Text style={[profileStyles.navText, activeNavTab === "settings" && profileStyles.navTextActive]}>Account</Text>
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
 
-      <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, gap: 16 }}>
-        <View style={{ flexDirection: 'row', gap: 16, alignItems: 'center', flexWrap: 'wrap' }}>
-          <Image source={{ uri: photo || 'https://placehold.co/128x128?text=Avatar' }} style={{ width: 96, height: 96, borderRadius: 48, borderWidth: 1, borderColor: BORDER_LIGHT, backgroundColor: '#EEE' }} />
-          <FilePicker label="Upload avatar" onFile={handleAvatarPick} accept="image/*" />
+          {/* Log Out Button */}
+          {!isMobile && (
+          <TouchableOpacity style={profileStyles.logoutButton} onPress={handleLogout}>
+            <Text style={profileStyles.logoutIcon}>→</Text>
+            <Text style={profileStyles.logoutText}>Log Out</Text>
+          </TouchableOpacity>
+          )}
         </View>
 
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>Display Name</Text>
+        {/* Main Content Area */}
+        <View style={profileStyles.mainContent}>
+          {activeNavTab === "orders" ? (
+            <>
+              {/* Tabs */}
+              <View style={profileStyles.tabs}>
+                <TouchableOpacity
+                  style={[profileStyles.tab, activeOrderTab === "all" && profileStyles.tabActive]}
+                  onPress={() => setActiveOrderTab("all")}
+                >
+                  <Text style={[profileStyles.tabText, activeOrderTab === "all" && profileStyles.tabTextActive]}>
+                    All
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[profileStyles.tab, activeOrderTab === "upcoming" && profileStyles.tabActive]}
+                  onPress={() => setActiveOrderTab("upcoming")}
+                >
+                  <Text style={[profileStyles.tabText, activeOrderTab === "upcoming" && profileStyles.tabTextActive]}>
+                    Upcoming
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[profileStyles.tab, activeOrderTab === "completed" && profileStyles.tabActive]}
+                  onPress={() => setActiveOrderTab("completed")}
+                >
+                  <Text style={[profileStyles.tabText, activeOrderTab === "completed" && profileStyles.tabTextActive]}>
+                    Completed
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[profileStyles.tab, activeOrderTab === "declined" && profileStyles.tabActive]}
+                  onPress={() => setActiveOrderTab("declined")}
+                >
+                  <Text style={[profileStyles.tabText, activeOrderTab === "declined" && profileStyles.tabTextActive]}>
+                    Declined
+                  </Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Orders List */}
+              <View style={profileStyles.ordersList}>
+                {ordersLoading ? (
+                  <View style={profileStyles.loadingContainer}>
+                    <ActivityIndicator size="large" color={theme.colors.primary} />
+                  </View>
+                ) : filteredUserOrders.length === 0 ? (
+                  <View style={profileStyles.emptyContainer}>
+                    <Text style={profileStyles.emptyText}>No orders yet</Text>
+                    <Text style={profileStyles.emptySubtext}>Pickup homemade meals near you</Text>
+                  </View>
+                ) : (
+                  <View style={profileStyles.ordersListContent}>
+                    {filteredUserOrders.map((order) => {
+                      const statusInfo = getStatusInfo(order.status);
+                      return (
+                        <View key={order.id} style={profileStyles.orderCard}>
+                          <View style={profileStyles.orderContent}>
+                            <View style={profileStyles.orderInfo}>
+                              <Text style={profileStyles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
+                              {order.dish_names && order.dish_names.length > 0 && (
+                                <Text style={profileStyles.orderDishInfo}>
+                                  {order.dish_names[0]}{order.dish_names.length > 1 ? ` +${order.dish_names.length - 1} more` : ''}
+                                  {order.total_quantity ? ` × ${order.total_quantity}` : ''}
+                                </Text>
+                              )}
+                              {order.chef_location && (
+                                <Text style={profileStyles.orderLocation}>Pickup location: {order.chef_location}</Text>
+                              )}
+                              {order.pickup_at && (
+                                <Text style={profileStyles.orderDishName}>Pickup: {formatLocalOrder(order.pickup_at)}</Text>
+                              )}
+                              <Text style={profileStyles.orderChef}>Placed: {formatLocalOrder(order.created_at)}</Text>
+                              <View style={profileStyles.orderStatus}>
+                                <Text style={profileStyles.statusIcon}>{statusInfo.icon}</Text>
+                                <Text style={[profileStyles.statusText, { color: statusInfo.color }]}>
+                                  {statusInfo.label}
+                                </Text>
+                              </View>
+                            </View>
+                            <View style={{ alignItems: 'flex-end', gap: 12 }}>
+                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                                <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
+                                  <TouchableOpacity style={profileStyles.orderButtonPrimary}>
+                                    <Text style={profileStyles.orderButtonTextPrimary}>View details</Text>
+                                  </TouchableOpacity>
+                                </Link>
+                                <Text style={profileStyles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
+                              </View>
+                            </View>
+                          </View>
+                        </View>
+                      );
+                    })}
+                  </View>
+                )}
+              </View>
+            </>
+          ) : (
+            <View style={profileStyles.settingsContent}>
+              <View style={profileStyles.header}>
+                <TouchableOpacity
+                  style={[profileStyles.saveButton, saving && profileStyles.saveButtonDisabled]}
+                  onPress={handleSaveProfile}
+                  disabled={saving}
+                >
+                  {saving ? (
+                    <ActivityIndicator size="small" color="#FFFFFF" />
+                  ) : (
+                    <Text style={profileStyles.saveButtonText}>Save Changes</Text>
+                  )}
+                </TouchableOpacity>
+              </View>
+
+              <View style={profileStyles.settingsCard}>
+                {/* Chef Logo Field */}
+                <View style={profileStyles.settingsSection}>
+                  <View style={profileStyles.chefLogoRow}>
+                    <Text style={profileStyles.settingsSectionTitle}>Chef logo</Text>
+                    <View style={profileStyles.chefLogoContainer}>
+                      {chefLogoUrl ? (
+                        <Image
+                          source={{ uri: chefLogoUrl }}
+                          style={profileStyles.settingsAvatar}
+                        />
+                      ) : (
+                        <View style={[profileStyles.settingsAvatar, profileStyles.avatarPlaceholder]}>
+                          <Text style={profileStyles.avatarInitials}>🍽️</Text>
+                        </View>
+                      )}
+                      <FilePicker 
+                        label={uploadingChefLogo ? "Uploading..." : "Upload logo"} 
+                        onFile={handleChefLogoPick} 
+                        accept="image/*"
+                        disabled={uploadingChefLogo}
+                      />
+                    </View>
+                  </View>
+                </View>
+
+                <View style={profileStyles.nameRow}>
+                  <View style={profileStyles.nameField}>
+                    <Text style={profileStyles.settingsSectionTitle}>First name</Text>
           <TextInput
-            value={name}
-            onChangeText={setName}
-            placeholder="e.g., Chef Amira"
-            placeholderTextColor={TEXT_MUTED}
-            style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 48 }}
+                      value={firstName}
+                      onChangeText={setFirstName}
+                      placeholder="Enter your first name"
+                      placeholderTextColor="#94a3b8"
+                      style={profileStyles.settingsInput}
+                    />
+                  </View>
+                  <View style={profileStyles.nameField}>
+                    <Text style={profileStyles.settingsSectionTitle}>Last name</Text>
+                    <TextInput
+                      value={lastName}
+                      onChangeText={setLastName}
+                      placeholder="Enter your last name"
+                      placeholderTextColor="#94a3b8"
+                      style={profileStyles.settingsInput}
+                    />
+                  </View>
+        </View>
+
+                <View style={profileStyles.settingsSection}>
+                  <Text style={profileStyles.settingsSectionTitle}>Email</Text>
+          <TextInput
+                    value={email}
+                    editable={false}
+                    style={[profileStyles.settingsInput, profileStyles.settingsInputReadOnly]}
+                    placeholderTextColor="#94a3b8"
           />
         </View>
 
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>Short Bio</Text>
-          <TextInput
-            value={bio}
-            onChangeText={setBio}
-            placeholder="Your cooking story…"
-            placeholderTextColor={TEXT_MUTED}
-            multiline
-            style={{ backgroundColor: BG_GRAY, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 96 }}
-          />
-        </View>
+                <View style={profileStyles.settingsSection}>
+                  <Text style={profileStyles.settingsSectionTitle}>Phone</Text>
+                  <TextInput
+                    value={phone}
+                    onChangeText={setPhone}
+                    placeholder="Enter your phone number"
+                    placeholderTextColor="#94a3b8"
+                    keyboardType="phone-pad"
+                    style={profileStyles.settingsInput}
+                  />
+                </View>
 
-        <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700' }}>Location</Text>
+                <View style={profileStyles.settingsSection}>
+                  <Text style={profileStyles.settingsSectionTitle}>Location</Text>
           <LocationPicker
             value={location}
             onChange={setLocation}
             placeholder="Search for your location..."
+                    style={profileStyles.locationPicker}
           />
-          <Text style={{ color: TEXT_MUTED, fontSize: 12, marginTop: 4 }}>Select your location from the dropdown</Text>
+                  <Text style={profileStyles.settingsHint}>Only available to customers after order confirmation</Text>
         </View>
 
+                <View style={profileStyles.actionButtons}>
         <TouchableOpacity
-          onPress={saveProfile}
-          disabled={saving}
-          style={{ backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, padding: 12, borderRadius: 8, alignSelf: 'flex-start' }}
-        >
-          <Text style={{ color: '#FFFFFF', fontWeight: '900', fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Save Profile'}</Text>
+                    style={profileStyles.logoutButtonProfile}
+                    onPress={handleLogout}
+                  >
+                    <Text style={profileStyles.logoutButtonText}>Logout</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={profileStyles.deleteButton}
+                    onPress={handleDeactivateChefAccount}
+                  >
+                    <Text style={profileStyles.deleteButtonText}>Deactivate</Text>
         </TouchableOpacity>
       </View>
-    </ScrollView>
+              </View>
+            </View>
+          )}
+        </View>
+      </View>
+    </View>
   );
 
   return (
@@ -1712,3 +2353,436 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
     </View>
   );
 }
+
+const profileStyles = StyleSheet.create({
+  container: {
+    flex: 1,
+    flexDirection: Platform.select({
+      web: "row",
+      default: "column",
+    }),
+    backgroundColor: '#F2F0EF',
+    padding: Platform.select({
+      web: theme.spacing['3xl'],
+      default: theme.spacing.md,
+    }),
+    gap: theme.spacing['2xl'],
+    maxWidth: 1280,
+    alignSelf: "center",
+    width: "100%",
+  },
+  sidebar: {
+    width: Platform.select({
+      web: 256,
+      default: "100%",
+    }),
+    minHeight: Platform.select({
+      web: 700,
+      default: "auto",
+    }),
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.md,
+    flexDirection: "column",
+    justifyContent: "space-between",
+  },
+  sidebarContent: {
+    flex: 1,
+    gap: theme.spacing.md,
+  },
+  profileHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    marginBottom: theme.spacing.md,
+  },
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: theme.colors.primary,
+  },
+  avatarPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  profileInfo: {
+    flex: 1,
+    gap: theme.spacing.xs / 2,
+  },
+  profileName: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.medium,
+    lineHeight: theme.typography.fontSize.base * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  profileEmail: {
+    color: '#3E6A55',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  navMenu: {
+    gap: theme.spacing.xs,
+    marginTop: theme.spacing.md,
+  },
+  navItem: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.lg,
+  },
+  navItemActive: {
+    backgroundColor: theme.colors.primary,
+  },
+  navText: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  navTextActive: {
+    color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  logoutButton: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    borderRadius: theme.radius.lg,
+    marginTop: theme.spacing['2xl'],
+  },
+  logoutIcon: {
+    fontSize: 20,
+    color: '#EF4444',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  logoutText: {
+    color: '#EF4444',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  mainContent: {
+    flex: 1,
+    backgroundColor: '#F2F0EF',
+  },
+  header: {
+    padding: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
+  },
+  tabs: {
+    flexDirection: "row",
+    borderBottomWidth: 1,
+    borderBottomColor: '#EAECF0',
+    paddingHorizontal: theme.spacing.md,
+    gap: theme.spacing['2xl'],
+  },
+  tab: {
+    paddingBottom: 13,
+    paddingTop: theme.spacing.md,
+    borderBottomWidth: 3,
+    borderBottomColor: 'transparent',
+  },
+  tabActive: {
+    borderBottomColor: theme.colors.primary,
+  },
+  tabText: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    letterSpacing: 0.015,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  tabTextActive: {
+    color: '#101828',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  ordersList: {
+    flex: 1,
+  },
+  ordersListContent: {
+    gap: theme.spacing.md,
+  },
+  loadingContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing['4xl'],
+  },
+  emptyContainer: {
+    flex: 1,
+    alignItems: "center",
+    justifyContent: "center",
+    paddingVertical: theme.spacing['4xl'],
+  },
+  emptyText: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.xs,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  emptySubtext: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderCard: {
+    flexDirection: Platform.select({
+      web: "row",
+      default: "column",
+    }),
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+    alignItems: "stretch",
+  },
+  orderContent: {
+    flex: 2,
+    flexDirection: "column",
+    justifyContent: "space-between",
+    gap: theme.spacing.md,
+  },
+  orderInfo: {
+    gap: theme.spacing.xs,
+  },
+  orderId: {
+    color: theme.colors.primary,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderDishInfo: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderLocation: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderDishName: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    lineHeight: theme.typography.fontSize.lg * 1.2,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderChef: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderStatus: {
+    flexDirection: "row",
+    alignItems: "center",
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  statusIcon: {
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  statusText: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderButtonPrimary: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: theme.radius.lg,
+  },
+  orderButtonTextPrimary: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderTotal: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold,
+    lineHeight: theme.typography.fontSize.lg * 1.2,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  settingsContent: {
+    flex: 1,
+    backgroundColor: '#FFFFFF',
+  },
+  settingsCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: theme.radius.xl,
+    padding: theme.spacing.xl,
+    gap: theme.spacing['2xl'],
+  },
+  settingsSection: {
+    gap: theme.spacing.md,
+  },
+  settingsSectionTitle: {
+    color: '#101828',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  avatarSection: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.md,
+  },
+  chefLogoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.lg,
+  },
+  chefLogoContainer: {
+    flexDirection: 'column',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.sm,
+  },
+  settingsAvatar: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: 'transparent',
+  },
+  settingsInput: {
+    borderWidth: 1,
+    borderColor: '#E5E7EB',
+    borderRadius: theme.radius.lg,
+    padding: theme.spacing.md,
+    fontSize: theme.typography.fontSize.base,
+    color: '#101828',
+    backgroundColor: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  settingsInputReadOnly: {
+    backgroundColor: '#F9FAFB',
+    color: '#667085',
+  },
+  locationPicker: {
+    marginTop: 0,
+  },
+  settingsHint: {
+    color: '#667085',
+    fontSize: theme.typography.fontSize.sm,
+    marginTop: theme.spacing.xs / 2,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  nameRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+  },
+  nameField: {
+    flex: 1,
+  },
+  saveButton: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  saveButtonDisabled: {
+    opacity: 0.6,
+  },
+  saveButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  actionButtons: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.xl,
+  },
+  logoutButtonProfile: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  logoutButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  deleteButton: {
+    flex: 1,
+    backgroundColor: theme.colors.primary,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.xl,
+    borderRadius: theme.radius.lg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  containerMobile: {
+    flexDirection: 'column',
+    padding: theme.spacing.md,
+    gap: theme.spacing.md,
+  },
+  sidebarMobile: {
+    width: '100%',
+    minHeight: 'auto',
+    flexDirection: 'row',
+    alignItems: 'center',
+    padding: 0,
+    borderRadius: 0,
+    backgroundColor: 'transparent',
+  },
+  sidebarContentMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  navMenuMobile: {
+    marginTop: 0,
+    width: '100%',
+  },
+  navMenuMobileContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+});

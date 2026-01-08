@@ -764,6 +764,7 @@ export default function ChefSignup() {
                         />
                   </View>
                       <Text style={styles.hint}>Share a detailed address for order pickups.</Text>
+                      <Text style={styles.hint}>Only available to customers after order confirmation</Text>
                   </View>
 
                   {/* Action Buttons */}
