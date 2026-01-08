@@ -1,31 +1,39 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { ActivityIndicator, Linking, Pressable, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+// TypeScript declaration for Web Speech API
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
+import React, { useEffect, useMemo, useState, useRef } from 'react';
+import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ScrollView, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, Link, router } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import { formatLocal } from '../../lib/datetime';
 import { cents } from '../../lib/money';
 import { updateOrderStatus } from '../../lib/orders';
+import { theme } from '../../lib/theme';
 
 const BG = '#f6f8f8';
 const CARD_BG = '#FFFFFF';
 const BORDER = '#E3E7E7';
-const TEXT_DARK = '#111817';
+const TEXT_DARK = '#33393a';
 const TEXT_MUTED = '#638886';
-const PRIMARY = '#2D6966';
-const ACCENT = '#2D6966';
+const PRIMARY = '#FE734C';
+const ACCENT = '#FE734C';
 
 const ACTIVE_STATUSES = ['requested', 'pending', 'ready', 'paid'] as const;
-const STATUS_STEPS = ['requested', 'pending', 'ready', 'completed'] as const;
 
 const STEP_META: Record<string, { label: string; icon: string }> = {
-  requested: { label: 'Order Placed', icon: '🧾' },
-  pending: { label: 'In the Kitchen', icon: '👩‍🍳' },
-  ready: { label: 'Ready for Pickup', icon: '🛍️' },
-  completed: { label: 'Completed', icon: '✅' },
-  rejected: { label: 'Rejected', icon: '❌' },
+  requested: { label: '🟡 Awaiting chef confirmation', icon: '🟡' },
+  pending: { label: '🟠 Chef confirmed the order', icon: '🟠' },
+  ready: { label: '🟢 Food ready for pickup', icon: '🟢' },
+  completed: { label: '🔵 Order picked up, enjoy!', icon: '🔵' },
+  rejected: { label: '⭕ Issue reported - under review', icon: '⭕' },
 };
 
 type OrderRow = {
@@ -59,6 +67,20 @@ type ChefRow = {
   email?: string | null;
   phone?: string | null;
   location?: string | null;
+  photo?: string | null;
+};
+
+type MessageRow = {
+  id: number;
+  order_id: number;
+  user_id: string;
+  chef_id: number;
+  message: string;
+  created_at: string;
+  chef_name?: string | null;
+  sender_user_id?: string | null;
+  recipient_user_id?: string | null;
+  sender_type?: 'customer' | 'chef' | null;
 };
 
 export default function TrackOrderPage() {
@@ -68,6 +90,16 @@ export default function TrackOrderPage() {
   const [items, setItems] = useState<(OrderItemRow & { dish?: DishRow | null })[]>([]);
   const [chef, setChef] = useState<ChefRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(false);
+  const [isPickupInfoExpanded, setIsPickupInfoExpanded] = useState(false);
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [messages, setMessages] = useState<MessageRow[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
 
   useEffect(() => {
     let mounted = true;
@@ -83,9 +115,12 @@ export default function TrackOrderPage() {
           setOrder(null);
           setItems([]);
           setChef(null);
+          setCurrentUserId(null);
           setLoading(false);
           return;
         }
+
+        if (mounted) setCurrentUserId(user.id);
 
         let selectedOrder: OrderRow | null = null;
 
@@ -143,12 +178,34 @@ export default function TrackOrderPage() {
         if (selectedOrder.chef_id) {
           const chefRes = await supabase
             .from('chefs')
-            .select('id,name,email,phone,location')
+            .select('id,name,email,phone,location,photo')
             .eq('id', selectedOrder.chef_id)
             .maybeSingle();
           if (!chefRes.error && mounted) setChef(chefRes.data as ChefRow | null);
         } else if (mounted) {
           setChef(null);
+        }
+
+        // Fetch messages for this order - sorted latest to oldest (newest first)
+        if (selectedOrder.id && mounted) {
+          const messagesRes = await supabase
+            .from('order_messages')
+            .select('*')
+            .eq('order_id', selectedOrder.id)
+            .order('created_at', { ascending: false }); // Latest (newest) first, oldest last
+          
+          console.log('Order tracking - Messages fetched:', {
+            orderId: selectedOrder.id,
+            messages: messagesRes.data,
+            error: messagesRes.error,
+            currentUserId: user?.id
+          });
+          
+          if (!messagesRes.error && messagesRes.data && mounted) {
+            setMessages(messagesRes.data as MessageRow[]);
+          } else if (messagesRes.error && mounted) {
+            console.error('Error fetching messages:', messagesRes.error);
+          }
         }
 
         channel = supabase
@@ -176,6 +233,117 @@ export default function TrackOrderPage() {
     [items]
   );
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
+  
+  // Platform service fee: 10% of subtotal
+  const platformFeeCents = useMemo(() => Math.round(subtotalCents * 0.10), [subtotalCents]);
+  // Taxes: 13% HST on subtotal + platform fee (Ontario rate)
+  const taxesCents = useMemo(() => Math.round((subtotalCents + platformFeeCents) * 0.13), [subtotalCents, platformFeeCents]);
+
+  // Send message function
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !order || !chef || sendingMessage) return;
+
+    setSendingMessage(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please sign in to send messages');
+        return;
+      }
+
+      // When customer sends a message:
+      // - sender_user_id = customer's user ID (current logged-in user)
+      // - recipient_user_id = chef's user ID (from chefs table)
+      // - sender_type = 'customer'
+      // First, get chef's user_id
+      let chefUserId: string | null = null;
+      if (chef.id) {
+        const { data: chefData } = await supabase
+          .from('chefs')
+          .select('user_id')
+          .eq('id', chef.id)
+          .maybeSingle();
+        chefUserId = chefData?.user_id || null;
+      }
+
+      const { data, error } = await supabase
+        .from('order_messages')
+        .insert({
+          order_id: order.id,
+          user_id: user.id, // Keep for backward compatibility
+          chef_id: chef.id, // Keep for backward compatibility
+          sender_user_id: user.id, // Customer's user ID (who sent it)
+          recipient_user_id: chefUserId, // Chef's user ID (who receives it)
+          sender_type: 'customer', // Customer sent this message
+          message: messageText.trim(),
+          chef_name: chef.name,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add message to local state
+      setMessages(prev => [...prev, data as MessageRow]);
+      setMessageText('');
+      setShowMessageModal(false);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to send message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Voice dictation function (Web Speech API)
+  const handleStartVoiceInput = () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Info', 'Voice dictation is currently only available on web');
+      return;
+    }
+
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      Alert.alert('Not Supported', 'Voice dictation is not supported in this browser');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setMessageText(prev => prev + (prev ? ' ' : '') + transcript);
+      setIsRecording(false);
+      recognition.stop();
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      Alert.alert('Error', 'Voice recognition failed. Please try again.');
+      recognition.stop();
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const handleStopVoiceInput = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+  };
 
   if (loading) {
     return (
@@ -188,8 +356,8 @@ export default function TrackOrderPage() {
   if (error) {
     return (
       <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }} style={{ backgroundColor: BG }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '800', marginBottom: 8 }}>Unable to load order</Text>
-        <Text style={{ color: TEXT_MUTED, textAlign: 'center' }}>{error}</Text>
+        <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '800', marginBottom: 8, fontFamily: theme.typography.fontFamily.display }}>Unable to load order</Text>
+        <Text style={{ color: TEXT_MUTED, textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>{error}</Text>
         <Link href="/browse" asChild>
           <TouchableOpacity style={styles.ctaPrimary}>
             <Text style={styles.ctaPrimaryText}>Browse dishes</Text>
@@ -202,8 +370,8 @@ export default function TrackOrderPage() {
   if (!order) {
     return (
       <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 24 }} style={{ backgroundColor: BG }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '800', marginBottom: 8 }}>No active orders</Text>
-        <Text style={{ color: TEXT_MUTED, marginBottom: 16, textAlign: 'center' }}>Once you place an order you can track it here.</Text>
+        <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '800', marginBottom: 8, fontFamily: theme.typography.fontFamily.display }}>No active orders</Text>
+        <Text style={{ color: TEXT_MUTED, marginBottom: 16, textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>Once you place an order you can track it here.</Text>
         <Link href="/browse" asChild>
           <TouchableOpacity style={styles.ctaPrimary}>
             <Text style={styles.ctaPrimaryText}>Browse dishes</Text>
@@ -213,26 +381,110 @@ export default function TrackOrderPage() {
     );
   }
 
-  const totalCents = Number.isFinite(order.total_cents) ? order.total_cents : subtotalCents;
-  const visualStatus = order.status === 'completed' ? 'ready' : order.status;
-  const rawIndex = STATUS_STEPS.findIndex(s => s === visualStatus);
-  const stepIndex = rawIndex < 0 ? 0 : rawIndex;
-  const stepMeta = STEP_META[visualStatus] ?? { label: visualStatus, icon: '•' };
+  const calculatedTotalCents = subtotalCents + platformFeeCents + taxesCents;
+  const totalCents = Number.isFinite(order.total_cents) ? order.total_cents : calculatedTotalCents;
+  const visualStatus = order.status === 'completed' ? 'completed' : order.status;
+  const stepMeta = STEP_META[visualStatus] ?? { label: `⭕ Issue reported - under review`, icon: '⭕' };
 
   let statusMessage = '';
   switch (visualStatus) {
     case 'requested':
-      statusMessage = 'Waiting for chef approval';
+      statusMessage = 'Your order is waiting for chef confirmation';
       break;
     case 'pending':
-      statusMessage = 'Chef approved — preparing your order';
+      statusMessage = 'Chef has confirmed your order and is preparing it';
       break;
     case 'ready':
-      statusMessage = 'Your order is ready for pickup';
+      statusMessage = 'Your food is ready! Please pick it up at the scheduled time';
+      break;
+    case 'completed':
+      statusMessage = 'Thank you for your order! We hope you enjoy your meal';
+      break;
+    case 'rejected':
+      statusMessage = 'There was an issue with your order. Our team is reviewing it';
       break;
     default:
-      statusMessage = order.status;
+      statusMessage = 'Your order status is being updated';
   }
+
+  // Format location address to display street, city, country
+  const formatLocationAddress = (location: string | null | undefined): { street: string; city: string; country: string } => {
+    if (!location) {
+      return { street: 'Not available', city: '', country: '' };
+    }
+    
+    try {
+      // Split by comma to parse address components
+      const parts = location.split(',').map(p => p.trim());
+      
+      // Street address is typically the first part
+      const street = parts[0] || 'Not available';
+      
+      // City is typically the second part (or first if only one part)
+      let city = parts.length > 1 ? parts[1] : '';
+      
+      // If there's a third part, it might contain province/state and postal code
+      // Extract city from the remaining parts (remove postal codes and province codes)
+      if (parts.length > 2) {
+        // City might be in the second part, third part could be province/postal
+        // Try to extract just the city name (remove postal codes)
+        const cityPart = parts[1];
+        // Remove postal code patterns (e.g., "ON M4C 1M6" or "M4C 1M6")
+        city = cityPart.replace(/\s*[A-Z]\d[A-Z]\s?\d[A-Z]\d\s*/i, '').replace(/\s*[A-Z]{2}\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d\s*/i, '').trim();
+        if (!city) city = cityPart; // Fallback to original if parsing failed
+      }
+      
+      // Determine country - default to Canada for Canadian addresses, or try to extract
+      let country = 'Canada';
+      // If we see US state codes or patterns, it might be USA
+      if (location.match(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/)) {
+        country = 'United States';
+      } else if (location.match(/\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b/)) {
+        country = 'Canada';
+      }
+      
+      return { street, city, country };
+    } catch {
+      return { street: location, city: '', country: 'Canada' };
+    }
+  };
+
+  // Format pickup date/time in the format "Jan 1, 2025 • 08:30PM-09:30PM"
+  const formatPickupDateTime = (pickupAt: string | null): string => {
+    if (!pickupAt) return 'Not available';
+    try {
+      const date = new Date(pickupAt);
+      if (Number.isNaN(date.getTime())) return 'Not available';
+      
+      // Format date as "Jan 1, 2025"
+      const dateStr = date.toLocaleDateString('en-US', { 
+        month: 'short', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+      
+      // Format time as "08:30PM"
+      const hour = date.getHours();
+      const minute = date.getMinutes();
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour >= 12 ? 'PM' : 'AM';
+      const minuteStr = minute.toString().padStart(2, '0');
+      const timeStr = `${hour12}:${minuteStr}${ampm}`;
+      
+      // Calculate end time (1 hour later)
+      const endDate = new Date(date);
+      endDate.setHours(endDate.getHours() + 1);
+      const endHour = endDate.getHours();
+      const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
+      const endAmpm = endHour >= 12 ? 'PM' : 'AM';
+      const endMinuteStr = endDate.getMinutes().toString().padStart(2, '0');
+      const endTimeStr = `${endHour12}:${endMinuteStr}${endAmpm}`;
+      
+      return `${dateStr} • ${timeStr}-${endTimeStr}`;
+    } catch {
+      return 'Not available';
+    }
+  };
 
   const showReadyAction = order.status === 'ready' || order.status === 'completed';
   const showRejectedBanner = order.status === 'rejected';
@@ -243,42 +495,9 @@ export default function TrackOrderPage() {
   return (
     <Screen scroll style={{ backgroundColor: BG }} contentPadding={0}>
       <View style={styles.wrapper}>
-        <View style={styles.topBar}>
-          <Link href="/profile" asChild>
-            <TouchableOpacity style={styles.backButton}>
-              <Text style={{ fontSize: 16 }}>←</Text>
-            </TouchableOpacity>
-          </Link>
-          <Text style={styles.topTitle}>Track Your Order</Text>
-          <View style={styles.backButton} />
-        </View>
-
-        <View style={styles.progressSection}>
-          <View style={styles.progressBarBackground}>
-            <View style={[styles.progressBarFill, { width: `${Math.max(0, Math.min(stepIndex, STATUS_STEPS.length - 1)) / (STATUS_STEPS.length - 1 || 1) * 100}%` }]} />
-          </View>
-          <View style={styles.progressSteps}>
-            {STATUS_STEPS.slice(0, 3).map((status, idx) => {
-              const meta = STEP_META[status];
-              const isActive = idx <= stepIndex;
-              return (
-                <View key={status} style={styles.progressStep}>
-                  <View style={[styles.progressDot, isActive ? styles.progressDotActive : styles.progressDotInactive]}>
-                    <Text style={{ fontSize: 16 }}>{meta?.icon ?? '•'}</Text>
-                  </View>
-                  <Text style={[styles.progressLabel, isActive ? styles.progressLabelActive : styles.progressLabelInactive]}>{meta?.label ?? status}</Text>
-                </View>
-              );
-            })}
-          </View>
-        </View>
-
-        <Text style={styles.heroTitle}>{stepMeta.label}</Text>
-        <Text style={styles.statusMessage}>{statusMessage}</Text>
-
         {showRejectedBanner ? (
           <View style={styles.rejectedBanner}>
-            <Text style={styles.rejectedText}>Order was rejected by the chef.</Text>
+            <Text style={styles.rejectedText}>Issue reported - under review</Text>
           </View>
         ) : null}
 
@@ -289,58 +508,159 @@ export default function TrackOrderPage() {
         ) : null}
 
         <View style={styles.card}>
-          <Text style={styles.cardLabel}>Order #{String(order.id).padStart(5, '0')}</Text>
-          <Text style={styles.cardTitle}>{chefName}'s Kitchen</Text>
-          <Text style={styles.cardMeta}>Pickup: {formatLocal(order.pickup_at)}</Text>
-          <Text style={styles.cardMeta}>{itemCount} item{itemCount === 1 ? '' : 's'}</Text>
-          {chef?.email ? (
-            <Pressable
-              onPress={() => Linking.openURL(`mailto:${chef.email}`)}
-              style={styles.contactButton}
-            >
-              <Text style={styles.contactButtonIcon}>💬</Text>
-              <Text style={styles.contactButtonText}>Contact Chef</Text>
-            </Pressable>
-          ) : null}
-        </View>
-
-        <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Items</Text>
-          <View style={{ gap: 12 }}>
-            {items.map(item => (
-              <View key={item.id} style={styles.itemRow}>
-                <Text style={styles.itemName} numberOfLines={1}>
-                  {item.dish?.name ?? `Dish #${item.dish_id}`} × {item.quantity}
-                </Text>
-                <Text style={styles.itemPrice}>{cents(item.unit_price_cents * item.quantity)}</Text>
+          <Text style={styles.sectionTitle}>Status</Text>
+          <Text style={styles.statusValue}>{stepMeta.label}</Text>
+          <View style={styles.statusDetails}>
+            <View style={styles.infoRow}>
+              <Text style={styles.statusInfoLabel}>Pickup scheduled</Text>
+              <Text style={styles.statusInfoValue}>{formatPickupDateTime(order.pickup_at)}</Text>
+            </View>
+            <View style={styles.infoRow}>
+              <Text style={styles.statusInfoLabel}>Pick up location</Text>
+              <View style={styles.locationValueContainer}>
+                {(() => {
+                  const { street, city, country } = formatLocationAddress(chef?.location);
+                  return (
+                    <>
+                      <Text style={styles.locationAddressLine}>{street}</Text>
+                      {city && <Text style={styles.locationAddressLine}>{city}</Text>}
+                      {country && <Text style={styles.locationAddressLine}>{country}</Text>}
+                    </>
+                  );
+                })()}
               </View>
-            ))}
-            {items.length === 0 && <Text style={{ color: TEXT_MUTED }}>No items recorded.</Text>}
+            </View>
           </View>
         </View>
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Order Summary</Text>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Subtotal</Text>
-            <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
-          </View>
-          <View style={styles.summaryRow}>
-            <Text style={styles.summaryLabel}>Fees</Text>
-            <Text style={styles.summaryValue}>{cents(0)}</Text>
-          </View>
-          <View style={[styles.summaryRow, { marginTop: 8 }]}>
-            <Text style={[styles.summaryLabel, { fontWeight: '800', color: TEXT_DARK }]}>Total</Text>
-            <Text style={[styles.summaryValue, { fontWeight: '800', color: TEXT_DARK }]}>{cents(totalCents)}</Text>
-          </View>
+          <TouchableOpacity 
+            style={styles.orderSummaryHeader}
+            onPress={() => setIsOrderSummaryExpanded(!isOrderSummaryExpanded)}
+          >
+            <View style={styles.orderSummaryTitleRow}>
+              <Text style={styles.sectionTitle}>Order Summary</Text>
+              <Text style={styles.orderNumber}>#{String(order.id).padStart(5, '0')}</Text>
+            </View>
+            <Text style={styles.expandIcon}>{isOrderSummaryExpanded ? '−' : '+'}</Text>
+          </TouchableOpacity>
+          
+          {isOrderSummaryExpanded && (
+            <View style={styles.orderSummaryContent}>
+              {items.map(item => (
+                <View key={item.id} style={styles.orderItemRow}>
+                  <View style={styles.orderItemInfo}>
+                    <Text style={styles.orderItemName}>
+                      {item.dish?.name ?? `Dish #${item.dish_id}`} ({chef?.name ?? 'Chef'})
+                    </Text>
+                  </View>
+                  <View style={styles.orderItemQuantityPrice}>
+                    <Text style={styles.orderItemQuantity}>{item.quantity}</Text>
+                    <Text style={styles.orderItemPrice}>{cents(item.unit_price_cents * item.quantity)}</Text>
+                  </View>
+                </View>
+              ))}
+              
+              <View style={styles.summaryDivider} />
+              
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Subtotal</Text>
+                <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <View style={styles.summaryLabelWithIcon}>
+                  <Text style={styles.summaryLabel}>Platform service fee </Text>
+                  <Text style={styles.infoIcon}>ⓘ</Text>
+                </View>
+                <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
+              </View>
+              <View style={styles.summaryRow}>
+                <Text style={styles.summaryLabel}>Taxes</Text>
+                <Text style={styles.summaryValue}>{cents(taxesCents)}</Text>
+              </View>
+              <View style={[styles.summaryRow, { marginTop: 8 }]}>
+                <Text style={[styles.summaryLabel, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>Total</Text>
+                <Text style={[styles.summaryValue, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>{cents(calculatedTotalCents)}</Text>
+              </View>
+              
+              <Text style={styles.platformFeeInfo}>
+                ⓘ It helps support the platform and secure payments.
+              </Text>
+            </View>
+          )}
         </View>
 
-        {chef?.location ? (
-          <View style={styles.card}>
-            <Text style={styles.sectionTitle}>Pickup Location</Text>
-            <Text style={{ color: TEXT_MUTED }}>{chef.location}</Text>
-          </View>
-        ) : null}
+        <View style={styles.card}>
+          <TouchableOpacity 
+            style={styles.orderSummaryHeader}
+            onPress={() => setIsPickupInfoExpanded(!isPickupInfoExpanded)}
+          >
+            <Text style={styles.sectionTitle}>Pickup info</Text>
+            <Text style={styles.expandIcon}>{isPickupInfoExpanded ? '−' : '+'}</Text>
+          </TouchableOpacity>
+          
+          {isPickupInfoExpanded && (
+            <View style={styles.pickupInfoContent}>
+              <Text style={styles.pickupDateTime}>
+                {order.pickup_at ? (() => {
+                  try {
+                    const date = new Date(order.pickup_at);
+                    if (Number.isNaN(date.getTime())) return 'Not available';
+                    
+                    // Format date as "January 1, 2025"
+                    const dateStr = date.toLocaleDateString('en-US', { 
+                      month: 'long', 
+                      day: 'numeric', 
+                      year: 'numeric' 
+                    });
+                    
+                    // Format start time as "08:30" (24-hour format)
+                    const hour = date.getHours();
+                    const minute = date.getMinutes();
+                    const hourStr = hour.toString().padStart(2, '0');
+                    const minuteStr = minute.toString().padStart(2, '0');
+                    const startTimeStr = `${hourStr}:${minuteStr}`;
+                    
+                    // Calculate end time (1 hour later) and format as "9:30PM"
+                    const endDate = new Date(date);
+                    endDate.setHours(endDate.getHours() + 1);
+                    const endHour = endDate.getHours();
+                    const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
+                    const endAmpm = endHour >= 12 ? 'PM' : 'AM';
+                    const endMinuteStr = endDate.getMinutes().toString().padStart(2, '0');
+                    const endTimeStr = `${endHour12}:${endMinuteStr}${endAmpm}`;
+                    
+                    return `${dateStr} - ${startTimeStr} - ${endTimeStr}`;
+                  } catch {
+                    return 'Not available';
+                  }
+                })() : 'Not available'}
+              </Text>
+              
+              {chef?.location && (
+                <TouchableOpacity 
+                  style={styles.pickupLocationRow}
+                  onPress={() => {
+                    const encodedAddress = encodeURIComponent(chef.location || '');
+                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                    Linking.openURL(mapsUrl);
+                  }}
+                >
+                  <Image 
+                    source={require('../../assets/placeholder.png')} 
+                    style={styles.locationIcon}
+                    resizeMode="contain"
+                  />
+                  <Text style={styles.pickupLocation}>{chef.location}</Text>
+                </TouchableOpacity>
+              )}
+              
+              <Text style={styles.pickupReminder}>
+                We'll remind you before pickup time. The food's prepared by an independent home chef.
+              </Text>
+            </View>
+          )}
+        </View>
 
         {showReadyAction ? (
           <TouchableOpacity
@@ -358,15 +678,168 @@ export default function TrackOrderPage() {
           </TouchableOpacity>
         ) : null}
 
-        <View style={{ height: 24 }} />
+        {messages.length > 0 && (
+          <View style={styles.card}>
+            <TouchableOpacity 
+              style={styles.orderSummaryHeader}
+              onPress={() => setIsMessagesExpanded(!isMessagesExpanded)}
+            >
+              <Text style={styles.sectionTitle}>Messages</Text>
+              <Text style={styles.expandIcon}>{isMessagesExpanded ? '−' : '+'}</Text>
+            </TouchableOpacity>
+            
+            {isMessagesExpanded && (
+              <ScrollView 
+                style={styles.messagesScrollView}
+                contentContainerStyle={styles.messagesContent}
+                showsVerticalScrollIndicator={true}
+              >
+                {messages.map(message => {
+                  // Determine if message is from current user (customer) or chef
+                  // Use sender_type if available (new schema), otherwise fall back to user_id comparison
+                  const isUserMessage = message.sender_type === 'customer' || 
+                    (message.sender_type === null && message.user_id === currentUserId);
+                  const isChefMessage = message.sender_type === 'chef' || 
+                    (message.sender_type === null && message.user_id !== currentUserId);
+                  
+                  // Determine sender name
+                  const senderName = isUserMessage 
+                    ? 'You' 
+                    : (message.chef_name || chef?.name || 'Chef');
+                  
+                  return (
+                    <View 
+                      key={message.id} 
+                      style={[
+                        styles.messageBubbleContainer,
+                        isUserMessage ? styles.messageBubbleRight : styles.messageBubbleLeft
+                      ]}
+                    >
+                      <View style={[
+                        styles.messageBubble,
+                        isUserMessage ? styles.messageBubbleUser : styles.messageBubbleChef
+                      ]}>
+                        <Text style={styles.messageSenderName}>{senderName}</Text>
+                        <Text style={styles.messageBody}>{message.message}</Text>
+                        <Text style={styles.messageTime}>{formatLocal(message.created_at, { dateStyle: 'short', timeStyle: 'short' })}</Text>
+                      </View>
+                    </View>
+                  );
+                })}
+              </ScrollView>
+            )}
+          </View>
+        )}
+
+        <View style={styles.actionButtonsContainer}>
+          <View style={styles.messageChefContainer}>
+            <TouchableOpacity
+              onPress={() => setShowMessageModal(true)}
+              style={styles.messageChefButton}
+            >
+              <Text style={styles.messageChefButtonText}>Have questions? Message chef.</Text>
+            </TouchableOpacity>
+            <Text style={styles.messageChefSubtext}>Messages are shared securely through the platform.</Text>
+          </View>
+          
+          <View style={styles.browseContainer}>
+            <Link href="/browse?tab=chefs" asChild>
+              <TouchableOpacity style={styles.messageChefButton}>
+                <Text style={styles.messageChefButtonText}>Browse chefs, as you wait!</Text>
+              </TouchableOpacity>
+            </Link>
+            <TouchableOpacity style={styles.messageChefButton}>
+              <Text style={styles.messageChefButtonText}>Report an issue?</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+
+        <Text style={styles.footerNote}>
+          The food is prepared by an independent home chef. Please handle it safely after pickup.
+        </Text>
       </View>
-      <View style={styles.bottomBar}>
-        <Link href="/profile" asChild>
-          <TouchableOpacity style={styles.bottomButton}>
-            <Text style={styles.bottomButtonText}>View Order Summary</Text>
-          </TouchableOpacity>
-        </Link>
-      </View>
+
+      {/* Message Chef Modal */}
+      <Modal
+        visible={showMessageModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowMessageModal(false);
+          setMessageText('');
+          handleStopVoiceInput();
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <View style={styles.modalTitleContainer}>
+                <View style={styles.chefHeaderRow}>
+                  {chef?.photo ? (
+                    <Image source={{ uri: chef.photo }} style={styles.chefLogoModal} />
+                  ) : (
+                    <View style={[styles.chefLogoModal, styles.chefLogoPlaceholder]}>
+                      <Text style={styles.chefLogoText}>{chef?.name?.charAt(0) || 'C'}</Text>
+                    </View>
+                  )}
+                  <Text style={styles.modalTitle}>{chef?.name || 'Chef'}</Text>
+                </View>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowMessageModal(false);
+                  setMessageText('');
+                  handleStopVoiceInput();
+                }}
+                style={styles.modalCloseButton}
+              >
+                <Text style={styles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              style={styles.modalBody}
+              contentContainerStyle={styles.modalBodyContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              <View style={styles.messageInputContainer}>
+                <TextInput
+                  style={styles.messageInput}
+                  placeholder="Type your message..."
+                  placeholderTextColor={TEXT_MUTED}
+                  value={messageText}
+                  onChangeText={setMessageText}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+                <View style={styles.messageInputActions}>
+                  <TouchableOpacity
+                    style={[styles.micButton, isRecording && styles.micButtonActive]}
+                    onPress={isRecording ? handleStopVoiceInput : handleStartVoiceInput}
+                  >
+                    <Image 
+                      source={require('../../assets/microphone.png')} 
+                      style={styles.micIconImage}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.sendButton, (!messageText.trim() || sendingMessage) && styles.sendButtonDisabled]}
+                    onPress={handleSendMessage}
+                    disabled={!messageText.trim() || sendingMessage}
+                  >
+                    {sendingMessage ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={styles.sendButtonIcon}>➤</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -378,83 +851,19 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 96,
+    paddingBottom: 20,
     gap: 20,
-  },
-  topBar: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: '#E1E9E8',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  topTitle: {
-    flex: 1,
-    textAlign: 'center',
-    color: TEXT_DARK,
-    fontWeight: '800',
-    fontSize: 18,
-  },
-  progressSection: {
-    gap: 16,
-  },
-  progressBarBackground: {
-    height: 4,
-    borderRadius: 999,
-    backgroundColor: '#D7E2E0',
-    overflow: 'hidden',
-  },
-  progressBarFill: {
-    height: '100%',
-    backgroundColor: PRIMARY,
-  },
-  progressSteps: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-  },
-  progressStep: {
-    alignItems: 'center',
-    flex: 1,
-  },
-  progressDot: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  progressDotActive: {
-    backgroundColor: PRIMARY,
-  },
-  progressDotInactive: {
-    backgroundColor: '#E1E9E8',
-  },
-  progressLabel: {
-    fontSize: 12,
-    marginTop: 8,
-    textAlign: 'center',
-  },
-  progressLabelActive: {
-    color: PRIMARY,
-    fontWeight: '700',
-  },
-  progressLabelInactive: {
-    color: TEXT_MUTED,
   },
   heroTitle: {
     color: TEXT_DARK,
     fontSize: 24,
     fontWeight: '900',
     marginTop: 8,
+    fontFamily: theme.typography.fontFamily.display,
   },
   statusMessage: {
     color: TEXT_MUTED,
+    fontFamily: theme.typography.fontFamily.body,
   },
   rejectedBanner: {
     backgroundColor: '#FEE2E2',
@@ -464,6 +873,7 @@ const styles = StyleSheet.create({
   rejectedText: {
     color: '#B91C1C',
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   completedBadge: {
     alignSelf: 'flex-start',
@@ -475,27 +885,52 @@ const styles = StyleSheet.create({
   completedText: {
     color: '#15803D',
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
   },
   card: {
     backgroundColor: CARD_BG,
     borderRadius: 16,
     borderWidth: 1,
     borderColor: BORDER,
-    padding: 20,
+    padding: 12,
     gap: 8,
   },
   cardLabel: {
     color: TEXT_MUTED,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardTitle: {
     color: TEXT_DARK,
     fontSize: 20,
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
   },
   cardMeta: {
     color: TEXT_MUTED,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  infoRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  infoLabel: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  infoValue: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '600',
+    flex: 2,
+    textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.body,
   },
   contactButton: {
     marginTop: 12,
@@ -510,15 +945,174 @@ const styles = StyleSheet.create({
   contactButtonIcon: {
     fontSize: 18,
     color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
   },
   contactButtonText: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
   },
   sectionTitle: {
     color: TEXT_DARK,
     fontSize: 18,
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  statusValue: {
+    color: TEXT_DARK,
+    fontSize: 24,
+    fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 8,
+    marginBottom: 16,
+  },
+  statusDetails: {
+    marginTop: 8,
+    gap: 12,
+  },
+  statusInfoLabel: {
+    color: PRIMARY,
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  statusInfoValue: {
+    color: PRIMARY,
+    fontSize: 14,
+    fontWeight: '700',
+    flex: 2,
+    textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  locationValueContainer: {
+    flex: 2,
+    alignItems: 'flex-end',
+    gap: 2,
+  },
+  locationAddressLine: {
+    color: PRIMARY,
+    fontSize: 14,
+    fontWeight: '700',
+    textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderSummaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 0,
+    minHeight: 24,
+  },
+  orderSummaryTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  orderNumber: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  expandIcon: {
+    color: PRIMARY,
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  orderSummaryContent: {
+    marginTop: 8,
+    gap: 12,
+  },
+  orderItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 8,
+  },
+  orderItemInfo: {
+    flex: 1,
+  },
+  orderItemName: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderItemQuantityPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginLeft: 12,
+  },
+  orderItemQuantity: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    minWidth: 20,
+    textAlign: 'right',
+  },
+  orderItemPrice: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: BORDER,
+    marginVertical: 8,
+  },
+  summaryLabelWithIcon: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  infoIcon: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+  },
+  platformFeeInfo: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  pickupInfoContent: {
+    marginTop: 8,
+    gap: 12,
+  },
+  pickupDateTime: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '600',
+  },
+  pickupLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  locationIcon: {
+    width: 14,
+    height: 14,
+    tintColor: PRIMARY,
+    marginTop: 2,
+  },
+  pickupLocation: {
+    flex: 1,
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    textDecorationLine: 'underline',
+  },
+  pickupReminder: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 18,
+    marginTop: 4,
   },
   itemRow: {
     flexDirection: 'row',
@@ -528,10 +1122,12 @@ const styles = StyleSheet.create({
   itemName: {
     flex: 1,
     color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
   },
   itemPrice: {
     color: TEXT_DARK,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   summaryRow: {
     flexDirection: 'row',
@@ -540,11 +1136,13 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   summaryLabel: {
-    color: TEXT_MUTED,
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
   },
   summaryValue: {
-    color: TEXT_MUTED,
+    color: TEXT_DARK,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   readyAction: {
     backgroundColor: ACCENT,
@@ -556,28 +1154,278 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
   },
-  bottomBar: {
-    position: 'absolute',
-    left: 0,
-    right: 0,
-    bottom: 0,
-    padding: 20,
-    backgroundColor: BG,
-    borderTopWidth: 1,
-    borderTopColor: BORDER,
+  actionButtonsContainer: {
+    gap: 12,
+    marginTop: 8,
   },
-  bottomButton: {
+  messageChefContainer: {
+    gap: 8,
+  },
+  messageChefButton: {
     backgroundColor: PRIMARY,
     borderRadius: 16,
-    height: 52,
+    paddingVertical: 14,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  bottomButtonText: {
+  messageChefButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  messageChefSubtext: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  browseContainer: {
+    gap: 12,
+  },
+  actionButton: {
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  actionButtonText: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+    marginBottom: 4,
+  },
+  actionButtonSubtext: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  footerNote: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    textAlign: 'center',
+    lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  messagesScrollView: {
+    maxHeight: 400,
+  },
+  messagesContent: {
+    marginTop: 8,
+    gap: 8,
+    paddingBottom: 8,
+  },
+  messageBubbleContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  messageBubbleLeft: {
+    justifyContent: 'flex-start',
+  },
+  messageBubbleRight: {
+    justifyContent: 'flex-end',
+  },
+  messageBubble: {
+    maxWidth: '75%',
+    padding: 12,
+    borderRadius: 16,
+    gap: 6,
+  },
+  messageBubbleChef: {
+    backgroundColor: '#F3F4F6',
+    borderTopLeftRadius: 4,
+  },
+  messageBubbleUser: {
+    backgroundColor: 'rgba(254, 115, 76, 0.1)',
+    borderTopRightRadius: 4,
+  },
+  messageSenderName: {
+    color: TEXT_DARK,
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+    marginBottom: 4,
+  },
+  messageBody: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 20,
+  },
+  messageTime: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  // Keep old styles for backward compatibility (not used anymore)
+  messageItem: {
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    gap: 8,
+  },
+  messageItemUser: {
+    backgroundColor: 'rgba(254, 115, 76, 0.1)',
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messageChefName: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  messageDate: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: CARD_BG,
+    borderRadius: 16,
+    maxHeight: '80%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      },
+      default: {
+        elevation: 10,
+      },
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER,
+  },
+  modalTitleContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  chefHeaderRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  chefLogoModal: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: '#E1E9E8',
+  },
+  chefLogoPlaceholder: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  chefLogoText: {
+    color: TEXT_DARK,
+    fontSize: 18,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
+    color: TEXT_DARK,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: TEXT_DARK,
+    fontWeight: '300',
+  },
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: 20,
+    paddingBottom: 20,
+  },
+  messageInputContainer: {
+    gap: 12,
+  },
+  messageInput: {
+    minHeight: 120,
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: BORDER,
+    borderRadius: 12,
+    padding: 12,
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlignVertical: 'top',
+  },
+  messageInputActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: PRIMARY,
+  },
+  micIconImage: {
+    width: 24,
+    height: 24,
+    tintColor: PRIMARY,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+  sendButtonIcon: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
   },
   ctaPrimary: {
     backgroundColor: PRIMARY,
@@ -588,5 +1436,6 @@ const styles = StyleSheet.create({
   ctaPrimaryText: {
     color: '#FFFFFF',
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
   },
 });

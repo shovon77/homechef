@@ -1,6 +1,15 @@
 'use client';
-import { useEffect, useState, useMemo, useCallback } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions } from 'react-native';
+
+// TypeScript declaration for Web Speech API
+declare global {
+  interface Window {
+    SpeechRecognition: any;
+    webkitSpeechRecognition: any;
+  }
+}
+
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions, Modal } from 'react-native';
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
@@ -88,6 +97,29 @@ export default function ChefDashboard() {
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewSearch, setReviewSearch] = useState('');
   const [reviewSort, setReviewSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
+  const [showMessageModal, setShowMessageModal] = useState(false);
+  const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
+  const [selectedOrderUserId, setSelectedOrderUserId] = useState<string | null>(null);
+  const [orderMessages, setOrderMessages] = useState<MessageWithUser[]>([]);
+  const [messageText, setMessageText] = useState('');
+  const [sendingMessage, setSendingMessage] = useState(false);
+  const [isRecording, setIsRecording] = useState(false);
+  const [selectedOrderUserEmail, setSelectedOrderUserEmail] = useState<string | null>(null);
+  const recognitionRef = useRef<any>(null);
+  
+  type MessageWithUser = {
+    id: number;
+    order_id: number;
+    user_id: string;
+    chef_id: number;
+    message: string;
+    created_at: string;
+    chef_name?: string | null;
+    user_email?: string;
+    sender_user_id?: string | null;
+    recipient_user_id?: string | null;
+    sender_type?: 'customer' | 'chef' | null;
+  };
 
   useEffect(() => {
     (async () => {
@@ -766,14 +798,14 @@ export default function ChefDashboard() {
 
   async function refreshOrdersForChef(chefId: number) {
     try {
-      // Show orders that are ready for chef to process
-      // Fetch all 'requested' orders and filter for paid ones
+      // Fetch orders with all relevant statuses for chef dashboard
+      // Include: requested, pending, ready, completed, cancelled, rejected
       // Include: payment_status='succeeded' OR (payment_status IS NULL AND has stripe_payment_intent_id)
       const { data: ordersData, error } = await supabase
         .from('orders')
         .select('id,user_id,status,total_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
         .eq('chef_id', chefId)
-        .eq('status', 'requested')
+        .in('status', ['requested', 'pending', 'ready', 'completed', 'cancelled', 'rejected'])
         .order('created_at', { ascending: false });
 
       if (error || !ordersData) {
@@ -782,14 +814,23 @@ export default function ChefDashboard() {
         return;
       }
 
-      // Client-side filter: ONLY show orders where payment was successfully processed
-      // This is strict to ensure chefs only see paid orders
+      // Client-side filter: For 'requested' orders, ONLY show orders where payment was successfully processed
+      // For other statuses (pending, ready, completed), show all orders as they've already been confirmed
+      // This is strict for 'requested' to ensure chefs only see paid orders
       // Include:
       // 1. payment_status = 'succeeded' (confirmed paid - webhook updated)
       // 2. payment_status IS NULL AND stripe_payment_intent_id IS NOT NULL (legacy paid orders)
-      // Exclude: 'awaiting_payment', 'failed', 'canceled', or any other non-success status
+      // 3. Orders with status other than 'requested' (pending, ready, completed, etc.)
+      // Exclude: 'awaiting_payment', 'failed', 'canceled' for 'requested' orders only
       // Note: Orders with 'awaiting_payment' are NOT shown until webhook updates them to 'succeeded'
       const filteredOrders = ordersData.filter(order => {
+        // For non-requested orders (pending, ready, completed, etc.), show them all
+        // These orders have already been confirmed by the chef
+        if (order.status !== 'requested') {
+          return true;
+        }
+        
+        // For 'requested' orders, apply strict payment filtering
         const paymentStatus = order.payment_status;
         const hasPaymentIntent = !!order.stripe_payment_intent_id;
         
@@ -962,6 +1003,202 @@ export default function ChefDashboard() {
   const filteredOrders = useMemo(() => {
     return orders.filter(o => o.status === orderStatusFilter);
   }, [orders, orderStatusFilter]);
+
+  // Open message modal for an order
+  const handleOpenMessageModal = async (orderId: number, userEmail: string) => {
+    setSelectedOrderId(orderId);
+    setSelectedOrderUserEmail(userEmail);
+    setShowMessageModal(true);
+    setMessageText('');
+    setOrderMessages([]); // Clear previous messages
+    
+    // Fetch messages for this order
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      console.log('Fetching messages for order:', orderId, 'Chef ID:', chef?.id, 'User ID:', user?.id);
+      
+      // Fetch order details to get customer's user_id
+      let customerUserId: string | null = null;
+      if (chef?.id) {
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('id,chef_id,user_id')
+          .eq('id', orderId)
+          .eq('chef_id', chef.id)
+          .maybeSingle();
+        
+        if (orderError || !orderData) {
+          console.warn('Order verification:', { orderError, orderData, orderId, chefId: chef.id });
+          // Don't block - RLS will handle security, just log for debugging
+        } else {
+          customerUserId = orderData.user_id;
+          setSelectedOrderUserId(customerUserId);
+        }
+      }
+      
+      // Fetch messages - RLS should allow if chef_id matches and chef.user_id = auth.uid()
+      const { data, error } = await supabase
+        .from('order_messages')
+        .select('*')
+        .eq('order_id', orderId)
+        .order('created_at', { ascending: true });
+      
+      console.log('Messages query result:', { 
+        data, 
+        error, 
+        dataLength: data?.length,
+        chefId: chef?.id,
+        orderId: orderId
+      });
+      
+      if (error) {
+        console.error('Error fetching messages:', error);
+        Alert.alert('Error', `Failed to load messages: ${error.message}`);
+        setOrderMessages([]);
+        return;
+      }
+      
+      if (data && data.length > 0) {
+        console.log('Found messages:', data.length);
+        // Fetch user emails for customer messages
+        const userIds = [...new Set(data.map(m => m.user_id).filter(Boolean))];
+        let userEmailMap = new Map<string, string>();
+        
+        if (userIds.length > 0) {
+          const { data: profilesData, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id,email,name')
+            .in('id', userIds);
+          
+          if (profilesError) {
+            console.warn('Error fetching user profiles:', profilesError);
+          }
+          
+          if (profilesData) {
+            // Use name if available, otherwise fall back to email
+            userEmailMap = new Map(profilesData.map((p: any) => [p.id, p.name || p.email || 'Customer']));
+          }
+        }
+        
+        // Enhance messages with user name/email info
+        const enhancedMessages = data.map(msg => ({
+          ...msg,
+          user_email: userEmailMap.get(msg.user_id) || userEmail || 'Customer',
+        }));
+        
+        console.log('Enhanced messages:', enhancedMessages);
+        setOrderMessages(enhancedMessages);
+      } else {
+        console.log('No messages found for order:', orderId);
+        setOrderMessages([]);
+      }
+    } catch (err: any) {
+      console.error('Error fetching messages:', err);
+      Alert.alert('Error', `Failed to load messages: ${err?.message || 'Unknown error'}`);
+      setOrderMessages([]);
+    }
+  };
+
+  // Send message function
+  const handleSendMessage = async () => {
+    if (!messageText.trim() || !selectedOrderId || !chef || sendingMessage) return;
+
+    setSendingMessage(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please sign in to send messages');
+        return;
+      }
+
+      // Find the order to get order details
+      const order = orders.find(o => o.id === selectedOrderId);
+      if (!order) {
+        Alert.alert('Error', 'Order not found');
+        return;
+      }
+
+      // When chef sends a message:
+      // - sender_user_id = chef's user ID (current logged-in user)
+      // - recipient_user_id = customer's user ID (from order)
+      // - sender_type = 'chef'
+      const { data, error } = await supabase
+        .from('order_messages')
+        .insert({
+          order_id: selectedOrderId,
+          user_id: user.id, // Keep for backward compatibility
+          chef_id: chef.id, // Keep for backward compatibility
+          sender_user_id: user.id, // Chef's user ID (who sent it)
+          recipient_user_id: order.user_id, // Customer's user ID (who receives it)
+          sender_type: 'chef', // Chef sent this message
+          message: messageText.trim(),
+          chef_name: chef.name,
+        })
+        .select()
+        .single();
+
+      if (error) throw error;
+
+      // Add message to local state
+      setOrderMessages(prev => [...prev, data]);
+      setMessageText('');
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to send message');
+    } finally {
+      setSendingMessage(false);
+    }
+  };
+
+  // Voice dictation function (Web Speech API)
+  const handleStartVoiceInput = () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Info', 'Voice dictation is currently only available on web');
+      return;
+    }
+
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      Alert.alert('Not Supported', 'Voice dictation is not supported in this browser');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecording(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setMessageText(prev => prev + (prev ? ' ' : '') + transcript);
+      setIsRecording(false);
+      recognition.stop();
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecording(false);
+      Alert.alert('Error', 'Voice recognition failed. Please try again.');
+      recognition.stop();
+    };
+
+    recognition.onend = () => {
+      setIsRecording(false);
+    };
+
+    recognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const handleStopVoiceInput = () => {
+    if (recognitionRef.current) {
+      recognitionRef.current.stop();
+      setIsRecording(false);
+    }
+  };
 
   async function loadReviews(chefId: number) {
     setReviewsLoading(true);
@@ -1362,7 +1599,7 @@ export default function ChefDashboard() {
                       </TouchableOpacity>
                     </>
                   ) : order.status === 'pending' ? (
-                    <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <View style={{ gap: 8 }}>
                       <TouchableOpacity
                         onPress={async () => {
                           try {
@@ -1375,6 +1612,12 @@ export default function ChefDashboard() {
                         style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: isMobile ? 12 : 16, borderRadius: 8, alignSelf: 'flex-start', minWidth: isMobile ? 100 : 'auto' }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
                       </TouchableOpacity>
                       <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
                     </View>
@@ -1508,7 +1751,7 @@ export default function ChefDashboard() {
                 </TouchableOpacity>
               </>
             ) : order.status === 'pending' ? (
-              <View style={{ flexDirection: 'row', gap: 8, alignItems: 'center' }}>
+                    <View style={{ gap: 8 }}>
                 <TouchableOpacity
                   onPress={async () => {
                     try {
@@ -1521,6 +1764,12 @@ export default function ChefDashboard() {
                 style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                 >
                   <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
                 </TouchableOpacity>
                 <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
               </View>
@@ -1974,6 +2223,125 @@ export default function ChefDashboard() {
           {activeTab === 'profile' && ProfileTab}
         </View>
       </View>
+
+      {/* Message Modal */}
+      <Modal
+        visible={showMessageModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowMessageModal(false);
+          setMessageText('');
+          handleStopVoiceInput();
+        }}
+      >
+        <View style={messageModalStyles.modalOverlay}>
+          <View style={messageModalStyles.modalContent}>
+            <View style={messageModalStyles.modalHeader}>
+              <View style={messageModalStyles.modalTitleContainer}>
+                <Text style={messageModalStyles.modalTitle}>{selectedOrderUserEmail || 'Customer'}</Text>
+                <Text style={messageModalStyles.modalSubtitle}>Order #{selectedOrderId}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowMessageModal(false);
+                  setMessageText('');
+                  handleStopVoiceInput();
+                }}
+                style={messageModalStyles.modalCloseButton}
+              >
+                <Text style={messageModalStyles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView 
+              style={messageModalStyles.modalBody}
+              contentContainerStyle={messageModalStyles.modalBodyContent}
+              keyboardShouldPersistTaps="handled"
+              showsVerticalScrollIndicator={true}
+            >
+              {/* Messages List */}
+              {orderMessages.length > 0 ? (
+                <View style={messageModalStyles.messagesList}>
+                  {orderMessages.map(message => {
+                    // Check if this message was sent by the chef (current logged-in chef)
+                    // Use sender_type if available (new schema), otherwise fall back to user_id comparison
+                    const isChefMessage = message.sender_type === 'chef' || 
+                      (message.sender_type === null && selectedOrderUserId 
+                        ? message.user_id !== selectedOrderUserId 
+                        : message.user_id === user?.id);
+                    
+                    // For chef messages: show "You" (just like order tracking page)
+                    // For user messages: show user's name/email
+                    const senderName = isChefMessage 
+                      ? 'You' 
+                      : (message.user_email || 'Customer');
+                    
+                    return (
+                      <View 
+                        key={message.id} 
+                        style={[
+                          messageModalStyles.messageBubbleContainer,
+                          isChefMessage ? messageModalStyles.messageBubbleRight : messageModalStyles.messageBubbleLeft
+                        ]}
+                      >
+                        <View style={[
+                          messageModalStyles.messageBubble,
+                          isChefMessage ? messageModalStyles.messageBubbleChef : messageModalStyles.messageBubbleUser
+                        ]}>
+                          <Text style={messageModalStyles.messageSenderName}>{senderName}</Text>
+                          <Text style={messageModalStyles.messageBody}>{message.message}</Text>
+                          <Text style={messageModalStyles.messageTime}>{formatLocal(message.created_at, { dateStyle: 'short', timeStyle: 'short' })}</Text>
+                        </View>
+                      </View>
+                    );
+                  })}
+                </View>
+              ) : (
+                <View style={messageModalStyles.emptyMessagesContainer}>
+                  <Text style={messageModalStyles.emptyMessagesText}>No messages yet. Start the conversation!</Text>
+                </View>
+              )}
+
+              {/* Message Input */}
+              <View style={messageModalStyles.messageInputContainer}>
+                <TextInput
+                  style={messageModalStyles.messageInput}
+                  placeholder="Type your message..."
+                  placeholderTextColor={TEXT_MUTED}
+                  value={messageText}
+                  onChangeText={setMessageText}
+                  multiline
+                  numberOfLines={4}
+                  textAlignVertical="top"
+                />
+                <View style={messageModalStyles.messageInputActions}>
+                  <TouchableOpacity
+                    style={[messageModalStyles.micButton, isRecording && messageModalStyles.micButtonActive]}
+                    onPress={isRecording ? handleStopVoiceInput : handleStartVoiceInput}
+                  >
+                    <Image 
+                      source={require('../../assets/microphone.png')} 
+                      style={messageModalStyles.micIconImage}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[messageModalStyles.sendButton, (!messageText.trim() || sendingMessage) && messageModalStyles.sendButtonDisabled]}
+                    onPress={handleSendMessage}
+                    disabled={!messageText.trim() || sendingMessage}
+                  >
+                    {sendingMessage ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={messageModalStyles.sendButtonIcon}>➤</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </Screen>
   );
 }
@@ -2099,6 +2467,210 @@ const styles = StyleSheet.create({
   navItemMobile: {
     marginRight: 8,
     marginBottom: 0,
+  },
+});
+
+const messageModalStyles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: BG_LIGHT,
+    borderRadius: 16,
+    maxHeight: '80%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      },
+      default: {
+        elevation: 10,
+      },
+    }),
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  modalTitleContainer: {
+    flex: 1,
+    marginRight: 16,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
+    color: TEXT_DARK,
+  },
+  modalSubtitle: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_MUTED,
+    marginTop: 4,
+  },
+  modalCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  modalCloseText: {
+    fontSize: 24,
+    color: TEXT_DARK,
+    fontWeight: '300',
+  },
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: 20,
+    paddingBottom: 20,
+  },
+  messagesList: {
+    marginBottom: 16,
+    gap: 8,
+    flexGrow: 1,
+  },
+  emptyMessagesContainer: {
+    padding: 32,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  emptyMessagesText: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  messageBubbleContainer: {
+    width: '100%',
+    flexDirection: 'row',
+    marginBottom: 4,
+  },
+  messageBubbleLeft: {
+    justifyContent: 'flex-start',
+  },
+  messageBubbleRight: {
+    justifyContent: 'flex-end',
+  },
+  messageBubble: {
+    maxWidth: '75%',
+    padding: 12,
+    borderRadius: 16,
+    gap: 6,
+  },
+  messageBubbleChef: {
+    backgroundColor: 'rgba(254, 115, 76, 0.1)', // Orange background for chef messages
+    borderTopRightRadius: 4,
+  },
+  messageBubbleUser: {
+    backgroundColor: '#F3F4F6', // Grey background for user messages
+    borderTopLeftRadius: 4,
+  },
+  messageSenderName: {
+    color: TEXT_DARK,
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+    marginBottom: 4,
+  },
+  messageBody: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 20,
+  },
+  messageTime: {
+    color: TEXT_MUTED,
+    fontSize: 10,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 4,
+    alignSelf: 'flex-end',
+  },
+  // Keep old styles for backward compatibility (not used anymore)
+  messageItem: {
+    padding: 12,
+    backgroundColor: '#F9FAFB',
+    borderRadius: 12,
+    gap: 8,
+  },
+  messageItemUser: {
+    backgroundColor: '#F9FAFB', // Grey background for user messages
+  },
+  messageItemChef: {
+    backgroundColor: 'rgba(254, 115, 76, 0.1)', // Orange background for chef messages
+  },
+  messageHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  messageDate: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  messageInputContainer: {
+    gap: 12,
+  },
+  messageInput: {
+    minHeight: 120,
+    maxHeight: 200,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 12,
+    padding: 12,
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlignVertical: 'top',
+  },
+  messageInputActions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    gap: 12,
+  },
+  micButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: '#F3F4F6',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  micButtonActive: {
+    backgroundColor: PRIMARY_COLOR,
+  },
+  micIconImage: {
+    width: 24,
+    height: 24,
+    tintColor: PRIMARY_COLOR,
+  },
+  sendButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    backgroundColor: PRIMARY_COLOR,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  sendButtonDisabled: {
+    opacity: 0.5,
+  },
+  sendButtonIcon: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
   },
 });
 
