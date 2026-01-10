@@ -49,10 +49,10 @@ export default function RootLayout() {
       
       // Add new favicon link - try multiple paths for compatibility
       const faviconPaths = [
-        '/assets/AppLogoFinal2026.png',
-        './assets/AppLogoFinal2026.png',
+        '/assets/tablogo.png',
+        './assets/tablogo.png',
         '/favicon.png',
-        '/_expo/static/assets/AppLogoFinal2026.png',
+        '/_expo/static/assets/tablogo.png',
       ];
       
       faviconPaths.forEach((path, index) => {
@@ -66,7 +66,7 @@ export default function RootLayout() {
       // Also add apple-touch-icon for better mobile support
       const appleLink = document.createElement('link');
       appleLink.rel = 'apple-touch-icon';
-      appleLink.href = '/assets/AppLogoFinal2026.png';
+      appleLink.href = '/assets/tablogo.png';
       document.head.appendChild(appleLink);
     }
   }, []);

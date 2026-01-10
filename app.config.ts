@@ -9,7 +9,7 @@ export default {
     icon: './assets/AppLogoFinal2026.png',
     web: { 
       bundler: 'metro',
-      favicon: './assets/AppLogoFinal2026.png',
+      favicon: './assets/tablogo.png',
       output: 'static',
     },
   },
