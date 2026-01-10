@@ -17,10 +17,13 @@ import { formatLocal } from '../../lib/datetime';
 import { cents } from '../../lib/money';
 import { updateOrderStatus } from '../../lib/orders';
 import { theme } from '../../lib/theme';
+import { uploadToBucket } from '../../lib/upload';
 
 const BG = '#f6f8f8';
 const CARD_BG = '#FFFFFF';
+const BG_LIGHT = '#FFFFFF';
 const BORDER = '#E3E7E7';
+const BORDER_LIGHT = '#E3E7E7';
 const TEXT_DARK = '#33393a';
 const TEXT_MUTED = '#638886';
 const PRIMARY = '#FE734C';
@@ -100,6 +103,15 @@ export default function TrackOrderPage() {
   const [isMessagesExpanded, setIsMessagesExpanded] = useState(false);
   const [currentUserId, setCurrentUserId] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const [showReportIssueModal, setShowReportIssueModal] = useState(false);
+  const [issueType, setIssueType] = useState<string>('');
+  const [additionalDetails, setAdditionalDetails] = useState('');
+  const [issueImages, setIssueImages] = useState<string[]>([]);
+  const [uploadingIssueImages, setUploadingIssueImages] = useState(false);
+  const [submittingIssue, setSubmittingIssue] = useState(false);
+  const [isRecordingIssue, setIsRecordingIssue] = useState(false);
+  const issueRecognitionRef = useRef<any>(null);
+  const [showIssueTypeDropdown, setShowIssueTypeDropdown] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -342,6 +354,174 @@ export default function TrackOrderPage() {
     if (recognitionRef.current) {
       recognitionRef.current.stop();
       setIsRecording(false);
+    }
+  };
+
+  // Voice dictation for issue details
+  const handleStartIssueVoiceInput = () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Info', 'Voice dictation is currently only available on web');
+      return;
+    }
+
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      Alert.alert('Not Supported', 'Voice dictation is not supported in this browser');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecordingIssue(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setAdditionalDetails(prev => prev + (prev ? ' ' : '') + transcript);
+      setIsRecordingIssue(false);
+      recognition.stop();
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecordingIssue(false);
+      Alert.alert('Error', 'Voice recognition failed. Please try again.');
+      recognition.stop();
+    };
+
+    recognition.onend = () => {
+      setIsRecordingIssue(false);
+    };
+
+    issueRecognitionRef.current = recognition;
+    recognition.start();
+  };
+
+  const handleStopIssueVoiceInput = () => {
+    if (issueRecognitionRef.current) {
+      issueRecognitionRef.current.stop();
+      setIsRecordingIssue(false);
+    }
+  };
+
+  // Handle image upload for issue
+  const handleIssueImageUpload = async () => {
+    if (issueImages.length >= 3) {
+      Alert.alert('Limit Reached', 'You can upload a maximum of 3 images');
+      return;
+    }
+
+    try {
+      // For web, use file input
+      if (Platform.OS === 'web') {
+        const input = document.createElement('input');
+        input.type = 'file';
+        input.accept = 'image/*';
+        input.multiple = false;
+        input.onchange = async (e: any) => {
+          const file = e.target.files?.[0];
+          if (!file) return;
+
+          if (issueImages.length >= 3) {
+            Alert.alert('Limit Reached', 'You can upload a maximum of 3 images');
+            return;
+          }
+
+          setUploadingIssueImages(true);
+          try {
+            const { publicUrl } = await uploadToBucket(
+              'public-assets',
+              file,
+              `order-issues/${order?.id || 'temp'}`
+            );
+            setIssueImages(prev => [...prev, publicUrl]);
+          } catch (err: any) {
+            Alert.alert('Upload Failed', err?.message || 'Failed to upload image');
+          } finally {
+            setUploadingIssueImages(false);
+          }
+        };
+        input.click();
+      } else {
+        // For native, you would use ImagePicker here
+        Alert.alert('Info', 'Image upload on mobile coming soon');
+      }
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to upload image');
+    }
+  };
+
+  // Remove image from issue
+  const handleRemoveIssueImage = (index: number) => {
+    setIssueImages(prev => prev.filter((_, i) => i !== index));
+  };
+
+  // Submit issue report
+  const handleSubmitIssue = async () => {
+    if (!issueType) {
+      Alert.alert('Required', 'Please select an issue type');
+      return;
+    }
+
+    if (!order || !chef) {
+      Alert.alert('Error', 'Order or chef information is missing');
+      return;
+    }
+
+    setSubmittingIssue(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) {
+        Alert.alert('Error', 'Please sign in to report an issue');
+        return;
+      }
+
+      // Insert issue
+      const { data: issueData, error: issueError } = await supabase
+        .from('order_issues')
+        .insert({
+          order_id: order.id,
+          user_id: user.id,
+          chef_id: chef.id,
+          issue_type: issueType,
+          additional_details: additionalDetails.trim() || null,
+          status: 'pending',
+        })
+        .select()
+        .single();
+
+      if (issueError) throw issueError;
+
+      // Upload images if any
+      if (issueImages.length > 0 && issueData) {
+        const imageInserts = issueImages.map(imageUrl => ({
+          issue_id: issueData.id,
+          image_url: imageUrl,
+        }));
+
+        const { error: imagesError } = await supabase
+          .from('order_issue_images')
+          .insert(imageInserts);
+
+        if (imagesError) {
+          console.error('Error inserting images:', imagesError);
+          // Don't fail the whole submission if images fail
+        }
+      }
+
+      Alert.alert('Success', 'Issue reported successfully. We\'ll review it within 24 hours.');
+      setShowReportIssueModal(false);
+      setIssueType('');
+      setAdditionalDetails('');
+      setIssueImages([]);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to submit issue report');
+    } finally {
+      setSubmittingIssue(false);
     }
   };
 
@@ -748,7 +928,10 @@ export default function TrackOrderPage() {
                 <Text style={styles.messageChefButtonText}>Browse chefs, as you wait!</Text>
               </TouchableOpacity>
             </Link>
-            <TouchableOpacity style={styles.messageChefButton}>
+            <TouchableOpacity 
+              style={styles.messageChefButton}
+              onPress={() => setShowReportIssueModal(true)}
+            >
               <Text style={styles.messageChefButtonText}>Report an issue?</Text>
             </TouchableOpacity>
           </View>
@@ -758,6 +941,210 @@ export default function TrackOrderPage() {
           The food is prepared by an independent home chef. Please handle it safely after pickup.
         </Text>
       </View>
+
+      {/* Report Issue Modal */}
+      <Modal
+        visible={showReportIssueModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowReportIssueModal(false);
+          setIssueType('');
+          setAdditionalDetails('');
+          setIssueImages([]);
+          handleStopIssueVoiceInput();
+        }}
+      >
+        <View style={styles.reportIssueModalOverlay}>
+          <View style={styles.reportIssueModalContent}>
+            <View style={styles.reportIssueModalHeader}>
+              <View>
+                <Text style={styles.reportIssueModalTitle}>Report an issue</Text>
+                <Text style={styles.reportIssueModalSubtitle}>We'll review it in 24 hours</Text>
+                <Text style={styles.reportIssueOrderNumber}>Order #{order?.id}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowReportIssueModal(false);
+                  setIssueType('');
+                  setAdditionalDetails('');
+                  setIssueImages([]);
+                  handleStopIssueVoiceInput();
+                }}
+                style={styles.reportIssueModalCloseButton}
+              >
+                <Text style={styles.reportIssueModalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <ScrollView 
+              style={styles.reportIssueModalBody}
+              contentContainerStyle={styles.reportIssueModalBodyContent}
+              keyboardShouldPersistTaps="handled"
+            >
+              {/* Issue Type Dropdown */}
+              <View style={styles.reportIssueField}>
+                <Text style={styles.reportIssueLabel}>What's the issue?</Text>
+                {Platform.OS === 'web' ? (
+                  <View style={styles.reportIssueSelectContainer}>
+                    {React.createElement('select', {
+                      value: issueType,
+                      onChange: (e: any) => setIssueType(e.target.value),
+                      style: {
+                        width: '100%',
+                        padding: 12,
+                        borderWidth: 1,
+                        borderColor: BORDER_LIGHT,
+                        borderRadius: 8,
+                        backgroundColor: BG_LIGHT,
+                        color: TEXT_DARK,
+                        fontSize: 14,
+                        fontFamily: theme.typography.fontFamily.body,
+                        cursor: 'pointer',
+                      } as any,
+                    }, [
+                      React.createElement('option', { key: '', value: '' }, 'Select a reason'),
+                      React.createElement('option', { key: 'chef_unresponsive', value: 'chef_unresponsive' }, 'Chef is unresponsive'),
+                      React.createElement('option', { key: 'pickup_location_unclear', value: 'pickup_location_unclear' }, 'Pickup location unclear'),
+                      React.createElement('option', { key: 'chef_running_late', value: 'chef_running_late' }, 'Chef\'s running late'),
+                      React.createElement('option', { key: 'food_unavailable', value: 'food_unavailable' }, 'Food unavailable'),
+                      React.createElement('option', { key: 'other', value: 'other' }, 'Other'),
+                    ])}
+                  </View>
+                ) : (
+                  <>
+                    <TouchableOpacity
+                      style={styles.reportIssueSelectButton}
+                      onPress={() => setShowIssueTypeDropdown(!showIssueTypeDropdown)}
+                    >
+                      <Text style={[styles.reportIssueSelectButtonText, !issueType && styles.reportIssueSelectButtonPlaceholder]}>
+                        {issueType 
+                          ? [
+                              { value: 'chef_unresponsive', label: 'Chef is unresponsive' },
+                              { value: 'pickup_location_unclear', label: 'Pickup location unclear' },
+                              { value: 'chef_running_late', label: 'Chef\'s running late' },
+                              { value: 'food_unavailable', label: 'Food unavailable' },
+                              { value: 'other', label: 'Other' },
+                            ].find(opt => opt.value === issueType)?.label || 'Select a reason'
+                          : 'Select a reason'
+                        }
+                      </Text>
+                      <Text style={styles.reportIssueSelectArrow}>{showIssueTypeDropdown ? '▲' : '▼'}</Text>
+                    </TouchableOpacity>
+                    {showIssueTypeDropdown && (
+                      <View style={styles.reportIssueDropdown}>
+                        {[
+                          { value: 'chef_unresponsive', label: 'Chef is unresponsive' },
+                          { value: 'pickup_location_unclear', label: 'Pickup location unclear' },
+                          { value: 'chef_running_late', label: 'Chef\'s running late' },
+                          { value: 'food_unavailable', label: 'Food unavailable' },
+                          { value: 'other', label: 'Other' },
+                        ].map(option => (
+                          <TouchableOpacity
+                            key={option.value}
+                            onPress={() => {
+                              setIssueType(option.value);
+                              setShowIssueTypeDropdown(false);
+                            }}
+                            style={[
+                              styles.reportIssueOption,
+                              issueType === option.value && styles.reportIssueOptionSelected
+                            ]}
+                          >
+                            <Text style={[
+                              styles.reportIssueOptionText,
+                              issueType === option.value && styles.reportIssueOptionTextSelected
+                            ]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    )}
+                  </>
+                )}
+              </View>
+
+              {/* Additional Details */}
+              {issueType === 'other' && (
+                <View style={styles.reportIssueField}>
+                  <Text style={styles.reportIssueLabel}>If other, please share additional details</Text>
+                  <View style={styles.reportIssueTextInputWrapper}>
+                    <TextInput
+                      style={styles.reportIssueTextInput}
+                      placeholder="Describe the issue..."
+                      placeholderTextColor={TEXT_MUTED}
+                      value={additionalDetails}
+                      onChangeText={setAdditionalDetails}
+                      multiline
+                      numberOfLines={4}
+                      textAlignVertical="top"
+                    />
+                    <TouchableOpacity
+                      style={styles.reportIssueMicIconContainer}
+                      onPress={isRecordingIssue ? handleStopIssueVoiceInput : handleStartIssueVoiceInput}
+                    >
+                      <Image 
+                        source={require('../../assets/microphone.png')} 
+                        style={[styles.reportIssueMicIconImage, isRecordingIssue && styles.reportIssueMicIconImageActive]}
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              )}
+
+              {/* Image Upload */}
+              <View style={styles.reportIssueField}>
+                <Text style={styles.reportIssueLabel}>If relevant, please share images</Text>
+                <TouchableOpacity
+                  style={styles.reportIssueUploadButton}
+                  onPress={handleIssueImageUpload}
+                  disabled={uploadingIssueImages || issueImages.length >= 3}
+                >
+                  {uploadingIssueImages ? (
+                    <ActivityIndicator size="small" color={PRIMARY} />
+                  ) : (
+                    <Text style={styles.reportIssueUploadButtonText}>
+                      Upload {issueImages.length > 0 ? `(${issueImages.length}/3)` : ''}
+                    </Text>
+                  )}
+                </TouchableOpacity>
+                
+                {/* Display uploaded images */}
+                {issueImages.length > 0 && (
+                  <View style={styles.reportIssueImagesContainer}>
+                    {issueImages.map((imageUrl, index) => (
+                      <View key={index} style={styles.reportIssueImageWrapper}>
+                        <Image source={{ uri: imageUrl }} style={styles.reportIssueImage} />
+                        <TouchableOpacity
+                          style={styles.reportIssueRemoveImage}
+                          onPress={() => handleRemoveIssueImage(index)}
+                        >
+                          <Text style={styles.reportIssueRemoveImageText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                    ))}
+                  </View>
+                )}
+              </View>
+
+              {/* Submit Button */}
+              <TouchableOpacity
+                style={[styles.reportIssueSubmitButton, (!issueType || submittingIssue) && styles.reportIssueSubmitButtonDisabled]}
+                onPress={handleSubmitIssue}
+                disabled={!issueType || submittingIssue}
+              >
+                {submittingIssue ? (
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                ) : (
+                  <Text style={styles.reportIssueSubmitButtonText}>Submit</Text>
+                )}
+              </TouchableOpacity>
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
 
       {/* Message Chef Modal */}
       <Modal
@@ -1435,6 +1822,261 @@ const styles = StyleSheet.create({
   },
   ctaPrimaryText: {
     color: '#FFFFFF',
+    fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  // Report Issue Modal Styles
+  reportIssueModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  reportIssueModalContent: {
+    width: '100%',
+    maxWidth: 500,
+    backgroundColor: BG_LIGHT,
+    borderRadius: 16,
+    maxHeight: '90%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      },
+      default: {
+        elevation: 10,
+      },
+    }),
+  },
+  reportIssueModalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    padding: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  reportIssueModalTitle: {
+    fontSize: 20,
+    fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
+    color: TEXT_DARK,
+  },
+  reportIssueModalSubtitle: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_MUTED,
+    marginTop: 4,
+  },
+  reportIssueOrderNumber: {
+    fontSize: 16,
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_DARK,
+    fontWeight: '700',
+    marginTop: 8,
+  },
+  reportIssueModalCloseButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  reportIssueModalCloseText: {
+    fontSize: 24,
+    color: TEXT_DARK,
+    fontWeight: '300',
+  },
+  reportIssueModalBody: {
+    flex: 1,
+  },
+  reportIssueModalBodyContent: {
+    padding: 20,
+    paddingBottom: 20,
+    gap: 20,
+  },
+  reportIssueField: {
+    gap: 8,
+  },
+  reportIssueLabel: {
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_DARK,
+  },
+  reportIssuePlaceholder: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_MUTED,
+    fontStyle: 'italic',
+    marginBottom: 8,
+  },
+  reportIssueSelectContainer: {
+    width: '100%',
+  },
+  reportIssueSelectButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 12,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 8,
+    backgroundColor: BG_LIGHT,
+    minHeight: 44,
+  },
+  reportIssueSelectButtonText: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_DARK,
+    flex: 1,
+  },
+  reportIssueSelectButtonPlaceholder: {
+    color: TEXT_MUTED,
+  },
+  reportIssueSelectArrow: {
+    fontSize: 12,
+    color: TEXT_MUTED,
+    marginLeft: 8,
+  },
+  reportIssueDropdown: {
+    marginTop: 4,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 8,
+    backgroundColor: BG_LIGHT,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+      },
+      default: {
+        elevation: 3,
+      },
+    }),
+  },
+  reportIssueOption: {
+    padding: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+    backgroundColor: BG_LIGHT,
+  },
+  reportIssueOptionSelected: {
+    backgroundColor: 'rgba(254, 115, 76, 0.1)',
+  },
+  reportIssueOptionText: {
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    color: TEXT_DARK,
+  },
+  reportIssueOptionTextSelected: {
+    color: PRIMARY,
+    fontWeight: '700',
+  },
+  reportIssueTextInputWrapper: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    borderRadius: 12,
+    backgroundColor: BG_LIGHT,
+    paddingLeft: 12,
+    paddingTop: 12,
+    paddingBottom: 12,
+  },
+  reportIssueTextInput: {
+    flex: 1,
+    minHeight: 100,
+    maxHeight: 200,
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlignVertical: 'top',
+    paddingRight: 8,
+  },
+  reportIssueMicIconContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingRight: 12,
+    paddingLeft: 8,
+    paddingTop: 4,
+  },
+  reportIssueMicIconImage: {
+    width: 24,
+    height: 24,
+    tintColor: PRIMARY,
+  },
+  reportIssueMicIconImageActive: {
+    tintColor: '#FFFFFF',
+    backgroundColor: PRIMARY,
+    borderRadius: 12,
+  },
+  reportIssueUploadButton: {
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderWidth: 1,
+    borderColor: PRIMARY,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 44,
+  },
+  reportIssueUploadButtonText: {
+    color: PRIMARY,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  reportIssueImagesContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 8,
+  },
+  reportIssueImageWrapper: {
+    position: 'relative',
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    overflow: 'hidden',
+  },
+  reportIssueImage: {
+    width: '100%',
+    height: '100%',
+    resizeMode: 'cover',
+  },
+  reportIssueRemoveImage: {
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+    backgroundColor: 'rgba(0, 0, 0, 0.6)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportIssueRemoveImageText: {
+    color: '#FFFFFF',
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  reportIssueSubmitButton: {
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 48,
+    marginTop: 8,
+  },
+  reportIssueSubmitButtonDisabled: {
+    opacity: 0.5,
+  },
+  reportIssueSubmitButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
     fontWeight: '800',
     fontFamily: theme.typography.fontFamily.body,
   },

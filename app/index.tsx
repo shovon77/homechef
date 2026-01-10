@@ -486,8 +486,8 @@ const styles = StyleSheet.create({
     }),
     paddingTop: theme.spacing.lg,
     paddingBottom: Platform.select({
-      web: theme.spacing['4xl'],
-      default: theme.spacing['2xl'],
+      web: theme.spacing.xs,
+      default: theme.spacing.xs,
     }),
     backgroundColor: '#F2F0EF',
   },
@@ -701,7 +701,7 @@ const styles = StyleSheet.create({
   },
   // Sections
   section: {
-    marginBottom: theme.spacing['3xl'],
+    marginBottom: theme.spacing.sm,
   },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.body,

@@ -6,6 +6,11 @@ export default {
     slug: 'homechef',
     scheme: 'homechef',
     ios: { bundleIdentifier: 'com.homechef.app' },
-    web: { bundler: 'metro' },
+    icon: './assets/AppLogoFinal2026.png',
+    web: { 
+      bundler: 'metro',
+      favicon: './assets/AppLogoFinal2026.png',
+      output: 'static',
+    },
   },
 };

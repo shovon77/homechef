@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { Stack, useRouter, usePathname } from 'expo-router';
-import { View, ScrollView } from 'react-native';
+import { View, ScrollView, Platform } from 'react-native';
 import { ensureUser } from '../lib/ensureUser';
 import { ensureProfile } from '../lib/ensureProfile';
 import { supabase } from '../lib/supabase';
@@ -39,6 +39,37 @@ export default function RootLayout() {
       SplashScreen.hideAsync();
     }
   }, [fontsLoaded]);
+
+  // Add favicon to head for web
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof document !== 'undefined') {
+      // Remove existing favicon links
+      const existingLinks = document.querySelectorAll("link[rel*='icon']");
+      existingLinks.forEach(link => link.remove());
+      
+      // Add new favicon link - try multiple paths for compatibility
+      const faviconPaths = [
+        '/assets/AppLogoFinal2026.png',
+        './assets/AppLogoFinal2026.png',
+        '/favicon.png',
+        '/_expo/static/assets/AppLogoFinal2026.png',
+      ];
+      
+      faviconPaths.forEach((path, index) => {
+        const link = document.createElement('link');
+        link.rel = index === 0 ? 'icon' : 'alternate icon';
+        link.type = 'image/png';
+        link.href = path;
+        document.head.appendChild(link);
+      });
+      
+      // Also add apple-touch-icon for better mobile support
+      const appleLink = document.createElement('link');
+      appleLink.rel = 'apple-touch-icon';
+      appleLink.href = '/assets/AppLogoFinal2026.png';
+      document.head.appendChild(appleLink);
+    }
+  }, []);
 
   // ... existing useEffects ...
 
