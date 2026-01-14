@@ -1011,11 +1011,11 @@ const styles = StyleSheet.create({
     tintColor: '#FE734C',
   },
   locationNavText: {
-    fontSize: 14,
+    fontSize: 12,
     fontWeight: '500',
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
-    maxWidth: 100,
+    maxWidth: 55,
     textDecorationLine: 'underline',
     textDecorationColor: PRIMARY_COLOR,
   },
@@ -1112,14 +1112,14 @@ const styles = StyleSheet.create({
   },
   navCenterMobile: {
     position: 'absolute',
-    left: '45%',
+    left: '48%',
     top: 0,
     bottom: 0,
     transform: [{ translateX: '-50%' }],
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 8,
-    marginLeft: 40, // Push buttons to the right, away from logo (reduced by 50%)
+    gap: 2,
+    marginLeft: 0,
   },
   rightSectionMobile: {
     gap: 8,

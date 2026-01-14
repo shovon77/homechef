@@ -376,7 +376,6 @@ const styles = StyleSheet.create({
     transform: [{ translateX: '-50%' }, { translateY: '-50%' }] as any,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 50, // Push Order button to the right, away from logo
   },
   rightSection: {
     flexDirection: 'row',

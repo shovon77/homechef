@@ -32,11 +32,11 @@ const ACCENT = '#FE734C';
 const ACTIVE_STATUSES = ['requested', 'pending', 'ready', 'paid'] as const;
 
 const STEP_META: Record<string, { label: string; icon: string }> = {
-  requested: { label: '🟡 Awaiting chef confirmation', icon: '🟡' },
-  pending: { label: '🟠 Chef confirmed the order', icon: '🟠' },
-  ready: { label: '🟢 Food ready for pickup', icon: '🟢' },
-  completed: { label: '🔵 Order picked up, enjoy!', icon: '🔵' },
-  rejected: { label: '⭕ Issue reported - under review', icon: '⭕' },
+  requested: { label: 'Awaiting chef confirmation', icon: '' },
+  pending: { label: 'Chef confirmed the order', icon: '' },
+  ready: { label: 'Food ready for pickup', icon: '' },
+  completed: { label: 'Order picked up, enjoy!', icon: '' },
+  rejected: { label: 'Issue reported - under review', icon: '' },
 };
 
 type OrderRow = {
@@ -564,7 +564,7 @@ export default function TrackOrderPage() {
   const calculatedTotalCents = subtotalCents + platformFeeCents + taxesCents;
   const totalCents = Number.isFinite(order.total_cents) ? order.total_cents : calculatedTotalCents;
   const visualStatus = order.status === 'completed' ? 'completed' : order.status;
-  const stepMeta = STEP_META[visualStatus] ?? { label: `⭕ Issue reported - under review`, icon: '⭕' };
+  const stepMeta = STEP_META[visualStatus] ?? { label: 'Issue reported - under review', icon: '' };
 
   let statusMessage = '';
   switch (visualStatus) {
@@ -1358,14 +1358,14 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   statusInfoLabel: {
-    color: PRIMARY,
+    color: TEXT_DARK,
     fontSize: 14,
     fontWeight: '700',
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
   },
   statusInfoValue: {
-    color: PRIMARY,
+    color: TEXT_DARK,
     fontSize: 14,
     fontWeight: '700',
     flex: 2,
@@ -1378,7 +1378,7 @@ const styles = StyleSheet.create({
     gap: 2,
   },
   locationAddressLine: {
-    color: PRIMARY,
+    color: TEXT_DARK,
     fontSize: 14,
     fontWeight: '700',
     textAlign: 'right',
