@@ -125,6 +125,11 @@ export default function HomePage() {
   const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
+  const featuredScrollRef = React.useRef<ScrollView>(null);
+  const isUserScrollingRef = React.useRef(false);
+  const autoScrollPosition = React.useRef(0);
+  const autoScrollTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const resumeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -175,25 +180,39 @@ export default function HomePage() {
     return Array(Math.max(copies, 10)).fill(dishes).flat();
   }, [dishes]);
 
+  // Auto-scroll effect for featured dishes
   useEffect(() => {
     if (dishes.length === 0) return;
     
-    // Reset position before starting
-    scrollX.setValue(0);
-
-    const animation = Animated.loop(
-      Animated.timing(scrollX, {
-        toValue: -(dishes.length * TOTAL_ITEM_WIDTH),
-        duration: dishes.length * 6000, // Slower: 6s per item
-        easing: Easing.linear,
-        useNativeDriver: true,
-      }),
-      { iterations: -1 } // Explicitly set infinite iterations
-    );
-    animation.start();
+    const maxScroll = infiniteDishes.length * TOTAL_ITEM_WIDTH - width;
     
-    return () => animation.stop();
-  }, [dishes.length, scrollX, TOTAL_ITEM_WIDTH]);
+    autoScrollTimer.current = setInterval(() => {
+      if (!isUserScrollingRef.current && featuredScrollRef.current) {
+        autoScrollPosition.current += 1;
+        
+        // Reset to start when reaching near the end
+        if (autoScrollPosition.current >= maxScroll * 0.5) {
+          autoScrollPosition.current = 0;
+          featuredScrollRef.current.scrollTo({ x: 0, animated: false });
+        } else {
+          featuredScrollRef.current.scrollTo({
+            x: autoScrollPosition.current,
+            animated: false,
+          });
+        }
+      }
+    }, 30); // Smooth scrolling at ~33fps
+    
+    return () => {
+      if (autoScrollTimer.current) {
+        clearInterval(autoScrollTimer.current);
+      }
+      if (resumeTimeoutRef.current) {
+        clearTimeout(resumeTimeoutRef.current);
+      }
+    };
+  }, [dishes.length, infiniteDishes.length, TOTAL_ITEM_WIDTH, width]);
+  
 
   useEffect(() => {
     let mounted = true;
@@ -287,34 +306,69 @@ export default function HomePage() {
                 source={{ uri: bannerUrl }}
                 style={[
                   styles.heroBackgroundImage,
-                  Platform.OS === 'web' && { objectPosition: 'left center' } as any,
-                  isMobile && { width: '140%' }
+                  Platform.OS === 'web' && { objectPosition: 'center center' } as any,
+                  isMobile && { width: '140%', left: -15 }
                 ]}
                 resizeMode="cover"
               />
             </TouchableOpacity>
           </Link>
 
-          {/* Featured Dishes section - Infinite Scroll */}
+          {/* Featured Dishes section - Auto-scroll + Swipeable Carousel */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured Dishes</Text>
-            <View style={{ overflow: 'hidden', width: '100%' }}>
-              <Animated.View 
-                style={{ 
-                  flexDirection: 'row', 
-                  gap: GAP,
-                  paddingHorizontal: GAP / 2,
-                  transform: [{ translateX: scrollX }],
-                  width: infiniteDishes.length * TOTAL_ITEM_WIDTH,
-                }}
-              >
-                {infiniteDishes.map((dish, index) => (
-                  <View key={`${dish.id}-${index}`} style={{ width: CARD_WIDTH }}>
-                    <CircularDishCard dish={dish} />
-                  </View>
-                ))}
-              </Animated.View>
-            </View>
+            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured this week</Text>
+            <ScrollView 
+              ref={featuredScrollRef}
+              horizontal 
+              showsHorizontalScrollIndicator={false}
+              contentContainerStyle={{
+                flexDirection: 'row', 
+                gap: GAP,
+                paddingHorizontal: GAP / 2,
+              }}
+              decelerationRate="fast"
+              scrollEventThrottle={16}
+              onTouchStart={() => {
+                isUserScrollingRef.current = true;
+                if (resumeTimeoutRef.current) {
+                  clearTimeout(resumeTimeoutRef.current);
+                }
+              }}
+              onScroll={(e) => {
+                // Continuously track scroll position while user is scrolling
+                if (isUserScrollingRef.current) {
+                  autoScrollPosition.current = e.nativeEvent.contentOffset.x;
+                }
+              }}
+              onScrollBeginDrag={() => {
+                isUserScrollingRef.current = true;
+                if (resumeTimeoutRef.current) {
+                  clearTimeout(resumeTimeoutRef.current);
+                }
+              }}
+              onScrollEndDrag={(e) => {
+                autoScrollPosition.current = e.nativeEvent.contentOffset.x;
+              }}
+              onMomentumScrollEnd={(e) => {
+                autoScrollPosition.current = e.nativeEvent.contentOffset.x;
+                // Resume auto-scroll after momentum ends
+                resumeTimeoutRef.current = setTimeout(() => {
+                  isUserScrollingRef.current = false;
+                }, 2000);
+              }}
+              onTouchEnd={() => {
+                // Resume auto-scroll 2 seconds after touch ends (if no momentum)
+                resumeTimeoutRef.current = setTimeout(() => {
+                  isUserScrollingRef.current = false;
+                }, 2000);
+              }}
+            >
+              {infiniteDishes.map((dish, index) => (
+                <View key={`${dish.id}-${index}`} style={{ width: CARD_WIDTH }}>
+                  <CircularDishCard dish={dish} />
+                </View>
+              ))}
+            </ScrollView>
           </View>
 
           {/* Featured Chefs section - matches HTML design */}
@@ -371,8 +425,8 @@ export default function HomePage() {
           </View>
 
           {/* How It Works section */}
-          <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>How It Works</Text>
+          <View style={[styles.section, styles.howItWorksSection]}>
+            <Text style={[styles.sectionTitle, styles.howItWorksTitle, isMobile && styles.sectionTitleMobile]}>How It Works?</Text>
             <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
               <View style={styles.howItWorksCard}>
                 <View style={styles.howItWorksIconContainer}>
@@ -703,6 +757,13 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: theme.spacing.sm,
   },
+  howItWorksSection: {
+    marginBottom: -theme.spacing['4xl'],
+    paddingBottom: 0,
+  },
+  howItWorksTitle: {
+    paddingBottom: 0,
+  },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
@@ -815,6 +876,8 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     gap: theme.spacing['2xl'],
     paddingHorizontal: theme.spacing.md,
+    paddingBottom: 0,
+    marginBottom: -theme.spacing.lg,
   },
   howItWorksCard: {
     flex: 1,

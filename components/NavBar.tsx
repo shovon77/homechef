@@ -211,6 +211,13 @@ export default function NavBar() {
     }
   }, [user]);
 
+  // Sync location state when profile location changes
+  useEffect(() => {
+    if (profile?.location) {
+      setLocation(profile.location);
+    }
+  }, [profile?.location]);
+
   // Load location when modal opens
   useEffect(() => {
     if (showLocationModal && user) {
@@ -252,6 +259,10 @@ export default function NavBar() {
       }
 
       setLocation(currentLocation);
+      
+      // Refresh profile to update navbar immediately
+      await refreshRole();
+      
       setShowLocationModal(false);
       Alert.alert("Success", "Location updated successfully!");
     } catch (e: any) {
@@ -302,6 +313,10 @@ export default function NavBar() {
       setCurrentLocation(selectedLocation.trim());
       setManualInputLocation(selectedLocation.trim());
       setSelectedLocation(""); // Clear selected location after save
+      
+      // Refresh profile to update navbar immediately
+      await refreshRole();
+      
       Alert.alert("Success", "Location saved successfully!");
     } catch (e: any) {
       console.error("Error saving location:", e);
@@ -570,7 +585,7 @@ export default function NavBar() {
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
           >
             <Image 
-              source={require('../assets/AppLogoWordFinal2026.png')}
+              source={require('../assets/AppLogoFinal2026.png')}
               style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile]) as any}
               resizeMode="contain"
             />
@@ -604,6 +619,22 @@ export default function NavBar() {
                 label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
                 isActive={isDashboardActive} 
               />
+            )}
+            {/* Location button */}
+            {loggedIn && (
+              <TouchableOpacity 
+                onPress={() => setShowLocationModal(true)}
+                style={styles.locationNavButton}
+              >
+                <Image 
+                  source={require('../assets/placeholder.png')} 
+                  style={styles.locationNavIcon as any} 
+                  resizeMode="contain" 
+                />
+                <Text style={styles.locationNavText} numberOfLines={1}>
+                  {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
+                </Text>
+              </TouchableOpacity>
             )}
           </View>
         )}
@@ -656,27 +687,6 @@ export default function NavBar() {
             </>
           ) : (
             <>
-              {loggedIn ? (
-                <TouchableOpacity 
-                  onPress={() => setShowLocationModal(true)}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, marginRight: 12 }}
-                >
-                  <Image 
-                    source={require('../assets/placeholder.png')} 
-                    style={{ width: 16, height: 16, tintColor: '#FE734C' } as any} 
-                    resizeMode="contain" 
-                  />
-                  <Text style={{ 
-                    fontSize: 14, 
-                    color: PRIMARY_COLOR, 
-                    fontFamily: theme.typography.fontFamily.body,
-                    fontWeight: '500',
-                    textDecorationLine: 'underline'
-                  }}>
-                    {profile?.location || "Set Location"}
-                  </Text>
-                </TouchableOpacity>
-              ) : null}
               {loggedIn ? (
             <>
               <TouchableOpacity
@@ -743,20 +753,6 @@ export default function NavBar() {
         </View>
       </View>
 
-      {isMobile && loggedIn ? (
-        <View style={styles.mobileLocationBar}>
-          <Image 
-            source={require('../assets/placeholder.png')} 
-            style={styles.mobileLocationIcon as any} 
-            resizeMode="contain" 
-          />
-          <TouchableOpacity onPress={() => setShowLocationModal(true)}>
-            <Text style={[styles.mobileLocationText, styles.mobileLocationLink]} numberOfLines={1}>
-              {profile?.location || "Set Location"}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      ) : null}
 
       {/* Mobile Menu Overlay */}
       {isMobile && isMenuOpen && (
@@ -945,19 +941,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingHorizontal: 16,
+    paddingRight: 16,
+    paddingLeft: 0,
   },
   logoContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    marginLeft: -58,
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    gap: 0,
+    marginLeft: -80,
+    paddingLeft: 0,
+    paddingTop: 0,
+    marginTop: 0,
   },
   logoImage: {
     width: 364,
     height: 73,
     backgroundColor: 'transparent',
-    marginTop: -9, // Visual correction for alignment
   },
   navCenter: {
     ...Platform.select({
@@ -967,18 +967,18 @@ const styles = StyleSheet.create({
         top: '50%',
         transform: [{ translateX: '-50%' }, { translateY: '-50%' }] as any,
         overflow: 'visible', // Ensure underline isn't clipped
-        marginLeft: 60, // Push buttons to the right, away from logo (reduced by 50%)
+        marginLeft: 0,
       },
       default: {
         flex: 1,
         alignItems: 'center',
         justifyContent: 'center',
-        marginLeft: 40, // Push buttons to the right on mobile (reduced by 50%)
+        marginLeft: 0,
       },
     }),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2.4, // Reduced by 70% from 8
+    gap: 16,
   },
   navLink: {
     paddingVertical: 8,
@@ -996,6 +996,28 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
+  },
+  locationNavButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingVertical: 6,
+    paddingHorizontal: 8,
+    borderRadius: 8,
+  },
+  locationNavIcon: {
+    width: 16,
+    height: 16,
+    tintColor: '#FE734C',
+  },
+  locationNavText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+    maxWidth: 100,
+    textDecorationLine: 'underline',
+    textDecorationColor: PRIMARY_COLOR,
   },
   primaryButton: {
     minWidth: 84,
@@ -1072,11 +1094,17 @@ const styles = StyleSheet.create({
   },
   // Mobile styles
   containerMobile: {
-    paddingHorizontal: 8,
+    paddingRight: 8,
+    paddingLeft: 0,
   },
   logoContainerMobile: {
-    gap: 4,
-    marginLeft: -58, // Pull logo left
+    gap: 0,
+    marginLeft: -80,
+    paddingLeft: 0,
+    alignItems: 'flex-start',
+    alignSelf: 'flex-start',
+    paddingTop: 0,
+    marginTop: 0,
   },
   logoImageMobile: {
     width: 260,
@@ -1084,13 +1112,13 @@ const styles = StyleSheet.create({
   },
   navCenterMobile: {
     position: 'absolute',
-    left: '50%',
+    left: '45%',
     top: 0,
     bottom: 0,
     transform: [{ translateX: '-50%' }],
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 1.8, // Reduced by 70% from 6
+    gap: 8,
     marginLeft: 40, // Push buttons to the right, away from logo (reduced by 50%)
   },
   rightSectionMobile: {

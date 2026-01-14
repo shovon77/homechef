@@ -32,7 +32,7 @@ export default function ProfilePage() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const { loading: roleLoading, user, isAdmin, isChef } = useRole();
+  const { loading: roleLoading, user, isAdmin, isChef, refreshRole } = useRole();
   const [profile, setProfile] = useState<Profile | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -265,6 +265,8 @@ export default function ProfilePage() {
 
       Alert.alert("Success", "Profile updated successfully");
       await loadProfile();
+      // Refresh auth context to update navbar location
+      await refreshRole();
     } catch (e: any) {
       console.error("Profile update exception:", e);
       const errorMsg = e?.message || e?.details || "Failed to update profile";

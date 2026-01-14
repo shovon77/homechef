@@ -98,7 +98,7 @@ export default function IntroPage() {
           <Link href="/" asChild>
             <TouchableOpacity style={styles.logoContainer}>
               <Image
-                source={require('../assets/AppLogoWordFinal2026.png')}
+                source={require('../assets/AppLogoFinal2026.png')}
                 style={styles.logoImage}
                 resizeMode="contain"
               />
@@ -347,27 +347,27 @@ const styles = StyleSheet.create({
     maxWidth: 1280,
     width: '100%',
     alignSelf: 'center',
-    paddingHorizontal: Platform.select({
+    paddingRight: Platform.select({
       web: 16,
-      default: 3,
+      default: 8,
     }),
+    paddingLeft: 0,
   },
   logoContainer: {
-    marginLeft: Platform.select({
-      web: -100,
-      default: -100, // Move further left
-    }),
+    marginLeft: -80,
+    paddingLeft: 0,
+    paddingTop: 0,
+    marginTop: 0,
   },
   logoImage: {
     width: Platform.select({
-      web: 364,
-      default: 260,
+      web: 280,
+      default: 80,
     }),
     height: Platform.select({
-      web: 73,
-      default: 52,
+      web: 56,
+      default: 32,
     }),
-    marginTop: -9,
   },
   centerSection: {
     position: 'absolute',
