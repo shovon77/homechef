@@ -423,7 +423,7 @@ export default function CartScreen() {
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
-      <View style={{ paddingBottom: 32 }}>
+      <View style={{ paddingBottom: 0 }}>
         <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Breadcrumbs - REMOVED */}
         {/* Page Heading */}
@@ -438,7 +438,7 @@ export default function CartScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.emptyCartTitle}>Your cart if empty</Text>
+            <Text style={styles.emptyCartTitle}>Your cart is empty!</Text>
             <Text style={styles.emptyCartText}>
               Find homemade meals near you
             </Text>
@@ -689,7 +689,8 @@ const styles = StyleSheet.create({
       web: theme.spacing['4xl'],
       default: theme.spacing.md,
     }),
-    paddingVertical: theme.spacing['2xl'],
+    paddingTop: theme.spacing['2xl'],
+    paddingBottom: 0,
   },
   pageTitle: {
     color: TEXT_DARK,
@@ -698,7 +699,7 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_700Bold',
     lineHeight: 24 * 1.2,
     letterSpacing: -0.033,
-    marginBottom: theme.spacing['2xl'],
+    marginBottom: theme.spacing.md,
   },
   mobileLayout: {
     flexDirection: 'column',
@@ -891,7 +892,8 @@ const styles = StyleSheet.create({
   emptyCart: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingVertical: theme.spacing['4xl'],
+    paddingTop: theme.spacing.lg,
+    paddingBottom: 0,
     paddingHorizontal: theme.spacing['2xl'],
     borderWidth: 2,
     borderStyle: 'dashed',
@@ -901,32 +903,32 @@ const styles = StyleSheet.create({
   emptyCartIcon: {
     backgroundColor: 'transparent',
     borderRadius: 9999,
-    padding: theme.spacing.xl,
-    marginBottom: theme.spacing.md,
+    padding: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
   },
   emptyCartImage: {
     width: 64,
     height: 64,
-    tintColor: PRIMARY_COLOR,
+    tintColor: TEXT_DARK,
   },
   emptyCartTitle: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize['2xl'],
     fontWeight: theme.typography.fontWeight.bold as any,
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xs,
     fontFamily: 'OpenSans_700Bold',
   },
   emptyCartText: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontWeight: 'bold',
     fontSize: theme.typography.fontSize.base,
     textAlign: 'center',
-    marginBottom: theme.spacing.xl,
+    marginBottom: theme.spacing.md,
     fontFamily: 'OpenSans_700Bold',
   },
   emptyCartButtons: {
     flexDirection: 'column',
-    gap: theme.spacing.md,
+    gap: theme.spacing.sm,
     alignItems: 'center',
     width: '100%',
   },
@@ -947,7 +949,8 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_700Bold',
   },
   emptyCartFooterContainer: {
-    marginTop: theme.spacing.xl,
+    marginTop: theme.spacing.md,
+    marginBottom: theme.spacing.md,
     alignItems: 'center',
     gap: theme.spacing.xs,
   },
@@ -973,7 +976,8 @@ const styles = StyleSheet.create({
   },
   emptyCartFooterLink: {
     textDecorationLine: 'underline',
-    color: PRIMARY_COLOR,
+    textDecorationColor: PRIMARY_COLOR,
+    color: TEXT_DARK,
   },
   modalOverlay: {
     flex: 1,
