@@ -7,6 +7,7 @@ import Screen from "../components/Screen";
 import { getDishRatings, getChefById } from "../lib/db";
 import { safeToFixed, toNumber } from "../lib/number";
 import { formatCad } from "../lib/money";
+import { useRole } from "../hooks/useRole";
 
 type Chef = Record<string, any>;
 type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null; chef?: string | null };
@@ -50,11 +51,14 @@ function CircularDishCard({ dish }: { dish: Dish }) {
           />
         </View>
         <View style={styles.circularDishInfo}>
-          <Text style={styles.circularDishTitle} numberOfLines={1}>
-            {dish.name} by {chefName}
+          <Text style={styles.circularDishTitle} numberOfLines={2}>
+            {dish.name}
+          </Text>
+          <Text style={styles.circularDishChefName} numberOfLines={1}>
+            by {chefName}
           </Text>
           <Text style={styles.circularDishSubtitle} numberOfLines={1}>
-            {formatCad(dish.price)} • ★ {safeToFixed(rating?.avg)}
+            {formatCad(dish.price)}{rating?.count > 0 ? ` • ★ ${safeToFixed(rating?.avg)}` : ''}
           </Text>
         </View>
       </TouchableOpacity>
@@ -119,6 +123,7 @@ export default function HomePage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const { isChef, isAdmin } = useRole();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
@@ -169,31 +174,57 @@ export default function HomePage() {
   const GAP = 24;
   const TOTAL_ITEM_WIDTH = CARD_WIDTH + GAP;
 
-  // Create enough duplicates to fill screen and loop seamlessly
-  const infiniteDishes = useMemo(() => {
-    if (dishes.length === 0) return [];
-    // Ensure we have enough items to fill the screen width + buffer
-    // Create at least 20 copies or enough to have 100 items, whichever is safer
-    const MIN_ITEMS = 100;
-    const copies = Math.ceil(MIN_ITEMS / dishes.length);
-    // Create array of copies
-    return Array(Math.max(copies, 10)).fill(dishes).flat();
+  // Use original dishes array (no infinite duplication)
+  const displayDishes = useMemo(() => {
+    return dishes;
   }, [dishes]);
 
-  // Auto-scroll effect for featured dishes
-  useEffect(() => {
+  // Track if we're in the process of resetting to start
+  const isResettingRef = React.useRef(false);
+  
+  // Function to start auto-scroll from current position
+  const startAutoScroll = React.useCallback(() => {
     if (dishes.length === 0) return;
+    if (autoScrollTimer.current) {
+      clearInterval(autoScrollTimer.current);
+    }
     
-    const maxScroll = infiniteDishes.length * TOTAL_ITEM_WIDTH - width;
+    const maxScroll = Math.max(0, displayDishes.length * TOTAL_ITEM_WIDTH - width);
+    
+    // If starting at or very close to the end, reset to beginning first
+    if (autoScrollPosition.current >= maxScroll - 5) {
+      isResettingRef.current = true;
+      autoScrollPosition.current = 0;
+      featuredScrollRef.current?.scrollTo({ x: 0, animated: true });
+      // Wait for the reset animation to complete before starting auto-scroll
+      setTimeout(() => {
+        isResettingRef.current = false;
+        startAutoScroll();
+      }, 500);
+      return;
+    }
     
     autoScrollTimer.current = setInterval(() => {
-      if (!isUserScrollingRef.current && featuredScrollRef.current) {
+      if (!isUserScrollingRef.current && !isResettingRef.current && featuredScrollRef.current) {
         autoScrollPosition.current += 1;
         
-        // Reset to start when reaching near the end
-        if (autoScrollPosition.current >= maxScroll * 0.5) {
-          autoScrollPosition.current = 0;
-          featuredScrollRef.current.scrollTo({ x: 0, animated: false });
+        // When reaching the end, smoothly reset to start
+        if (autoScrollPosition.current >= maxScroll) {
+          isResettingRef.current = true;
+          clearInterval(autoScrollTimer.current!);
+          autoScrollTimer.current = null;
+          
+          // Wait a moment at the end, then smoothly scroll back
+          setTimeout(() => {
+            autoScrollPosition.current = 0;
+            featuredScrollRef.current?.scrollTo({ x: 0, animated: true });
+            
+            // Wait for reset animation, then resume auto-scroll
+            setTimeout(() => {
+              isResettingRef.current = false;
+              startAutoScroll();
+            }, 500);
+          }, 1000);
         } else {
           featuredScrollRef.current.scrollTo({
             x: autoScrollPosition.current,
@@ -202,6 +233,11 @@ export default function HomePage() {
         }
       }
     }, 30); // Smooth scrolling at ~33fps
+  }, [dishes.length, displayDishes.length, TOTAL_ITEM_WIDTH, width]);
+
+  // Auto-scroll effect for featured dishes - start on mount
+  useEffect(() => {
+    startAutoScroll();
     
     return () => {
       if (autoScrollTimer.current) {
@@ -211,7 +247,7 @@ export default function HomePage() {
         clearTimeout(resumeTimeoutRef.current);
       }
     };
-  }, [dishes.length, infiniteDishes.length, TOTAL_ITEM_WIDTH, width]);
+  }, [startAutoScroll]);
   
 
   useEffect(() => {
@@ -321,6 +357,7 @@ export default function HomePage() {
               ref={featuredScrollRef}
               horizontal 
               showsHorizontalScrollIndicator={false}
+              bounces={false}
               contentContainerStyle={{
                 flexDirection: 'row', 
                 gap: GAP,
@@ -330,18 +367,24 @@ export default function HomePage() {
               scrollEventThrottle={16}
               onTouchStart={() => {
                 isUserScrollingRef.current = true;
+                if (autoScrollTimer.current) {
+                  clearInterval(autoScrollTimer.current);
+                  autoScrollTimer.current = null;
+                }
                 if (resumeTimeoutRef.current) {
                   clearTimeout(resumeTimeoutRef.current);
                 }
               }}
               onScroll={(e) => {
-                // Continuously track scroll position while user is scrolling
-                if (isUserScrollingRef.current) {
-                  autoScrollPosition.current = e.nativeEvent.contentOffset.x;
-                }
+                // Always track scroll position
+                autoScrollPosition.current = e.nativeEvent.contentOffset.x;
               }}
               onScrollBeginDrag={() => {
                 isUserScrollingRef.current = true;
+                if (autoScrollTimer.current) {
+                  clearInterval(autoScrollTimer.current);
+                  autoScrollTimer.current = null;
+                }
                 if (resumeTimeoutRef.current) {
                   clearTimeout(resumeTimeoutRef.current);
                 }
@@ -354,16 +397,18 @@ export default function HomePage() {
                 // Resume auto-scroll after momentum ends
                 resumeTimeoutRef.current = setTimeout(() => {
                   isUserScrollingRef.current = false;
+                  startAutoScroll();
                 }, 2000);
               }}
               onTouchEnd={() => {
                 // Resume auto-scroll 2 seconds after touch ends (if no momentum)
                 resumeTimeoutRef.current = setTimeout(() => {
                   isUserScrollingRef.current = false;
+                  startAutoScroll();
                 }, 2000);
               }}
             >
-              {infiniteDishes.map((dish, index) => (
+              {displayDishes.map((dish, index) => (
                 <View key={`${dish.id}-${index}`} style={{ width: CARD_WIDTH }}>
                   <CircularDishCard dish={dish} />
                 </View>
@@ -401,21 +446,23 @@ export default function HomePage() {
                       />
                       <Text style={styles.featuredChefName}>{chef.name}</Text>
                       <Text style={styles.featuredChefCuisine}>{chef.cuisine || 'Chef'}</Text>
-                      {chef.location && (
-                        <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', marginTop: 4, gap: 4 }}>
-                          <Image 
-                            source={require('../assets/placeholder.png')} 
-                            style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
-                            resizeMode="contain" 
-                          />
-                          <Text style={[styles.featuredChefLocation, { marginTop: 0 }]} numberOfLines={1}>
-                            {chef.location?.split(',')[0]}
-                          </Text>
+                      <View style={styles.featuredChefLocationRatingRow}>
+                        {chef.location && (
+                          <View style={styles.featuredChefLocationContainer}>
+                            <Image 
+                              source={require('../assets/placeholder.png')} 
+                              style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
+                              resizeMode="contain" 
+                            />
+                            <Text style={styles.featuredChefLocation} numberOfLines={1}>
+                              {chef.location?.split(',')[1]?.trim() || chef.location?.split(',')[0]}
+                            </Text>
+                          </View>
+                        )}
+                        <View style={styles.featuredChefRating}>
+                          <Text style={styles.starIcon}>★</Text>
+                          <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
                         </View>
-                      )}
-                      <View style={styles.featuredChefRating}>
-                        <Text style={styles.starIcon}>★</Text>
-                        <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
                       </View>
                     </TouchableOpacity>
                   </Link>
@@ -426,7 +473,7 @@ export default function HomePage() {
 
           {/* How It Works section */}
           <View style={[styles.section, styles.howItWorksSection]}>
-            <Text style={[styles.sectionTitle, styles.howItWorksTitle, isMobile && styles.sectionTitleMobile]}>How It Works?</Text>
+            <Text style={[styles.sectionTitle, styles.howItWorksTitle, isMobile && styles.sectionTitleMobile]}>How it works?</Text>
             <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
               <View style={styles.howItWorksCard}>
                 <View style={styles.howItWorksIconContainer}>
@@ -437,9 +484,9 @@ export default function HomePage() {
                   />
                 </View>
                 <View style={styles.howItWorksContent}>
-                  <Text style={styles.howItWorksTitle}>1. Discover</Text>
+                  <Text style={styles.howItWorksCardTitle}>Discover</Text>
                   <Text style={styles.howItWorksText}>
-                    Browse homemade food from local home chefs. The Platform does not inspect or prepare meals.
+                    Browse homemade food from local chefs near you
                   </Text>
                 </View>
               </View>
@@ -452,9 +499,9 @@ export default function HomePage() {
                   />
                 </View>
                 <View style={styles.howItWorksContent}>
-                  <Text style={styles.howItWorksTitle}>2. Order</Text>
+                  <Text style={styles.howItWorksCardTitle}>Order</Text>
                   <Text style={styles.howItWorksText}>
-                    Choose a dish, select a pickup time, and pay online. Orders are made directly with the chef.
+                    Choose a dish, select a pickup time, and pay securely online
                   </Text>
                 </View>
               </View>
@@ -467,14 +514,28 @@ export default function HomePage() {
                   />
                 </View>
                 <View style={styles.howItWorksContent}>
-                  <Text style={styles.howItWorksTitle}>3. Pickup</Text>
+                  <Text style={styles.howItWorksCardTitle}>Pickup</Text>
                   <Text style={styles.howItWorksText}>
-                    Collect your order at the scheduled time. Handle and consume food safely.
+                    Collect your order on time & handle food safely after pickup
                   </Text>
                 </View>
               </View>
             </View>
           </View>
+
+          {/* Sell on YourHomeChef CTA - only show for regular users and non-logged in users */}
+          {!isChef && !isAdmin && (
+            <View style={styles.sellCtaContainer}>
+              <Link href="/auth/chef" asChild>
+                <TouchableOpacity style={styles.becomeChefButton}>
+                  <Text style={styles.becomeChefButtonText}>Become a Chef</Text>
+                </TouchableOpacity>
+              </Link>
+              <Text style={styles.sellCtaText}>
+                Love cooking? Sell on YourHomeChef.
+              </Text>
+            </View>
+          )}
         </View>
       </Screen>
 
@@ -758,11 +819,40 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
   },
   howItWorksSection: {
-    marginBottom: -theme.spacing['4xl'],
+    marginBottom: 0,
     paddingBottom: 0,
   },
   howItWorksTitle: {
     paddingBottom: 0,
+  },
+  sellCtaContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingTop: theme.spacing['2xl'],
+    paddingBottom: 0,
+    marginTop: theme.spacing['3xl'],
+    marginBottom: -theme.spacing['2xl'],
+    gap: theme.spacing.sm,
+  },
+  becomeChefButton: {
+    backgroundColor: '#FE734C',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing['2xl'],
+    borderRadius: theme.radius.lg,
+    minWidth: 180,
+    alignItems: 'center',
+  },
+  becomeChefButtonText: {
+    color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.bold as any,
+  },
+  sellCtaText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.base,
+    color: '#333333',
+    textAlign: 'center',
   },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.body,
@@ -793,7 +883,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
-    ...elev('md'),
   },
   dishImageContainer: {
     width: "100%",
@@ -888,9 +977,13 @@ const styles = StyleSheet.create({
     padding: theme.spacing.lg,
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
-    borderWidth: 1,
-    borderColor: '#FE734C',
-    ...elev('lg'), // 3D style effect
+  },
+  howItWorksCardTitle: {
+    fontFamily: theme.typography.fontFamily.display,
+    color: '#333333',
+    fontSize: 18,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    textAlign: 'left',
   },
   howItWorksIconContainer: {
     width: 48,
@@ -941,12 +1034,9 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.md,
     padding: theme.spacing['2xl'],
-    backgroundColor: '#FFFFFF', // Changed to white for better shadow contrast
+    backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
     textAlign: "center",
-    borderWidth: 2,
-    borderColor: '#FE734C',
-    ...elev('lg'), // Added 3D effect
   },
   featuredChefAvatar: {
     width: 96,
@@ -968,18 +1058,27 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
+  featuredChefLocationRatingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: theme.spacing.md,
+    marginTop: theme.spacing.xs,
+  },
+  featuredChefLocationContainer: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
   featuredChefLocation: {
     fontFamily: theme.typography.fontFamily.body,
     color: '#777777',
     fontSize: theme.typography.fontSize.xs,
-    marginTop: theme.spacing.xs / 2,
-    textAlign: 'center',
   },
   featuredChefRating: {
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.xs / 2,
-    marginTop: theme.spacing.sm,
   },
   // Mobile Styles
   containerMobile: {
@@ -1012,27 +1111,22 @@ const styles = StyleSheet.create({
   // Circular Dish Card
   circularDishCard: {
     alignItems: 'center',
-    gap: theme.spacing.sm,
+    gap: theme.spacing.xs,
     padding: theme.spacing.md,
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
-    ...elev('md'),
-    borderWidth: 2,
-    borderColor: '#FE734C',
   },
   circularDishImageContainer: {
-    width: 180, // Slightly smaller to fit padding
-    height: 180,
-    borderRadius: 90,
+    width: 120,
+    height: 120,
+    borderRadius: 60,
     overflow: 'hidden',
     backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#FE734C',
   },
   circularDishImageContainerMobile: {
-    width: 140,
-    height: 140,
-    borderRadius: 70,
+    width: 100,
+    height: 100,
+    borderRadius: 50,
   },
   circularDishImage: {
     width: '100%',
@@ -1045,15 +1139,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
   },
   circularDishTitle: {
-    fontSize: 16,
+    fontSize: 14,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: 'bold',
     color: '#333',
     textAlign: 'center',
   },
+  circularDishChefName: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 12,
+    color: '#777',
+    textAlign: 'center',
+  },
   circularDishSubtitle: {
     fontFamily: theme.typography.fontFamily.body,
-    fontSize: 14,
+    fontSize: 12,
     color: '#666',
     textAlign: 'center',
   },

@@ -45,7 +45,6 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
   // Web version with framer-motion animations
   if (Platform.OS === 'web' && motion) {
     const MotionDiv = motion.div;
-    const MotionSpan = motion.span;
     
     // Merge all styles into single objects - NO arrays for DOM elements
     const linkStyle = { textDecoration: 'none', outline: 'none' };
@@ -53,28 +52,18 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       display: 'inline-flex',
       alignItems: 'center',
       gap: isMobile ? '4px' : '8px',
-      paddingInline: isMobile ? '4px' : '10px',
-      paddingBlock: '6px',
-      borderRadius: '10px',
+      paddingInline: isMobile ? '8px' : '16px',
+      paddingBlock: '8px',
+      borderRadius: '8px',
       position: 'relative',
-      color: isActive ? activeColor : TEXT_DARK,
+      backgroundColor: isActive ? activeColor : 'transparent',
       cursor: 'pointer',
     };
     const textStyle = {
-      fontWeight: '600',
-      color: isActive ? activeColor : TEXT_DARK,
+      fontWeight: isActive ? '700' : '600',
+      color: isActive ? '#FFFFFF' : TEXT_DARK,
       fontFamily: theme.typography.fontFamily.body,
       fontSize: '14px',
-    };
-    const underlineStyle = {
-      position: 'absolute',
-      left: '8px',
-      right: '8px',
-      bottom: '-4px',
-      height: '2.5px',
-      borderRadius: '2px',
-      background: 'linear-gradient(90deg, rgba(254,115,76,1) 0%, rgba(254,115,76,1) 100%)',
-      pointerEvents: 'none' as const,
     };
     
     return (
@@ -86,19 +75,8 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
           transition={{ type: 'spring', stiffness: 350, damping: 22 }}
           style={containerStyle}
         >
-          {Icon && <Icon size={18} strokeWidth={2.2} color={isActive ? activeColor : TEXT_DARK} />}
+          {Icon && <Icon size={18} strokeWidth={2.2} color={isActive ? '#FFFFFF' : TEXT_DARK} />}
           <span style={textStyle}>{label}</span>
-          <MotionSpan
-            layoutId={`nav-underline-${label}`} // Unique layoutId per button
-            initial={{ width: 0, opacity: 0, x: -8 }}
-            animate={{
-              width: isActive ? '100%' : '0%',
-              opacity: isActive ? 1 : 0,
-              x: 0,
-            }}
-            transition={{ duration: 0.22, ease: 'easeOut' }}
-            style={underlineStyle}
-          />
         </MotionDiv>
       </Link>
     );
@@ -110,13 +88,13 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       <TouchableOpacity 
         style={StyleSheet.flatten([
           styles.navLink,
-          isMobile && { paddingHorizontal: 4, paddingVertical: 4 },
-          isActive && { borderBottomWidth: 2, borderBottomColor: activeColor }
+          isMobile && { paddingHorizontal: 8, paddingVertical: 8 },
+          isActive && { backgroundColor: activeColor, borderRadius: 8 }
         ])}
       >
         <Text style={StyleSheet.flatten([
-          styles.navLinkText, 
-          isActive && { color: activeColor, fontWeight: '600' as any }
+          styles.navLinkText,
+          isActive && { color: '#FFFFFF', fontWeight: '700' as any }
         ])}>
           {label}
         </Text>
@@ -596,6 +574,9 @@ export default function NavBar() {
         {!isAuthPage && (
           <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
             <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
+            {!loggedIn && (
+              <NavButton href="/auth" label="Sign Up" isActive={false} />
+            )}
             {hasActiveOrder ? (
               <Link href="/orders/track" asChild>
                 <TouchableOpacity style={StyleSheet.flatten([
