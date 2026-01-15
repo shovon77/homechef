@@ -3,9 +3,10 @@ import { CreateCheckoutBody, TCreateCheckoutBody } from '../_shared/schemas.ts';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
-const PLATFORM_FEE_PERCENT = Number(Deno.env.get('PLATFORM_FEE_PERCENT') ?? Deno.env.get('PLATFORM_FEE_PCT') ?? '0.10');
-const PLATFORM_FEE_MIN = Number.isFinite(Number(Deno.env.get('PLATFORM_FEE_MIN'))) ? Number(Deno.env.get('PLATFORM_FEE_MIN')) : 50;
-const PLATFORM_FEE_MAX = Number.isFinite(Number(Deno.env.get('PLATFORM_FEE_MAX'))) ? Number(Deno.env.get('PLATFORM_FEE_MAX')) : 1500;
+// Flat platform service fee: $1.50 (150 cents)
+const PLATFORM_FEE_CENTS = 150;
+// Tax rate: 13% HST (Ontario rate) - applied to subtotal + platform fee
+const TAX_RATE = 0.13;
 
 // CORS headers - must match what the client sends
 const corsHeaders = {
@@ -132,15 +133,14 @@ export const handler = async (req: Request) => {
       return j(400, { error: 'Order total must be greater than zero' });
     }
 
-    const platformFeeCents = (() => {
-      const pctConfig = Number.isFinite(PLATFORM_FEE_PERCENT) ? PLATFORM_FEE_PERCENT : 0;
-      const normalizedPct = pctConfig > 1 ? pctConfig / 100 : pctConfig;
-      const raw = Math.round(total_cents * normalizedPct);
-      const clampedMin = Number.isFinite(PLATFORM_FEE_MIN) ? PLATFORM_FEE_MIN : 0;
-      const clampedMax = Number.isFinite(PLATFORM_FEE_MAX) ? PLATFORM_FEE_MAX : raw;
-      const fee = Math.min(clampedMax, Math.max(clampedMin, raw));
-      return Math.max(0, Math.min(fee, total_cents));
-    })();
+    // Flat platform service fee: $1.50
+    const platformFeeCents = PLATFORM_FEE_CENTS;
+
+    // Calculate 13% tax on subtotal only
+    const taxCents = Math.round(total_cents * TAX_RATE);
+    
+    // Grand total including tax
+    const grandTotalCents = total_cents + platformFeeCents + taxCents;
 
     const { data: chefRow, error: chefError } = await adminClient
       .from('chefs')
@@ -181,8 +181,10 @@ export const handler = async (req: Request) => {
         chef_id: body.chef_id,
         status: 'requested',
         payment_status: 'awaiting_payment', // Order is created before payment
-        total_cents: total_cents,
+        total_cents: grandTotalCents, // Total including platform fee and taxes
+        subtotal_cents: total_cents, // Subtotal (dish prices only)
         platform_fee_cents: platformFeeCents,
+        tax_cents: taxCents, // 13% HST
         pickup_at: pickupDate.toISOString(),
         expires_at: expiresAt.toISOString(),
       })
@@ -243,16 +245,41 @@ export const handler = async (req: Request) => {
         payment_intent_data: paymentIntentData,
         customer_creation: 'if_required',
         client_reference_id: String(orderId),
-        line_items: lineItems.map((item) => ({
-          price_data: {
-            currency: 'cad',
-            product_data: {
-              name: item.name || 'Dish',
+        line_items: [
+          // Dish items
+          ...lineItems.map((item) => ({
+            price_data: {
+              currency: 'cad',
+              product_data: {
+                name: item.name || 'Dish',
+              },
+              unit_amount: item.unit_cents,
             },
-            unit_amount: item.unit_cents,
+            quantity: item.quantity,
+          })),
+          // Platform service fee
+          {
+            price_data: {
+              currency: 'cad',
+              product_data: {
+                name: 'Service Fee',
+              },
+              unit_amount: platformFeeCents,
+            },
+            quantity: 1,
           },
-          quantity: item.quantity,
-        })),
+          // 13% HST Tax
+          {
+            price_data: {
+              currency: 'cad',
+              product_data: {
+                name: 'Tax (13% HST)',
+              },
+              unit_amount: taxCents,
+            },
+            quantity: 1,
+          },
+        ],
         success_url: resolveUrl(body.success_url),
         cancel_url: resolveUrl(body.cancel_url),
         metadata: {
@@ -290,9 +317,12 @@ export const handler = async (req: Request) => {
       sessionId: session.id,
       paymentIntent: session.payment_intent,
       paymentIntentId: updateData.stripe_payment_intent_id || 'not available yet',
-      applicationFeeCents: platformFeeCents,
+      subtotalCents: total_cents,
+      platformFeeCents,
+      taxCents,
+      grandTotalCents,
       transferDestination: stripeAccountId,
-      captureMethod: 'manual',
+      captureMethod: 'automatic',
     });
 
     return j(200, { url: session.url });

@@ -50,10 +50,10 @@ export default function CheckoutPage() {
   }, [cartChefId]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
-  // Platform service fee: 10% of subtotal
-  const platformFee = useMemo(() => subtotal * 0.10, [subtotal]);
-  // Taxes: 13% HST on subtotal + platform fee (Ontario rate)
-  const taxes = useMemo(() => (subtotal + platformFee) * 0.13, [subtotal, platformFee]);
+  // Platform service fee: flat $1.50
+  const platformFee = 1.50;
+  // Taxes: 13% HST on subtotal only (Ontario rate)
+  const taxes = useMemo(() => subtotal * 0.13, [subtotal]);
   // Total: subtotal + platform fee + taxes
   const total = useMemo(() => subtotal + platformFee + taxes, [subtotal, platformFee, taxes]);
   const totalCents = useMemo(() => Math.round(total * 100), [total]);

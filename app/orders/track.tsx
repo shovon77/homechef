@@ -115,6 +115,9 @@ export default function TrackOrderPage() {
   const issueRecognitionRef = useRef<any>(null);
   const [showIssueTypeDropdown, setShowIssueTypeDropdown] = useState(false);
   const [switchingOrder, setSwitchingOrder] = useState(false);
+  const [reportedIssue, setReportedIssue] = useState<any | null>(null);
+  const [reportedIssueImages, setReportedIssueImages] = useState<any[]>([]);
+  const [isReportedIssueExpanded, setIsReportedIssueExpanded] = useState(true);
 
   useEffect(() => {
     let mounted = true;
@@ -240,6 +243,31 @@ export default function TrackOrderPage() {
           } else if (messagesRes.error && mounted) {
             console.error('Error fetching messages:', messagesRes.error);
           }
+
+          // Fetch reported issue for this order
+          const issueRes = await supabase
+            .from('order_issues')
+            .select('*')
+            .eq('order_id', selectedOrder.id)
+            .eq('user_id', user.id)
+            .maybeSingle();
+          
+          if (!issueRes.error && issueRes.data && mounted) {
+            setReportedIssue(issueRes.data);
+            
+            // Fetch images for the issue
+            const imagesRes = await supabase
+              .from('order_issue_images')
+              .select('*')
+              .eq('issue_id', issueRes.data.id);
+            
+            if (!imagesRes.error && imagesRes.data && mounted) {
+              setReportedIssueImages(imagesRes.data);
+            }
+          } else if (mounted) {
+            setReportedIssue(null);
+            setReportedIssueImages([]);
+          }
         }
 
         channel = supabase
@@ -268,10 +296,10 @@ export default function TrackOrderPage() {
   );
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
   
-  // Platform service fee: 10% of subtotal
-  const platformFeeCents = useMemo(() => Math.round(subtotalCents * 0.10), [subtotalCents]);
-  // Taxes: 13% HST on subtotal + platform fee (Ontario rate)
-  const taxesCents = useMemo(() => Math.round((subtotalCents + platformFeeCents) * 0.13), [subtotalCents, platformFeeCents]);
+  // Platform service fee: flat $1.50 (150 cents)
+  const platformFeeCents = 150;
+  // Taxes: 13% HST on subtotal only (Ontario rate)
+  const taxesCents = useMemo(() => Math.round(subtotalCents * 0.13), [subtotalCents]);
 
   // Send message function
   const handleSendMessage = async () => {
@@ -473,6 +501,36 @@ export default function TrackOrderPage() {
     if (!messagesRes.error && messagesRes.data) {
       setMessages(messagesRes.data as MessageRow[]);
     }
+
+    // Load reported issue
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      const issueRes = await supabase
+        .from('order_issues')
+        .select('*')
+        .eq('order_id', selectedOrder.id)
+        .eq('user_id', user.id)
+        .maybeSingle();
+      
+      if (!issueRes.error && issueRes.data) {
+        setReportedIssue(issueRes.data);
+        
+        // Fetch images for the issue
+        const imagesRes = await supabase
+          .from('order_issue_images')
+          .select('*')
+          .eq('issue_id', issueRes.data.id);
+        
+        if (!imagesRes.error && imagesRes.data) {
+          setReportedIssueImages(imagesRes.data);
+        } else {
+          setReportedIssueImages([]);
+        }
+      } else {
+        setReportedIssue(null);
+        setReportedIssueImages([]);
+      }
+    }
   };
 
   // Navigate to previous order (older) - smooth transition without page reload
@@ -615,6 +673,13 @@ export default function TrackOrderPage() {
       }
 
       Alert.alert('Success', 'Issue reported successfully. We\'ll review it within 24 hours.');
+      
+      // Set the reported issue to display it
+      setReportedIssue(issueData);
+      if (issueImages.length > 0) {
+        setReportedIssueImages(issueImages.map((url, idx) => ({ id: idx, image_url: url })));
+      }
+      
       setShowReportIssueModal(false);
       setIssueType('');
       setAdditionalDetails('');
@@ -773,6 +838,39 @@ export default function TrackOrderPage() {
 
   const chefName = chef?.name ?? 'Chef';
 
+  // Helper to format issue type
+  const formatIssueType = (type: string) => {
+    switch (type) {
+      case 'chef_unresponsive': return 'Chef is unresponsive';
+      case 'pickup_location_unclear': return 'Pickup location unclear';
+      case 'chef_running_late': return "Chef's running late";
+      case 'food_unavailable': return 'Food unavailable';
+      case 'other': return 'Other';
+      default: return type || 'Unknown';
+    }
+  };
+
+  // Helper to format issue status
+  const formatIssueStatus = (status: string) => {
+    switch (status) {
+      case 'pending': return 'Pending review';
+      case 'reviewing': return 'Under review';
+      case 'resolved': return 'Resolved';
+      case 'dismissed': return 'Dismissed';
+      default: return status || 'Pending';
+    }
+  };
+
+  const getIssueStatusColor = (status: string) => {
+    switch (status) {
+      case 'pending': return '#F97316';
+      case 'reviewing': return '#3B82F6';
+      case 'resolved': return '#22C55E';
+      case 'dismissed': return '#6B7280';
+      default: return PRIMARY;
+    }
+  };
+
   return (
     <Screen scroll style={{ backgroundColor: BG }} contentPadding={0}>
       {/* Loading overlay when switching orders */}
@@ -800,7 +898,7 @@ export default function TrackOrderPage() {
               <Text style={styles.orderNavSubtext}>
                 #{String(order?.id || '').padStart(5, '0')}
               </Text>
-            </View>
+        </View>
             <TouchableOpacity
               style={[styles.navArrowButton, currentOrderIndex >= allOrders.length - 1 && styles.navArrowButtonDisabled]}
               onPress={handlePreviousOrder}
@@ -863,27 +961,27 @@ export default function TrackOrderPage() {
           
           {isOrderSummaryExpanded && (
             <View style={styles.orderSummaryContent}>
-              {items.map(item => (
+            {items.map(item => (
                 <View key={item.id} style={styles.orderItemRow}>
                   <View style={styles.orderItemInfo}>
                     <Text style={styles.orderItemName}>
                       {item.dish?.name ?? `Dish #${item.dish_id}`} ({chef?.name ?? 'Chef'})
-                    </Text>
-                  </View>
+                </Text>
+              </View>
                   <View style={styles.orderItemQuantityPrice}>
                     <Text style={styles.orderItemQuantity}>{item.quantity}</Text>
                     <Text style={styles.orderItemPrice}>{cents(item.unit_price_cents * item.quantity)}</Text>
-                  </View>
-                </View>
+          </View>
+        </View>
               ))}
-              
+
               <View style={styles.summaryDivider} />
               
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Subtotal</Text>
-                <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
-              </View>
-              <View style={styles.summaryRow}>
+          <View style={styles.summaryRow}>
+            <Text style={styles.summaryLabel}>Subtotal</Text>
+            <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
+          </View>
+          <View style={styles.summaryRow}>
                 <View style={styles.summaryLabelWithIcon}>
                   <Text style={styles.summaryLabel}>Platform service fee </Text>
                   <Text style={styles.infoIcon}>ⓘ</Text>
@@ -893,11 +991,11 @@ export default function TrackOrderPage() {
               <View style={styles.summaryRow}>
                 <Text style={styles.summaryLabel}>Taxes</Text>
                 <Text style={styles.summaryValue}>{cents(taxesCents)}</Text>
-              </View>
-              <View style={[styles.summaryRow, { marginTop: 8 }]}>
+          </View>
+          <View style={[styles.summaryRow, { marginTop: 8 }]}>
                 <Text style={[styles.summaryLabel, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>Total</Text>
                 <Text style={[styles.summaryValue, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>{cents(calculatedTotalCents)}</Text>
-              </View>
+          </View>
               
               <Text style={styles.platformFeeInfo}>
                 ⓘ It helps support the platform and secure payments.
@@ -906,7 +1004,7 @@ export default function TrackOrderPage() {
           )}
         </View>
 
-        <View style={styles.card}>
+          <View style={styles.card}>
           <TouchableOpacity 
             style={styles.orderSummaryHeader}
             onPress={() => setIsPickupInfoExpanded(!isPickupInfoExpanded)}
@@ -974,7 +1072,7 @@ export default function TrackOrderPage() {
               <Text style={styles.pickupReminder}>
                 We'll remind you before pickup time. The food's prepared by an independent home chef.
               </Text>
-            </View>
+          </View>
           )}
         </View>
 
@@ -993,6 +1091,70 @@ export default function TrackOrderPage() {
             <Text style={styles.readyActionText}>I picked up my order</Text>
           </TouchableOpacity>
         ) : null}
+
+        {/* Reported Issue Section */}
+        {reportedIssue && (
+          <View style={styles.card}>
+            <TouchableOpacity 
+              style={styles.orderSummaryHeader}
+              onPress={() => setIsReportedIssueExpanded(!isReportedIssueExpanded)}
+            >
+              <Text style={styles.sectionTitle}>Reported Issue</Text>
+              <Text style={styles.expandIcon}>{isReportedIssueExpanded ? '−' : '+'}</Text>
+            </TouchableOpacity>
+            
+            {isReportedIssueExpanded && (
+              <View style={styles.reportedIssueContent}>
+                <View style={styles.reportedIssueRow}>
+                  <Text style={styles.reportedIssueLabel}>Status</Text>
+                  <View style={[styles.reportedIssueStatusBadge, { backgroundColor: `${getIssueStatusColor(reportedIssue.status)}15` }]}>
+                    <Text style={[styles.reportedIssueStatusText, { color: getIssueStatusColor(reportedIssue.status) }]}>
+                      {formatIssueStatus(reportedIssue.status)}
+                    </Text>
+      </View>
+                </View>
+                
+                <View style={styles.reportedIssueRow}>
+                  <Text style={styles.reportedIssueLabel}>Issue type</Text>
+                  <Text style={styles.reportedIssueValue}>{formatIssueType(reportedIssue.issue_type)}</Text>
+                </View>
+                
+                {reportedIssue.additional_details && (
+                  <View style={styles.reportedIssueDetailsSection}>
+                    <Text style={styles.reportedIssueLabel}>Details</Text>
+                    <Text style={styles.reportedIssueDetails}>{reportedIssue.additional_details}</Text>
+                  </View>
+                )}
+                
+                {reportedIssueImages.length > 0 && (
+                  <View style={styles.reportedIssueDetailsSection}>
+                    <Text style={styles.reportedIssueLabel}>Attached images</Text>
+                    <View style={styles.reportedIssueImagesRow}>
+                      {reportedIssueImages.map((img: any) => (
+                        <Image
+                          key={img.id}
+                          source={{ uri: img.image_url }}
+                          style={styles.reportedIssueImage}
+                          resizeMode="cover"
+                        />
+                      ))}
+                    </View>
+                  </View>
+                )}
+                
+                <Text style={styles.reportedIssueTimestamp}>
+                  Reported: {formatLocal(reportedIssue.created_at, { dateStyle: 'medium', timeStyle: 'short' })}
+                </Text>
+                
+                {reportedIssue.status === 'pending' && (
+                  <Text style={styles.reportedIssueNote}>
+                    We'll review your issue within 24 hours.
+                  </Text>
+                )}
+              </View>
+            )}
+          </View>
+        )}
 
         {messages.length > 0 && (
           <View style={styles.card}>
@@ -1062,15 +1224,17 @@ export default function TrackOrderPage() {
             <Link href="/browse?tab=chefs" asChild>
               <TouchableOpacity style={styles.messageChefButton}>
                 <Text style={styles.messageChefButtonText}>Browse chefs, as you wait!</Text>
+          </TouchableOpacity>
+        </Link>
+            {!reportedIssue && (
+              <TouchableOpacity 
+                style={styles.messageChefButton}
+                onPress={() => setShowReportIssueModal(true)}
+              >
+                <Text style={styles.messageChefButtonText}>Report an issue?</Text>
               </TouchableOpacity>
-            </Link>
-            <TouchableOpacity 
-              style={styles.messageChefButton}
-              onPress={() => setShowReportIssueModal(true)}
-            >
-              <Text style={styles.messageChefButtonText}>Report an issue?</Text>
-            </TouchableOpacity>
-          </View>
+            )}
+      </View>
         </View>
 
         <Text style={styles.footerNote}>
@@ -2270,5 +2434,71 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '800',
     fontFamily: theme.typography.fontFamily.body,
+  },
+  // Reported Issue Section Styles
+  reportedIssueContent: {
+    marginTop: 12,
+    gap: 12,
+  },
+  reportedIssueRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  reportedIssueLabel: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  reportedIssueValue: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'right',
+    flex: 1,
+    marginLeft: 12,
+  },
+  reportedIssueStatusBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 999,
+  },
+  reportedIssueStatusText: {
+    fontSize: 12,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  reportedIssueDetailsSection: {
+    gap: 8,
+  },
+  reportedIssueDetails: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 20,
+  },
+  reportedIssueImagesRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 8,
+  },
+  reportedIssueImage: {
+    width: 80,
+    height: 80,
+    borderRadius: 8,
+    backgroundColor: BORDER,
+  },
+  reportedIssueTimestamp: {
+    color: TEXT_DARK,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 4,
+  },
+  reportedIssueNote: {
+    color: PRIMARY,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    fontStyle: 'italic',
   },
 });

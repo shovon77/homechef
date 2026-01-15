@@ -740,7 +740,7 @@ export default function NavBar() {
           ) : (
               <Link href="/auth" asChild>
                   <TouchableOpacity style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>Login/Sign-up</Text>
+                  <Text style={styles.secondaryButtonText}>Login / Sign-up</Text>
                 </TouchableOpacity>
               </Link>
           )}
@@ -819,7 +819,7 @@ export default function NavBar() {
               >
                 {/* Assuming user icon for login or could import another one */}
                  <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                <Text style={styles.mobileMenuText}>Login/Sign-up</Text>
+                <Text style={styles.mobileMenuText}>Login / Sign-up</Text>
               </TouchableOpacity>
             </Link>
           )}
@@ -1033,11 +1033,11 @@ const styles = StyleSheet.create({
     tintColor: '#FE734C',
   },
   locationNavText: {
-    fontSize: 12,
+    fontSize: 14,
     fontWeight: '500',
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
-    maxWidth: 55,
+    maxWidth: 70,
     textDecorationLine: 'underline',
     textDecorationColor: PRIMARY_COLOR,
   },
@@ -1178,13 +1178,15 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: NAVBAR_HEIGHT,
     right: 0,
-    width: '50%',
+    width: 'auto',
+    minWidth: 160,
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
     borderLeftWidth: 1,
     borderLeftColor: BORDER_LIGHT,
-    padding: 16,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: -2, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
       android: { elevation: 4 },
@@ -1194,7 +1196,7 @@ const styles = StyleSheet.create({
   mobileMenuItem: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 12,
+    paddingVertical: 10,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
     gap: 12,
@@ -1205,8 +1207,8 @@ const styles = StyleSheet.create({
     tintColor: '#FE734C',
   },
   mobileMenuText: {
-    fontSize: 16,
-    fontWeight: '600',
+    fontSize: 14,
+    fontWeight: '400',
     color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
   },

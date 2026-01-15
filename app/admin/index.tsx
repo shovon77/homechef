@@ -35,7 +35,7 @@ const palette = {
 export default function AdminPage() {
   const router = useRouter();
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const tabKeys = ['overview', 'chef-requests', 'chefs', 'users', 'orders'];
+  const tabKeys = ['overview', 'chef-requests', 'chefs', 'users', 'orders', 'issues'];
   const initialTabIdx = tabKeys.indexOf(tab || 'overview');
   const safeInitial = initialTabIdx >= 0 ? initialTabIdx : 0;
   const { isAdmin, loading: adminLoading, user, profile } = useRole();
@@ -54,6 +54,9 @@ export default function AdminPage() {
   const [chefRequests, setChefRequests] = useState<any[]>([]);
   const [chefReqSearch, setChefReqSearch] = useState('');
   const [autoRejecting, setAutoRejecting] = useState(false);
+  const [issues, setIssues] = useState<any[]>([]);
+  const [issueSearch, setIssueSearch] = useState('');
+  const [issuePage, setIssuePage] = useState(1);
   const [expandedSections, setExpandedSections] = useState<{ [chefId: number]: { [section: string]: boolean } }>({});
   const [bannerUrl, setBannerUrl] = useState('');
   const [originalBannerUrl, setOriginalBannerUrl] = useState('');
@@ -166,10 +169,44 @@ export default function AdminPage() {
         setOriginalBannerUrl(bannerData.value);
       }
 
+      // Load order issues with related data
+      const { data: issuesData } = await supabase
+        .from('order_issues')
+        .select(`
+          *,
+          orders!order_issues_order_id_fkey (id, total_cents, created_at, user_id),
+          chefs!order_issues_chef_id_fkey (id, name, email)
+        `)
+        .order('created_at', { ascending: false });
+      
+      // Fetch images for each issue
+      const issuesWithImages = await Promise.all(
+        (issuesData || []).map(async (issue: any) => {
+          const { data: images } = await supabase
+            .from('order_issue_images')
+            .select('*')
+            .eq('issue_id', issue.id);
+          
+          // Fetch user email
+          let userEmail = '';
+          if (issue.user_id) {
+            const { data: userData } = await supabase
+              .from('profiles')
+              .select('email')
+              .eq('id', issue.user_id)
+              .single();
+            userEmail = userData?.email || '';
+          }
+          
+          return { ...issue, images: images || [], user_email: userEmail };
+        })
+      );
+
       setChefs(chefRows);
       setOrders(orderRows);
       setUsers((userRows as any[]) || []);
       setApplications((applicationRows as any[]) || []);
+      setIssues(issuesWithImages);
     } catch (e: any) {
       setErr(e.message || String(e));
     } finally {
@@ -472,6 +509,53 @@ export default function AdminPage() {
     );
   }, [chefRequests, chefReqSearch]);
 
+  const filteredIssues = useMemo(() => {
+    if (!Array.isArray(issues)) return [];
+    const q = (issueSearch ?? '').toLowerCase().trim();
+    if (!q) return issues;
+    return issues.filter(i =>
+      String(i.order_id).includes(q) ||
+      (i.issue_type ?? '').toLowerCase().includes(q) ||
+      (i.status ?? '').toLowerCase().includes(q) ||
+      (i.additional_details ?? '').toLowerCase().includes(q) ||
+      (i.user_email ?? '').toLowerCase().includes(q) ||
+      (i.chefs?.name ?? '').toLowerCase().includes(q)
+    );
+  }, [issues, issueSearch]);
+
+  useEffect(() => {
+    setIssuePage(1);
+  }, [issueSearch]);
+
+  const paginatedIssues = useMemo(() => {
+    const start = (issuePage - 1) * ITEMS_PER_PAGE;
+    return filteredIssues.slice(start, start + ITEMS_PER_PAGE);
+  }, [filteredIssues, issuePage]);
+
+  const totalIssuePages = Math.ceil(filteredIssues.length / ITEMS_PER_PAGE);
+
+  async function handleUpdateIssueStatus(issueId: number, newStatus: string) {
+    const { error } = await supabase
+      .from('order_issues')
+      .update({ 
+        status: newStatus,
+        reviewed_by: user?.id,
+        reviewed_at: new Date().toISOString()
+      })
+      .eq('id', issueId);
+    
+    if (error) {
+      Alert.alert('Error', error.message || 'Failed to update issue status');
+    } else {
+      setIssues(prev => prev.map(i => 
+        i.id === issueId 
+          ? { ...i, status: newStatus, reviewed_by: user?.id, reviewed_at: new Date().toISOString() }
+          : i
+      ));
+      Alert.alert('Success', 'Issue status updated');
+    }
+  }
+
   const chefStatusStyles = (status?: string) => {
     switch ((status || '').toLowerCase()) {
       case 'active':
@@ -507,6 +591,30 @@ export default function AdminPage() {
   };
 
   const orderStatusLabel = (status?: string) => status ? status.charAt(0).toUpperCase() + status.slice(1) : 'Pending';
+
+  const issueStatusStyles = (status?: string) => {
+    switch ((status || '').toLowerCase()) {
+      case 'resolved':
+        return { container: [styles.statusPill, styles.statusSuccess], text: styles.statusTextSuccess };
+      case 'reviewing':
+        return { container: [styles.statusPill, styles.statusAccent], text: styles.statusTextAccent };
+      case 'dismissed':
+        return { container: [styles.statusPill, styles.statusNeutral], text: styles.statusTextNeutral };
+      default:
+        return { container: [styles.statusPill, styles.statusPending], text: styles.statusTextPending };
+    }
+  };
+
+  const issueTypeLabel = (type?: string) => {
+    switch (type) {
+      case 'chef_unresponsive': return 'Chef Unresponsive';
+      case 'pickup_location_unclear': return 'Pickup Location Unclear';
+      case 'chef_running_late': return "Chef Running Late";
+      case 'food_unavailable': return 'Food Unavailable';
+      case 'other': return 'Other';
+      default: return type || 'Unknown';
+    }
+  };
 
   const overviewStats = useMemo(() => {
     const now = new Date();
@@ -1003,6 +1111,137 @@ export default function AdminPage() {
     </ScrollView>
   );
 
+  const IssuesTab = (
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <Text style={styles.sectionTitle}>Order Issues ({filteredIssues.length} total)</Text>
+      <View style={styles.searchWrapper}>
+        <TextInput
+          value={issueSearch}
+          onChangeText={setIssueSearch}
+          placeholder="Search by order ID, issue type, status, or chef name..."
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
+        />
+      </View>
+
+      {loading && issues.length === 0 ? (
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+      ) : paginatedIssues.length === 0 ? (
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{issueSearch ? 'No issues found matching your search.' : 'No issues reported.'}</Text></View>
+      ) : (
+        <>
+          {paginatedIssues.map((issue) => {
+            const statusStyles = issueStatusStyles(issue.status);
+            const statusOptions = ['pending', 'reviewing', 'resolved', 'dismissed'];
+            const currentStatus = (issue.status || '').toLowerCase();
+            
+            return (
+              <View key={issue.id} style={styles.card}>
+                <View style={styles.cardHeader}>
+                  <View style={{ flex: 1 }}>
+                    <Text style={styles.cardTitle}>Issue #{issue.id}</Text>
+                    <Text style={styles.cardMeta}>Order #{issue.order_id}</Text>
+                    <Text style={styles.cardMeta}>Chef: {issue.chefs?.name || 'Unknown'}</Text>
+                    <Text style={styles.cardMeta}>Customer: {issue.user_email || 'Unknown'}</Text>
+                    {issue.created_at && (
+                      <Text style={styles.cardTimestamp}>
+                        Reported: {new Date(issue.created_at).toLocaleString()}
+                      </Text>
+                    )}
+                  </View>
+                  <View style={statusStyles.container}>
+                    <Text style={[styles.statusPillText, statusStyles.text]}>
+                      {issue.status ? issue.status.charAt(0).toUpperCase() + issue.status.slice(1) : 'Pending'}
+                    </Text>
+                  </View>
+                </View>
+
+                <View style={styles.dividerSection}>
+                  <Text style={styles.sectionLabel}>Issue Type</Text>
+                  <View style={[styles.statusPill, styles.statusPending, { alignSelf: 'flex-start', marginTop: 4 }]}>
+                    <Text style={[styles.statusPillText, styles.statusTextPending]}>{issueTypeLabel(issue.issue_type)}</Text>
+                  </View>
+                </View>
+
+                {issue.additional_details && (
+                  <View style={styles.dividerSection}>
+                    <Text style={styles.sectionLabel}>Additional Details</Text>
+                    <Text style={styles.cardBodyMuted}>{issue.additional_details}</Text>
+                  </View>
+                )}
+
+                {issue.images && issue.images.length > 0 && (
+                  <View style={styles.dividerSection}>
+                    <Text style={styles.sectionLabel}>Attached Images ({issue.images.length})</Text>
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                      {issue.images.map((img: any) => (
+                        <Image
+                          key={img.id}
+                          source={{ uri: img.image_url }}
+                          style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: palette.border }}
+                          resizeMode="cover"
+                        />
+                      ))}
+                    </View>
+                  </View>
+                )}
+
+                {issue.reviewed_at && (
+                  <View style={styles.dividerSection}>
+                    <Text style={styles.sectionLabel}>Review Info</Text>
+                    <Text style={styles.cardMeta}>
+                      Reviewed: {new Date(issue.reviewed_at).toLocaleString()}
+                    </Text>
+                    {issue.resolution_notes && (
+                      <Text style={styles.cardBodyMuted}>{issue.resolution_notes}</Text>
+                    )}
+                  </View>
+                )}
+
+                <View style={styles.segmentRow}>
+                  {statusOptions.map((status) => {
+                    const active = currentStatus === status;
+                    return (
+                      <TouchableOpacity
+                        key={status}
+                        onPress={() => handleUpdateIssueStatus(issue.id, status)}
+                        disabled={active}
+                        style={[styles.segmentButton, active && styles.segmentButtonActive]}
+                      >
+                        <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>
+                          {status.charAt(0).toUpperCase() + status.slice(1)}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </View>
+              </View>
+            );
+          })}
+          {totalIssuePages > 1 && (
+            <View style={styles.paginationRow}>
+              <TouchableOpacity
+                onPress={() => setIssuePage((p) => Math.max(1, p - 1))}
+                disabled={issuePage === 1}
+                style={[styles.paginationButton, issuePage === 1 && styles.paginationButtonDisabled]}
+              >
+                <Text style={[styles.paginationButtonText, issuePage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
+              </TouchableOpacity>
+              <Text style={styles.paginationStatus}>Page {issuePage} of {totalIssuePages} ({filteredIssues.length} total)</Text>
+              <TouchableOpacity
+                onPress={() => setIssuePage((p) => Math.min(totalIssuePages, p + 1))}
+                disabled={issuePage === totalIssuePages}
+                style={[styles.paginationButton, issuePage === totalIssuePages && styles.paginationButtonDisabled]}
+              >
+                <Text style={[styles.paginationButtonText, issuePage === totalIssuePages && styles.paginationButtonTextDisabled]}>Next</Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </>
+      )}
+    </ScrollView>
+  );
+
   function OrderCard({ order, onStatusUpdate }: { order: OrderWithItems; onStatusUpdate: (id: number, status: string) => void }) {
     const statusOptions = ['pending', 'paid', 'completed', 'cancelled'];
     const currentStatus = (order.status || '').toLowerCase();
@@ -1142,6 +1381,7 @@ export default function AdminPage() {
             { key: 'chefs', title: 'Chefs', content: ChefsTab },
             { key: 'users', title: 'Users', content: UsersTab },
             { key: 'orders', title: 'Orders', content: OrdersTab },
+            { key: 'issues', title: 'Issues', content: IssuesTab },
           ]}
         />
       </View>
