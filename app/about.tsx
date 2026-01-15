@@ -1,9 +1,12 @@
 import React from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import { View, Text, StyleSheet, Platform, Image, useWindowDimensions } from "react-native";
 import { Screen } from "../components/Screen";
 import { theme } from "../lib/theme";
 
 export default function AboutPage() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
   return (
     <Screen 
       contentStyle={styles.content}
@@ -12,10 +15,16 @@ export default function AboutPage() {
       <View style={styles.container}>
         <Text style={styles.title}>About Us</Text>
         
-        <Text style={styles.subtitle}>YourHomeChef</Text>
+        <Text style={[styles.subtitle, isMobile && styles.subtitleMobile]}>YourHomeChef</Text>
+
+        <Image 
+          source={require('../assets/About us.png')} 
+          style={[styles.heroImage, isMobile && styles.heroImageMobile]}
+          resizeMode="contain"
+        />
 
         <View style={styles.section}>
-          <Text style={styles.heading}>Our Mission</Text>
+          <Text style={[styles.heading, isMobile && styles.headingMobile]}>Our Mission</Text>
           <Text style={styles.paragraph}>
             YourHomeChef connects passionate home cooks with people who appreciate authentic, handcrafted meals. We believe homemade food carries stories — of family, tradition, and culture — and our mission is to make it easy for those stories to be shared within local communities.
           </Text>
@@ -97,7 +106,21 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: 24 * 1.2,
-    marginBottom: theme.spacing['2xl'],
+    marginBottom: theme.spacing.lg,
+  },
+  subtitleMobile: {
+    marginBottom: 8,
+  },
+  heroImage: {
+    width: '100%',
+    height: 300,
+    borderRadius: theme.radius.xl,
+    marginBottom: theme.spacing.lg,
+  },
+  heroImageMobile: {
+    height: 180,
+    marginTop: 0,
+    marginBottom: 8,
   },
   section: {
     marginBottom: theme.spacing['2xl'],
@@ -110,6 +133,9 @@ const styles = StyleSheet.create({
     lineHeight: 24 * 1.4,
     marginBottom: theme.spacing.md,
     marginTop: theme.spacing.lg,
+  },
+  headingMobile: {
+    marginTop: 8,
   },
   paragraph: {
     color: '#33393a',
