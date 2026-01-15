@@ -2,7 +2,7 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native'
-import { Link, useRouter, usePathname } from 'expo-router'
+import { Link, useRouter, usePathname, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import { useRole } from '../hooks/useRole'
 import { useCart } from '../context/CartContext'
@@ -93,7 +93,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
         ])}
       >
         <Text style={StyleSheet.flatten([
-          styles.navLinkText,
+          styles.navLinkText, 
           isActive && { color: '#FFFFFF', fontWeight: '700' as any }
         ])}>
           {label}
@@ -110,11 +110,14 @@ export default function NavBar() {
   const { isAdmin, isChef, user, profile, refreshRole } = useRole()
   const { items } = useCart()
   const { showLocationModal, setShowLocationModal } = useLocationModal()
+  const params = useLocalSearchParams<{ id?: string; type?: string }>()
   const loggedIn = !!user
   const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
   const pathname = usePathname?.() || '';
   const isExploreActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
-  const isOrderActive = pathname.startsWith('/orders');
+  const isOrderActive = pathname.startsWith('/orders') && !pathname.includes('/thank-you');
+  // Hide Order button on tracking page EXCEPT when viewing history (rejected/cancelled) orders
+  const isOnOrderTrackingPage = pathname.startsWith('/orders/track') && params.type !== 'history';
   const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
   const isCartPage = pathname.startsWith('/cart');
@@ -153,9 +156,20 @@ export default function NavBar() {
     </View>
   )
 
+  // Check for active orders - runs when user changes and subscribes to real-time updates
   useEffect(() => {
     let mounted = true
-    ;(async () => {
+    let channel: ReturnType<typeof supabase.channel> | null = null
+
+    async function checkActiveOrders() {
+      if (!user?.id) {
+        if (mounted) {
+          setHasActiveOrder(false)
+          setHasReadyOrder(false)
+        }
+        return
+      }
+
       try {
         const { data, error } = await supabase
           .from('orders')
@@ -176,11 +190,38 @@ export default function NavBar() {
           setHasReadyOrder(false)
         }
       }
-    })()
+    }
+
+    // Initial check
+    checkActiveOrders()
+
+    // Subscribe to order changes for real-time updates
+    if (user?.id) {
+      channel = supabase
+        .channel(`navbar-orders-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'orders',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            // Re-check active orders when any order changes
+            checkActiveOrders()
+          }
+        )
+        .subscribe()
+    }
+
     return () => {
       mounted = false
+      if (channel) {
+        supabase.removeChannel(channel)
+      }
     }
-  }, [])
+  }, [user?.id])
 
   // Load current location
   useEffect(() => {
@@ -572,13 +613,13 @@ export default function NavBar() {
 
         {/* Center Section: Navigation */}
         {!isAuthPage && (
-          <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
-            <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
+        <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
+          <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
             {!loggedIn && (
               <NavButton href="/auth" label="Sign-up" isActive={false} />
             )}
-            {hasActiveOrder ? (
-              <Link href="/orders/track" asChild>
+            {hasActiveOrder && !isOnOrderTrackingPage ? (
+            <Link href="/orders/track" asChild>
                 <TouchableOpacity style={StyleSheet.flatten([
                   styles.navLink, 
                   { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -589,18 +630,18 @@ export default function NavBar() {
                     { fontWeight: '700' as any },
                     isOrderActive && { color: PRIMARY_COLOR, fontWeight: '600' as any }
                   ])}>Order</Text>
-                  {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
-                </TouchableOpacity>
-              </Link>
-            ) : null}
+                {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
+              </TouchableOpacity>
+            </Link>
+          ) : null}
             {/* Dashboard button: only show for admin or chef, but not on cart, checkout, or chef signup page */}
             {(isAdmin || isChef) && !isCartPage && !isCheckoutPage && !isChefSignupPage && (
-              <NavButton 
-                href={isAdmin ? '/admin' : '/chef'} 
-                label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
-                isActive={isDashboardActive} 
-              />
-            )}
+            <NavButton 
+              href={isAdmin ? '/admin' : '/chef'} 
+              label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
+              isActive={isDashboardActive} 
+            />
+          )}
             {/* Location button */}
             {loggedIn && (
               <TouchableOpacity 
@@ -616,8 +657,8 @@ export default function NavBar() {
                   {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
                 </Text>
               </TouchableOpacity>
-            )}
-          </View>
+          )}
+        </View>
         )}
 
         {/* Right Section: Actions */}
@@ -630,23 +671,23 @@ export default function NavBar() {
             </Link>
           ) : (
             <>
-              {isMobile ? (
+          {isMobile ? (
             <>
               {!isCartPage && !isCheckoutPage && !isChefSignupPage && (
-                <Link href="/cart" asChild>
-                  <TouchableOpacity style={styles.cartButton}>
-                    <Image 
-                      source={require('../assets/shopping-cart.png')} 
+              <Link href="/cart" asChild>
+                <TouchableOpacity style={styles.cartButton}>
+                  <Image 
+                    source={require('../assets/shopping-cart.png')} 
                       style={styles.cartIconImage as any}
-                      resizeMode="contain"
-                    />
-                    {cartQty > 0 && (
-                      <View style={styles.cartBadge}>
-                        <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                      </View>
-                    )}
-                  </TouchableOpacity>
-                </Link>
+                    resizeMode="contain"
+                  />
+                  {cartQty > 0 && (
+                    <View style={styles.cartBadge}>
+                      <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              </Link>
               )}
               {(isCartPage || isCheckoutPage || isChefSignupPage) && (
                 <Link href="/faq" asChild>
@@ -705,20 +746,20 @@ export default function NavBar() {
           )}
 
           {!isCartPage && !isCheckoutPage && !isChefSignupPage && (
-            <Link href="/cart" asChild>
-              <TouchableOpacity style={styles.cartButton}>
-                <Image 
-                  source={require('../assets/shopping-cart.png')} 
+          <Link href="/cart" asChild>
+            <TouchableOpacity style={styles.cartButton}>
+              <Image 
+                source={require('../assets/shopping-cart.png')} 
                   style={styles.cartIconImage as any}
-                  resizeMode="contain"
-                />
-                {cartQty > 0 && (
-                  <View style={styles.cartBadge}>
-                    <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                  </View>
-                )}
-              </TouchableOpacity>
-            </Link>
+                resizeMode="contain"
+              />
+              {cartQty > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Link>
           )}
           {(isCartPage || isCheckoutPage || isChefSignupPage) && (
             <Link href="/faq" asChild>

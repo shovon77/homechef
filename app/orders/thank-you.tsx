@@ -1,71 +1,217 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { StyleSheet, Text, TouchableOpacity, View, ActivityIndicator } from 'react-native';
 import { Link, useLocalSearchParams } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import { formatLocal } from '../../lib/datetime';
-
-const BG_LIGHT = '#ffffff';
-const BG_DARK = '#102216';
-const TAL0_GREEN = '#294B29';
-const PRIMARY = '#13ec5b';
+import { cents } from '../../lib/money';
+const BG_LIGHT = '#F2F0EF';
+const PRIMARY = '#FE734C';
 const TEXT_GRAY = '#4F4F4F';
 const TEXT_DARK = '#111813';
+const BORDER = '#E3E7E7';
+
+type OrderItemRow = {
+  id: number;
+  order_id: number;
+  dish_id: number | null;
+  quantity: number;
+  unit_price_cents: number;
+};
+
+type DishRow = {
+  id: number;
+  name: string;
+};
 
 export default function OrderThankYouPage() {
   const params = useLocalSearchParams<{ id?: string }>();
+  const [loading, setLoading] = useState(true);
   const [pickupAt, setPickupAt] = useState<string | null>(null);
+  const [items, setItems] = useState<(OrderItemRow & { dish?: DishRow | null })[]>([]);
+  const [chefName, setChefName] = useState<string | null>(null);
+  const [chefId, setChefId] = useState<number | null>(null);
+  const [isSummaryExpanded, setIsSummaryExpanded] = useState(true);
 
   useEffect(() => {
     let mounted = true;
-    if (!params.id) return;
+    if (!params.id) {
+      setLoading(false);
+      return;
+    }
+    
     (async () => {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('pickup_at')
-        .eq('id', Number(params.id))
-        .maybeSingle();
-      if (!error && mounted) {
-        setPickupAt(data?.pickup_at ?? null);
+      try {
+        // Fetch order details
+        const { data: orderData, error: orderError } = await supabase
+          .from('orders')
+          .select('pickup_at, chef_id')
+          .eq('id', Number(params.id))
+          .maybeSingle();
+        
+        if (!orderError && mounted && orderData) {
+          setPickupAt(orderData.pickup_at ?? null);
+          
+          // Fetch chef name
+          if (orderData.chef_id) {
+            setChefId(orderData.chef_id);
+            const { data: chefData } = await supabase
+              .from('chefs')
+              .select('name')
+              .eq('id', orderData.chef_id)
+              .maybeSingle();
+            if (mounted && chefData) {
+              setChefName(chefData.name);
+            }
+          }
+        }
+
+        // Fetch order items
+        const { data: itemsData, error: itemsError } = await supabase
+          .from('order_items')
+          .select('*')
+          .eq('order_id', Number(params.id));
+        
+        if (!itemsError && mounted && itemsData) {
+          const itemRows = itemsData as OrderItemRow[];
+          
+          // Fetch dish names
+          const dishIds = itemRows.map(it => it.dish_id).filter((id): id is number => typeof id === 'number');
+          if (dishIds.length > 0) {
+            const { data: dishesData } = await supabase
+              .from('dishes')
+              .select('id, name')
+              .in('id', dishIds);
+            
+            const dishMap = new Map<number, DishRow>();
+            (dishesData ?? []).forEach(d => dishMap.set(d.id, d as DishRow));
+            
+            if (mounted) {
+              setItems(itemRows.map(it => ({ ...it, dish: it.dish_id ? dishMap.get(it.dish_id) ?? null : null })));
+            }
+          } else if (mounted) {
+            setItems(itemRows);
+          }
+        }
+      } catch (err) {
+        console.error('Error loading order:', err);
+      } finally {
+        if (mounted) setLoading(false);
       }
     })();
+    
     return () => {
       mounted = false;
     };
   }, [params.id]);
+
+  // Calculate totals
+  const subtotalCents = useMemo(
+    () => items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0),
+    [items]
+  );
+  const platformFeeCents = useMemo(() => Math.round(subtotalCents * 0.10), [subtotalCents]);
+  const taxesCents = useMemo(() => Math.round((subtotalCents + platformFeeCents) * 0.13), [subtotalCents, platformFeeCents]);
+  const totalCents = useMemo(() => subtotalCents + platformFeeCents + taxesCents, [subtotalCents, platformFeeCents, taxesCents]);
+
+  if (loading) {
+    return (
+      <Screen contentStyle={{ alignItems: 'center', justifyContent: 'center' }} style={{ backgroundColor: BG_LIGHT }}>
+        <ActivityIndicator color={PRIMARY} size="large" />
+      </Screen>
+    );
+  }
 
   return (
     <Screen
       scroll
       contentPadding={0}
       style={{ backgroundColor: BG_LIGHT }}
+      compactFooter
       {...{ contentContainerStyle: styles.scrollContent }}
     >
       <View style={styles.container}>
-        <View style={styles.heroCircle}>
-          <Text style={styles.heroIcon}>🍽️</Text>
-        </View>
         <Text style={styles.title}>Thank you for your order!</Text>
         <Text style={styles.subtitle}>
           Enjoy your delicious, home-cooked meal! Your support means the world to our local chefs.
         </Text>
+        
         {pickupAt ? (
           <View style={styles.pickupCard}>
             <Text style={styles.pickupLabel}>Pickup time</Text>
             <Text style={styles.pickupValue}>{formatLocal(pickupAt)}</Text>
           </View>
         ) : null}
+
+        {/* Order Summary */}
+        {items.length > 0 && (
+          <View style={styles.summaryCard}>
+            <TouchableOpacity 
+              style={styles.summaryHeader} 
+              onPress={() => setIsSummaryExpanded(!isSummaryExpanded)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.summaryTitle}>Order Summary</Text>
+              <View style={styles.toggleIcon}>
+                <Text style={styles.toggleIconText}>{isSummaryExpanded ? '−' : '+'}</Text>
+              </View>
+            </TouchableOpacity>
+            
+            {isSummaryExpanded && (
+              <>
+                {/* Order Items */}
+                <View style={styles.itemsContainer}>
+                  {items.map(item => (
+                    <View key={item.id} style={styles.itemRow}>
+                      <Text style={styles.itemName} numberOfLines={1}>
+                        {item.dish?.name ?? `Dish #${item.dish_id}`} {chefName ? `(${chefName})` : ''}
+                      </Text>
+                      <View style={styles.itemQuantityPrice}>
+                        <Text style={styles.itemQuantity}>x{item.quantity}</Text>
+                        <Text style={styles.itemPrice}>{cents(item.unit_price_cents)}</Text>
+                      </View>
+                    </View>
+                  ))}
+                </View>
+                
+                <View style={styles.divider} />
+                
+                {/* Price Breakdown */}
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Subtotal</Text>
+                  <Text style={styles.priceValue}>{cents(subtotalCents)}</Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Platform service fee</Text>
+                  <Text style={styles.priceValue}>{cents(platformFeeCents)}</Text>
+                </View>
+                <View style={styles.priceRow}>
+                  <Text style={styles.priceLabel}>Taxes</Text>
+                  <Text style={styles.priceValue}>{cents(taxesCents)}</Text>
+                </View>
+                
+                <View style={styles.divider} />
+                
+                <View style={styles.priceRow}>
+                  <Text style={styles.totalLabel}>Total</Text>
+                  <Text style={styles.totalValue}>{cents(totalCents)}</Text>
+                </View>
+              </>
+            )}
+          </View>
+        )}
+
         <View style={styles.actions}>
-          <Link href="/" asChild>
+          <Link href="/browse" asChild>
             <TouchableOpacity style={styles.primaryButton}>
-              <Text style={styles.primaryButtonText}>Back to Home</Text>
+              <Text style={styles.primaryButtonText}>Explore</Text>
             </TouchableOpacity>
           </Link>
-          <Link href="/profile" asChild>
+          <Link href={chefId ? `/chef/${chefId}` : '/browse'} asChild>
             <TouchableOpacity style={styles.secondaryButton}>
-              <Text style={styles.secondaryButtonText}>Rate Your Chef</Text>
+              <Text style={styles.secondaryButtonText}>Rate your chef</Text>
             </TouchableOpacity>
           </Link>
         </View>
@@ -77,45 +223,37 @@ export default function OrderThankYouPage() {
 const styles = StyleSheet.create({
   scrollContent: {
     alignItems: 'center',
-    justifyContent: 'center',
-    paddingBottom: 48,
-    paddingTop: 48,
+    paddingBottom: 16,
+    paddingTop: 24,
   },
   container: {
     width: '100%',
     maxWidth: 520,
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingVertical: 16,
     alignItems: 'center',
     gap: 16,
   },
-  heroCircle: {
-    width: 160,
-    height: 160,
-    borderRadius: 80,
-    backgroundColor: TAL0_GREEN + '1A',
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 32,
-  },
-  heroIcon: {
-    fontSize: 72,
-    color: TAL0_GREEN,
-  },
   title: {
-    fontSize: 32,
+    fontSize: 28,
     fontWeight: '800',
-    color: TAL0_GREEN,
+    color: TEXT_DARK,
     textAlign: 'center',
+    fontFamily: 'OpenSans_700Bold',
+    marginTop: 0,
   },
   subtitle: {
     color: TEXT_GRAY,
     textAlign: 'center',
     fontSize: 16,
     maxWidth: 360,
+    fontFamily: 'OpenSans_400Regular',
   },
   pickupCard: {
-    backgroundColor: '#F4F6F4',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
     padding: 16,
     width: '100%',
     alignItems: 'center',
@@ -124,19 +262,114 @@ const styles = StyleSheet.create({
   pickupLabel: {
     color: TEXT_GRAY,
     fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
   },
   pickupValue: {
-    color: TEXT_DARK,
+    color: PRIMARY,
     fontSize: 18,
     fontWeight: '700',
+    fontFamily: 'OpenSans_700Bold',
+  },
+  summaryCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 16,
+    width: '100%',
+    gap: 12,
+  },
+  summaryHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  summaryTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  toggleIcon: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  toggleIconText: {
+    color: PRIMARY,
+    fontSize: 24,
+    fontWeight: '700',
+  },
+  itemsContainer: {
+    gap: 8,
+  },
+  itemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  itemName: {
+    flex: 1,
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  itemQuantityPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginLeft: 12,
+  },
+  itemQuantity: {
+    color: TEXT_GRAY,
+    fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  itemPrice: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
+    minWidth: 70,
+    textAlign: 'right',
+  },
+  divider: {
+    height: 1,
+    backgroundColor: BORDER,
+    marginVertical: 4,
+  },
+  priceRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+  },
+  priceLabel: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  priceValue: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  totalLabel: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: 'OpenSans_700Bold',
+  },
+  totalValue: {
+    color: PRIMARY,
+    fontSize: 16,
+    fontWeight: '800',
+    fontFamily: 'OpenSans_700Bold',
   },
   actions: {
     width: '100%',
     gap: 12,
-    marginTop: 24,
+    marginTop: 8,
   },
   primaryButton: {
-    backgroundColor: TAL0_GREEN,
+    backgroundColor: PRIMARY,
     borderRadius: 12,
     paddingVertical: 14,
     alignItems: 'center',
@@ -145,17 +378,19 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: 'OpenSans_700Bold',
   },
   secondaryButton: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: TAL0_GREEN,
+    borderColor: PRIMARY,
     paddingVertical: 14,
     alignItems: 'center',
   },
   secondaryButtonText: {
-    color: TAL0_GREEN,
+    color: PRIMARY,
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: 'OpenSans_700Bold',
   },
 });

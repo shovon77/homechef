@@ -1,7 +1,7 @@
 'use client';
 import React, { useEffect, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image, Alert } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import { useRouter, Link, usePathname } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
 import { getAuthRedirect, getEmailRedirect } from '../../lib/authRedirect';
@@ -24,6 +24,7 @@ const C = {
 
 export default function AuthPage() {
   const router = useRouter();
+  const pathname = usePathname();
   const [mode, setMode] = useState<'signin'|'signup'>('signin');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -44,11 +45,14 @@ export default function AuthPage() {
     ]).start();
   }, []);
 
+  // Only redirect if user is logged in AND we're actually on the auth page
+  // This prevents background redirects when token refreshes occur
   useEffect(() => {
-    if (!loading && user) {
+    const isOnAuthPage = pathname === '/auth' || pathname === '/auth/';
+    if (!loading && user && isOnAuthPage) {
       redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
     }
-  }, [loading, user, isChef, isAdmin, role]);
+  }, [loading, user, isChef, isAdmin, role, pathname]);
 
   async function doGoogle() {
     setErr(null);

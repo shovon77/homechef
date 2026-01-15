@@ -89,6 +89,8 @@ type MessageRow = {
 export default function TrackOrderPage() {
   const params = useLocalSearchParams<{ id?: string }>();
   const [loading, setLoading] = useState(true);
+  const [allOrders, setAllOrders] = useState<OrderRow[]>([]); // All active orders
+  const [currentOrderIndex, setCurrentOrderIndex] = useState(0); // Current order index
   const [order, setOrder] = useState<OrderRow | null>(null);
   const [items, setItems] = useState<(OrderItemRow & { dish?: DishRow | null })[]>([]);
   const [chef, setChef] = useState<ChefRow | null>(null);
@@ -112,6 +114,7 @@ export default function TrackOrderPage() {
   const [isRecordingIssue, setIsRecordingIssue] = useState(false);
   const issueRecognitionRef = useRef<any>(null);
   const [showIssueTypeDropdown, setShowIssueTypeDropdown] = useState(false);
+  const [switchingOrder, setSwitchingOrder] = useState(false);
 
   useEffect(() => {
     let mounted = true;
@@ -159,6 +162,21 @@ export default function TrackOrderPage() {
           }
         }
 
+        // Fetch ALL active orders for navigation
+        const allOrdersRes = await supabase
+          .from('orders')
+          .select('*')
+          .eq('user_id', user.id)
+          .in('status', ACTIVE_STATUSES as any)
+          .order('created_at', { ascending: false });
+
+        const activeOrders = (allOrdersRes.data || []) as OrderRow[];
+        if (mounted) setAllOrders(activeOrders);
+
+        if (!selectedOrder && activeOrders.length > 0) {
+          selectedOrder = activeOrders[0]; // Default to latest order
+        }
+
         if (!selectedOrder) {
           setOrder(null);
           setItems([]);
@@ -166,6 +184,10 @@ export default function TrackOrderPage() {
           setLoading(false);
           return;
         }
+
+        // Set current order index for navigation
+        const orderIndex = activeOrders.findIndex(o => o.id === selectedOrder!.id);
+        if (mounted) setCurrentOrderIndex(orderIndex >= 0 ? orderIndex : 0);
 
         if (mounted) setOrder(selectedOrder);
 
@@ -405,6 +427,85 @@ export default function TrackOrderPage() {
     if (issueRecognitionRef.current) {
       issueRecognitionRef.current.stop();
       setIsRecordingIssue(false);
+    }
+  };
+
+  // Load order details helper function
+  const loadOrderDetails = async (selectedOrder: OrderRow) => {
+    // Load items
+    const itemRes = await supabase
+      .from('order_items')
+      .select('*')
+      .eq('order_id', selectedOrder.id);
+    const itemRows = Array.isArray(itemRes.data) ? (itemRes.data as OrderItemRow[]) : [];
+
+    if (itemRows.length) {
+      const dishIds = itemRows.map(it => it.dish_id).filter((id): id is number => typeof id === 'number');
+      const dishRes = dishIds.length
+        ? await supabase.from('dishes').select('id,name,image,price').in('id', dishIds)
+        : { data: [] };
+      const dishMap = new Map<number, DishRow>();
+      (dishRes.data ?? []).forEach(d => dishMap.set(d.id, d as DishRow));
+      setItems(itemRows.map(it => ({ ...it, dish: it.dish_id ? dishMap.get(it.dish_id) ?? null : null })));
+    } else {
+      setItems([]);
+    }
+
+    // Load chef
+    if (selectedOrder.chef_id) {
+      const chefRes = await supabase
+        .from('chefs')
+        .select('id,name,email,phone,location,photo')
+        .eq('id', selectedOrder.chef_id)
+        .maybeSingle();
+      if (!chefRes.error) setChef(chefRes.data as ChefRow | null);
+    } else {
+      setChef(null);
+    }
+
+    // Load messages
+    const messagesRes = await supabase
+      .from('order_messages')
+      .select('*')
+      .eq('order_id', selectedOrder.id)
+      .order('created_at', { ascending: false });
+    
+    if (!messagesRes.error && messagesRes.data) {
+      setMessages(messagesRes.data as MessageRow[]);
+    }
+  };
+
+  // Navigate to previous order (older) - smooth transition without page reload
+  const handlePreviousOrder = async () => {
+    if (currentOrderIndex < allOrders.length - 1 && !switchingOrder) {
+      setSwitchingOrder(true);
+      const newIndex = currentOrderIndex + 1;
+      const newOrder = allOrders[newIndex];
+      
+      setCurrentOrderIndex(newIndex);
+      setOrder(newOrder);
+      
+      // Load details for the new order
+      await loadOrderDetails(newOrder);
+      
+      setSwitchingOrder(false);
+    }
+  };
+
+  // Navigate to next order (newer) - smooth transition without page reload
+  const handleNextOrder = async () => {
+    if (currentOrderIndex > 0 && !switchingOrder) {
+      setSwitchingOrder(true);
+      const newIndex = currentOrderIndex - 1;
+      const newOrder = allOrders[newIndex];
+      
+      setCurrentOrderIndex(newIndex);
+      setOrder(newOrder);
+      
+      // Load details for the new order
+      await loadOrderDetails(newOrder);
+      
+      setSwitchingOrder(false);
     }
   };
 
@@ -674,7 +775,42 @@ export default function TrackOrderPage() {
 
   return (
     <Screen scroll style={{ backgroundColor: BG }} contentPadding={0}>
+      {/* Loading overlay when switching orders */}
+      {switchingOrder && (
+        <View style={styles.switchingOverlay}>
+          <ActivityIndicator size="large" color={PRIMARY} />
+        </View>
+      )}
+      
       <View style={styles.wrapper}>
+        {/* Order Navigation - Only show if multiple active orders AND current order is in the active list */}
+        {allOrders.length > 1 && allOrders.some(o => o.id === order?.id) && (
+          <View style={styles.orderNavigation}>
+            <TouchableOpacity
+              style={[styles.navArrowButton, currentOrderIndex <= 0 && styles.navArrowButtonDisabled]}
+              onPress={handleNextOrder}
+              disabled={currentOrderIndex <= 0}
+            >
+              <Text style={[styles.navArrowText, currentOrderIndex <= 0 && styles.navArrowTextDisabled]}>←</Text>
+            </TouchableOpacity>
+            <View style={styles.orderNavInfo}>
+              <Text style={styles.orderNavText}>
+                Order {currentOrderIndex + 1} of {allOrders.length}
+              </Text>
+              <Text style={styles.orderNavSubtext}>
+                #{String(order?.id || '').padStart(5, '0')}
+              </Text>
+            </View>
+            <TouchableOpacity
+              style={[styles.navArrowButton, currentOrderIndex >= allOrders.length - 1 && styles.navArrowButtonDisabled]}
+              onPress={handlePreviousOrder}
+              disabled={currentOrderIndex >= allOrders.length - 1}
+            >
+              <Text style={[styles.navArrowText, currentOrderIndex >= allOrders.length - 1 && styles.navArrowTextDisabled]}>→</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         {showRejectedBanner ? (
           <View style={styles.rejectedBanner}>
             <Text style={styles.rejectedText}>Issue reported - under review</Text>
@@ -1240,6 +1376,61 @@ const styles = StyleSheet.create({
     paddingTop: 16,
     paddingBottom: 20,
     gap: 20,
+  },
+  orderNavigation: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: CARD_BG,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    padding: 12,
+  },
+  navArrowButton: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    backgroundColor: PRIMARY,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  navArrowButtonDisabled: {
+    backgroundColor: '#E5E7EB',
+  },
+  navArrowText: {
+    color: '#FFFFFF',
+    fontSize: 20,
+    fontWeight: '700',
+  },
+  navArrowTextDisabled: {
+    color: '#9CA3AF',
+  },
+  orderNavInfo: {
+    alignItems: 'center',
+    gap: 2,
+  },
+  orderNavText: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderNavSubtext: {
+    color: TEXT_MUTED,
+    fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  switchingOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(246, 248, 248, 0.9)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 1000,
   },
   heroTitle: {
     color: TEXT_DARK,

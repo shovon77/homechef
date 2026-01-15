@@ -2,24 +2,28 @@ import React, { useState, useEffect } from "react";
 import { View, Text, TextInput, TouchableOpacity, Alert } from "react-native";
 import { supabase } from "../lib/supabase";
 import { theme } from "../constants/theme";
-import { Link } from "expo-router";
+import { Link, usePathname } from "expo-router";
 import { getEmailRedirect, redirectAfterLogin } from "../lib/authRedirect";
 import { useRole } from "../hooks/useRole";
 
 export default function Login() {
   const [email, setEmail] = useState("");
+  const pathname = usePathname();
   const { loading, user, isChef, isAdmin, role } = useRole();
   const [checking, setChecking] = useState(true);
 
+  // Only redirect if user is logged in AND we're actually on the login page
+  // This prevents background redirects when token refreshes occur
   useEffect(() => {
+    const isOnLoginPage = pathname === '/login' || pathname === '/login/';
     if (!loading) {
-      if (user) {
+      if (user && isOnLoginPage) {
         redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
       } else {
         setChecking(false);
       }
     }
-  }, [loading, user, isChef, isAdmin, role]);
+  }, [loading, user, isChef, isAdmin, role, pathname]);
 
   const sendMagicLink = async () => {
     if (!email.includes("@")) return Alert.alert("Enter a valid email");

@@ -1,6 +1,7 @@
 'use client';
 import { useState, useEffect } from 'react';
 import { View, Text, TextInput, TouchableOpacity } from 'react-native';
+import { usePathname } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { getEmailRedirect, redirectAfterLogin } from '../../lib/authRedirect';
 
@@ -9,8 +10,16 @@ export default function MagicLogin() {
   const [sent, setSent] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const [checking, setChecking] = useState(true);
+  const pathname = usePathname();
 
+  // Only redirect if user is logged in AND we're actually on the magic page
   useEffect(() => {
+    const isOnMagicPage = pathname === '/auth/magic' || pathname === '/auth/magic/';
+    if (!isOnMagicPage) {
+      setChecking(false);
+      return;
+    }
+    
     (async () => {
       const { data: { session } } = await supabase.auth.getSession();
       if (!session) {
@@ -24,7 +33,7 @@ export default function MagicLogin() {
         .maybeSingle();
       redirectAfterLogin(profile ?? {});
     })();
-  }, []);
+  }, [pathname]);
 
   async function sendLink() {
     setErr(null);

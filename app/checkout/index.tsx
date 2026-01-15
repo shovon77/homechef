@@ -635,7 +635,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   priceBreakdownTitle: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: '700' as any,
     fontFamily: 'OpenSans_700Bold',
@@ -650,7 +650,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   orderSummaryLabel: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'OpenSans_400Regular',
   },

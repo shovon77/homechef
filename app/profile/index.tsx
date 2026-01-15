@@ -577,7 +577,7 @@ export default function ProfilePage() {
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 12 }}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
+                                <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : (order.status === 'rejected' || order.status === 'cancelled') ? `/orders/track?id=${order.id}&type=history` : `/orders/track?id=${order.id}`} asChild>
                                   <TouchableOpacity style={styles.orderButtonPrimary}>
                                     <Text style={styles.orderButtonTextPrimary}>View details</Text>
                                   </TouchableOpacity>
