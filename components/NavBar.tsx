@@ -575,7 +575,7 @@ export default function NavBar() {
           <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
             <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
             {!loggedIn && (
-              <NavButton href="/auth" label="Sign Up" isActive={false} />
+              <NavButton href="/auth" label="Sign-up" isActive={false} />
             )}
             {hasActiveOrder ? (
               <Link href="/orders/track" asChild>
@@ -699,7 +699,7 @@ export default function NavBar() {
           ) : (
               <Link href="/auth" asChild>
                   <TouchableOpacity style={styles.secondaryButton}>
-                  <Text style={styles.secondaryButtonText}>Login</Text>
+                  <Text style={styles.secondaryButtonText}>Login/Sign-up</Text>
                 </TouchableOpacity>
               </Link>
           )}
@@ -778,7 +778,7 @@ export default function NavBar() {
               >
                 {/* Assuming user icon for login or could import another one */}
                  <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                <Text style={styles.mobileMenuText}>Login</Text>
+                <Text style={styles.mobileMenuText}>Login/Sign-up</Text>
               </TouchableOpacity>
             </Link>
           )}

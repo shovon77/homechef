@@ -444,15 +444,15 @@ export default function CartScreen() {
             </Text>
             <View style={styles.emptyCartButtons}>
               <Link href="/browse?tab=dishes" asChild>
-                <TouchableOpacity style={styles.emptyCartButton}>
+              <TouchableOpacity style={styles.emptyCartButton}>
                   <Text style={styles.emptyCartButtonText}>Explore homemade meals</Text>
                 </TouchableOpacity>
               </Link>
               <Link href="/browse?tab=chefs" asChild>
                 <TouchableOpacity style={styles.emptyCartButton}>
                   <Text style={styles.emptyCartButtonText}>Browse popular chefs</Text>
-                </TouchableOpacity>
-              </Link>
+              </TouchableOpacity>
+            </Link>
             </View>
             <View style={styles.emptyCartFooterContainer}>
               <View style={styles.emptyCartFooterLine}>
@@ -603,11 +603,11 @@ export default function CartScreen() {
                         <View style={styles.cartItemLeft}>
                           <Link href={`/dish/${item.id}?quantity=${item.quantity}`} asChild>
                             <TouchableOpacity>
-                              <Image
-                                source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
-                                style={styles.cartItemImage}
-                                resizeMode="cover"
-                              />
+                          <Image
+                            source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
+                            style={styles.cartItemImage}
+                            resizeMode="cover"
+                          />
                             </TouchableOpacity>
                           </Link>
                           <View style={styles.cartItemInfo}>
@@ -618,7 +618,7 @@ export default function CartScreen() {
                           </View>
                         </View>
                         <View style={styles.cartItemRight}>
-                          <Text style={styles.cartItemPriceDesktop}>{itemPrice}</Text>
+                            <Text style={styles.cartItemPriceDesktop}>{itemPrice}</Text>
                           <View style={styles.quantityControls}>
                             <TouchableOpacity
                               style={styles.quantityButton}
@@ -920,11 +920,11 @@ const styles = StyleSheet.create({
   },
   emptyCartText: {
     color: TEXT_DARK,
-    fontWeight: 'bold',
+    fontWeight: 'normal',
     fontSize: theme.typography.fontSize.base,
     textAlign: 'center',
     marginBottom: theme.spacing.md,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: 'OpenSans_400Regular',
   },
   emptyCartButtons: {
     flexDirection: 'column',
@@ -970,7 +970,8 @@ const styles = StyleSheet.create({
     color: '#33393A',
     fontSize: 16,
     textAlign: 'center',
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: 'OpenSans_400Regular',
+    fontWeight: 'normal',
     lineHeight: 16 * 1.5,
     flexShrink: 1,
   },
@@ -978,6 +979,12 @@ const styles = StyleSheet.create({
     textDecorationLine: 'underline',
     textDecorationColor: PRIMARY_COLOR,
     color: TEXT_DARK,
+    ...Platform.select({
+      web: {
+        textUnderlineOffset: 3,
+      },
+      default: {},
+    }),
   },
   modalOverlay: {
     flex: 1,

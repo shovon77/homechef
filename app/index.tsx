@@ -55,7 +55,7 @@ function CircularDishCard({ dish }: { dish: Dish }) {
             {dish.name}
           </Text>
           <Text style={styles.circularDishChefName} numberOfLines={1}>
-            by {chefName}
+            {chefName}
           </Text>
           <Text style={styles.circularDishSubtitle} numberOfLines={1}>
             {formatCad(dish.price)}{rating?.count > 0 ? ` • ★ ${safeToFixed(rating?.avg)}` : ''}
@@ -1027,7 +1027,6 @@ const styles = StyleSheet.create({
     width: 72,
     height: 72,
     borderRadius: 36,
-    borderWidth: 2,
   },
   featuredChefCard: {
     flex: 1,
@@ -1042,8 +1041,6 @@ const styles = StyleSheet.create({
     width: 96,
     height: 96,
     borderRadius: 48,
-    borderWidth: 4,
-    borderColor: '#FE734C',
   },
   featuredChefName: {
     fontFamily: theme.typography.fontFamily.body,
