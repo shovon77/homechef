@@ -359,9 +359,9 @@ export default function ChefSignup() {
           }
           
           // For other errors, show the error
-          throw su.error;
-        }
-        
+        throw su.error;
+      }
+      
         // If signup succeeded, try to establish session
         if (su.data?.user && !su.data.session) {
           // User created but no session - try to sign in with password
@@ -423,7 +423,7 @@ export default function ChefSignup() {
             cuisine: chefCuisine,
             pickup_availability: pickupSlots.length > 0 ? pickupSlots : null,
             status: 'pending', // Deactivated until admin approval
-            user_id: session.user.id,
+          user_id: session.user.id,
           })
           .eq('id', existingChef.id)
           .select('id')
@@ -439,7 +439,7 @@ export default function ChefSignup() {
           .insert({
             name: chefName,
             email: email || null,
-            phone: phone || null,
+          phone: phone || null,
             location: chefLocation,
             bio: chefBio,
             cuisine: chefCuisine,
@@ -447,9 +447,9 @@ export default function ChefSignup() {
             status: 'pending', // Deactivated until admin approval
             user_id: session.user.id,
           })
-          .select('id')
-          .single();
-        
+        .select('id')
+        .single();
+
         if (insertError) throw insertError;
         if (!newChef?.id) throw new Error('Failed to create chef');
         chefId = newChef.id;

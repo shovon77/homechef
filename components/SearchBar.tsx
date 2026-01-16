@@ -28,10 +28,6 @@ export function SearchBarGlass({
         gap: 8,
         borderWidth: 1,
         borderColor: "rgba(230,236,242,0.9)",
-        shadowColor: "#000",
-        shadowOpacity: 0.08,
-        shadowRadius: 12,
-        shadowOffset: { width: 0, height: 6 },
         // web-only blur; native will just look frosted with alpha
         ...(Platform.OS === "web" ? ({ backdropFilter: "blur(10px)" } as any) : null),
       }}

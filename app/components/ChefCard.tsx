@@ -44,7 +44,7 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
           {chef.location && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
               <Image 
-                source={require('../../assets/placeholder.png')} 
+                source={require('../../assets/locationnewicon.png')} 
                 style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
                 resizeMode="contain" 
               />

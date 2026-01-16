@@ -174,11 +174,11 @@ export default function BrowsePage() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
   const PLACEHOLDERS = [
-    "In the mood for spicy mutton biryani?",
+    "Craving spicy mutton biryani?",
     "Or maybe a classic chicken pulao?",
     "No wait, let's get a quick fuchka?",
-    "How about samosa & shingara like school days?",
-    "Find the taste of home only a click away!"
+    "Jhalmuri & shingara like school?",
+    "Find the taste of home here!"
   ];
 
   useEffect(() => {
@@ -311,7 +311,7 @@ export default function BrowsePage() {
 
           // Only apply pagination if not using nearest sort (nearest handles pagination after filtering)
           if (effectiveSort !== 'nearest') {
-            request = request.range(from, to);
+          request = request.range(from, to);
           }
 
           if (maxPrice) {
@@ -451,8 +451,8 @@ export default function BrowsePage() {
             setTotal(0);
           } else {
             // For other sorts, use data as-is
-            setDishes((data as any) ?? []);
-            setTotal(count ?? (data?.length ?? 0));
+          setDishes((data as any) ?? []);
+          setTotal(count ?? (data?.length ?? 0));
           }
         } else if (tab === 'chefs') {
           let request = supabase
@@ -662,11 +662,11 @@ export default function BrowsePage() {
           >
             <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
           </Pressable>
-          
-          {tab === 'dishes' && (
+
+        {tab === 'dishes' && (
             <View style={{ position: 'relative', marginLeft: 10, flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
               <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TouchableOpacity 
+                <TouchableOpacity 
                   activeOpacity={0.7}
                   onPress={() => {
                     if (!showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
@@ -687,7 +687,7 @@ export default function BrowsePage() {
                   style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}
                 >
                   <SortIcon size={20} color="#FE734C" />
-                  <Text style={{ fontSize: 13, fontWeight: '600', color: '#475569' }} numberOfLines={1}>
+                  <Text style={{ fontFamily: theme.typography.fontFamily.display, fontWeight: '700', color: '#475569' }} numberOfLines={1}>
                     {sortBy === 'none' ? 'Sort' :
                      sortBy === 'newest' ? 'Newest' :
                      sortBy === 'nearest' ? 'Nearest' :
@@ -747,8 +747,8 @@ export default function BrowsePage() {
                   ))}
                 </View>
               )}
-            </View>
-          )}
+          </View>
+        )}
         </View>
 
         {/* Old search bar removed */}
@@ -776,7 +776,7 @@ export default function BrowsePage() {
               </TouchableOpacity>
             </View>
           ) : (
-            <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
+          <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
           )
         ) : tab === 'dishes' ? (
           <View style={styles.grid}>
@@ -1038,17 +1038,17 @@ const styles = StyleSheet.create({
         pointerEvents: 'auto',
       },
       default: {
-        position: 'absolute',
-        top: '100%',
+    position: 'absolute',
+    top: '100%',
         right: 0,
-        marginTop: 8,
-        minWidth: 180,
+    marginTop: 8,
+    minWidth: 180,
         maxWidth: 220,
-        backgroundColor: '#FFFFFF',
-        borderRadius: 12,
-        borderWidth: 1,
-        borderColor: '#e2e8f0',
-        padding: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: '#e2e8f0',
+    padding: 4,
         zIndex: 10000,
         ...Platform.select({
           ios: { 
@@ -1144,13 +1144,6 @@ const styles = StyleSheet.create({
       web: 580,
       default: '100%',
     }),
-    shadowColor: "#000",
-    shadowOffset: {
-      width: 0,
-      height: 4,
-    },
-    shadowOpacity: 0.15,
-    shadowRadius: 12,
   },
   floatingSearchInput: {
     flex: 1,

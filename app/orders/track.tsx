@@ -1061,7 +1061,7 @@ export default function TrackOrderPage() {
                   }}
                 >
                   <Image 
-                    source={require('../../assets/placeholder.png')} 
+                    source={require('../../assets/locationnewicon.png')} 
                     style={styles.locationIcon}
                     resizeMode="contain"
                   />

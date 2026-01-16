@@ -123,6 +123,8 @@ export default function NavBar() {
   const isCartPage = pathname.startsWith('/cart');
   const isCheckoutPage = pathname.startsWith('/checkout');
   const isChefSignupPage = pathname.startsWith('/auth/chef');
+  const isHomePage = pathname === '/' || pathname === '/index';
+  const isFaqPage = pathname.startsWith('/faq');
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
@@ -143,11 +145,11 @@ export default function NavBar() {
 
   // Native Icon Fallbacks
   const MenuIcon = () => (
-    <View style={{ width: 24, height: 24, justifyContent: 'space-around', paddingVertical: 4 }}>
-      <View style={{ height: 2, backgroundColor: '#FE734C', borderRadius: 1 }} />
-      <View style={{ height: 2, backgroundColor: '#FE734C', borderRadius: 1 }} />
-      <View style={{ height: 2, backgroundColor: '#FE734C', borderRadius: 1 }} />
-    </View>
+    <Image 
+      source={require('../assets/menu.png')} 
+      style={{ width: 24, height: 24, tintColor: '#FE734C' }} 
+      resizeMode="contain" 
+    />
   )
   const CloseIcon = () => (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
@@ -649,7 +651,7 @@ export default function NavBar() {
                 style={styles.locationNavButton}
               >
                 <Image 
-                  source={require('../assets/placeholder.png')} 
+                  source={require('../assets/locationnewicon.png')} 
                   style={styles.locationNavIcon as any} 
                   resizeMode="contain" 
                 />
@@ -663,7 +665,7 @@ export default function NavBar() {
 
         {/* Right Section: Actions */}
         <View style={StyleSheet.flatten([styles.rightSection, isMobile && styles.rightSectionMobile])}>
-          {(isAuthPage && !isChefSignupPage) ? (
+          {!isFaqPage && (isAuthPage && !isChefSignupPage) ? (
             <Link href="/faq" asChild>
               <TouchableOpacity style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>FAQ</Text>
@@ -673,7 +675,7 @@ export default function NavBar() {
             <>
           {isMobile ? (
             <>
-              {!isCartPage && !isCheckoutPage && !isChefSignupPage && (
+              {!isCheckoutPage && !isChefSignupPage && (
               <Link href="/cart" asChild>
                 <TouchableOpacity style={styles.cartButton}>
                   <Image 
@@ -689,7 +691,7 @@ export default function NavBar() {
                 </TouchableOpacity>
               </Link>
               )}
-              {(isCartPage || isCheckoutPage || isChefSignupPage) && (
+              {!isFaqPage && !(loggedIn && location) && (
                 <Link href="/faq" asChild>
                   <TouchableOpacity style={styles.iconButton}>
                     <Text style={styles.faqButtonText}>FAQ</Text>
@@ -698,12 +700,12 @@ export default function NavBar() {
               )}
               <TouchableOpacity 
                 onPress={() => setIsMenuOpen(!isMenuOpen)}
-                style={styles.iconButton}
+                style={[styles.iconButton, { backgroundColor: 'transparent' }]}
               >
                 {isMenuOpen ? (
                   Platform.OS === 'web' && X ? <X color="#FE734C" size={24} /> : <CloseIcon />
                 ) : (
-                  Platform.OS === 'web' && Menu ? <Menu color="#FE734C" size={24} /> : <MenuIcon />
+                  <MenuIcon />
                 )}
               </TouchableOpacity>
             </>
@@ -745,7 +747,7 @@ export default function NavBar() {
               </Link>
           )}
 
-          {!isCartPage && !isCheckoutPage && !isChefSignupPage && (
+          {!isCheckoutPage && !isChefSignupPage && (
           <Link href="/cart" asChild>
             <TouchableOpacity style={styles.cartButton}>
               <Image 
@@ -761,7 +763,7 @@ export default function NavBar() {
             </TouchableOpacity>
           </Link>
           )}
-          {(isCartPage || isCheckoutPage || isChefSignupPage) && (
+          {!isFaqPage && (
             <Link href="/faq" asChild>
               <TouchableOpacity style={styles.secondaryButton}>
                 <Text style={styles.secondaryButtonText}>FAQ</Text>
@@ -795,9 +797,20 @@ export default function NavBar() {
                 style={styles.mobileMenuItem}
               >
                 <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                <Text style={StyleSheet.flatten([styles.mobileMenuText, { color: PRIMARY_COLOR }])}>Profile</Text>
+                <Text style={styles.mobileMenuText}>Profile</Text>
               </TouchableOpacity>
               
+              {loggedIn && location && !isFaqPage && (
+                <Link href="/faq" asChild>
+                  <TouchableOpacity 
+                    style={styles.mobileMenuItem}
+                    onPress={() => setIsMenuOpen(false)}
+                  >
+                    <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                    <Text style={styles.mobileMenuText}>FAQ</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
 
               <TouchableOpacity
                 onPress={async () => { 
@@ -808,7 +821,7 @@ export default function NavBar() {
                 style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
               >
                 <Image source={require('../assets/logout.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                <Text style={StyleSheet.flatten([styles.mobileMenuText, { color: '#FE734C' }])}>Logout</Text>
+                <Text style={styles.mobileMenuText}>Logout</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -968,8 +981,8 @@ const styles = StyleSheet.create({
   },
   logoContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
-    alignSelf: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'center',
     gap: 0,
     marginLeft: -80,
     paddingLeft: 0,
@@ -1038,8 +1051,6 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
     maxWidth: 70,
-    textDecorationLine: 'underline',
-    textDecorationColor: PRIMARY_COLOR,
   },
   primaryButton: {
     minWidth: 84,
@@ -1123,8 +1134,8 @@ const styles = StyleSheet.create({
     gap: 0,
     marginLeft: -80,
     paddingLeft: 0,
-    alignItems: 'flex-start',
-    alignSelf: 'flex-start',
+    alignItems: 'center',
+    alignSelf: 'center',
     paddingTop: 0,
     marginTop: 0,
   },
@@ -1209,8 +1220,15 @@ const styles = StyleSheet.create({
   mobileMenuText: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#33393A',
+    color: '#000000',
     fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 20,
+    textAlignVertical: 'center',
+    ...Platform.select({
+      android: {
+        includeFontPadding: false,
+      },
+    }),
   },
   mobileLocationBar: {
     flexDirection: 'row',

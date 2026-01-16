@@ -140,11 +140,11 @@ export default function HomePage() {
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
   const PLACEHOLDERS = [
-    "In the mood for spicy mutton biryani?",
+    "Craving spicy mutton biryani?",
     "Or maybe a classic chicken pulao?",
     "No wait, let's get a quick fuchka?",
-    "How about samosa & shingara like school days?",
-    "Find the taste of home only a click away!"
+    "Jhalmuri & shingara like school?",
+    "Find the taste of home here!"
   ];
 
   useEffect(() => {
@@ -450,7 +450,7 @@ export default function HomePage() {
                         {chef.location && (
                           <View style={styles.featuredChefLocationContainer}>
                             <Image 
-                              source={require('../assets/placeholder.png')} 
+                              source={require('../assets/locationnewicon.png')} 
                               style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
                               resizeMode="contain" 
                             />
@@ -486,7 +486,7 @@ export default function HomePage() {
                 <View style={styles.howItWorksContent}>
                   <Text style={styles.howItWorksCardTitle}>Discover</Text>
                   <Text style={styles.howItWorksText}>
-                    Browse homemade food from local chefs near you
+                    Browse homemade food from local chefs near you today
                   </Text>
                 </View>
               </View>
@@ -534,6 +534,11 @@ export default function HomePage() {
               <Text style={styles.sellCtaText}>
                 Love cooking? Sell on YourHomeChef.
               </Text>
+              <View style={styles.bulletPointsContainer}>
+                <Text style={styles.bulletPointText}>• No sign-up fees</Text>
+                <Text style={styles.bulletPointText}>• Create your own menu</Text>
+                <Text style={styles.bulletPointText}>• Manage & process orders</Text>
+              </View>
             </View>
           )}
         </View>
@@ -707,20 +712,6 @@ const styles = StyleSheet.create({
       web: 580,
       default: '100%',
     }),
-    shadowColor: "#000",
-    ...Platform.select({
-      web: {
-        boxShadow: '0 4px 12px rgba(0, 0, 0, 0.15)',
-      },
-      default: {
-        shadowOffset: {
-          width: 0,
-          height: 4,
-        },
-        shadowOpacity: 0.15,
-        shadowRadius: 12,
-      },
-    }),
   },
   floatingSearchInput: {
     flex: 1,
@@ -854,6 +845,17 @@ const styles = StyleSheet.create({
     color: '#333333',
     textAlign: 'center',
   },
+  bulletPointsContainer: {
+    alignItems: 'center',
+    gap: 4,
+    marginTop: theme.spacing.xs,
+  },
+  bulletPointText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    color: '#555555',
+    textAlign: 'center',
+  },
   sectionTitle: {
     fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
@@ -971,7 +973,7 @@ const styles = StyleSheet.create({
   howItWorksCard: {
     flex: 1,
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'flex-start',
     gap: theme.spacing.md,
     padding: theme.spacing.lg,
