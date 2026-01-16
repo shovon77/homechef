@@ -675,7 +675,7 @@ export default function NavBar() {
             <>
           {isMobile ? (
             <>
-              {!isCheckoutPage && !isChefSignupPage && (
+              {!isChefSignupPage && (
               <Link href="/cart" asChild>
                 <TouchableOpacity style={styles.cartButton}>
                   <Image 
@@ -747,7 +747,7 @@ export default function NavBar() {
               </Link>
           )}
 
-          {!isCheckoutPage && !isChefSignupPage && (
+          {!isChefSignupPage && (
           <Link href="/cart" asChild>
             <TouchableOpacity style={styles.cartButton}>
               <Image 
