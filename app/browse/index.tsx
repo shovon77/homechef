@@ -177,7 +177,7 @@ export default function BrowsePage() {
     "Craving spicy mutton biryani?",
     "Or maybe a classic chicken pulao?",
     "No wait, let's get a quick fuchka?",
-    "Jhalmuri & shingara like school?",
+    "Jhalmuri & shingara like school days?",
     "Find the taste of home here!"
   ];
 

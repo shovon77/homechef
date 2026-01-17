@@ -909,7 +909,7 @@ const styles = StyleSheet.create({
   emptyCartImage: {
     width: 64,
     height: 64,
-    tintColor: TEXT_DARK,
+    tintColor: PRIMARY_COLOR,
   },
   emptyCartTitle: {
     color: TEXT_DARK,

@@ -143,7 +143,7 @@ export default function HomePage() {
     "Craving spicy mutton biryani?",
     "Or maybe a classic chicken pulao?",
     "No wait, let's get a quick fuchka?",
-    "Jhalmuri & shingara like school?",
+    "Jhalmuri & shingara like school days?",
     "Find the taste of home here!"
   ];
 
@@ -362,6 +362,7 @@ export default function HomePage() {
                 flexDirection: 'row', 
                 gap: GAP,
                 paddingHorizontal: GAP / 2,
+                paddingBottom: theme.spacing.md,
               }}
               decelerationRate="fast"
               scrollEventThrottle={16}
@@ -535,9 +536,9 @@ export default function HomePage() {
                 Love cooking? Sell on YourHomeChef.
               </Text>
               <View style={styles.bulletPointsContainer}>
-                <Text style={styles.bulletPointText}>• No sign-up fees</Text>
-                <Text style={styles.bulletPointText}>• Create your own menu</Text>
-                <Text style={styles.bulletPointText}>• Manage & process orders</Text>
+                <Text style={styles.bulletPointText}>No sign-up fees</Text>
+                <Text style={styles.bulletPointText}>Create your own menu</Text>
+                <Text style={styles.bulletPointText}>Manage & process orders</Text>
               </View>
             </View>
           )}
@@ -605,10 +606,7 @@ const styles = StyleSheet.create({
       default: theme.spacing.md,
     }),
     paddingTop: theme.spacing.lg,
-    paddingBottom: Platform.select({
-      web: theme.spacing.xs,
-      default: theme.spacing.xs,
-    }),
+    paddingBottom: 0,
     backgroundColor: '#F2F0EF',
   },
   // Hero section
@@ -625,7 +623,7 @@ const styles = StyleSheet.create({
     }),
     borderRadius: theme.radius.xl,
     overflow: "hidden",
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.xl,
     position: "relative",
   },
   heroBackgroundImage: {
@@ -807,10 +805,9 @@ const styles = StyleSheet.create({
   },
   // Sections
   section: {
-    marginBottom: theme.spacing.sm,
+    marginBottom: theme.spacing.xl,
   },
   howItWorksSection: {
-    marginBottom: 0,
     paddingBottom: 0,
   },
   howItWorksTitle: {
@@ -819,10 +816,10 @@ const styles = StyleSheet.create({
   sellCtaContainer: {
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: theme.spacing['2xl'],
+    paddingTop: 0,
     paddingBottom: 0,
-    marginTop: theme.spacing['3xl'],
-    marginBottom: -theme.spacing['2xl'],
+    marginTop: 0,
+    marginBottom: 0,
     gap: theme.spacing.sm,
   },
   becomeChefButton: {
@@ -967,8 +964,7 @@ const styles = StyleSheet.create({
     flexDirection: "column",
     gap: theme.spacing['2xl'],
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: 0,
-    marginBottom: -theme.spacing.lg,
+    paddingBottom: theme.spacing.md,
   },
   howItWorksCard: {
     flex: 1,

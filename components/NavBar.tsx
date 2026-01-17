@@ -675,6 +675,9 @@ export default function NavBar() {
             <>
           {isMobile ? (
             <>
+              {!isFaqPage && !(loggedIn && location) && (
+                <NavButton href="/faq" label="FAQ" isActive={false} />
+              )}
               {!isChefSignupPage && (
               <Link href="/cart" asChild>
                 <TouchableOpacity style={styles.cartButton}>
@@ -690,13 +693,6 @@ export default function NavBar() {
                   )}
                 </TouchableOpacity>
               </Link>
-              )}
-              {!isFaqPage && !(loggedIn && location) && (
-                <Link href="/faq" asChild>
-                  <TouchableOpacity style={styles.iconButton}>
-                    <Text style={styles.faqButtonText}>FAQ</Text>
-                  </TouchableOpacity>
-                </Link>
               )}
               <TouchableOpacity 
                 onPress={() => setIsMenuOpen(!isMenuOpen)}
@@ -747,6 +743,9 @@ export default function NavBar() {
               </Link>
           )}
 
+          {!isFaqPage && (
+            <NavButton href="/faq" label="FAQ" isActive={false} />
+          )}
           {!isChefSignupPage && (
           <Link href="/cart" asChild>
             <TouchableOpacity style={styles.cartButton}>
@@ -762,13 +761,6 @@ export default function NavBar() {
               )}
             </TouchableOpacity>
           </Link>
-          )}
-          {!isFaqPage && (
-            <Link href="/faq" asChild>
-              <TouchableOpacity style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>FAQ</Text>
-              </TouchableOpacity>
-            </Link>
           )}
             </>
           )}
