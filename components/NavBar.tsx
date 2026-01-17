@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native'
 import { Link, useRouter, usePathname, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
+import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRole } from '../hooks/useRole'
 import { useCart } from '../context/CartContext'
 import { useLocationModal } from '../context/LocationModalContext'
@@ -727,24 +728,85 @@ export default function NavBar() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
+                  let subscription: any = null;
+                  let hasNavigated = false;
+                  
+                  const navigateToAuth = () => {
+                    if (!hasNavigated) {
+                      hasNavigated = true;
+                      if (subscription) {
+                        subscription.unsubscribe();
+                      }
+                      router.push('/auth');
+                    }
+                  };
+
                   // Set up a one-time listener for auth state change
-                  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                  const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
                     if (event === 'SIGNED_OUT' || !session) {
-                      subscription.unsubscribe();
-                  router.push('/auth');
+                      navigateToAuth();
                     }
                   });
+                  subscription = sub;
                   
-                  // Sign out
+                  // Try to sign out - even if it fails (403), we'll still proceed
                   const { error } = await supabase.auth.signOut();
-                  if (error) {
-                    subscription.unsubscribe();
-                    Alert.alert("Error", "Failed to log out. Please try again.");
+                  
+                  // Manually clear session storage to ensure logout works even if signOut fails
+                  try {
+                    // Extract project ref from Supabase URL to build exact key
+                    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                    const projectRef = supabaseUrl.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1] || '';
+                    const authKey = projectRef ? `sb-${projectRef}-auth-token` : null;
+                    
+                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      // Clear Supabase auth token from localStorage
+                      if (authKey) {
+                        localStorage.removeItem(authKey);
+                      }
+                      // Also clear any other Supabase-related keys as fallback
+                      const keys = Object.keys(localStorage);
+                      keys.forEach(key => {
+                        if (key.includes('supabase') && key.includes('auth')) {
+                          localStorage.removeItem(key);
+                        }
+                      });
+                    } else {
+                      // Native: Clear AsyncStorage keys
+                      if (authKey) {
+                        await AsyncStorage.removeItem(authKey);
+                      }
+                      // Also clear any other Supabase-related keys as fallback
+                      const allKeys = await AsyncStorage.getAllKeys();
+                      const supabaseKeys = allKeys.filter(key => 
+                        key.includes('supabase') && key.includes('auth')
+                      );
+                      if (supabaseKeys.length > 0) {
+                        await AsyncStorage.multiRemove(supabaseKeys);
+                      }
+                    }
+                  } catch (storageError) {
+                    console.warn("Error clearing storage:", storageError);
                   }
+                  
+                  if (error) {
+                    console.warn("SignOut error (proceeding anyway):", error);
+                  }
+
+                  // Fallback: Check session and navigate after delay
+                  setTimeout(async () => {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                      navigateToAuth();
+                    } else {
+                      // Force navigation even if session exists
+                      navigateToAuth();
+                    }
+                  }, 300);
                 }}
                     style={styles.secondaryButton}
               >
-                  <Text style={styles.secondaryButtonText}>Logout</Text>
+                <Text style={styles.secondaryButtonText}>Logout</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -820,20 +882,81 @@ export default function NavBar() {
                 onPress={async () => { 
                   setIsMenuOpen(false);
                   
+                  let subscription: any = null;
+                  let hasNavigated = false;
+                  
+                  const navigateToAuth = () => {
+                    if (!hasNavigated) {
+                      hasNavigated = true;
+                      if (subscription) {
+                        subscription.unsubscribe();
+                      }
+                      router.push('/auth');
+                    }
+                  };
+
                   // Set up a one-time listener for auth state change
-                  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                  const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
                     if (event === 'SIGNED_OUT' || !session) {
-                      subscription.unsubscribe();
-                  router.push('/auth');
+                      navigateToAuth();
                     }
                   });
+                  subscription = sub;
                   
-                  // Sign out
+                  // Try to sign out - even if it fails (403), we'll still proceed
                   const { error } = await supabase.auth.signOut();
-                  if (error) {
-                    subscription.unsubscribe();
-                    Alert.alert("Error", "Failed to log out. Please try again.");
+                  
+                  // Manually clear session storage to ensure logout works even if signOut fails
+                  try {
+                    // Extract project ref from Supabase URL to build exact key
+                    const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+                    const projectRef = supabaseUrl.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1] || '';
+                    const authKey = projectRef ? `sb-${projectRef}-auth-token` : null;
+                    
+                    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+                      // Clear Supabase auth token from localStorage
+                      if (authKey) {
+                        localStorage.removeItem(authKey);
+                      }
+                      // Also clear any other Supabase-related keys as fallback
+                      const keys = Object.keys(localStorage);
+                      keys.forEach(key => {
+                        if (key.includes('supabase') && key.includes('auth')) {
+                          localStorage.removeItem(key);
+                        }
+                      });
+                    } else {
+                      // Native: Clear AsyncStorage keys
+                      if (authKey) {
+                        await AsyncStorage.removeItem(authKey);
+                      }
+                      // Also clear any other Supabase-related keys as fallback
+                      const allKeys = await AsyncStorage.getAllKeys();
+                      const supabaseKeys = allKeys.filter(key => 
+                        key.includes('supabase') && key.includes('auth')
+                      );
+                      if (supabaseKeys.length > 0) {
+                        await AsyncStorage.multiRemove(supabaseKeys);
+                      }
+                    }
+                  } catch (storageError) {
+                    console.warn("Error clearing storage:", storageError);
                   }
+                  
+                  if (error) {
+                    console.warn("SignOut error (proceeding anyway):", error);
+                  }
+
+                  // Fallback: Check session and navigate after delay
+                  setTimeout(async () => {
+                    const { data: { session } } = await supabase.auth.getSession();
+                    if (!session) {
+                      navigateToAuth();
+                    } else {
+                      // Force navigation even if session exists
+                      navigateToAuth();
+                    }
+                  }, 300);
                 }}
                 style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
               >

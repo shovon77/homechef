@@ -1,7 +1,8 @@
 import React, { useEffect, useMemo, useState } from "react";
-import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput, ScrollView, useWindowDimensions } from "react-native";
+import { View, Text, TouchableOpacity, ActivityIndicator, Alert, Image, StyleSheet, Platform, TextInput, ScrollView, useWindowDimensions, Modal } from "react-native";
 import { useRouter, Link, useLocalSearchParams, usePathname } from "expo-router";
 import { supabase } from "../../lib/supabase";
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { theme, elev } from "../../lib/theme";
 import { useRole } from "../../hooks/useRole";
 import { getProfile } from "../../lib/db";
@@ -47,6 +48,7 @@ export default function ProfilePage() {
   const [activeNavTab, setActiveNavTab] = useState<"orders" | "settings">(tab === "settings" ? "settings" : "orders");
   const [orders, setOrders] = useState<UserOrderSummary[]>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
+  const [showLogoutModal, setShowLogoutModal] = useState(false);
 
   const filteredOrders = useMemo(() => {
     if (activeTab === 'all') {
@@ -299,35 +301,117 @@ export default function ProfilePage() {
     }
   }
 
-  async function handleLogout() {
-    Alert.alert(
-      "Log Out",
-      "Are you sure you want to log out?",
-      [
-        { text: "Cancel", style: "cancel" },
-        {
-          text: "Log Out",
-          style: "destructive",
-          onPress: async () => {
-            // Set up a one-time listener for auth state change
-            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
-              if (event === 'SIGNED_OUT' || !session) {
-                subscription.unsubscribe();
-                router.replace("/auth");
-              }
-            });
-            
-            // Sign out
-            const { error } = await supabase.auth.signOut();
-            if (error) {
-              subscription.unsubscribe();
-              Alert.alert("Error", "Failed to log out. Please try again.");
-              return;
+  function handleLogout() {
+    setShowLogoutModal(true);
+  }
+
+  function handleLogoutCancel() {
+    setShowLogoutModal(false);
+  }
+
+  async function handleLogoutConfirm() {
+    setShowLogoutModal(false);
+    await performLogout();
+  }
+
+  async function performLogout() {
+    try {
+      console.log("Starting logout process");
+      let hasNavigated = false;
+      let subscription: any = null;
+      
+      const navigateToAuth = () => {
+        if (!hasNavigated) {
+          hasNavigated = true;
+          console.log("Navigating to auth page");
+          if (subscription) {
+            subscription.unsubscribe();
+          }
+          router.replace("/auth");
+        }
+      };
+
+      // Set up a one-time listener for auth state change
+      const { data: { subscription: sub } } = supabase.auth.onAuthStateChange((event, session) => {
+        console.log("Auth state changed:", event, session ? "has session" : "no session");
+        if (event === 'SIGNED_OUT' || !session) {
+          navigateToAuth();
+        }
+      });
+      subscription = sub;
+      
+      // Try to sign out - even if it fails (403), we'll still proceed
+      console.log("Calling signOut");
+      const { error } = await supabase.auth.signOut();
+      
+      // Manually clear session storage to ensure logout works even if signOut fails
+      try {
+        // Extract project ref from Supabase URL to build exact key
+        const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL || '';
+        const projectRef = supabaseUrl.match(/https?:\/\/([^.]+)\.supabase\.co/)?.[1] || '';
+        const authKey = projectRef ? `sb-${projectRef}-auth-token` : null;
+        
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          // Clear Supabase auth token from localStorage
+          if (authKey) {
+            localStorage.removeItem(authKey);
+          }
+          // Also clear any other Supabase-related keys as fallback
+          const keys = Object.keys(localStorage);
+          keys.forEach(key => {
+            if (key.includes('supabase') && key.includes('auth')) {
+              localStorage.removeItem(key);
             }
-          },
-        },
-      ]
-    );
+          });
+        } else {
+          // Native: Clear AsyncStorage keys
+          if (authKey) {
+            await AsyncStorage.removeItem(authKey);
+          }
+          // Also clear any other Supabase-related keys as fallback
+          const allKeys = await AsyncStorage.getAllKeys();
+          const supabaseKeys = allKeys.filter(key => 
+            key.includes('supabase') && key.includes('auth')
+          );
+          if (supabaseKeys.length > 0) {
+            await AsyncStorage.multiRemove(supabaseKeys);
+          }
+        }
+        console.log("Manually cleared session storage");
+      } catch (storageError) {
+        console.warn("Error clearing storage:", storageError);
+      }
+      
+      if (error) {
+        console.warn("SignOut error (proceeding anyway):", error);
+        // Don't return - proceed with logout even if server request fails
+      } else {
+        console.log("SignOut successful, waiting for session to clear");
+      }
+
+      // Check session after a delay and navigate if cleared
+      // This handles both successful signOut and cases where server request failed but local session is cleared
+      setTimeout(async () => {
+        const { data: { session } } = await supabase.auth.getSession();
+        console.log("Fallback check - session:", session ? "exists" : "cleared");
+        // Only navigate if session is actually cleared
+        if (!session) {
+          navigateToAuth();
+        } else {
+          // If session still exists, wait a bit more and check again
+          setTimeout(async () => {
+            const { data: { session: recheckSession } } = await supabase.auth.getSession();
+            if (!recheckSession) {
+              navigateToAuth();
+            }
+          }, 500);
+        }
+      }, 500);
+    } catch (error: any) {
+      console.error("Logout error:", error);
+      // Even on error, try to navigate to auth page
+      router.replace("/auth");
+    }
   }
 
   async function handleDeleteAccount() {
@@ -443,6 +527,34 @@ export default function ProfilePage() {
 
   return (
     <Screen scroll contentPadding={16} style={{ backgroundColor: '#F2F0EF' }}>
+      {/* Logout Confirmation Modal */}
+      <Modal
+        visible={showLogoutModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={handleLogoutCancel}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalMessage}>Are you sure you want to log out?</Text>
+            <View style={styles.modalButtons}>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonCancel]}
+                onPress={handleLogoutCancel}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.modalButton, styles.modalButtonConfirm]}
+                onPress={handleLogoutConfirm}
+              >
+                <Text style={styles.modalButtonConfirmText}>Logout</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
       <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Left Sidebar */}
         <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
@@ -1187,5 +1299,72 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    padding: 24,
+    width: '100%',
+    maxWidth: 400,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.2)',
+      },
+      default: {
+        elevation: 5,
+      },
+    }),
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: '#111827',
+    marginBottom: 12,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  modalMessage: {
+    fontSize: 16,
+    color: '#6B7280',
+    marginBottom: 24,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: 12,
+    justifyContent: 'flex-end',
+  },
+  modalButton: {
+    paddingVertical: 10,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    minWidth: 100,
+    alignItems: 'center',
+  },
+  modalButtonCancel: {
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#D1D5DB',
+  },
+  modalButtonCancelText: {
+    color: '#374151',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  modalButtonConfirm: {
+    backgroundColor: theme.colors.primary,
+  },
+  modalButtonConfirmText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
 });

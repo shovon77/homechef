@@ -50,12 +50,27 @@ export default function AuthPage() {
   useEffect(() => {
     const isOnAuthPage = pathname === '/auth' || pathname === '/auth/';
     if (!loading && user && isOnAuthPage) {
-      // Double-check session exists before redirecting to avoid logout loop
-      supabase.auth.getSession().then(({ data: { session } }) => {
-        if (session && session.user) {
-          redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
-        }
-      });
+      // Always check session exists before redirecting to avoid logout loop
+      // This prevents redirecting during logout when context still has cached user
+      // Add a delay to give time for logout to complete
+      const timeoutId = setTimeout(() => {
+        supabase.auth.getSession().then(({ data: { session } }) => {
+          // Only redirect if session actually exists and is valid
+          // Check multiple times to ensure we're not redirecting during logout
+          if (session && session.user && session.access_token) {
+            // Double-check after another small delay to ensure session is stable
+            setTimeout(() => {
+              supabase.auth.getSession().then(({ data: { session: checkSession } }) => {
+                if (checkSession && checkSession.user && checkSession.access_token) {
+                  redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
+                }
+              });
+            }, 200);
+          }
+        });
+      }, 800); // Wait 800ms to give logout time to clear session
+      
+      return () => clearTimeout(timeoutId);
     }
   }, [loading, user, isChef, isAdmin, role, pathname]);
 
