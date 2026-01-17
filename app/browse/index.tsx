@@ -784,7 +784,7 @@ export default function BrowsePage() {
               <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <DishCard 
                   dish={dish} 
-                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FE734C', ...elev('lg') }} 
+                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }} 
                   chefNameColor="#555555"
                   ratingColor="#FE734C"
                   priceColor="#FE734C"
@@ -798,7 +798,7 @@ export default function BrowsePage() {
               <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <ChefCard 
                   chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
-                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: '#FE734C', ...elev('lg') }}
+                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                   nameColor="#FE734C"
                   ratingColor="#FE734C"
                 />

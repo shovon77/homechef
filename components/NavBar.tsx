@@ -1110,7 +1110,7 @@ const styles = StyleSheet.create({
       },
     }),
     borderBottomWidth: 1,
-    borderBottomColor: '#FE734C',
+    borderBottomColor: '#FFFFFF',
   },
   container: {
     width: '100%',

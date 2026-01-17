@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, ViewStyle, StyleProp } from "react-native";
+import { View, Text, Image, TouchableOpacity, StyleSheet, ViewStyle, StyleProp, Platform } from "react-native";
 import { Link } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Stars } from "../../components/ui/Stars";
@@ -62,7 +62,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
                 });
                 setQuantity(1);
               }}
-              style={styles.button}
+              style={[styles.button, styles.buttonNoShadow]}
             />
           </View>
         </View>
@@ -126,6 +126,14 @@ const styles = StyleSheet.create({
   button: {
     marginTop: 0,
     minWidth: 60,
+  },
+  buttonNoShadow: {
+    shadowColor: 'transparent',
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0,
+    shadowRadius: 0,
+    elevation: 0,
+    ...(Platform.OS === 'web' ? { boxShadow: 'none' } : {}),
   },
   quantityControl: {
     flexDirection: 'row',
