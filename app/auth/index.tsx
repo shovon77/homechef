@@ -50,7 +50,12 @@ export default function AuthPage() {
   useEffect(() => {
     const isOnAuthPage = pathname === '/auth' || pathname === '/auth/';
     if (!loading && user && isOnAuthPage) {
-      redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
+      // Double-check session exists before redirecting to avoid logout loop
+      supabase.auth.getSession().then(({ data: { session } }) => {
+        if (session && session.user) {
+          redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role });
+        }
+      });
     }
   }, [loading, user, isChef, isAdmin, role, pathname]);
 

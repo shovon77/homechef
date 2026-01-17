@@ -727,12 +727,16 @@ export default function NavBar() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
-                  await supabase.auth.signOut(); 
-                  router.push('/auth');
+                  const { error } = await supabase.auth.signOut();
+                  if (!error) {
+                    // Wait a moment for auth state to clear, then navigate
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    router.push('/auth');
+                  }
                 }}
                     style={styles.secondaryButton}
               >
-                  <Text style={styles.secondaryButtonText}>Logout</Text>
+                <Text style={styles.secondaryButtonText}>Logout</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -807,8 +811,12 @@ export default function NavBar() {
               <TouchableOpacity
                 onPress={async () => { 
                   setIsMenuOpen(false);
-                  await supabase.auth.signOut(); 
-                  router.push('/auth');
+                  const { error } = await supabase.auth.signOut();
+                  if (!error) {
+                    // Wait a moment for auth state to clear, then navigate
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    router.push('/auth');
+                  }
                 }}
                 style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
               >

@@ -309,7 +309,13 @@ export default function ProfilePage() {
           text: "Log Out",
           style: "destructive",
           onPress: async () => {
-            await supabase.auth.signOut();
+            const { error } = await supabase.auth.signOut();
+            if (error) {
+              Alert.alert("Error", "Failed to log out. Please try again.");
+              return;
+            }
+            // Wait a moment for auth state to clear, then navigate
+            await new Promise(resolve => setTimeout(resolve, 300));
             router.replace("/auth");
           },
         },
