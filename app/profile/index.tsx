@@ -313,7 +313,7 @@ export default function ProfilePage() {
             const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
               if (event === 'SIGNED_OUT' || !session) {
                 subscription.unsubscribe();
-                router.replace("/intro");
+                router.replace("/auth");
               }
             });
             

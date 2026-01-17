@@ -731,7 +731,7 @@ export default function NavBar() {
                   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
                     if (event === 'SIGNED_OUT' || !session) {
                       subscription.unsubscribe();
-                      router.push('/intro');
+                  router.push('/auth');
                     }
                   });
                   
@@ -744,7 +744,7 @@ export default function NavBar() {
                 }}
                     style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Logout</Text>
+                  <Text style={styles.secondaryButtonText}>Logout</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -824,7 +824,7 @@ export default function NavBar() {
                   const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
                     if (event === 'SIGNED_OUT' || !session) {
                       subscription.unsubscribe();
-                      router.push('/intro');
+                  router.push('/auth');
                     }
                   });
                   
