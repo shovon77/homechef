@@ -309,14 +309,21 @@ export default function ProfilePage() {
           text: "Log Out",
           style: "destructive",
           onPress: async () => {
+            // Set up a one-time listener for auth state change
+            const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+              if (event === 'SIGNED_OUT' || !session) {
+                subscription.unsubscribe();
+                router.replace("/intro");
+              }
+            });
+            
+            // Sign out
             const { error } = await supabase.auth.signOut();
             if (error) {
+              subscription.unsubscribe();
               Alert.alert("Error", "Failed to log out. Please try again.");
               return;
             }
-            // Wait a moment for auth state to clear, then navigate
-            await new Promise(resolve => setTimeout(resolve, 300));
-            router.replace("/auth");
           },
         },
       ]

@@ -727,11 +727,19 @@ export default function NavBar() {
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
+                  // Set up a one-time listener for auth state change
+                  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                    if (event === 'SIGNED_OUT' || !session) {
+                      subscription.unsubscribe();
+                      router.push('/intro');
+                    }
+                  });
+                  
+                  // Sign out
                   const { error } = await supabase.auth.signOut();
-                  if (!error) {
-                    // Wait a moment for auth state to clear, then navigate
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    router.push('/auth');
+                  if (error) {
+                    subscription.unsubscribe();
+                    Alert.alert("Error", "Failed to log out. Please try again.");
                   }
                 }}
                     style={styles.secondaryButton}
@@ -811,11 +819,20 @@ export default function NavBar() {
               <TouchableOpacity
                 onPress={async () => { 
                   setIsMenuOpen(false);
+                  
+                  // Set up a one-time listener for auth state change
+                  const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
+                    if (event === 'SIGNED_OUT' || !session) {
+                      subscription.unsubscribe();
+                      router.push('/intro');
+                    }
+                  });
+                  
+                  // Sign out
                   const { error } = await supabase.auth.signOut();
-                  if (!error) {
-                    // Wait a moment for auth state to clear, then navigate
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    router.push('/auth');
+                  if (error) {
+                    subscription.unsubscribe();
+                    Alert.alert("Error", "Failed to log out. Please try again.");
                   }
                 }}
                 style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
