@@ -1,6 +1,6 @@
 // components/NavBar.tsx
 'use client'
-import React, { useEffect, useState } from 'react'
+import React, { useEffect, useState, useMemo } from 'react'
 import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native'
 import { Link, useRouter, usePathname, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
@@ -144,20 +144,21 @@ export default function NavBar() {
   const [gettingLocation, setGettingLocation] = useState(false)
   const [selectedLocation, setSelectedLocation] = useState("")
 
-  // Native Icon Fallbacks
-  const MenuIcon = () => (
+  // Native Icon Fallbacks - memoized to prevent re-renders and blinking
+  const MenuIcon = useMemo(() => (
     <Image 
       source={require('../assets/menu.png')} 
       style={{ width: 24, height: 24, tintColor: '#FE734C' }} 
       resizeMode="contain" 
     />
-  )
-  const CloseIcon = () => (
+  ), [])
+  
+  const CloseIcon = useMemo(() => (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: '#FE734C', transform: [{ rotate: '45deg' }] }} />
       <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: '#FE734C', transform: [{ rotate: '-45deg' }] }} />
     </View>
-  )
+  ), [])
 
   // Check for active orders - runs when user changes and subscribes to real-time updates
   useEffect(() => {
@@ -698,11 +699,12 @@ export default function NavBar() {
               <TouchableOpacity 
                 onPress={() => setIsMenuOpen(!isMenuOpen)}
                 style={[styles.iconButton, { backgroundColor: 'transparent' }]}
+                activeOpacity={0.7}
               >
                 {isMenuOpen ? (
-                  Platform.OS === 'web' && X ? <X color="#FE734C" size={24} /> : <CloseIcon />
+                  Platform.OS === 'web' && X ? <X color="#FE734C" size={24} /> : CloseIcon
                 ) : (
-                  <MenuIcon />
+                  MenuIcon
                 )}
               </TouchableOpacity>
             </>
