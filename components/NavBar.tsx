@@ -677,8 +677,8 @@ export default function NavBar() {
             <>
           {isMobile ? (
             <>
-              {!isFaqPage && !(loggedIn && location) && (
-                <NavButton href="/faq" label="FAQ" isActive={false} />
+              {!(loggedIn && location) && (
+                <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
               )}
               {!isChefSignupPage && (
               <Link href="/cart" asChild>
@@ -819,9 +819,7 @@ export default function NavBar() {
               </Link>
           )}
 
-          {!isFaqPage && (
-            <NavButton href="/faq" label="FAQ" isActive={false} />
-          )}
+          <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
           {!isChefSignupPage && (
           <Link href="/cart" asChild>
             <TouchableOpacity style={styles.cartButton}>
@@ -868,7 +866,7 @@ export default function NavBar() {
                 <Text style={styles.mobileMenuText}>Profile</Text>
               </TouchableOpacity>
               
-              {loggedIn && location && !isFaqPage && (
+              {loggedIn && location && (
                 <Link href="/faq" asChild>
                   <TouchableOpacity 
                     style={styles.mobileMenuItem}
