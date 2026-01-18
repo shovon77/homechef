@@ -252,6 +252,8 @@ export default function HomePage() {
 
   useEffect(() => {
     let mounted = true;
+    let channel: ReturnType<typeof supabase.channel> | null = null;
+    
     (async () => {
       setLoading(true);
       
@@ -281,8 +283,43 @@ export default function HomePage() {
       setChefs((c || []) as Chef[]);
       setDishes((d || []) as Dish[]);
       setLoading(false);
+
+      // Subscribe to real-time updates for chefs table
+      channel = supabase
+        .channel('homepage-chefs-updates')
+        .on(
+          'postgres_changes',
+          {
+            event: 'UPDATE',
+            schema: 'public',
+            table: 'chefs',
+            filter: 'featured=eq.true',
+          },
+          async () => {
+            // Refetch chefs when a featured chef is updated
+            if (mounted) {
+              const { data: updatedChefs } = await supabase
+                .from("chefs")
+                .select("*")
+                .eq("featured", true)
+                .eq("status", "active")
+                .order("rating", { ascending: false })
+                .limit(5);
+              if (mounted && updatedChefs) {
+                setChefs(updatedChefs as Chef[]);
+              }
+            }
+          }
+        )
+        .subscribe();
     })();
-    return () => { mounted = false; };
+    
+    return () => { 
+      mounted = false;
+      if (channel) {
+        supabase.removeChannel(channel);
+      }
+    };
   }, []);
 
   const handleSearch = () => {

@@ -382,6 +382,47 @@ export default function ChefDashboard() {
         throw new Error(error.message || `Update failed: ${error.code || 'Unknown error'}`);
       }
 
+      // Also update chefs table if chef exists (try user_id first, then email as fallback)
+      let chefUpdated = false;
+      
+      // First try to update by user_id
+      const { data: chefData, error: chefError } = await supabase
+        .from("chefs")
+        .update({ name: fullName })
+        .eq("user_id", user.id)
+        .select();
+
+      if (chefError) {
+        console.error("Failed to update chefs table by user_id:", chefError);
+      } else if (chefData && chefData.length > 0) {
+        console.log("Chef table updated successfully by user_id:", chefData);
+        chefUpdated = true;
+      } else {
+        // Fallback: try to update by email if user_id didn't match
+        if (profile?.email) {
+          const { data: chefDataByEmail, error: chefErrorByEmail } = await supabase
+            .from("chefs")
+            .update({ name: fullName })
+            .eq("email", profile.email)
+            .select();
+
+          if (chefErrorByEmail) {
+            console.error("Failed to update chefs table by email:", chefErrorByEmail);
+          } else if (chefDataByEmail && chefDataByEmail.length > 0) {
+            console.log("Chef table updated successfully by email:", chefDataByEmail);
+            chefUpdated = true;
+          } else {
+            console.warn("No chef record found for user_id:", user.id, "or email:", profile.email);
+          }
+        } else {
+          console.warn("No chef record found for user_id:", user.id, "and no email available for fallback");
+        }
+      }
+
+      if (!chefUpdated) {
+        console.warn("Chef table was not updated. The name change may not be reflected on all pages.");
+      }
+
       Alert.alert("Success", "Profile updated successfully");
       // Reload profile data
       if (user) {

@@ -35,7 +35,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
         <View style={{ gap: 2 }}>
           <Text style={styles.name} numberOfLines={1}>{dish.name}</Text>
           {dish.description ? <Text style={styles.description} numberOfLines={2}>{dish.description}</Text> : null}
-          {chefName && <Text style={[styles.chefName, chefNameColor ? { color: chefNameColor } : undefined]} numberOfLines={1}>by {chefName}</Text>}
+          {chefName && <Text style={[styles.chefName, chefNameColor ? { color: chefNameColor } : undefined]} numberOfLines={1}>{chefName}</Text>}
           {avg > 0 && <View style={{ marginTop: 2 }}><Stars value={toNumber(avg, 0)} size={16} color={ratingColor} /></View>}
         </View>
         <View style={styles.footer}>
