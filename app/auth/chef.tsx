@@ -2,6 +2,7 @@
 import { useEffect, useState, useMemo } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, ScrollView, Alert, Modal, Image, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
 import { ensureProfile } from '../../lib/ensureProfile';
 import { ensureSession } from '../../lib/session';
@@ -10,6 +11,54 @@ import { theme } from '../../lib/theme';
 import LocationPicker from '../../components/LocationPicker';
 import FilePicker from '../../components/FilePicker';
 import { uploadToBucket } from '../../lib/upload';
+
+// Storage key for chef onboarding form data
+const CHEF_FORM_STORAGE_KEY = 'chef_onboarding_form_data';
+
+// Helper functions for cross-platform storage
+const storage = {
+  async getItem(key: string): Promise<string | null> {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          return window.localStorage.getItem(key);
+        }
+        return null;
+      } else {
+        return await AsyncStorage.getItem(key);
+      }
+    } catch (e) {
+      console.warn('Storage getItem error:', e);
+      return null;
+    }
+  },
+  async setItem(key: string, value: string): Promise<void> {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.localStorage.setItem(key, value);
+        }
+      } else {
+        await AsyncStorage.setItem(key, value);
+      }
+    } catch (e) {
+      console.warn('Storage setItem error:', e);
+    }
+  },
+  async removeItem(key: string): Promise<void> {
+    try {
+      if (Platform.OS === 'web') {
+        if (typeof window !== 'undefined') {
+          window.localStorage.removeItem(key);
+        }
+      } else {
+        await AsyncStorage.removeItem(key);
+      }
+    } catch (e) {
+      console.warn('Storage removeItem error:', e);
+    }
+  },
+};
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -21,6 +70,8 @@ const TEXT_MUTED = '#6b7280';
 
 export default function ChefSignup() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const [step, setStep] = useState(1);
   const [fullName, setFullName] = useState('');
   const [brandName, setBrandName] = useState('');
@@ -144,6 +195,80 @@ export default function ChefSignup() {
       }
     });
   }, []);
+
+  // Load saved form data on mount
+  useEffect(() => {
+    const loadSavedData = async () => {
+      try {
+        // Check if user is logged in first
+        const { data: { user } } = await supabase.auth.getUser();
+        const saved = await storage.getItem(CHEF_FORM_STORAGE_KEY);
+        if (saved) {
+          const data = JSON.parse(saved);
+          if (data.step) setStep(data.step);
+          if (data.fullName) setFullName(data.fullName);
+          if (data.brandName) setBrandName(data.brandName);
+          if (data.briefDescription) setBriefDescription(data.briefDescription);
+          if (data.cuisineType) setCuisineType(data.cuisineType);
+          if (data.phone) setPhone(data.phone);
+          // Only load email from storage if user is not logged in (email from auth takes precedence)
+          if (data.email && !user?.email) setEmail(data.email);
+          if (data.address) setAddress(data.address);
+          if (data.password) setPassword(data.password);
+          if (data.pickupSlots) setPickupSlots(data.pickupSlots);
+          if (data.dishes) setDishes(data.dishes);
+          if (data.bio) setBio(data.bio);
+          if (data.location) setLocation(data.location);
+          if (data.experience) setExperience(data.experience);
+          if (data.specialties) setSpecialties(data.specialties);
+          if (data.foodSafetyAcknowledged) setFoodSafetyAcknowledged(data.foodSafetyAcknowledged);
+          if (data.allergensDisclosed) setAllergensDisclosed(data.allergensDisclosed);
+          if (data.platformInspectionUnderstood) setPlatformInspectionUnderstood(data.platformInspectionUnderstood);
+          if (data.agreementAccepted) setAgreementAccepted(data.agreementAccepted);
+          if (data.feeAccepted) setFeeAccepted(data.feeAccepted);
+          if (data.payoutAccepted) setPayoutAccepted(data.payoutAccepted);
+        }
+      } catch (e) {
+        console.warn('Error loading saved form data:', e);
+      }
+    };
+    loadSavedData();
+  }, []);
+
+  // Save form data whenever it changes
+  useEffect(() => {
+    const saveData = async () => {
+      try {
+        const dataToSave = {
+          step,
+          fullName,
+          brandName,
+          briefDescription,
+          cuisineType,
+          phone,
+          email,
+          address,
+          password,
+          pickupSlots,
+          dishes: dishes.map(d => ({ ...d, file: null })), // Don't save File objects
+          bio,
+          location,
+          experience,
+          specialties,
+          foodSafetyAcknowledged,
+          allergensDisclosed,
+          platformInspectionUnderstood,
+          agreementAccepted,
+          feeAccepted,
+          payoutAccepted,
+        };
+        await storage.setItem(CHEF_FORM_STORAGE_KEY, JSON.stringify(dataToSave));
+      } catch (e) {
+        console.warn('Error saving form data:', e);
+      }
+    };
+    saveData();
+  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, password, pickupSlots, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
 
   const canProceedToStep2 = fullName && brandName && briefDescription && cuisineType.length > 0 && phone && email && address;
   const canProceedToStep3 = pickupSlots.length > 0;
@@ -519,7 +644,8 @@ export default function ChefSignup() {
         }
       }
 
-      // 8) Navigate to chef dashboard
+      // 8) Clear saved form data and navigate to chef dashboard
+      await storage.removeItem(CHEF_FORM_STORAGE_KEY);
       router.replace('/chef');
     } catch (e: any) {
       console.error('Chef onboarding submit failed:', e);
@@ -541,7 +667,12 @@ export default function ChefSignup() {
         <View style={styles.container}>
           {/* Page Heading */}
           <View style={styles.heading}>
-            <Text style={styles.title}>Chef profile basics</Text>
+            <Image 
+              source={require('../../assets/Gemini_Generated_Image_4t6si4t6si4t6si4.png')} 
+              style={styles.headerImage}
+              resizeMode="contain"
+            />
+            <Text style={[styles.title, { fontSize: isMobile ? 30 : 48 }]}>Chef profile basics</Text>
             <Text style={styles.subtitle}>
               You control your menu & orders. There are no sign-up fees or commitments.
         </Text>
@@ -588,7 +719,7 @@ export default function ChefSignup() {
                     {/* Full Name Field */}
                     <View style={[styles.field, styles.fieldFull]}>
                       <View style={styles.fieldLabel}>
-                        <Text style={styles.label}>Full Name</Text>
+                        <Text style={styles.label}>Full name</Text>
                       </View>
                       <TextInput
                         value={fullName}
@@ -605,7 +736,7 @@ export default function ChefSignup() {
                     {/* Brand Name Field */}
                     <View style={[styles.field, styles.fieldFull]}>
                       <View style={styles.fieldLabel}>
-                        <Text style={styles.label}>Brand Name</Text>
+                        <Text style={styles.label}>Brand name</Text>
                       </View>
                       <TextInput
                         value={brandName}
@@ -622,7 +753,7 @@ export default function ChefSignup() {
                     {/* Brief Description Field */}
                     <View style={[styles.field, styles.fieldFull]}>
                       <View style={styles.fieldLabel}>
-                        <Text style={styles.label}>Brief Description</Text>
+                        <Text style={styles.label}>Brief description</Text>
                       </View>
           <TextInput
                         value={briefDescription}
@@ -641,7 +772,7 @@ export default function ChefSignup() {
                     {/* Cuisine Type Field */}
                     <View style={[styles.field, styles.fieldFull]}>
                       <View style={styles.fieldLabel}>
-                        <Text style={styles.label}>Cuisine Type</Text>
+                        <Text style={styles.label}>Cuisine type</Text>
                       </View>
                       <TouchableOpacity
                         style={[styles.input, styles.dropdownButton, focusedInput === 'cuisineType' && styles.inputFocused]}
@@ -671,7 +802,7 @@ export default function ChefSignup() {
                         >
                           <View style={styles.dropdownModal} onStartShouldSetResponder={() => true}>
                             <View style={styles.dropdownHeader}>
-                              <Text style={styles.dropdownTitle}>Select Cuisine Types</Text>
+                              <Text style={styles.dropdownTitle}>Select cuisine types</Text>
                               <TouchableOpacity
                                 onPress={() => setShowCuisineDropdown(false)}
                                 style={styles.dropdownCloseButton}
@@ -1572,18 +1703,18 @@ No subscriptions. No commitments. You control your menu.
                       </View>
                       <View style={{ gap: theme.spacing.xs }}>
                         <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Full Name:</Text> {fullName || 'Not set'}
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Full name:</Text> {fullName || 'Not set'}
                         </Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Brand Name:</Text> {brandName || 'Not set'}
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Brand name:</Text> {brandName || 'Not set'}
                         </Text>
                         {briefDescription && (
                           <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Brief Description:</Text> {briefDescription}
+                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Brief description:</Text> {briefDescription}
                           </Text>
                         )}
                         <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Cuisine Type:</Text> {cuisineType.length > 0 ? cuisineType.join(', ') : 'Not set'}
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Cuisine type:</Text> {cuisineType.length > 0 ? cuisineType.join(', ') : 'Not set'}
                         </Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
                           <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Phone:</Text> {phone || 'Not set'}
@@ -1960,7 +2091,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           />
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Ingredients & Allergens</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Ingredients & allergens</Text>
           <TextInput
             value={ingredients}
             onChangeText={setIngredients}
@@ -2075,7 +2206,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
             />
           </View>
           <View style={{ gap: 8 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Ingredients & Allergens</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Ingredients & allergens</Text>
             <TextInput
               value={ingredients}
               onChangeText={setIngredients}
@@ -2166,9 +2297,16 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing['2xl'],
     width: '100%',
   },
+  headerImage: {
+    width: '100%',
+    maxWidth: 600,
+    height: Platform.select({ web: 200, default: 150 }),
+    marginBottom: theme.spacing.lg,
+    alignSelf: 'center',
+  },
   title: {
     color: TEXT_LIGHT,
-    fontSize: Platform.select({ web: 48, default: 36 }),
+    fontSize: Platform.select({ web: 48, default: 14 }),
     fontWeight: theme.typography.fontWeight.black as any, fontFamily: theme.typography.fontFamily.display,
     letterSpacing: -0.02,
     textAlign: 'left',
@@ -2186,11 +2324,6 @@ const styles = StyleSheet.create({
     backgroundColor: CARD_LIGHT,
     borderRadius: theme.radius.xl,
     padding: Platform.select({ web: theme.spacing['2xl'], default: theme.spacing.sm }),
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.1,
-    shadowRadius: 8,
-    elevation: 3,
   },
   progressSection: {
     marginBottom: theme.spacing['2xl'],
@@ -2285,14 +2418,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     color: TEXT_LIGHT,
     fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
+    fontStyle: 'normal',
   },
   inputFocused: {
     borderColor: PRIMARY_COLOR,
-    ...Platform.select({
-      web: {
-        boxShadow: `0 0 0 2px ${PRIMARY_COLOR}40`,
-      } as any,
-    }),
   },
   inputReadOnly: {
     backgroundColor: '#F9FAFB',
@@ -2506,7 +2635,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: theme.spacing.xs,
-    fontStyle: 'italic',
+    fontStyle: 'normal',
   },
   locationPickerContainer: {
     width: '100%',
