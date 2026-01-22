@@ -116,6 +116,7 @@ export default function OrderThankYouPage() {
   const platformFeeCents = 150;
   // Taxes: 13% HST on subtotal only (Ontario rate)
   const taxesCents = useMemo(() => Math.round(subtotalCents * 0.13), [subtotalCents]);
+  // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not shown to customer
   const totalCents = useMemo(() => subtotalCents + platformFeeCents + taxesCents, [subtotalCents, platformFeeCents, taxesCents]);
 
   if (loading) {

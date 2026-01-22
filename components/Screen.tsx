@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, ViewProps, ViewStyle, StyleSheet } from 'react-native';
+import { View, ScrollView, ViewProps, ViewStyle, StyleSheet, Platform } from 'react-native';
 import NavBar from './NavBar';
 import Footer from './Footer';
 
@@ -42,16 +42,46 @@ export default function Screen({
       )}
       <ScrollView 
         contentContainerStyle={[
-          { flexGrow: 1 }, 
+          { flexGrow: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, backgroundColor: baseStyle.backgroundColor || '#ffffff' }, 
           scrollViewContentStyle
         ]}
-        style={{ flex: 1 }}
+        style={{ flex: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, backgroundColor: baseStyle.backgroundColor || '#ffffff' }}
+        contentInsetAdjustmentBehavior="never"
       >
         <View style={[content, { minHeight: '100%', justifyContent: 'space-between' }]}>
           <View style={{ flex: 1 }}>
             {children}
           </View>
-          {!noFooter && <Footer />}
+          {!noFooter && (
+            <View style={{ 
+              marginLeft: contentStyle?.paddingLeft ? -contentStyle.paddingLeft : 
+                (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
+                (contentPadding != null && contentPadding > 0 ? -contentPadding : 
+                (scrollViewContentStyle?.paddingLeft ? -scrollViewContentStyle.paddingLeft :
+                (scrollViewContentStyle?.paddingHorizontal ? -scrollViewContentStyle.paddingHorizontal : 0)))),
+              marginRight: contentStyle?.paddingRight ? -contentStyle.paddingRight : 
+                (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
+                (contentPadding != null && contentPadding > 0 ? -contentPadding :
+                (scrollViewContentStyle?.paddingRight ? -scrollViewContentStyle.paddingRight :
+                (scrollViewContentStyle?.paddingHorizontal ? -scrollViewContentStyle.paddingHorizontal : 0)))),
+              ...(Platform.OS === 'web' ? {
+                width: '100vw',
+                maxWidth: '100vw',
+                marginLeft: contentStyle?.paddingLeft ? -contentStyle.paddingLeft : 
+                  (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
+                  (contentPadding != null && contentPadding > 0 ? -contentPadding : 
+                  (scrollViewContentStyle?.paddingLeft ? -scrollViewContentStyle.paddingLeft :
+                  (scrollViewContentStyle?.paddingHorizontal ? -scrollViewContentStyle.paddingHorizontal : -24)))),
+                marginRight: contentStyle?.paddingRight ? -contentStyle.paddingRight : 
+                  (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
+                  (contentPadding != null && contentPadding > 0 ? -contentPadding :
+                  (scrollViewContentStyle?.paddingRight ? -scrollViewContentStyle.paddingRight :
+                  (scrollViewContentStyle?.paddingHorizontal ? -scrollViewContentStyle.paddingHorizontal : -24)))),
+              } : {}),
+            } as any}>
+              <Footer />
+            </View>
+          )}
         </View>
         {/* Spacer for fixed bottom elements */}
         {fixedFooterHeight > 0 && <View style={{ height: fixedFooterHeight }} />}

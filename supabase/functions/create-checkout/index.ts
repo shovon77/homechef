@@ -5,7 +5,9 @@ import { stripe } from '../_shared/stripe.ts';
 
 // Flat platform service fee: $1.50 (150 cents)
 const PLATFORM_FEE_CENTS = 150;
-// Tax rate: 13% HST (Ontario rate) - applied to subtotal + platform fee
+// Platform commission: 10% of subtotal
+const PLATFORM_COMMISSION_RATE = 0.10;
+// Tax rate: 13% HST (Ontario rate) - applied to subtotal only
 const TAX_RATE = 0.13;
 
 // CORS headers - must match what the client sends
@@ -55,11 +57,20 @@ export const handler = async (req: Request) => {
 
     const parsed = CreateCheckoutBody.safeParse(raw);
     if (!parsed.success) {
-      console.error('[create-checkout] validation error:', parsed.error.flatten());
+      const flattened = parsed.error.flatten();
+      const fieldErrors = parsed.error.errors.map(e => ({
+        path: e.path.join('.'),
+        message: e.message,
+        code: e.code,
+      }));
+      console.error('[create-checkout] validation error:', JSON.stringify(flattened, null, 2));
+      console.error('[create-checkout] field errors:', JSON.stringify(fieldErrors, null, 2));
       console.error('[create-checkout] received data:', JSON.stringify(raw, null, 2));
       return j(400, { 
         error: 'Validation failed', 
-        details: parsed.error.flatten(),
+        message: 'Invalid request data. Please check your input.',
+        details: flattened,
+        fieldErrors: fieldErrors,
         received: raw, // Include received data for debugging
       });
     }
@@ -136,11 +147,18 @@ export const handler = async (req: Request) => {
     // Flat platform service fee: $1.50
     const platformFeeCents = PLATFORM_FEE_CENTS;
 
+    // Calculate 10% platform commission on subtotal
+    const platformCommissionCents = Math.round(total_cents * PLATFORM_COMMISSION_RATE);
+
     // Calculate 13% tax on subtotal only
     const taxCents = Math.round(total_cents * TAX_RATE);
     
-    // Grand total including tax
+    // Customer pays: subtotal + platform service fee + tax (commission is NOT paid by customer)
     const grandTotalCents = total_cents + platformFeeCents + taxCents;
+    
+    // Amount chef receives: subtotal minus platform commission
+    // (Stripe processing fees are deducted separately by Stripe)
+    const chefAmountCents = total_cents - platformCommissionCents;
 
     const { data: chefRow, error: chefError } = await adminClient
       .from('chefs')
@@ -181,10 +199,11 @@ export const handler = async (req: Request) => {
         chef_id: body.chef_id,
         status: 'requested',
         payment_status: 'awaiting_payment', // Order is created before payment
-        total_cents: grandTotalCents, // Total including platform fee and taxes
+        total_cents: grandTotalCents, // Total customer pays: subtotal + service fee + tax (commission deducted from chef)
         subtotal_cents: total_cents, // Subtotal (dish prices only)
-        platform_fee_cents: platformFeeCents,
-        tax_cents: taxCents, // 13% HST
+        platform_commission_cents: platformCommissionCents, // 10% of subtotal
+        platform_fee_cents: platformFeeCents, // Flat $1.50 service fee
+        tax_cents: taxCents, // 13% HST on subtotal
         pickup_at: pickupDate.toISOString(),
         expires_at: expiresAt.toISOString(),
       })
@@ -230,12 +249,26 @@ export const handler = async (req: Request) => {
     };
 
     // Only add transfer data if we have a destination account
+    // Customer pays: subtotal + service fee + tax
+    // Chef receives: subtotal - commission (commission is deducted from chef's payout)
+    // Platform receives: commission + service fee + tax (automatically calculated as grandTotalCents - chefAmountCents)
     if (stripeAccountId) {
-      paymentIntentData.application_fee_amount = platformFeeCents;
+      // Use transfer_data.amount to specify exactly what chef receives
+      // Platform automatically gets the difference: grandTotalCents - chefAmountCents
+      // Note: Cannot use both application_fee_amount and transfer_data.amount (they are mutually exclusive)
       paymentIntentData.transfer_data = {
         destination: stripeAccountId,
+        amount: chefAmountCents, // Chef receives subtotal minus commission
       };
       paymentIntentData.transfer_group = transferGroup;
+      console.log('[create-checkout] Stripe transfer setup', {
+        chefAmountCents, // What chef receives (subtotal - commission)
+        platformCommissionCents, // Commission deducted from chef
+        platformFeeCents, // Service fee
+        taxCents, // Tax
+        grandTotalCents, // Total customer pays (subtotal + service fee + tax)
+        platformTotal: grandTotalCents - chefAmountCents, // Total platform receives (commission + service fee + tax)
+      });
     }
 
     const session = await stripe.checkout.sessions.create(
@@ -258,6 +291,7 @@ export const handler = async (req: Request) => {
             quantity: item.quantity,
           })),
           // Platform service fee
+          // Note: Platform commission is NOT charged to customer - it's deducted from chef's payout
           {
             price_data: {
               currency: 'cad',
@@ -318,9 +352,11 @@ export const handler = async (req: Request) => {
       paymentIntent: session.payment_intent,
       paymentIntentId: updateData.stripe_payment_intent_id || 'not available yet',
       subtotalCents: total_cents,
+      platformCommissionCents,
       platformFeeCents,
       taxCents,
       grandTotalCents,
+      chefAmountCents: stripeAccountId ? chefAmountCents : null, // Only relevant if chef has Stripe account
       transferDestination: stripeAccountId,
       captureMethod: 'automatic',
     });

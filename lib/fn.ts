@@ -26,13 +26,27 @@ export async function callFn<T = any>(
       status: (error as any)?.status,
       statusText: (error as any)?.statusText,
     });
-    // Supabase functions can include details in error.context
-    const msg =
-      (error as any)?.context?.error ??
-      (error as any)?.context?.details ??
+    
+    // Try to extract detailed error message from various possible locations
+    const errorContext = (error as any)?.context;
+    let errorMsg = 
+      errorContext?.error ??
+      errorContext?.message ??
+      (errorContext?.details && typeof errorContext.details === 'object' 
+        ? JSON.stringify(errorContext.details) 
+        : errorContext?.details) ??
       (error as any)?.message ??
       'Edge Function returned a non-2xx status code';
-    throw new Error(msg);
+    
+    // If we have field errors, include them in the message
+    if (errorContext?.fieldErrors && Array.isArray(errorContext.fieldErrors)) {
+      const fieldErrorMessages = errorContext.fieldErrors
+        .map((fe: any) => `${fe.path}: ${fe.message}`)
+        .join(', ');
+      errorMsg = `${errorMsg}. Field errors: ${fieldErrorMessages}`;
+    }
+    
+    throw new Error(errorMsg);
   }
 
   return data as T;

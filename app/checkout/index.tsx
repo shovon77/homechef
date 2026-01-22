@@ -54,7 +54,8 @@ export default function CheckoutPage() {
   const platformFee = 1.50;
   // Taxes: 13% HST on subtotal only (Ontario rate)
   const taxes = useMemo(() => subtotal * 0.13, [subtotal]);
-  // Total: subtotal + platform fee + taxes
+  // Total: subtotal + platform service fee + taxes
+  // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not paid by customer
   const total = useMemo(() => subtotal + platformFee + taxes, [subtotal, platformFee, taxes]);
   const totalCents = useMemo(() => Math.round(total * 100), [total]);
   
@@ -190,7 +191,7 @@ export default function CheckoutPage() {
           dish_id: Number(item.id),
           quantity: Number(item.quantity),
         })),
-        chef_id: cartChefId,
+        chef_id: Number(cartChefId),
         pickupAt: combined,
         successUrl,
         cancelUrl,

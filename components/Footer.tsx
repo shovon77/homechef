@@ -24,37 +24,39 @@ export default function Footer() {
 
   return (
     <View style={styles.container}>
-      <View style={styles.inner}>
-        <View style={styles.brandContainer}>
-          <Image 
-            source={require('../assets/AppLogoWordFinal2026.png')}
-            style={[
-              styles.brandLogo,
-              { 
-                width: isMobile ? Math.min(400, width - 40) : 560,
-                height: isMobile ? (Math.min(400, width - 40) / 5) : 112 
-              }
-            ]}
-            resizeMode="contain"
-          />
+      <View style={styles.contentWrapper}>
+        <View style={styles.inner}>
+          <View style={styles.brandContainer}>
+            <Image 
+              source={require('../assets/AppLogoWordFinal2026.png')}
+              style={[
+                styles.brandLogo,
+                { 
+                  width: isMobile ? Math.min(400, width - 40) : 560,
+                  height: isMobile ? (Math.min(400, width - 40) / 5) : 112 
+                }
+              ]}
+              resizeMode="contain"
+            />
+          </View>
+          <Text style={styles.copy}>YourHomeChef is a marketplace connecting independent home chefs with local customers. All food is prepared by the chefs.</Text>
         </View>
-        <Text style={styles.copy}>YourHomeChef is a marketplace connecting independent home chefs with local customers. All food is prepared by the chefs.</Text>
+        <View style={styles.links}>
+          <TouchableOpacity onPress={() => router.push('/about')}>
+            <Text style={styles.link}>About Us</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/faq')}>
+            <Text style={styles.link}>FAQ</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={handleContact}>
+            <Text style={styles.link}>Contact</Text>
+          </TouchableOpacity>
+          <TouchableOpacity onPress={() => router.push('/terms')}>
+            <Text style={styles.link}>Terms of Service</Text>
+          </TouchableOpacity>
+        </View>
+        <Text style={styles.legal}>© 2025 YourHomeChef. All rights reserved.</Text>
       </View>
-      <View style={styles.links}>
-        <TouchableOpacity onPress={() => router.push('/about')}>
-          <Text style={styles.link}>About Us</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/faq')}>
-          <Text style={styles.link}>FAQ</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={handleContact}>
-          <Text style={styles.link}>Contact</Text>
-        </TouchableOpacity>
-        <TouchableOpacity onPress={() => router.push('/terms')}>
-          <Text style={styles.link}>Terms of Service</Text>
-        </TouchableOpacity>
-      </View>
-      <Text style={styles.legal}>© 2025 YourHomeChef. All rights reserved.</Text>
     </View>
   )
 }
@@ -65,28 +67,48 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: '#FFFFFF',
     backgroundColor: '#F2F0EF',
-    paddingHorizontal: 16,
-    paddingTop: 11,
-    paddingBottom: 11,
+    paddingLeft: 48,
+    paddingRight: 48,
+    paddingTop: 24,
+    paddingBottom: 8,
+    ...Platform.select({
+      web: {
+        overflow: 'visible',
+      },
+    }),
+  },
+  contentWrapper: {
+    width: '100%',
+    alignItems: 'flex-start',
   },
   inner: {
-    gap: 4,
+    gap: 12,
+    alignItems: 'flex-start',
+    width: '100%',
   },
   brandContainer: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
+    alignItems: 'flex-start',
+    justifyContent: 'flex-start',
+    gap: 0,
     marginLeft: -100,
+    paddingLeft: 0,
+    alignSelf: 'flex-start',
+    width: 'auto',
   },
   brandLogo: {
     backgroundColor: 'transparent',
+    alignSelf: 'flex-start',
+    marginLeft: 0,
   },
   copy: {
-    color: '#334155',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
+    fontSize: 14,
+    lineHeight: 20,
   },
   links: {
-    marginTop: 4,
+    marginTop: 12,
     flexDirection: 'row',
     flexWrap: 'wrap',
     gap: 16,
@@ -95,10 +117,11 @@ const styles = StyleSheet.create({
     color: '#FE734C',
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: 'bold',
+    fontSize: 14,
   },
   legal: {
-    marginTop: 4,
-    color: '#64748b',
+    marginTop: 12,
+    color: '#33393A',
     fontSize: 12,
     fontFamily: theme.typography.fontFamily.body,
   },
