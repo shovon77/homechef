@@ -139,13 +139,13 @@ export default function HomePage() {
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
-  const PLACEHOLDERS = [
+  const [PLACEHOLDERS, setPLACEHOLDERS] = useState<string[]>([
     "Craving spicy mutton biryani?",
     "Or maybe a classic chicken pulao?",
     "No wait, let's get a quick fuchka?",
     "Jhalmuri & shingara like school days?",
     "Find the taste of home here!"
-  ];
+  ]);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -168,7 +168,7 @@ export default function HomePage() {
     }, 3500); // 3s visible + 1s transition
 
     return () => clearInterval(interval);
-  }, []);
+  }, [PLACEHOLDERS.length]);
 
   const CARD_WIDTH = isMobile ? 200 : 240;
   const GAP = 24;
@@ -270,6 +270,21 @@ export default function HomePage() {
                }
             }
             setBannerUrl(url);
+          }
+        });
+
+      // Fetch search placeholders
+      supabase.from('app_settings').select('value').eq('key', 'search_placeholders').single()
+        .then(({ data }) => {
+          if (mounted && data?.value) {
+            try {
+              const parsed = JSON.parse(data.value);
+              if (Array.isArray(parsed) && parsed.length === 5 && parsed.every((p: any) => typeof p === 'string' && p.trim())) {
+                setPLACEHOLDERS(parsed);
+              }
+            } catch (e) {
+              console.warn('Failed to parse search placeholders:', e);
+            }
           }
         });
 

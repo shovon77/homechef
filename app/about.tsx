@@ -1,11 +1,31 @@
-import React from "react";
-import { View, Text, StyleSheet, Platform, Image, useWindowDimensions } from "react-native";
+import React, { useState, useEffect } from "react";
+import { View, Text, StyleSheet, Platform, Image, useWindowDimensions, ActivityIndicator } from "react-native";
 import { Screen } from "../components/Screen";
 import { theme } from "../lib/theme";
+import { supabase } from "../lib/supabase";
 
 export default function AboutPage() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    // Load About Us banner from app_settings
+    supabase.from('app_settings')
+      .select('value')
+      .eq('key', 'about_us_banner_url')
+      .single()
+      .then(({ data }) => {
+        if (data?.value) {
+          setBannerUrl(data.value);
+        }
+        setLoading(false);
+      })
+      .catch(() => {
+        setLoading(false);
+      });
+  }, []);
 
   return (
     <Screen 
@@ -17,11 +37,23 @@ export default function AboutPage() {
         
         <Text style={[styles.subtitle, isMobile && styles.subtitleMobile]}>YourHomeChef</Text>
 
-        <Image 
-          source={require('../assets/About us.png')} 
-          style={[styles.heroImage, isMobile && styles.heroImageMobile]}
-          resizeMode="contain"
-        />
+        {loading ? (
+          <View style={[styles.heroImage, isMobile && styles.heroImageMobile, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
+            <ActivityIndicator size="large" color={theme.colors.primary} />
+          </View>
+        ) : bannerUrl ? (
+          <Image 
+            source={{ uri: bannerUrl }} 
+            style={[styles.heroImage, isMobile && styles.heroImageMobile]}
+            resizeMode="cover"
+          />
+        ) : (
+          <Image 
+            source={require('../assets/About us.png')} 
+            style={[styles.heroImage, isMobile && styles.heroImageMobile]}
+            resizeMode="contain"
+          />
+        )}
 
         <View style={styles.section}>
           <Text style={[styles.heading, isMobile && styles.headingMobile]}>Our Mission</Text>

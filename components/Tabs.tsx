@@ -1,6 +1,6 @@
 'use client';
 import { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, ScrollView, useWindowDimensions } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, ScrollView, useWindowDimensions, Platform } from 'react-native';
 import { theme } from '../lib/theme';
 
 type TabConfig = { key: string; title: string; content: JSX.Element }[];
@@ -127,10 +127,12 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: '600',
     letterSpacing: theme.typography.letterSpacing.wide,
+    fontFamily: theme.typography.fontFamily.body,
   },
   tabTextActive: {
     color: '#FFFFFF',
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   content: {
     flex: 1,

@@ -13,6 +13,7 @@ import type { Chef, OrderWithItems, Profile } from '../../lib/types';
 import { callFn } from '../../lib/fn';
 import { formatEst } from '../../lib/datetime';
 import { cents } from '../../lib/money';
+import { theme } from '../../lib/theme';
 
 const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
@@ -37,6 +38,8 @@ const palette = {
   neutralText: '#475569',
 };
 
+// Use theme fonts like rest of app - display for bold/headings, body for regular text
+
 export default function AdminPage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -45,7 +48,7 @@ export default function AdminPage() {
   // Ensure fixed elements are not rendered on mobile
   const shouldShowFixedElements = !isMobile;
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'issues'];
+  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'issues', 'app-settings'];
   const initialTabIdx = tabKeys.indexOf(tab || 'overview');
   const safeInitial = initialTabIdx >= 0 ? initialTabIdx : 0;
   const { isAdmin, loading: adminLoading, user, profile } = useRole();
@@ -76,6 +79,17 @@ export default function AdminPage() {
   const [originalBannerUrl, setOriginalBannerUrl] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [aboutUsBannerUrl, setAboutUsBannerUrl] = useState('');
+  const [originalAboutUsBannerUrl, setOriginalAboutUsBannerUrl] = useState('');
+  const [savingAboutUsBanner, setSavingAboutUsBanner] = useState(false);
+  const [uploadingAboutUsBanner, setUploadingAboutUsBanner] = useState(false);
+  const [chefOnboardingBannerUrl, setChefOnboardingBannerUrl] = useState('');
+  const [originalChefOnboardingBannerUrl, setOriginalChefOnboardingBannerUrl] = useState('');
+  const [savingChefOnboardingBanner, setSavingChefOnboardingBanner] = useState(false);
+  const [uploadingChefOnboardingBanner, setUploadingChefOnboardingBanner] = useState(false);
+  const [searchPlaceholders, setSearchPlaceholders] = useState<string[]>(['', '', '', '', '']);
+  const [originalSearchPlaceholders, setOriginalSearchPlaceholders] = useState<string[]>(['', '', '', '', '']);
+  const [savingPlaceholders, setSavingPlaceholders] = useState(false);
   const [issueActions, setIssueActions] = useState<{ [issueId: number]: string }>({});
   
   // Persist issueActions to localStorage whenever it changes
@@ -385,6 +399,60 @@ export default function AdminPage() {
       if (bannerData?.value) {
         setBannerUrl(bannerData.value);
         setOriginalBannerUrl(bannerData.value);
+      }
+
+      // Load About Us banner
+      const { data: aboutUsBannerData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'about_us_banner_url')
+        .single();
+      
+      if (aboutUsBannerData?.value) {
+        setAboutUsBannerUrl(aboutUsBannerData.value);
+        setOriginalAboutUsBannerUrl(aboutUsBannerData.value);
+      }
+
+      // Load Chef Onboarding banner
+      const { data: chefOnboardingBannerData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'chef_onboarding_banner_url')
+        .single();
+      
+      if (chefOnboardingBannerData?.value) {
+        setChefOnboardingBannerUrl(chefOnboardingBannerData.value);
+        setOriginalChefOnboardingBannerUrl(chefOnboardingBannerData.value);
+      }
+
+      // Load search placeholder texts
+      const { data: placeholdersData } = await supabase
+        .from('app_settings')
+        .select('value')
+        .eq('key', 'search_placeholders')
+        .single();
+      
+      if (placeholdersData?.value) {
+        try {
+          const parsed = JSON.parse(placeholdersData.value);
+          if (Array.isArray(parsed) && parsed.length === 5) {
+            setSearchPlaceholders(parsed);
+            setOriginalSearchPlaceholders(parsed);
+          }
+        } catch (e) {
+          console.warn('Failed to parse search placeholders:', e);
+        }
+      } else {
+        // Default placeholders if not set
+        const defaults = [
+          "Craving spicy mutton biryani?",
+          "Or maybe a classic chicken pulao?",
+          "No wait, let's get a quick fuchka?",
+          "Jhalmuri & shingara like school days?",
+          "Find the taste of home here!"
+        ];
+        setSearchPlaceholders(defaults);
+        setOriginalSearchPlaceholders(defaults);
       }
 
       // Load order issues with related data
@@ -844,6 +912,48 @@ export default function AdminPage() {
     }
   }
 
+  async function updateAboutUsBanner() {
+    if (!aboutUsBannerUrl.trim()) {
+      Alert.alert('Error', 'Please enter a valid URL');
+      return;
+    }
+    setSavingAboutUsBanner(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ key: 'about_us_banner_url', value: aboutUsBannerUrl.trim() });
+      
+      if (error) throw error;
+      setOriginalAboutUsBannerUrl(aboutUsBannerUrl);
+      Alert.alert('Success', 'About Us banner updated successfully');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update About Us banner. Make sure app_settings table exists.');
+    } finally {
+      setSavingAboutUsBanner(false);
+    }
+  }
+
+  async function updateChefOnboardingBanner() {
+    if (!chefOnboardingBannerUrl.trim()) {
+      Alert.alert('Error', 'Please enter a valid URL');
+      return;
+    }
+    setSavingChefOnboardingBanner(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ key: 'chef_onboarding_banner_url', value: chefOnboardingBannerUrl.trim() });
+      
+      if (error) throw error;
+      setOriginalChefOnboardingBannerUrl(chefOnboardingBannerUrl);
+      Alert.alert('Success', 'Chef onboarding banner updated successfully');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update chef onboarding banner. Make sure app_settings table exists.');
+    } finally {
+      setSavingChefOnboardingBanner(false);
+    }
+  }
+
   async function handleUpload(file: File) {
     if (!file) return;
     setUploading(true);
@@ -900,6 +1010,124 @@ export default function AdminPage() {
       }
     } finally {
       setUploading(false);
+    }
+  }
+
+  async function handleUploadAboutUsBanner(file: File) {
+    if (!file) return;
+    setUploadingAboutUsBanner(true);
+    try {
+      const fileExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'png';
+      const fileName = `about_us_banner_${Date.now()}.${fileExt || 'png'}`;
+      const filePath = `${fileName}`;
+
+      console.log('Starting upload...', { fileName, filePath });
+
+      // Try 'public-assets' bucket first (user specified)
+      let bucket = 'public-assets';
+      
+      let { data, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        console.warn(`Upload to '${bucket}' failed:`, uploadError);
+        
+        // Try fallback buckets
+        const fallbacks = ['public', 'assets', 'images', 'common'];
+        for (const b of fallbacks) {
+          console.log(`Retrying upload to '${b}'...`);
+          const res = await supabase.storage.from(b).upload(filePath, file, { upsert: true });
+          if (!res.error) {
+            bucket = b;
+            uploadError = null;
+            data = res.data;
+            console.log(`Upload to '${b}' succeeded`);
+            break;
+          } else {
+            console.warn(`Upload to '${b}' failed:`, res.error);
+          }
+        }
+        
+        if (uploadError) {
+          throw uploadError;
+        }
+      }
+
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      if (urlData?.publicUrl) {
+        console.log('Public URL generated:', urlData.publicUrl);
+        setAboutUsBannerUrl(urlData.publicUrl);
+      }
+    } catch (error: any) {
+      console.error('Upload error details:', error);
+      const msg = error.message || 'Unknown upload error';
+      if (msg.includes('400') || msg.includes('row-level security')) {
+         Alert.alert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
+      } else {
+         Alert.alert('Upload Failed', `Could not upload file: ${msg}`);
+      }
+    } finally {
+      setUploadingAboutUsBanner(false);
+    }
+  }
+
+  async function handleUploadChefOnboardingBanner(file: File) {
+    if (!file) return;
+    setUploadingChefOnboardingBanner(true);
+    try {
+      const fileExt = file.name ? file.name.split('.').pop()?.toLowerCase() : 'png';
+      const fileName = `chef_onboarding_banner_${Date.now()}.${fileExt || 'png'}`;
+      const filePath = `${fileName}`;
+
+      console.log('Starting upload...', { fileName, filePath });
+
+      // Try 'public-assets' bucket first (user specified)
+      let bucket = 'public-assets';
+      
+      let { data, error: uploadError } = await supabase.storage
+        .from(bucket)
+        .upload(filePath, file, { upsert: true });
+
+      if (uploadError) {
+        console.warn(`Upload to '${bucket}' failed:`, uploadError);
+        
+        // Try fallback buckets
+        const fallbacks = ['public', 'assets', 'images', 'common'];
+        for (const b of fallbacks) {
+          console.log(`Retrying upload to '${b}'...`);
+          const res = await supabase.storage.from(b).upload(filePath, file, { upsert: true });
+          if (!res.error) {
+            bucket = b;
+            uploadError = null;
+            data = res.data;
+            console.log(`Upload to '${b}' succeeded`);
+            break;
+          } else {
+            console.warn(`Upload to '${b}' failed:`, res.error);
+          }
+        }
+        
+        if (uploadError) {
+          throw uploadError;
+        }
+      }
+
+      const { data: urlData } = supabase.storage.from(bucket).getPublicUrl(filePath);
+      if (urlData?.publicUrl) {
+        console.log('Public URL generated:', urlData.publicUrl);
+        setChefOnboardingBannerUrl(urlData.publicUrl);
+      }
+    } catch (error: any) {
+      console.error('Upload error details:', error);
+      const msg = error.message || 'Unknown upload error';
+      if (msg.includes('400') || msg.includes('row-level security')) {
+         Alert.alert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
+      } else {
+         Alert.alert('Upload Failed', `Could not upload file: ${msg}`);
+      }
+    } finally {
+      setUploadingChefOnboardingBanner(false);
     }
   }
 
@@ -1472,42 +1700,6 @@ export default function AdminPage() {
         </View>
       </View>
 
-      <View style={styles.chartCard}>
-        <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Homepage Banner</Text>
-          <Text style={styles.chartSubtitle}>Update the main hero image</Text>
-        </View>
-        <View style={styles.searchWrapper}>
-          {bannerUrl ? (
-            <View style={styles.bannerPreviewContainer}>
-              <Text style={styles.sectionLabel}>Preview</Text>
-              <Image source={{ uri: bannerUrl }} style={styles.bannerPreview} resizeMode="cover" />
-            </View>
-          ) : null}
-          
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
-            <FilePicker 
-              label={uploading ? "Uploading..." : "Upload New Image"} 
-              onFile={handleUpload} 
-            />
-            {uploading && <ActivityIndicator size="small" color={palette.primary} />}
-          </View>
-
-          <Text style={styles.helperText}>
-            Recommended dimensions: Desktop 1920x600px, Mobile 800x600px.
-          </Text>
-
-          {bannerUrl !== originalBannerUrl && (
-            <TouchableOpacity
-              onPress={updateBanner}
-              disabled={savingBanner || uploading}
-              style={[styles.primaryButton, (savingBanner || uploading) && styles.disabledButton, { marginTop: 8 }]}
-            >
-              <Text style={styles.primaryButtonText}>{savingBanner ? 'Publishing...' : 'Publish Changes'}</Text>
-            </TouchableOpacity>
-          )}
-        </View>
-      </View>
     </ScrollView>
   );
 
@@ -1575,7 +1767,7 @@ export default function AdminPage() {
                 return (
                   <View key={c.id} style={[styles.tableRow, !isMobile && { minWidth: 1320 }]}>
                     <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
-                      <Text style={{ fontWeight: '600', color: '#000000' }} numberOfLines={1}>
+                      <Text style={{ fontWeight: '600', color: '#000000', fontFamily: theme.typography.fontFamily.body }} numberOfLines={1}>
                         {c.name || `Chef #${c.id}`}
                       </Text>
                       {c.id && (
@@ -1785,7 +1977,7 @@ export default function AdminPage() {
               {paginatedUsers.map((u: any) => (
                 <View key={u.id} style={[styles.tableRow, !isMobile && { minWidth: 1060 }]}>
                   <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.5 }]}>
-                    <Text style={{ fontWeight: '600', color: palette.text }} numberOfLines={1}>{u.name || 'Unknown'}</Text>
+                    <Text style={{ fontWeight: '600', color: palette.text, fontFamily: theme.typography.fontFamily.body }} numberOfLines={1}>{u.name || 'Unknown'}</Text>
                   </View>
                   <Text style={[styles.tableCell, isMobile ? { width: 200, minWidth: 200 } : { flex: 2.5 }]} numberOfLines={1}>
                     {u.email || 'No email'}
@@ -1808,7 +2000,7 @@ export default function AdminPage() {
                         <Text style={[styles.primaryButtonText, { fontSize: 12 }]}>Deactivate</Text>
                       </TouchableOpacity>
                     ) : (
-                      <Text style={{ color: palette.muted, fontSize: 12 }}>Banned</Text>
+                      <Text style={{ color: palette.muted, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Banned</Text>
                     )}
                   </View>
                 </View>
@@ -2079,6 +2271,207 @@ export default function AdminPage() {
       )}
 
     </View>
+  );
+
+  async function updateSearchPlaceholders() {
+    if (searchPlaceholders.some(p => !p.trim())) {
+      Alert.alert('Error', 'All placeholder texts must be filled');
+      return;
+    }
+    setSavingPlaceholders(true);
+    try {
+      const { error } = await supabase
+        .from('app_settings')
+        .upsert({ key: 'search_placeholders', value: JSON.stringify(searchPlaceholders) });
+      
+      if (error) throw error;
+      setOriginalSearchPlaceholders([...searchPlaceholders]);
+      Alert.alert('Success', 'Search placeholder texts updated successfully');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to update search placeholders');
+    } finally {
+      setSavingPlaceholders(false);
+    }
+  }
+
+  const AppSettingsTab = (
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Homepage banner</Text>
+          <Text style={styles.chartSubtitle}>Update the main hero image</Text>
+        </View>
+        <View style={styles.searchWrapper}>
+          {bannerUrl ? (
+            <View style={styles.bannerPreviewContainer}>
+              <Text style={styles.sectionLabel}>Preview</Text>
+              <Image source={{ uri: bannerUrl }} style={styles.bannerPreview} resizeMode="cover" />
+            </View>
+          ) : null}
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <FilePicker 
+              label={uploading ? "Uploading..." : "Upload New Image"} 
+              onFile={handleUpload} 
+            />
+            {uploading && <ActivityIndicator size="small" color={palette.primary} />}
+          </View>
+
+          <Text style={styles.helperText}>
+            Recommended dimensions: Desktop 1920x600px, Mobile 800x600px.
+          </Text>
+
+          {bannerUrl !== originalBannerUrl && (
+            <TouchableOpacity
+              onPress={updateBanner}
+              disabled={savingBanner || uploading}
+              style={[styles.primaryButton, (savingBanner || uploading) && styles.disabledButton, { marginTop: 8 }]}
+            >
+              <Text style={styles.primaryButtonText}>{savingBanner ? 'Publishing...' : 'Publish Changes'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>About Us page banner</Text>
+          <Text style={styles.chartSubtitle}>Update the banner image on the About Us page</Text>
+        </View>
+        <View style={styles.searchWrapper}>
+          {(aboutUsBannerUrl || originalAboutUsBannerUrl) ? (
+            <View style={styles.bannerPreviewContainer}>
+              <Text style={styles.sectionLabel}>Current banner</Text>
+              <Image 
+                source={{ uri: aboutUsBannerUrl || originalAboutUsBannerUrl }} 
+                style={styles.bannerPreview} 
+                resizeMode="cover" 
+              />
+            </View>
+          ) : (
+            <View style={styles.bannerPreviewContainer}>
+              <Text style={styles.sectionLabel}>Current banner</Text>
+              <View style={[styles.bannerPreview, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: palette.muted, fontSize: 14 }}>No banner image set</Text>
+              </View>
+            </View>
+          )}
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <FilePicker 
+              label={uploadingAboutUsBanner ? "Uploading..." : "Upload New Image"} 
+              onFile={handleUploadAboutUsBanner} 
+            />
+            {uploadingAboutUsBanner && <ActivityIndicator size="small" color={palette.primary} />}
+          </View>
+
+          <Text style={styles.helperText}>
+            Recommended dimensions: Desktop 1920x600px, Mobile 800x600px.
+          </Text>
+
+          {aboutUsBannerUrl !== originalAboutUsBannerUrl && (
+            <TouchableOpacity
+              onPress={updateAboutUsBanner}
+              disabled={savingAboutUsBanner || uploadingAboutUsBanner}
+              style={[styles.primaryButton, (savingAboutUsBanner || uploadingAboutUsBanner) && styles.disabledButton, { marginTop: 8 }]}
+            >
+              <Text style={styles.primaryButtonText}>{savingAboutUsBanner ? 'Publishing...' : 'Publish Changes'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Chef onboarding page banner</Text>
+          <Text style={styles.chartSubtitle}>Update the banner image on the chef onboarding page</Text>
+        </View>
+        <View style={styles.searchWrapper}>
+          {(chefOnboardingBannerUrl || originalChefOnboardingBannerUrl) ? (
+            <View style={styles.bannerPreviewContainer}>
+              <Text style={styles.sectionLabel}>Current banner</Text>
+              <Image 
+                source={{ uri: chefOnboardingBannerUrl || originalChefOnboardingBannerUrl }} 
+                style={styles.bannerPreview} 
+                resizeMode="cover" 
+              />
+            </View>
+          ) : (
+            <View style={styles.bannerPreviewContainer}>
+              <Text style={styles.sectionLabel}>Current banner</Text>
+              <View style={[styles.bannerPreview, { backgroundColor: '#E2E8F0', justifyContent: 'center', alignItems: 'center' }]}>
+                <Text style={{ color: palette.muted, fontSize: 14 }}>No banner image set</Text>
+              </View>
+            </View>
+          )}
+          
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12, marginBottom: 12 }}>
+            <FilePicker 
+              label={uploadingChefOnboardingBanner ? "Uploading..." : "Upload New Image"} 
+              onFile={handleUploadChefOnboardingBanner} 
+            />
+            {uploadingChefOnboardingBanner && <ActivityIndicator size="small" color={palette.primary} />}
+          </View>
+
+          <Text style={styles.helperText}>
+            Recommended dimensions: Desktop 1920x600px, Mobile 800x600px.
+          </Text>
+
+          {chefOnboardingBannerUrl !== originalChefOnboardingBannerUrl && (
+            <TouchableOpacity
+              onPress={updateChefOnboardingBanner}
+              disabled={savingChefOnboardingBanner || uploadingChefOnboardingBanner}
+              style={[styles.primaryButton, (savingChefOnboardingBanner || uploadingChefOnboardingBanner) && styles.disabledButton, { marginTop: 8 }]}
+            >
+              <Text style={styles.primaryButtonText}>{savingChefOnboardingBanner ? 'Publishing...' : 'Publish Changes'}</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Search bar placeholders</Text>
+          <Text style={styles.chartSubtitle}>Update the rotating placeholder texts on homepage and explore pages</Text>
+        </View>
+        <View style={styles.searchWrapper}>
+          {searchPlaceholders.map((placeholder, index) => (
+            <View key={index} style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: '600', marginBottom: 8, color: palette.text, fontFamily: theme.typography.fontFamily.body }}>
+                Placeholder {index + 1}
+              </Text>
+              <TextInput
+                value={placeholder}
+                onChangeText={(text) => {
+                  const updated = [...searchPlaceholders];
+                  updated[index] = text;
+                  setSearchPlaceholders(updated);
+                }}
+                placeholder={`Enter placeholder text ${index + 1}...`}
+                placeholderTextColor="#94a3b8"
+                style={[styles.searchInput, { minHeight: 44 }]}
+                multiline
+                spellCheck={true}
+                autoCorrect={true}
+                autoCapitalize="sentences"
+              />
+            </View>
+          ))}
+          
+          {JSON.stringify(searchPlaceholders) !== JSON.stringify(originalSearchPlaceholders) && (
+            <TouchableOpacity
+              onPress={updateSearchPlaceholders}
+              disabled={savingPlaceholders}
+              style={[styles.primaryButton, savingPlaceholders && styles.disabledButton, { marginTop: 8 }]}
+            >
+              <Text style={styles.primaryButtonText}>
+                {savingPlaceholders ? 'Publishing...' : 'Publish Changes'}
+              </Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      </View>
+    </ScrollView>
   );
 
   const IssuesTab = (
@@ -2455,7 +2848,7 @@ export default function AdminPage() {
                     <View style={styles.issueDetailOverlay}>
                       <View style={styles.issueDetailContent}>
                         <ActivityIndicator size="large" color={palette.primary} />
-                        <Text style={{ marginTop: 16, color: palette.text }}>Loading order details...</Text>
+                        <Text style={{ marginTop: 16, color: palette.text, fontFamily: theme.typography.fontFamily.body }}>Loading order details...</Text>
                       </View>
                     </View>
                   </Modal>
@@ -2895,6 +3288,7 @@ export default function AdminPage() {
             { key: 'chefs', title: 'Chefs', content: ChefsTab },
             { key: 'users', title: 'Users', content: UsersTab },
             { key: 'issues', title: 'Issues', content: IssuesTab },
+            { key: 'app-settings', title: 'App settings', content: AppSettingsTab },
           ]}
         />
       </View>
@@ -2950,47 +3344,47 @@ export default function AdminPage() {
                 {!chefApplicationData ? (
                   <View style={{ padding: 16, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
                     <ActivityIndicator size="large" color={palette.primary} />
-                          <Text style={{ marginTop: 16, color: palette.muted }}>Loading application</Text>
+                          <Text style={{ marginTop: 16, color: palette.muted, fontFamily: theme.typography.fontFamily.body }}>Loading application</Text>
                   </View>
                 ) : (
                   <>
                     {/* Page 1: Basic Information */}
                     {chefApplicationPage === 1 && (
                       <View style={{ padding: 16, gap: 16 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Basic information</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.display }}>Basic information</Text>
                         <View style={{ gap: 12 }}>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Full name</Text>
-                            <Text>{chefApplicationData.name || chefApplicationData.fullName || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Full name</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.name || chefApplicationData.fullName || '—'}</Text>
                           </View>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Brand name</Text>
-                            <Text>{chefApplicationData.brandName || chefApplicationData.name || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Brand name</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.brandName || chefApplicationData.name || '—'}</Text>
                           </View>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Email</Text>
-                            <Text>{chefApplicationData.email || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Email</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.email || '—'}</Text>
                           </View>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Phone</Text>
-                            <Text>{chefApplicationData.phone || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Phone</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.phone || '—'}</Text>
                           </View>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Location</Text>
-                            <Text>{chefApplicationData.location || chefApplicationData.address || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Location</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.location || chefApplicationData.address || '—'}</Text>
                           </View>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Brief description</Text>
-                            <Text>{chefApplicationData.short_bio || chefApplicationData.briefDescription || chefApplicationData.bio || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Brief description</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.short_bio || chefApplicationData.briefDescription || chefApplicationData.bio || '—'}</Text>
                           </View>
                           <View>
-                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Cuisine type</Text>
-                            <Text>{chefApplicationData.cuisine_specialty || chefApplicationData.cuisine || '—'}</Text>
+                            <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Cuisine type</Text>
+                            <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.cuisine_specialty || chefApplicationData.cuisine || '—'}</Text>
                           </View>
                           {chefApplicationData.experience && (
                             <View>
-                              <Text style={{ fontWeight: '600', marginBottom: 4 }}>Experience</Text>
-                              <Text>{chefApplicationData.experience}</Text>
+                              <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Experience</Text>
+                              <Text style={{ fontFamily: theme.typography.fontFamily.body }}>{chefApplicationData.experience}</Text>
                             </View>
                           )}
                         </View>
@@ -3000,7 +3394,7 @@ export default function AdminPage() {
                     {/* Page 2: Availability & Pickup */}
                     {chefApplicationPage === 2 && (
                       <View style={{ padding: 16, gap: 16 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Availability & pickup</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.display }}>Availability & pickup</Text>
                         {chefApplicationData.pickup_availability && Array.isArray(chefApplicationData.pickup_availability) && chefApplicationData.pickup_availability.length > 0 ? (
                           <View style={{ gap: 12 }}>
                             {Object.entries(
@@ -3011,13 +3405,13 @@ export default function AdminPage() {
                               }, {})
                             ).map(([day, timeWindows]: [string, any]) => (
                               <View key={day}>
-                                <Text style={{ fontWeight: '600', marginBottom: 4 }}>{day.charAt(0).toUpperCase() + day.slice(1).toLowerCase()}</Text>
+                                <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>{day.charAt(0).toUpperCase() + day.slice(1).toLowerCase()}</Text>
                                 <Text>{timeWindows.join(', ')}</Text>
                               </View>
                             ))}
                           </View>
                         ) : (
-                          <Text>No pickup availability set</Text>
+                          <Text style={{ fontFamily: theme.typography.fontFamily.body }}>No pickup availability set</Text>
                         )}
                       </View>
                     )}
@@ -3025,7 +3419,7 @@ export default function AdminPage() {
                     {/* Page 3: Dishes */}
                     {chefApplicationPage === 3 && (
                       <View style={{ padding: 16, gap: 16 }}>
-                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Dishes ({chefApplicationData.dishes?.length || 0})</Text>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.display }}>Dishes ({chefApplicationData.dishes?.length || 0})</Text>
                         {chefApplicationData.dishes && chefApplicationData.dishes.length > 0 ? (
                           <View style={{ gap: 16 }}>
                             {chefApplicationData.dishes.map((dish: any, idx: number) => (
@@ -3033,23 +3427,23 @@ export default function AdminPage() {
                                 {dish.image && (
                                   <Image source={{ uri: dish.image }} style={{ width: '100%', height: 200, borderRadius: 8 }} resizeMode="cover" />
                                 )}
-                                <Text style={{ fontWeight: '700', fontSize: 16 }}>{dish.name}</Text>
-                                <Text style={{ fontWeight: '600' }}>{cents((dish.price || 0) * 100)}</Text>
+                                <Text style={{ fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.display }}>{dish.name}</Text>
+                                <Text style={{ fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>{cents((dish.price || 0) * 100)}</Text>
                                 {dish.description && <Text>{dish.description}</Text>}
                                 {dish.ingredients && (
                                   <View>
-                                    <Text style={{ fontWeight: '600', marginBottom: 4 }}>Ingredients</Text>
+                                    <Text style={{ fontWeight: '600', marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>Ingredients</Text>
                                     <Text>{dish.ingredients}</Text>
                                   </View>
                                 )}
                                 {dish.portion && (
-                                  <Text style={{ color: palette.muted }}>Portion: {dish.portion}</Text>
+                                  <Text style={{ color: palette.muted, fontFamily: theme.typography.fontFamily.body }}>Portion: {dish.portion}</Text>
                                 )}
                               </View>
                             ))}
                           </View>
                         ) : (
-                          <Text>No dishes added</Text>
+                          <Text style={{ fontFamily: theme.typography.fontFamily.body }}>No dishes added</Text>
                         )}
                         {/* Approve/Reject Buttons - Only on last page */}
                         {chefApplicationData && (
@@ -3110,7 +3504,7 @@ export default function AdminPage() {
                   >
                     <Text style={[styles.paginationArrowText, chefApplicationPage === 1 && styles.paginationArrowTextDisabled]}>←</Text>
                   </TouchableOpacity>
-                  <Text style={{ color: palette.muted, fontSize: 14 }}>Page {chefApplicationPage} of 3</Text>
+                  <Text style={{ color: palette.muted, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Page {chefApplicationPage} of 3</Text>
                   <TouchableOpacity
                     onPress={() => setChefApplicationPage(p => Math.min(3, p + 1))}
                     disabled={chefApplicationPage === 3}
@@ -3164,12 +3558,14 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 28,
     fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
   },
   headerSubtitle: {
     color: palette.muted,
     fontSize: 15,
     marginTop: 4,
     maxWidth: 360,
+    fontFamily: theme.typography.fontFamily.body,
   },
   headerActions: {
     flexDirection: 'row',
@@ -3190,6 +3586,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: palette.text,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   warningButton: {
     backgroundColor: '#F97316',
@@ -3199,6 +3596,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   primaryButton: {
     backgroundColor: palette.primary,
@@ -3212,6 +3610,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   secondaryButton: {
     backgroundColor: 'transparent',
@@ -3227,6 +3626,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 16,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   disabledButton: {
     opacity: 0.7,
@@ -3242,6 +3642,7 @@ const styles = StyleSheet.create({
   errorBannerText: {
     color: palette.dangerText,
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   tabScroll: {
     paddingHorizontal: 4,
@@ -3253,6 +3654,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     marginBottom: 12,
     paddingHorizontal: 12,
+    fontFamily: theme.typography.fontFamily.display,
   },
   searchWrapper: {
     paddingHorizontal: 12,
@@ -3268,6 +3670,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     color: palette.text,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   loadingState: {
     paddingVertical: 32,
@@ -3280,6 +3683,7 @@ const styles = StyleSheet.create({
   emptyText: {
     color: palette.muted,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   card: {
     backgroundColor: palette.surface,
@@ -3306,33 +3710,39 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.display,
   },
   cardMeta: {
     color: palette.muted,
     fontSize: 14,
     marginBottom: 2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardTimestamp: {
     color: palette.muted,
     fontSize: 12,
     marginTop: 4,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardId: {
     color: palette.muted,
     fontSize: 11,
     marginTop: 4,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardBodyMuted: {
     color: palette.muted,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 12,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardTotal: {
     color: palette.primaryDark,
     fontSize: 18,
     fontWeight: '800',
     marginTop: 4,
+    fontFamily: theme.typography.fontFamily.display,
   },
   statusPill: {
     paddingHorizontal: 10,
@@ -3342,6 +3752,7 @@ const styles = StyleSheet.create({
   statusPillText: {
     fontWeight: '700',
     fontSize: 12,
+    fontFamily: theme.typography.fontFamily.display,
   },
   statusPending: {
     backgroundColor: '#FFF5F2',
@@ -3385,15 +3796,18 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
     marginBottom: 6,
+    fontFamily: theme.typography.fontFamily.display,
   },
   sectionLabelInline: {
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   sectionBody: {
     color: palette.muted,
     fontSize: 13,
     lineHeight: 18,
     marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardActionsRow: {
     flexDirection: 'row',
@@ -3417,6 +3831,7 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'center',
     color: palette.text,
+    fontFamily: theme.typography.fontFamily.display,
   },
   approveButton: {
     backgroundColor: 'transparent',
@@ -3424,6 +3839,7 @@ const styles = StyleSheet.create({
   },
   approveButtonText: {
     color: palette.primary,
+    fontFamily: theme.typography.fontFamily.body,
   },
   rejectButton: {
     backgroundColor: 'transparent',
@@ -3431,6 +3847,7 @@ const styles = StyleSheet.create({
   },
   rejectButtonText: {
     color: palette.primary,
+    fontFamily: theme.typography.fontFamily.body,
   },
   paginationRow: {
     flexDirection: 'row',
@@ -3459,9 +3876,11 @@ const styles = StyleSheet.create({
   paginationButtonText: {
     color: palette.text,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   paginationButtonTextDisabled: {
     color: palette.muted,
+    fontFamily: theme.typography.fontFamily.body,
   },
   paginationArrowButton: {
     backgroundColor: 'transparent',
@@ -3485,15 +3904,18 @@ const styles = StyleSheet.create({
     fontSize: 24,
     fontWeight: '600',
     lineHeight: 24,
+    fontFamily: theme.typography.fontFamily.body,
   },
   paginationArrowTextDisabled: {
     color: palette.muted,
+    fontFamily: theme.typography.fontFamily.body,
   },
   paginationStatus: {
     color: palette.muted,
     fontWeight: '600',
     fontSize: 13,
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   issuesPaginationWrap: {
     marginTop: 16,
@@ -3560,9 +3982,11 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontWeight: '600',
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   issuesPageButtonTextActive: {
     color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
   },
   issuesTabWrapper: {
     position: 'relative',
@@ -3635,6 +4059,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   issueDetailOverlay: {
     flex: 1,
@@ -3676,6 +4101,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: palette.text,
+    fontFamily: theme.typography.fontFamily.display,
   },
   issueDetailClose: {
     padding: 4,
@@ -3684,6 +4110,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: palette.muted,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   issueDetailBody: {
     flex: 1,
@@ -3701,11 +4128,13 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     color: palette.muted,
     textTransform: 'uppercase',
+    fontFamily: theme.typography.fontFamily.body,
   },
   issueDetailValue: {
     fontSize: 15,
     color: palette.text,
     lineHeight: 22,
+    fontFamily: theme.typography.fontFamily.body,
   },
   issueDetailImages: {
     flexDirection: 'row',
@@ -3750,6 +4179,7 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: palette.text,
     lineHeight: 22,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderItemQuantityPrice: {
     flexDirection: 'row',
@@ -3761,6 +4191,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     minWidth: 24,
     textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderItemPrice: {
     fontSize: 15,
@@ -3768,6 +4199,7 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     minWidth: 80,
     textAlign: 'right',
+    fontFamily: theme.typography.fontFamily.body,
   },
   summaryDivider: {
     height: 1,
@@ -3783,24 +4215,29 @@ const styles = StyleSheet.create({
   summaryLabel: {
     fontSize: 15,
     color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
   },
   summaryValue: {
     fontSize: 15,
     color: palette.text,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   summaryTotalLabel: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   summaryTotalValue: {
     fontSize: 16,
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   expandIcon: {
     fontSize: 18,
     color: palette.text,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   cardActionButton: {
     alignSelf: 'flex-start',
@@ -3819,6 +4256,7 @@ const styles = StyleSheet.create({
     color: palette.dangerText,
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   successOutlineButton: {
     borderColor: palette.successText,
@@ -3829,6 +4267,7 @@ const styles = StyleSheet.create({
     color: palette.successText,
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   approveButton: {
     backgroundColor: '#1E794F',
@@ -3842,6 +4281,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   rejectButton: {
     backgroundColor: '#B91C1C',
@@ -3855,6 +4295,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   neutralOutlineButton: {
     borderColor: palette.border,
@@ -3865,6 +4306,7 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontWeight: '700',
     textAlign: 'center',
+    fontFamily: theme.typography.fontFamily.display,
   },
   segmentRow: {
     flexDirection: 'row',
@@ -3890,9 +4332,11 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontWeight: '600',
     fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
   },
   segmentButtonTextActive: {
     color: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
   },
   itemRow: {
     flexDirection: 'row',
@@ -3904,15 +4348,18 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontWeight: '700',
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.display,
   },
   itemMeta: {
     color: palette.muted,
     fontSize: 12,
+    fontFamily: theme.typography.fontFamily.body,
   },
   itemPrice: {
     color: palette.text,
     fontWeight: '800',
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   loadingScreen: {
     flex: 1,
@@ -3923,6 +4370,7 @@ const styles = StyleSheet.create({
   loadingText: {
     color: palette.muted,
     marginTop: 16,
+    fontFamily: theme.typography.fontFamily.body,
   },
   accessDenied: {
     flex: 1,
@@ -3936,11 +4384,13 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontSize: 20,
     marginBottom: 8,
+    fontFamily: theme.typography.fontFamily.display,
   },
   accessDeniedSubtitle: {
     color: palette.muted,
     textAlign: 'center',
     marginBottom: 16,
+    fontFamily: theme.typography.fontFamily.body,
   },
   accessDeniedButton: {
     marginTop: 8,
@@ -3960,11 +4410,13 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     marginBottom: 8,
+    fontFamily: theme.typography.fontFamily.display,
   },
   placeholderText: {
     color: palette.muted,
     fontSize: 14,
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   reviewSection: {
     backgroundColor: '#F8FAFC',
@@ -3985,10 +4437,12 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700',
     color: palette.primary,
+    fontFamily: theme.typography.fontFamily.display,
   },
   expandIcon: {
     fontSize: 12,
     color: palette.primary,
+    fontFamily: theme.typography.fontFamily.body,
   },
   reviewSectionContent: {
     padding: 16,
@@ -3998,10 +4452,12 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: palette.muted,
     lineHeight: 20,
+    fontFamily: theme.typography.fontFamily.body,
   },
   reviewLabel: {
     fontWeight: '700',
     color: palette.text,
+    fontFamily: theme.typography.fontFamily.display,
   },
   dishItem: {
     paddingBottom: 12,
@@ -4036,11 +4492,13 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   chartSubtitle: {
     color: palette.muted,
     fontSize: 13,
     marginTop: 2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   earningsChartRow: {
     flexDirection: 'row',
@@ -4065,10 +4523,12 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     fontSize: 14,
     marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.display,
   },
   earningsLabel: {
     color: palette.muted,
     fontSize: 13,
+    fontFamily: theme.typography.fontFamily.body,
   },
   metricsList: {
     paddingHorizontal: 4,
@@ -4083,6 +4543,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   metricBarTrack: {
     flex: 2,
@@ -4101,12 +4562,14 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     color: palette.text,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   helperText: {
     color: palette.muted,
     fontSize: 12,
     marginBottom: 12,
     fontStyle: 'italic',
+    fontFamily: theme.typography.fontFamily.body,
   },
   tableContainer: {
     position: 'relative',
@@ -4135,6 +4598,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 14,
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
   },
   sortIcon: {
     fontSize: 16,
@@ -4157,6 +4621,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 4,
     textAlignVertical: 'center',
     overflow: 'hidden',
+    fontFamily: theme.typography.fontFamily.body,
   },
   createdCell: {
     paddingHorizontal: 2,
@@ -4183,6 +4648,7 @@ const styles = StyleSheet.create({
     color: palette.primary,
     fontSize: 14,
     textDecorationLine: 'underline',
+    fontFamily: theme.typography.fontFamily.body,
   },
   chefCell: {
     flexDirection: 'row',
@@ -4193,6 +4659,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 14,
     flexShrink: 1,
+    fontFamily: theme.typography.fontFamily.body,
   },
   chefLinkIcon: {
     padding: 0,
@@ -4202,6 +4669,7 @@ const styles = StyleSheet.create({
     color: palette.primary,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionCellWrapper: {
     paddingVertical: 0,
@@ -4232,6 +4700,7 @@ const styles = StyleSheet.create({
   actionButtonText: {
     color: palette.text,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionButtonReadOnly: {
     opacity: 0.6,
@@ -4239,6 +4708,7 @@ const styles = StyleSheet.create({
   },
   actionButtonTextReadOnly: {
     color: palette.muted,
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionButtonSelected: {
     flexDirection: 'row',
@@ -4257,6 +4727,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 14,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionDropdownIcon: {
     color: palette.primary,
@@ -4319,14 +4790,17 @@ const styles = StyleSheet.create({
   actionDropdownOptionText: {
     color: palette.text,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionDropdownOptionTextSelected: {
     color: palette.primary,
     fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionDropdownOptionTextReadOnly: {
     color: palette.muted,
     opacity: 0.6,
+    fontFamily: theme.typography.fontFamily.body,
   },
   bannerPreviewContainer: {
     marginBottom: 16,

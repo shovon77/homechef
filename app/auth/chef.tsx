@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, ScrollView, Alert, Modal, Image, useWindowDimensions } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, ScrollView, Alert, Modal, Image, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
@@ -162,6 +162,8 @@ export default function ChefSignup() {
   const [existingApplication, setExistingApplication] = useState<{ id: string; status: string } | null>(null);
   const [isAlreadyChef, setIsAlreadyChef] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
+  const [bannerUrl, setBannerUrl] = useState<string | null>(null);
+  const [loadingBanner, setLoadingBanner] = useState(true);
 
   useEffect(() => {
     // Check if user is already logged in, if so get their email and check status
@@ -194,6 +196,23 @@ export default function ChefSignup() {
         }
       }
     });
+  }, []);
+
+  useEffect(() => {
+    // Load Chef Onboarding banner from app_settings
+    supabase.from('app_settings')
+      .select('value')
+      .eq('key', 'chef_onboarding_banner_url')
+      .single()
+      .then(({ data }) => {
+        if (data?.value) {
+          setBannerUrl(data.value);
+        }
+        setLoadingBanner(false);
+      })
+      .catch(() => {
+        setLoadingBanner(false);
+      });
   }, []);
 
   // Load saved form data on mount
@@ -667,11 +686,23 @@ export default function ChefSignup() {
         <View style={styles.container}>
           {/* Page Heading */}
           <View style={styles.heading}>
-            <Image 
-              source={require('../../assets/Gemini_Generated_Image_4t6si4t6si4t6si4.png')} 
-              style={styles.headerImage}
-              resizeMode="contain"
-            />
+            {loadingBanner ? (
+              <View style={[styles.headerImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
+                <ActivityIndicator size="large" color={theme.colors.primary} />
+              </View>
+            ) : bannerUrl ? (
+              <Image 
+                source={{ uri: bannerUrl }} 
+                style={styles.headerImage}
+                resizeMode="cover"
+              />
+            ) : (
+              <Image 
+                source={require('../../assets/Gemini_Generated_Image_4t6si4t6si4t6si4.png')} 
+                style={styles.headerImage}
+                resizeMode="contain"
+              />
+            )}
             <Text style={[styles.title, { fontSize: isMobile ? 30 : 48 }]}>Chef profile basics</Text>
             <Text style={styles.subtitle}>
               You control your menu & orders. There are no sign-up fees or commitments.
