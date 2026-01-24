@@ -98,7 +98,9 @@ serve(async (req) => {
       return errorResponse(500, 'Failed to refund payment – please retry', err);
     }
 
-    const status = reason === 'user_cancelled' ? 'cancelled' : 'rejected';
+    // When refunding (chef_rejected or expired), set order status to 'cancelled'
+    // When user cancels, also set to 'cancelled'
+    const status = 'cancelled';
 
     await adminClient
       .from('orders')

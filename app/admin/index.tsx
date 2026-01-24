@@ -85,11 +85,16 @@ export default function AdminPage() {
   const [openActionDropdownIssueId, setOpenActionDropdownIssueId] = useState<number | null>(null);
   const [issueDetailModalId, setIssueDetailModalId] = useState<number | null>(null);
   const [orderDetailModalId, setOrderDetailModalId] = useState<number | null>(null);
+  const [showRefundModal, setShowRefundModal] = useState(false);
+  const [refundModalMessage, setRefundModalMessage] = useState('');
+  const [refundModalType, setRefundModalType] = useState<'confirm' | 'success' | 'error'>('confirm');
+  const [pendingRefund, setPendingRefund] = useState<{ issueId: number; orderId: number } | null>(null);
   const [orderDetails, setOrderDetails] = useState<{
     pickupAt: string | null;
     chefLocation: string | null;
     items: Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }>;
     totalCents: number | null;
+    platformFeeCents: number | null;
     chef: { id: number; name: string; photo?: string | null } | null;
   } | null>(null);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
@@ -147,7 +152,7 @@ export default function AdminPage() {
     try {
       const { data: order } = await supabase
         .from('orders')
-        .select('id, pickup_at, chef_id, total_cents')
+        .select('id, pickup_at, chef_id, total_cents, platform_fee_cents')
         .eq('id', orderId)
         .maybeSingle();
       
@@ -200,6 +205,7 @@ export default function AdminPage() {
         chefLocation,
         items,
         totalCents: order.total_cents,
+        platformFeeCents: order.platform_fee_cents ?? null,
         chef,
       });
     } catch (e) {
@@ -759,7 +765,7 @@ export default function AdminPage() {
   const totalIssuePages = Math.ceil(filteredIssues.length / ISSUES_PER_PAGE);
   const issuePageScrollRef = React.useRef<ScrollView>(null);
 
-  async function handleUpdateIssueStatus(issueId: number, newStatus: string) {
+  async function handleUpdateIssueStatus(issueId: number, newStatus: string, silent: boolean = false) {
     const { error } = await supabase
       .from('order_issues')
       .update({ 
@@ -770,60 +776,42 @@ export default function AdminPage() {
       .eq('id', issueId);
     
     if (error) {
-      Alert.alert('Error', error.message || 'Failed to update issue status');
+      if (!silent) {
+        Alert.alert('Error', error.message || 'Failed to update issue status');
+      }
+      throw error;
     } else {
       setIssues(prev => prev.map(i => 
         i.id === issueId 
           ? { ...i, status: newStatus, reviewed_by: user?.id, reviewed_at: new Date().toISOString() }
           : i
       ));
-      Alert.alert('Success', 'Issue status updated');
+      if (!silent) {
+        Alert.alert('Success', 'Issue status updated');
+      }
     }
   }
 
-  async function handleIssueAction(issueId: number, action: string, issue?: { order_id?: number }) {
+  async function handleIssueAction(issueId: number, action: string, issue?: any) {
     if (!action || action === '') return;
 
     if (action === 'Refund') {
-      const orderId = issue?.order_id ?? null;
+      // Try multiple ways to get order_id
+      const orderId = issue?.order_id ?? issue?.orders?.id ?? null;
+      console.log('Refund clicked - issue:', issue, 'orderId:', orderId);
       if (!orderId || !Number.isFinite(orderId)) {
+        console.error('Refund error: orderId not found', { issue, orderId });
         Alert.alert('Error', 'Cannot refund: order not found for this issue.');
         setOpenActionDropdownIssueId(null);
         return;
       }
       setOpenActionDropdownIssueId(null);
-      Alert.alert(
-        'Confirm refund',
-        'Are you sure you want to refund this order?',
-        [
-          { 
-            text: 'Cancel', 
-            style: 'cancel',
-            onPress: () => {
-              // Don't set the action if cancelled
-            }
-          },
-          {
-            text: 'Refund',
-            onPress: async () => {
-              setIssueActions(prev => ({ ...prev, [issueId]: 'Refund' }));
-              try {
-                await callFn('cancel-payment', { orderId: Number(orderId), reason: 'chef_rejected' });
-                Alert.alert('Success', 'Refund has been initiated for the order.');
-              } catch (e) {
-                const msg = e instanceof Error ? e.message : 'Failed to initiate refund. Please try again.';
-                Alert.alert('Refund failed', msg);
-                // Remove Refund from actions if it failed
-                setIssueActions(prev => {
-                  const next = { ...prev };
-                  delete next[issueId];
-                  return next;
-                });
-              }
-            },
-          },
-        ]
-      );
+      
+      // Show confirmation modal
+      setPendingRefund({ issueId, orderId: Number(orderId) });
+      setShowRefundModal(true);
+      setRefundModalMessage('Are you sure you want to refund this order?');
+      setRefundModalType('confirm');
       return;
     }
 
@@ -883,6 +871,8 @@ export default function AdminPage() {
         return { color: palette.primary, label: 'In review' };
       case 'dismissed':
         return { color: palette.neutralText, label: 'Dismissed' };
+      case 'refunded':
+        return { color: palette.neutralText, label: 'Refunded' };
       default:
         return { color: palette.dangerText, label: 'Pending' };
     }
@@ -1496,7 +1486,7 @@ export default function AdminPage() {
                   </Text>
                   <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.actionCellWrapper]}>
                     <View style={styles.actionDropdownWrapper}>
-                      {issueActions[issue.id] === 'Refund' ? (
+                      {issue.status === 'refunded' || issueActions[issue.id] === 'Refund' ? (
                         <View style={[styles.actionButton, styles.actionButtonReadOnly]}>
                           <Text style={[styles.actionButtonText, styles.actionButtonTextReadOnly]}>Refund</Text>
                         </View>
@@ -1812,7 +1802,7 @@ export default function AdminPage() {
               if (!orderDetails) return null;
               
               const subtotalCents = orderDetails.items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
-              const platformFeeCents = 150;
+              const platformFeeCents = orderDetails.platformFeeCents !== null ? orderDetails.platformFeeCents : 150;
               const taxesCents = Math.round(subtotalCents * 0.13);
               const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents + taxesCents;
               
@@ -1930,6 +1920,109 @@ export default function AdminPage() {
                 </Modal>
               );
             })()}
+
+            {showRefundModal && (
+              <Modal
+                visible
+                transparent
+                animationType="fade"
+                onRequestClose={() => {
+                  setShowRefundModal(false);
+                  setPendingRefund(null);
+                }}
+              >
+                <TouchableOpacity
+                  style={styles.issueDetailOverlay}
+                  activeOpacity={1}
+                  onPress={() => {
+                    if (refundModalType !== 'confirm') {
+                      setShowRefundModal(false);
+                      setPendingRefund(null);
+                    }
+                  }}
+                >
+                  <TouchableOpacity
+                    style={styles.issueDetailContent}
+                    activeOpacity={1}
+                    onPress={() => {}}
+                  >
+                    <View style={styles.issueDetailHeader}>
+                      <Text style={styles.issueDetailTitle}>
+                        {refundModalType === 'confirm' ? 'Confirm Refund' : refundModalType === 'success' ? 'Success' : 'Error'}
+                      </Text>
+                      <TouchableOpacity
+                        style={styles.issueDetailClose}
+                        onPress={() => {
+                          setShowRefundModal(false);
+                          setPendingRefund(null);
+                        }}
+                      >
+                        <Text style={styles.issueDetailCloseText}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <View style={styles.issueDetailBody}>
+                      <Text style={[styles.issueDetailValue, { marginBottom: 24, textAlign: 'center' }]}>
+                        {refundModalMessage}
+                      </Text>
+                      {refundModalType === 'confirm' && pendingRefund && (
+                        <View style={{ flexDirection: 'row', gap: 12, justifyContent: 'center' }}>
+                          <TouchableOpacity
+                            style={[styles.primaryButton, { flex: 1 }]}
+                            onPress={async () => {
+                              setShowRefundModal(false);
+                              setIssueActions(prev => ({ ...prev, [pendingRefund.issueId]: 'Refund' }));
+                              try {
+                                await callFn('cancel-payment', { orderId: pendingRefund.orderId, reason: 'chef_rejected' });
+                                // Update issue status to refunded (silent mode to avoid duplicate alerts)
+                                await handleUpdateIssueStatus(pendingRefund.issueId, 'refunded', true);
+                                setRefundModalMessage('Refund has been initiated for the order.');
+                                setRefundModalType('success');
+                                setShowRefundModal(true);
+                                setPendingRefund(null);
+                              } catch (e) {
+                                const msg = e instanceof Error ? e.message : 'Failed to initiate refund. Please try again.';
+                                setRefundModalMessage(msg);
+                                setRefundModalType('error');
+                                setShowRefundModal(true);
+                                setPendingRefund(null);
+                                // Remove Refund from actions if it failed
+                                setIssueActions(prev => {
+                                  const next = { ...prev };
+                                  delete next[pendingRefund.issueId];
+                                  return next;
+                                });
+                              }
+                            }}
+                          >
+                            <Text style={styles.primaryButtonText}>Confirm</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={[styles.secondaryButton, { flex: 1 }]}
+                            onPress={() => {
+                              setShowRefundModal(false);
+                              setPendingRefund(null);
+                            }}
+                          >
+                            <Text style={styles.secondaryButtonText}>Cancel</Text>
+                          </TouchableOpacity>
+                        </View>
+                      )}
+                      {refundModalType !== 'confirm' && (
+                        <TouchableOpacity
+                          style={styles.primaryButton}
+                          onPress={() => {
+                            setShowRefundModal(false);
+                            setPendingRefund(null);
+                          }}
+                        >
+                          <Text style={styles.primaryButtonText}>OK</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                  </TouchableOpacity>
+                </TouchableOpacity>
+              </Modal>
+            )}
 
           </View>
         )}
@@ -2176,6 +2269,21 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
+  },
+  secondaryButton: {
+    backgroundColor: 'transparent',
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  secondaryButtonText: {
+    color: palette.text,
+    fontSize: 16,
+    fontWeight: '600',
   },
   disabledButton: {
     opacity: 0.7,
@@ -2989,12 +3097,12 @@ const styles = StyleSheet.create({
   tableHeaderCell: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   tableHeaderCellSortable: {
     flexDirection: 'row',
     alignItems: 'center',
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
   },
   tableHeaderCellText: {
     color: palette.text,
@@ -3019,7 +3127,7 @@ const styles = StyleSheet.create({
     color: palette.text,
     fontSize: 14,
     paddingVertical: 8,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     textAlignVertical: 'center',
     overflow: 'hidden',
   },

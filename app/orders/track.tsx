@@ -834,7 +834,7 @@ export default function TrackOrderPage() {
   };
 
   const showReadyAction = order.status === 'ready' || order.status === 'completed';
-  const showRejectedBanner = order.status === 'rejected';
+  const showRejectedBanner = false; // Don't show banner for cancelled or rejected orders
   const showCompletedBadge = order.status === 'completed';
 
   const chefName = chef?.name ?? 'Chef';
