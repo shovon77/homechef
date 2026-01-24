@@ -26,7 +26,9 @@ export default function OrderSuccessPage() {
   const [items, setItems] = useState<Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }>>([]);
   const [chef, setChef] = useState<{ id: number; name: string; photo?: string | null } | null>(null);
   const [orderTotalCents, setOrderTotalCents] = useState<number | null>(null);
-  const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(true);
+  const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(false);
+  const [isPickupAddressExpanded, setIsPickupAddressExpanded] = useState(false);
+  const [isPickupDateTimeExpanded, setIsPickupDateTimeExpanded] = useState(false);
   const [showReportIssueModal, setShowReportIssueModal] = useState(false);
   const [issueType, setIssueType] = useState<string>('');
   const [additionalDetails, setAdditionalDetails] = useState('');
@@ -524,54 +526,81 @@ export default function OrderSuccessPage() {
       >
         <View style={[styles.screen, { marginHorizontal: 0, marginLeft: 0, marginRight: 0 }]}>
           <View style={styles.card}>
-            <Text style={styles.title}>Order confirmed 🎉</Text>
-            <Text style={styles.copy}>
-              Your order has been sent to the chef.
-            </Text>
+            <View style={styles.titleRow}>
+              <Text style={styles.title}>Order confirmed</Text>
+              {chef && (
+                <TouchableOpacity
+                  style={styles.messageChefButtonSmall}
+                  onPress={() => setShowMessageModal(true)}
+                >
+                  <Image 
+                    source={require('../../assets/chat.png')} 
+                    style={styles.messageChefIcon}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              )}
+            </View>
             {Number.isFinite(orderId) ? (
-              <Text style={styles.orderId}>Order #{String(orderId).padStart(5, '0')}</Text>
+              <>
+                <Text style={styles.orderId}>Order #{String(orderId).padStart(5, '0')}</Text>
+                <Text style={styles.copy}>
+                  Your order's been sent to the chef.
+                </Text>
+              </>
             ) : null}
             
             {/* Pickup Info */}
             {(pickupAt || chefLocation) && (
               <View style={styles.pickupInfoContainer}>
                 {chefLocation && (
-                  <View style={styles.pickupLocationContainer}>
-                    <Text style={styles.pickupLocationLabel}>Pickup location</Text>
+                  <View style={styles.pickupLocationCard}>
                     <TouchableOpacity 
-                      style={styles.pickupLocationRow}
-                      onPress={() => {
-                        const encodedAddress = encodeURIComponent(chefLocation);
-                        const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                        Linking.openURL(mapsUrl);
-                      }}
+                      style={styles.pickupLocationHeader}
+                      onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}
                     >
-                      <Image 
-                        source={require('../../assets/locationnewicon.png')} 
-                        style={styles.locationIcon}
-                        resizeMode="contain"
-                      />
-                      <Text style={styles.pickupLocation}>{chefLocation}</Text>
+                      <Text style={styles.pickupLocationLabel}>Pickup address</Text>
+                      <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
                     </TouchableOpacity>
+                    {isPickupAddressExpanded && (
+                      <View style={styles.pickupLocationContainer}>
+                        <View style={styles.pickupLocationRow}>
+                          <Text style={styles.pickupLocation}>{chefLocation}</Text>
+                          <TouchableOpacity 
+                            onPress={() => {
+                              const encodedAddress = encodeURIComponent(chefLocation);
+                              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                              Linking.openURL(mapsUrl);
+                            }}
+                          >
+                            <Image 
+                              source={require('../../assets/locationnewicon.png')} 
+                              style={styles.locationIcon}
+                              resizeMode="contain"
+                            />
+                          </TouchableOpacity>
+                        </View>
+                      </View>
+                    )}
                   </View>
                 )}
                 
                 {pickupAt && (
-                  <View style={styles.pickupDateTimeContainer}>
-                    <View style={styles.pickupDateTimeHeader}>
+                  <View style={styles.pickupDateTimeCard}>
+                    <TouchableOpacity 
+                      style={styles.pickupDateTimeHeader}
+                      onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}
+                    >
                       <Text style={styles.pickupDateTimeLabel}>Pickup date & time</Text>
-                      {chef && (
-                        <TouchableOpacity
-                          style={styles.messageChefButtonSmall}
-                          onPress={() => setShowMessageModal(true)}
-                        >
-                          <Text style={styles.messageChefButtonTextSmall}>Message chef</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                    <Text style={styles.pickupDateTime}>
-                      {formatPickupDateTime(pickupAt)}
-                    </Text>
+                      <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
+                    </TouchableOpacity>
+                    {isPickupDateTimeExpanded && (
+                      <View style={styles.pickupDateTimeContainer}>
+                        <Text style={styles.pickupDateTime}>
+                          {formatPickupDateTime(pickupAt)}
+                        </Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </View>
@@ -971,7 +1000,7 @@ const styles = StyleSheet.create({
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingTop: 24,
+    paddingTop: 0,
     paddingBottom: 0,
     paddingHorizontal: 0,
     backgroundColor: '#F2F0EF',
@@ -981,30 +1010,42 @@ const styles = StyleSheet.create({
     borderRadius: 16,
     borderWidth: 0,
     padding: 24,
+    paddingTop: 0,
     width: '100%',
     maxWidth: 420,
     marginHorizontal: 24,
-    gap: 16,
+    gap: 4,
     alignItems: 'flex-start',
+  },
+  titleRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 0,
   },
   title: {
     fontSize: 28,
     fontWeight: '900',
     color: TEXT_DARK,
     textAlign: 'left',
-    marginBottom: 4,
+    flex: 1,
   },
   copy: {
     color: TEXT_MUTED,
     textAlign: 'left',
-    fontSize: 16,
+    fontSize: 18,
+    marginTop: 0,
+    marginBottom: 0,
   },
   orderId: {
     color: TEXT_DARK,
-    fontWeight: '700',
-    textAlign: 'center',
+    fontWeight: '400',
+    textAlign: 'left',
     fontSize: 18,
     width: '100%',
+    marginTop: 0,
+    marginBottom: 0,
   },
   primaryButton: {
     backgroundColor: PRIMARY,
@@ -1035,65 +1076,102 @@ const styles = StyleSheet.create({
   pickupInfoContainer: {
     width: '100%',
     marginTop: 8,
-    gap: 12,
+    gap: 24,
+  },
+  pickupLocationCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0,
+    padding: 12,
+    paddingLeft: 0,
+    gap: 8,
+    width: '100%',
+  },
+  pickupDateTimeCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0,
+    padding: 12,
+    paddingLeft: 0,
+    gap: 8,
+    width: '100%',
+  },
+  pickupLocationContainer: {
+    gap: 4,
+    width: '100%',
+    paddingLeft: 24,
   },
   pickupDateTimeContainer: {
     gap: 4,
+    width: '100%',
+    paddingLeft: 24,
   },
   pickupDateTimeHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    marginBottom: 4,
+    marginBottom: 0,
+    paddingLeft: 24,
+    minHeight: 24,
   },
   pickupDateTimeLabel: {
-    color: TEXT_MUTED,
-    fontSize: 16,
+    color: TEXT_DARK,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
   },
   messageChefButtonSmall: {
-    backgroundColor: PRIMARY,
+    backgroundColor: 'transparent',
     borderRadius: 8,
-    paddingVertical: 6,
-    paddingHorizontal: 12,
+    padding: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  messageChefButtonTextSmall: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: '700',
-    fontFamily: theme.typography.fontFamily.body,
+  messageChefIcon: {
+    width: 50,
+    height: 50,
+    tintColor: PRIMARY,
   },
   pickupDateTime: {
     color: TEXT_DARK,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '400',
   },
   pickupLocationContainer: {
     gap: 4,
+    width: '100%',
+  },
+  pickupLocationHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 0,
+    paddingLeft: 24,
+    minHeight: 24,
   },
   pickupLocationLabel: {
-    color: TEXT_MUTED,
-    fontSize: 16,
+    color: TEXT_DARK,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
   },
   pickupLocationRow: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
+    justifyContent: 'space-between',
     gap: 8,
+    paddingLeft: 24,
   },
   locationIcon: {
-    width: 16,
-    height: 16,
+    width: 24,
+    height: 24,
     tintColor: PRIMARY,
-    marginTop: 2,
   },
   pickupLocation: {
     flex: 1,
     color: TEXT_DARK,
-    fontSize: 16,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
   },
   pickupReminder: {
@@ -1104,19 +1182,20 @@ const styles = StyleSheet.create({
     marginTop: 4,
   },
   orderSummaryCard: {
-    backgroundColor: '#F2F0EF',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
     borderWidth: 0,
     padding: 12,
+    paddingLeft: 0,
     gap: 8,
     width: '100%',
+    marginTop: 20,
   },
   orderSummaryHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     marginBottom: 0,
-    marginLeft: -24,
     paddingLeft: 24,
     minHeight: 24,
   },
@@ -1127,7 +1206,7 @@ const styles = StyleSheet.create({
   },
   sectionTitle: {
     color: TEXT_DARK,
-    fontSize: 16,
+    fontSize: 18,
     fontWeight: '800',
     fontFamily: theme.typography.fontFamily.display,
   },
@@ -1144,6 +1223,7 @@ const styles = StyleSheet.create({
   orderSummaryContent: {
     marginTop: 8,
     gap: 12,
+    paddingLeft: 24,
   },
   orderItemRow: {
     flexDirection: 'row',
@@ -1156,7 +1236,7 @@ const styles = StyleSheet.create({
   },
   orderItemName: {
     color: TEXT_DARK,
-    fontSize: 14,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
   },
   orderItemQuantityPrice: {
@@ -1167,14 +1247,14 @@ const styles = StyleSheet.create({
   },
   orderItemQuantity: {
     color: TEXT_DARK,
-    fontSize: 14,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 20,
     textAlign: 'right',
   },
   orderItemPrice: {
     color: TEXT_DARK,
-    fontSize: 14,
+    fontSize: 18,
     fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 80,
@@ -1193,7 +1273,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: TEXT_DARK,
-    fontSize: 14,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
   },
   summaryLabelWithIcon: {
@@ -1207,7 +1287,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     color: TEXT_DARK,
-    fontSize: 14,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
     minWidth: 80,
@@ -1225,10 +1305,9 @@ const styles = StyleSheet.create({
   },
   platformFeeInfo: {
     color: TEXT_MUTED,
-    fontSize: 12,
+    fontSize: 18,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
-    fontStyle: 'italic',
   },
   reminderText: {
     color: TEXT_DARK,
@@ -1264,8 +1343,8 @@ const styles = StyleSheet.create({
     marginTop: 8,
   },
   helpButtonText: {
-    color: TEXT_DARK,
-    fontWeight: '700',
+    color: PRIMARY,
+    fontWeight: '400',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
   },
