@@ -82,6 +82,50 @@ export async function toggleChefFeatured(chefId: number, featured: boolean): Pro
 }
 
 /**
+ * Suspend a chef
+ * Sets status to 'suspended' to prevent dishes from being displayed and ordered
+ */
+export async function suspendChef(chefId: number): Promise<{ ok: boolean; error?: string }> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: 'Admin access required' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('chefs')
+      .update({ status: 'suspended' })
+      .eq('id', chefId);
+
+    if (error) throw error;
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
+ * Reinstate a chef
+ * Sets status back to 'active' to make dishes available again
+ */
+export async function reinstateChef(chefId: number): Promise<{ ok: boolean; error?: string }> {
+  if (!(await requireAdmin())) {
+    return { ok: false, error: 'Admin access required' };
+  }
+
+  try {
+    const { error } = await supabase
+      .from('chefs')
+      .update({ status: 'active' })
+      .eq('id', chefId);
+
+    if (error) throw error;
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e?.message || String(e) };
+  }
+}
+
+/**
  * Update order status
  */
 export async function updateOrderStatus(orderId: number, status: string): Promise<{ ok: boolean; error?: string }> {

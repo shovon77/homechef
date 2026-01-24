@@ -110,6 +110,26 @@ export const handler = async (req: Request) => {
       return j(400, { error: 'All items must belong to the selected chef' });
     }
 
+    // Check if chef is suspended
+    const { data: chef, error: chefErr } = await adminClient
+      .from('chefs')
+      .select('id, status')
+      .eq('id', body.chef_id)
+      .maybeSingle();
+
+    if (chefErr) {
+      console.error('[create-checkout] Chef query failed:', chefErr);
+      return j(500, { error: 'Failed to verify chef status' });
+    }
+
+    if (!chef) {
+      return j(400, { error: 'Chef not found' });
+    }
+
+    if (chef.status === 'suspended') {
+      return j(400, { error: 'This chef is currently suspended and cannot accept orders' });
+    }
+
     // 2) Validate pickup window: within next 7 days, between 08:00 and 20:00 (local)
     const pickupDate = new Date(body.pickup_at);
     const now = new Date();

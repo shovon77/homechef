@@ -5,7 +5,7 @@ import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
 import FilePicker from '../../components/FilePicker';
-import { toggleChefActive, toggleChefFeatured, updateOrderStatus, approveChefApplication, rejectChefApplication, updateUserProfile } from '../../lib/adminActions';
+import { toggleChefActive, toggleChefFeatured, updateOrderStatus, approveChefApplication, rejectChefApplication, updateUserProfile, suspendChef, reinstateChef } from '../../lib/adminActions';
 import { Tabs } from '../../components/Tabs';
 import { Screen } from '../../components/Screen';
 import { getChefsPaginated, getOrders } from '../../lib/db';
@@ -16,6 +16,8 @@ import { cents } from '../../lib/money';
 
 const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
+const ORDERS_PER_PAGE = 10;
+const CHEFS_PER_PAGE = 10;
 
 const palette = {
   background: '#F2F0EF',
@@ -43,7 +45,7 @@ export default function AdminPage() {
   // Ensure fixed elements are not rendered on mobile
   const shouldShowFixedElements = !isMobile;
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const tabKeys = ['overview', 'chef-requests', 'chefs', 'users', 'orders', 'issues'];
+  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'issues'];
   const initialTabIdx = tabKeys.indexOf(tab || 'overview');
   const safeInitial = initialTabIdx >= 0 ? initialTabIdx : 0;
   const { isAdmin, loading: adminLoading, user, profile } = useRole();
@@ -59,6 +61,10 @@ export default function AdminPage() {
   const [chefSearch, setChefSearch] = useState('');
   const [orderPage, setOrderPage] = useState(1);
   const [orderSearch, setOrderSearch] = useState('');
+  const [orderSortBy, setOrderSortBy] = useState<'created' | 'status' | 'total'>('created');
+  const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('desc');
+  const [ordersWithChefs, setOrdersWithChefs] = useState<any[]>([]);
+  const [chefsWithStats, setChefsWithStats] = useState<any[]>([]);
   const [chefRequests, setChefRequests] = useState<any[]>([]);
   const [chefReqSearch, setChefReqSearch] = useState('');
   const [autoRejecting, setAutoRejecting] = useState(false);
@@ -83,12 +89,16 @@ export default function AdminPage() {
     }
   }, [issueActions]);
   const [openActionDropdownIssueId, setOpenActionDropdownIssueId] = useState<number | null>(null);
+  const [openActionDropdownOrderId, setOpenActionDropdownOrderId] = useState<number | null>(null);
   const [issueDetailModalId, setIssueDetailModalId] = useState<number | null>(null);
   const [orderDetailModalId, setOrderDetailModalId] = useState<number | null>(null);
   const [showRefundModal, setShowRefundModal] = useState(false);
   const [refundModalMessage, setRefundModalMessage] = useState('');
   const [refundModalType, setRefundModalType] = useState<'confirm' | 'success' | 'error'>('confirm');
   const [pendingRefund, setPendingRefund] = useState<{ issueId: number; orderId: number } | null>(null);
+  const [chefApplicationModalId, setChefApplicationModalId] = useState<number | null>(null);
+  const [chefApplicationData, setChefApplicationData] = useState<any>(null);
+  const [chefApplicationPage, setChefApplicationPage] = useState(1);
   const [orderDetails, setOrderDetails] = useState<{
     pickupAt: string | null;
     chefLocation: string | null;
@@ -309,11 +319,55 @@ export default function AdminPage() {
       // Load orders using db helper (includes order_items and user_email)
       const orderRows = await getOrders({ limit: 1000 });
       
+      // Enhance orders with chef names
+      const chefIds = [...new Set(orderRows.map(o => o.chef_id).filter((id): id is number => id !== null))];
+      const { data: chefsData } = chefIds.length > 0
+        ? await supabase.from('chefs').select('id, name').in('id', chefIds)
+        : { data: [] };
+      
+      const chefMap = new Map();
+      (chefsData || []).forEach((c: any) => chefMap.set(c.id, c));
+      
+      const ordersWithChefNames = orderRows.map((o: any) => ({
+        ...o,
+        chef: o.chef_id ? chefMap.get(o.chef_id) || null : null,
+      }));
+      
       // Load users from profiles table
       const { data: userRows } = await supabase
         .from('profiles')
-        .select('id,email,is_chef')
+        .select('id,email,is_chef,name,is_admin,role')
         .order('id', { ascending: true });
+      
+      // Enhance users with order statistics
+      const userIds = (userRows || []).map((u: any) => u.id);
+      const { data: userOrders } = userIds.length > 0
+        ? await supabase
+            .from('orders')
+            .select('user_id, total_cents')
+            .in('user_id', userIds)
+        : { data: [] };
+      
+      // Calculate order count and total spend per user
+      const userStats = new Map();
+      (userOrders || []).forEach((order: any) => {
+        const userId = order.user_id;
+        if (!userStats.has(userId)) {
+          userStats.set(userId, { orderCount: 0, totalSpend: 0 });
+        }
+        const stats = userStats.get(userId);
+        stats.orderCount += 1;
+        stats.totalSpend += order.total_cents || 0;
+      });
+      
+      const usersWithStats = (userRows || []).map((u: any) => {
+        const stats = userStats.get(u.id) || { orderCount: 0, totalSpend: 0 };
+        return {
+          ...u,
+          orderCount: stats.orderCount,
+          totalSpend: stats.totalSpend,
+        };
+      });
       
       // Load chef applications
       const { data: applicationRows } = await supabase
@@ -369,9 +423,60 @@ export default function AdminPage() {
         })
       );
 
+      // Filter chefs to only show those with a corresponding profile
+      const chefUserIds = chefRows.map((c: any) => c.user_id).filter(Boolean) as string[];
+      let chefsWithProfiles = chefRows;
+      
+      if (chefUserIds.length > 0) {
+        // Check which user_ids have profiles
+        const { data: profilesData } = await supabase
+          .from('profiles')
+          .select('id')
+          .in('id', chefUserIds);
+        
+        const profileUserIds = new Set((profilesData || []).map((p: any) => p.id));
+        chefsWithProfiles = chefRows.filter((chef: any) => 
+          chef.user_id && profileUserIds.has(chef.user_id)
+        );
+      } else {
+        // If no chefs have user_id, show empty list
+        chefsWithProfiles = [];
+      }
+
+      // Enhance chefs with sales and complaints
+      // Calculate sales per chef from orders
+      const chefSales = new Map();
+      orderRows.forEach((order: any) => {
+        if (order.chef_id) {
+          if (!chefSales.has(order.chef_id)) {
+            chefSales.set(order.chef_id, 0);
+          }
+          chefSales.set(order.chef_id, chefSales.get(order.chef_id) + (order.total_cents || 0));
+        }
+      });
+      
+      // Calculate complaints per chef from order_issues
+      const chefComplaints = new Map();
+      (issuesData || []).forEach((issue: any) => {
+        if (issue.chef_id) {
+          if (!chefComplaints.has(issue.chef_id)) {
+            chefComplaints.set(issue.chef_id, 0);
+          }
+          chefComplaints.set(issue.chef_id, chefComplaints.get(issue.chef_id) + 1);
+        }
+      });
+      
+      const chefsWithStatsData = chefsWithProfiles.map((chef: any) => ({
+        ...chef,
+        sales: chefSales.get(chef.id) || 0,
+        complaints: chefComplaints.get(chef.id) || 0,
+      }));
+
       setChefs(chefRows);
+      setChefsWithStats(chefsWithStatsData);
       setOrders(orderRows);
-      setUsers((userRows as any[]) || []);
+      setOrdersWithChefs(ordersWithChefNames);
+      setUsers(usersWithStats || []);
       setApplications((applicationRows as any[]) || []);
       setIssues(issuesWithImages);
       
@@ -419,6 +524,7 @@ export default function AdminPage() {
     const result = await toggleChefActive(id, next);
     if (result.ok) {
       setChefs(cs => cs.map(c => c.id === id ? { ...c, status: next ? 'active' : 'pending' } : c));
+      setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: next ? 'active' : 'pending' } : c));
     } else {
       setErr(result.error || 'Failed to update chef');
     }
@@ -428,8 +534,188 @@ export default function AdminPage() {
     const result = await toggleChefFeatured(id, featured);
     if (result.ok) {
       setChefs(cs => cs.map(c => c.id === id ? { ...c, featured } : c));
+      setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, featured } : c));
     } else {
       setErr(result.error || 'Failed to update chef featured status');
+    }
+  }
+
+  async function handleSuspendChef(id: number) {
+    const result = await suspendChef(id);
+    if (result.ok) {
+      setChefs(cs => cs.map(c => c.id === id ? { ...c, status: 'suspended' } : c));
+      setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: 'suspended' } : c));
+      Alert.alert('Success', 'Chef has been suspended');
+    } else {
+      setErr(result.error || 'Failed to suspend chef');
+      Alert.alert('Error', result.error || 'Failed to suspend chef');
+    }
+  }
+
+  async function handleReinstateChef(id: number) {
+    const result = await reinstateChef(id);
+    if (result.ok) {
+      setChefs(cs => cs.map(c => c.id === id ? { ...c, status: 'active' } : c));
+      setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: 'active' } : c));
+      Alert.alert('Success', 'Chef has been reinstated');
+    } else {
+      setErr(result.error || 'Failed to reinstate chef');
+      Alert.alert('Error', result.error || 'Failed to reinstate chef');
+    }
+  }
+
+  async function handleViewApplication(chefId: number, userId: string | null) {
+    console.log('handleViewApplication called:', { chefId, userId });
+    
+    if (!userId) {
+      Alert.alert('Error', 'Chef user ID not found');
+      return;
+    }
+    
+    // Set modal ID immediately to show modal
+    setChefApplicationModalId(chefId);
+    setChefApplicationPage(1);
+    setChefApplicationData(null); // Clear previous data
+    
+    try {
+      // Fetch application data - first try chef_applications table
+      const { data: application, error: appError } = await supabase
+        .from('chef_applications')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      console.log('Application fetch result:', { application, appError });
+      
+      if (appError) {
+        console.error('Error fetching application:', appError);
+      }
+      
+      // If no application found, use chef data as application data
+      if (!application) {
+        const chef = chefsWithStats.find(c => c.id === chefId);
+        console.log('No application found, using chef data:', chef);
+        
+        if (chef) {
+          // Fetch dishes for this chef
+          const { data: dishesData, error: dishesError } = await supabase
+            .from('dishes')
+            .select('*')
+            .eq('chef_id', chefId);
+          
+          if (dishesError) {
+            console.error('Error fetching dishes:', dishesError);
+          }
+          
+          const applicationData = {
+            ...chef,
+            dishes: dishesData || [],
+            status: chef.status === 'pending' ? 'submitted' : (chef.status === 'active' ? 'approved' : 'rejected'),
+          };
+          
+          console.log('Setting application data:', applicationData);
+          setChefApplicationData(applicationData);
+        } else {
+          Alert.alert('Error', 'Chef not found');
+          setChefApplicationModalId(null);
+        }
+      } else {
+        // Fetch dishes for this chef
+        const { data: dishesData, error: dishesError } = await supabase
+          .from('dishes')
+          .select('*')
+          .eq('chef_id', chefId);
+        
+        if (dishesError) {
+          console.error('Error fetching dishes:', dishesError);
+        }
+        
+        const applicationData = {
+          ...application,
+          dishes: dishesData || [],
+        };
+        
+        console.log('Setting application data from application:', applicationData);
+        setChefApplicationData(applicationData);
+      }
+    } catch (error: any) {
+      console.error('Error in handleViewApplication:', error);
+      Alert.alert('Error', error.message || 'Failed to load application');
+      setChefApplicationModalId(null);
+    }
+  }
+
+  async function handleApproveChefApplication(chefId: number, applicationId?: string) {
+    try {
+      if (applicationId) {
+        const result = await approveChefApplication(applicationId);
+        if (result.ok) {
+          // Activate the chef (approveChefApplication already sets status to 'active' in chefs table)
+          setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
+          setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
+          setChefApplicationData((prev: any) => prev ? { ...prev, status: 'approved' } : null);
+          Alert.alert('Success', 'Chef application approved and activated');
+        } else {
+          Alert.alert('Error', result.error || 'Failed to approve application');
+          return;
+        }
+      } else {
+        // No application record, just activate the chef
+        const result = await toggleChefActive(chefId, true);
+        if (result.ok) {
+          setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
+          setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
+          setChefApplicationData((prev: any) => prev ? { ...prev, status: 'approved' } : null);
+          Alert.alert('Success', 'Chef approved and activated');
+        } else {
+          Alert.alert('Error', result.error || 'Failed to approve chef');
+          return;
+        }
+      }
+      // Reload all data to ensure dishes are visible
+      loadAll();
+    } catch (error: any) {
+      Alert.alert('Error', error.message || 'Failed to approve application');
+    }
+  }
+
+  async function handleRejectChefApplication(chefId: number, applicationId?: string) {
+    try {
+      if (applicationId) {
+        const result = await rejectChefApplication(applicationId);
+        if (result.ok) {
+          setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
+          setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
+          setChefApplicationData((prev: any) => prev ? { ...prev, status: 'rejected' } : null);
+          Alert.alert('Success', 'Chef application rejected');
+        } else {
+          Alert.alert('Error', result.error || 'Failed to reject application');
+          return;
+        }
+      } else {
+        // No application record, update chef status to rejected
+        const { error } = await supabase
+          .from('chefs')
+          .update({ status: 'rejected' })
+          .eq('id', chefId);
+        
+        if (error) {
+          Alert.alert('Error', error.message || 'Failed to reject chef');
+          return;
+        } else {
+          setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
+          setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
+          setChefApplicationData((prev: any) => prev ? { ...prev, status: 'rejected' } : null);
+          Alert.alert('Success', 'Chef application rejected');
+        }
+      }
+      // Reload all data to ensure consistency
+      loadAll();
+    } catch (error: any) {
+      console.error('Error in handleRejectChefApplication:', error);
+      Alert.alert('Error', error.message || 'Failed to reject application');
     }
   }
 
@@ -437,6 +723,7 @@ export default function AdminPage() {
     const result = await updateOrderStatus(id, newStatus);
     if (result.ok) {
       setOrders(os => os.map(o => o.id === id ? { ...o, status: newStatus } : o));
+      setOrdersWithChefs(os => os.map((o: any) => o.id === id ? { ...o, status: newStatus } : o));
     } else {
       setErr(result.error || 'Failed to update order');
     }
@@ -616,21 +903,16 @@ export default function AdminPage() {
     }
   }
 
-  const nonChefs = useMemo(() => {
-    if (!Array.isArray(users)) return [];
-    return users.filter(u => !u.is_chef);
-  }, [users]);
-  
   const filteredUsers = useMemo(() => {
-    if (!Array.isArray(nonChefs)) return [];
+    if (!Array.isArray(users)) return [];
     const q = (userSearch ?? '').toLowerCase().trim();
-    if (!q) return nonChefs;
-    return nonChefs.filter(u => 
+    if (!q) return users;
+    return users.filter((u: any) => 
       (u.email ?? '').toLowerCase().includes(q) ||
       (u.name ?? '').toLowerCase().includes(q) ||
       String(u.id).toLowerCase().includes(q)
     );
-  }, [nonChefs, userSearch]);
+  }, [users, userSearch]);
 
   // Reset pagination when search changes
   useEffect(() => {
@@ -645,15 +927,48 @@ export default function AdminPage() {
   const totalUserPages = Math.ceil(filteredUsers.length / ITEMS_PER_PAGE);
 
   const filteredOrders = useMemo(() => {
-    if (!Array.isArray(orders)) return [];
+    if (!Array.isArray(ordersWithChefs)) return [];
     const q = (orderSearch ?? '').toLowerCase().trim();
-    if (!q) return orders;
-    return orders.filter(o =>
+    if (!q) return ordersWithChefs;
+    return ordersWithChefs.filter((o: any) =>
       String(o.id).includes(q) ||
       (o.status ?? '').toLowerCase().includes(q) ||
-      (o.user_email ?? '').toLowerCase().includes(q)
+      (o.user_email ?? '').toLowerCase().includes(q) ||
+      (o.chef?.name ?? '').toLowerCase().includes(q)
     );
-  }, [orders, orderSearch]);
+  }, [ordersWithChefs, orderSearch]);
+
+  const sortedOrders = useMemo(() => {
+    return [...filteredOrders].sort((a: any, b: any) => {
+      const idA = Number(a.id ?? 0);
+      const idB = Number(b.id ?? 0);
+      const dir = orderSortDir === 'asc' ? 1 : -1;
+      let cmp = 0;
+      if (orderSortBy === 'created') {
+        const ta = a.created_at ? new Date(a.created_at).getTime() : 0;
+        const tb = b.created_at ? new Date(b.created_at).getTime() : 0;
+        cmp = ta - tb;
+      } else if (orderSortBy === 'status') {
+        const sa = (a.status ?? '').toLowerCase();
+        const sb = (b.status ?? '').toLowerCase();
+        cmp = sa.localeCompare(sb);
+      } else if (orderSortBy === 'total') {
+        cmp = (a.total_cents ?? 0) - (b.total_cents ?? 0);
+      }
+      if (cmp !== 0) return dir * cmp;
+      return idB - idA; // always secondary: order id descending
+    });
+  }, [filteredOrders, orderSortBy, orderSortDir]);
+
+  function toggleOrderSort(col: 'created' | 'status' | 'total') {
+    if (orderSortBy === col) {
+      setOrderSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setOrderSortBy(col);
+      setOrderSortDir('desc');
+    }
+    setOrderPage(1);
+  }
 
   // Reset pagination when search changes
   useEffect(() => {
@@ -661,34 +976,34 @@ export default function AdminPage() {
   }, [orderSearch]);
 
   const paginatedOrders = useMemo(() => {
-    const start = (orderPage - 1) * ITEMS_PER_PAGE;
-    return filteredOrders.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredOrders, orderPage]);
+    const start = (orderPage - 1) * ORDERS_PER_PAGE;
+    return sortedOrders.slice(start, start + ORDERS_PER_PAGE);
+  }, [sortedOrders, orderPage]);
 
-  const totalOrderPages = Math.ceil(filteredOrders.length / ITEMS_PER_PAGE);
+  const totalOrderPages = Math.ceil(filteredOrders.length / ORDERS_PER_PAGE);
 
   const filteredChefs = useMemo(() => {
-    if (!Array.isArray(chefs)) return [];
+    if (!Array.isArray(chefsWithStats)) return [];
     const q = (chefSearch ?? '').toLowerCase().trim();
-    if (!q) return chefs;
-    return chefs.filter(c =>
+    if (!q) return chefsWithStats;
+    return chefsWithStats.filter(c =>
       (c.name ?? '').toLowerCase().includes(q) ||
       (c.location ?? '').toLowerCase().includes(q) ||
       (c.email ?? '').toLowerCase().includes(q) ||
       String(c.id).includes(q)
     );
-  }, [chefs, chefSearch]);
+  }, [chefsWithStats, chefSearch]);
 
   useEffect(() => {
     setChefPage(1);
   }, [chefSearch]);
 
   const paginatedChefs = useMemo(() => {
-    const start = (chefPage - 1) * ITEMS_PER_PAGE;
-    return filteredChefs.slice(start, start + ITEMS_PER_PAGE);
+    const start = (chefPage - 1) * CHEFS_PER_PAGE;
+    return filteredChefs.slice(start, start + CHEFS_PER_PAGE);
   }, [filteredChefs, chefPage]);
 
-  const totalChefPages = Math.ceil(filteredChefs.length / ITEMS_PER_PAGE);
+  const totalChefPages = Math.ceil(filteredChefs.length / CHEFS_PER_PAGE);
 
   const filteredChefRequests = useMemo(() => {
     if (!Array.isArray(chefRequests)) return [];
@@ -764,6 +1079,9 @@ export default function AdminPage() {
 
   const totalIssuePages = Math.ceil(filteredIssues.length / ISSUES_PER_PAGE);
   const issuePageScrollRef = React.useRef<ScrollView>(null);
+  const orderPageScrollRef = React.useRef<ScrollView>(null);
+  const userPageScrollRef = React.useRef<ScrollView>(null);
+  const chefPageScrollRef = React.useRef<ScrollView>(null);
 
   async function handleUpdateIssueStatus(issueId: number, newStatus: string, silent: boolean = false) {
     const { error } = await supabase
@@ -833,6 +1151,8 @@ export default function AdminPage() {
         return { container: [styles.statusPill, styles.statusSuccess], text: styles.statusTextSuccess };
       case 'pending':
         return { container: [styles.statusPill, styles.statusPending], text: styles.statusTextPending };
+      case 'suspended':
+        return { container: [styles.statusPill, styles.statusDanger], text: styles.statusTextDanger };
       default:
         return { container: [styles.statusPill, styles.statusNeutral], text: styles.statusTextNeutral };
     }
@@ -843,6 +1163,7 @@ export default function AdminPage() {
     const normalized = status.toLowerCase();
     if (normalized === 'active') return 'Active';
     if (normalized === 'pending') return 'Pending';
+    if (normalized === 'suspended') return 'Suspended';
     return 'Inactive';
   };
 
@@ -1191,197 +1512,573 @@ export default function AdminPage() {
   );
 
   const ChefsTab = (
-    <ScrollView contentContainerStyle={styles.tabScroll}>
-      <Text style={styles.sectionTitle}>Chefs ({filteredChefs.length} total)</Text>
-      <View style={styles.searchWrapper}>
-        <TextInput
-          value={chefSearch}
-          onChangeText={setChefSearch}
-          placeholder="Search by name, location, email, or ID..."
-          placeholderTextColor="#94a3b8"
-          style={styles.searchInput}
-        />
-      </View>
-      {loading && chefs.length === 0 ? (
-        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-      ) : paginatedChefs.length === 0 ? (
-        <View style={styles.emptyState}><Text style={styles.emptyText}>{chefSearch ? 'No chefs found matching your search.' : 'No chefs found.'}</Text></View>
-      ) : (
-        <>
-          {paginatedChefs.map((c) => {
-            const statusStyles = chefStatusStyles(c.status);
-            return (
-              <View key={c.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{c.name || `Chef #${c.id}`}</Text>
-                    <Text style={styles.cardMeta}>
-                      {c.location || 'No location'}
-                      {c.phone ? ` · ${c.phone}` : ''}
-                    </Text>
-                  </View>
-                  <View style={statusStyles.container}>
-                    <Text style={[styles.statusPillText, statusStyles.text]}>{chefStatusText(c.status)}</Text>
-                  </View>
+    <View style={styles.issuesTabWrapper}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.issuesTabScrollContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={!isMobile}
+      >
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={!isMobile}
+          contentContainerStyle={styles.tabScroll}
+        >
+          <View style={styles.issuesTabInner}>
+          <View style={styles.searchWrapper}>
+            <TextInput
+              value={chefSearch}
+              onChangeText={setChefSearch}
+              placeholder="Search by name, location, email, or ID..."
+              placeholderTextColor="#94a3b8"
+              style={styles.searchInput}
+            />
+          </View>
+
+          {loading && chefsWithStats.length === 0 ? (
+            <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+          ) : paginatedChefs.length === 0 ? (
+            <View style={styles.emptyState}><Text style={styles.emptyText}>{chefSearch ? 'No chefs found matching your search.' : 'No chefs found.'}</Text></View>
+          ) : (
+            <View style={styles.tableContainer}>
+              {/* Table Header */}
+              <View style={[styles.tableHeader, !isMobile && { minWidth: 1320 }]}>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Name</Text>
                 </View>
-                {c.bio ? <Text style={styles.cardBodyMuted}>{c.bio.length > 140 ? `${c.bio.slice(0, 140)}…` : c.bio}</Text> : null}
-                <View style={styles.cardActionsRow}>
-                  <TouchableOpacity
-                    onPress={() => handleToggleChefActive(c.id, c.status !== 'active')}
-                    style={c.status === 'active'
-                      ? [styles.dangerOutlineButton, styles.cardActionButton]
-                      : [styles.primaryButton, styles.cardActionButton]}
-                  >
-                    <Text style={c.status === 'active' ? styles.dangerOutlineButtonText : styles.primaryButtonText}>
-                      {c.status === 'active' ? 'Deactivate' : 'Activate'}
-                    </Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    onPress={() => handleToggleChefFeatured(c.id, !(c as any).featured)}
-                    style={(c as any).featured
-                      ? [styles.successOutlineButton, styles.cardActionButton]
-                      : [styles.neutralOutlineButton, styles.cardActionButton]}
-                  >
-                    <Text style={(c as any).featured ? styles.successOutlineButtonText : styles.neutralOutlineButtonText}>
-                      {(c as any).featured ? '★ Featured' : '☆ Feature'}
-                    </Text>
-                  </TouchableOpacity>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Brand</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                  <Text style={styles.tableHeaderCellText}>Status</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                  <Text style={styles.tableHeaderCellText}>Onboarding</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                  <Text style={styles.tableHeaderCellText}>Sales</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
+                  <Text style={styles.tableHeaderCellText}>Complaints</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Actions</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                  <Text style={styles.tableHeaderCellText}>Featured</Text>
                 </View>
               </View>
-            );
-          })}
-          {totalChefPages > 1 ? (
-            <View style={styles.paginationRow}>
+
+              {/* Table Rows */}
+              {paginatedChefs.map((c: any) => {
+                const statusStyles = chefStatusStyles(c.status);
+                return (
+                  <View key={c.id} style={[styles.tableRow, !isMobile && { minWidth: 1320 }]}>
+                    <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                      <Text style={{ fontWeight: '600', color: '#000000' }} numberOfLines={1}>
+                        {c.name || `Chef #${c.id}`}
+                      </Text>
+                      {c.id && (
+                        <Link href={`/chef/${c.id}`} asChild>
+                          <TouchableOpacity>
+                            <Text style={styles.viewDetailsLink}>View details</Text>
+                          </TouchableOpacity>
+                        </Link>
+                      )}
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                      <Text numberOfLines={1}>{c.name || '—'}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                      <View style={statusStyles.container}>
+                        <Text style={[styles.statusPillText, statusStyles.text]}>{chefStatusText(c.status)}</Text>
+                      </View>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                      {c.user_id ? (
+                        <TouchableOpacity 
+                          onPress={() => {
+                            console.log('View application clicked for chef:', c.id, 'user_id:', c.user_id);
+                            handleViewApplication(c.id, c.user_id);
+                          }}
+                          activeOpacity={0.7}
+                        >
+                          <Text style={styles.viewDetailsLink}>View application</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <Text>{c.created_at ? formatEst(c.created_at) : '—'}</Text>
+                      )}
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                      <Text>{cents(c.sales || 0)}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
+                      <Text>{c.complaints || 0}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }, { flexDirection: 'row', gap: 8, flexWrap: 'wrap' }]}>
+                      {c.status === 'suspended' ? (
+                        <TouchableOpacity
+                          onPress={() => handleReinstateChef(c.id)}
+                          style={[styles.primaryButton, { paddingVertical: 6, paddingHorizontal: 8 }]}
+                        >
+                          <Text style={styles.primaryButtonText}>Reinstate</Text>
+                        </TouchableOpacity>
+                      ) : (
+                        <TouchableOpacity
+                          onPress={() => handleSuspendChef(c.id)}
+                          style={[styles.dangerOutlineButton, { paddingVertical: 6, paddingHorizontal: 8 }]}
+                        >
+                          <Text style={styles.dangerOutlineButtonText}>Suspend</Text>
+                        </TouchableOpacity>
+                      )}
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                      <TouchableOpacity
+                        onPress={() => handleToggleChefFeatured(c.id, !(c as any).featured)}
+                        style={(c as any).featured
+                          ? [styles.successOutlineButton, { paddingVertical: 6, paddingHorizontal: 8 }]
+                          : [styles.neutralOutlineButton, { paddingVertical: 6, paddingHorizontal: 8 }]}
+                      >
+                        <Text style={(c as any).featured ? styles.successOutlineButtonText : styles.neutralOutlineButtonText}>
+                          {(c as any).featured ? '★ Featured' : '☆ Feature'}
+                        </Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                );
+              })}
+            </View>
+          )}
+          </View>
+        </ScrollView>
+      </ScrollView>
+      
+      {/* Pagination - Outside ScrollViews */}
+      {totalChefPages > 0 && (
+        <View style={styles.issuesPaginationWrap}>
+          {isMobile && (
+            <View style={styles.issuesPaginationMobileInfo}>
+              <Text style={styles.paginationStatus}>
+                Page {chefPage} of {totalChefPages}
+              </Text>
+              <Text style={styles.issuesTotalText}>{filteredChefs.length} total</Text>
+            </View>
+          )}
+          {totalChefPages > 1 && (
+            <View style={[styles.paginationControlsContainer, isMobile && styles.paginationControlsContainerMobile]}>
               <TouchableOpacity
                 onPress={() => setChefPage((p) => Math.max(1, p - 1))}
                 disabled={chefPage === 1}
-                style={[styles.paginationButton, chefPage === 1 && styles.paginationButtonDisabled]}
+                style={[styles.paginationArrowButton, chefPage === 1 && styles.paginationArrowButtonDisabled]}
               >
-                <Text style={[styles.paginationButtonText, chefPage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
+                <Text style={[styles.paginationArrowText, chefPage === 1 && styles.paginationArrowTextDisabled]}>
+                  ←
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.paginationStatus}>Page {chefPage} of {totalChefPages}</Text>
+              <ScrollView
+                ref={chefPageScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={!isMobile}
+                contentContainerStyle={styles.issuesPageScrollContent}
+                style={[styles.issuesPageScroll, isMobile && styles.issuesPageScrollMobile]}
+                nestedScrollEnabled
+                scrollEnabled
+              >
+                {Array.from({ length: totalChefPages }, (_, i) => i + 1).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => {
+                      setChefPage(p);
+                    }}
+                    activeOpacity={0.7}
+                    style={[styles.issuesPageButton, chefPage === p && styles.issuesPageButtonActive]}
+                  >
+                    <Text style={[styles.issuesPageButtonText, chefPage === p && styles.issuesPageButtonTextActive]}>
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               <TouchableOpacity
                 onPress={() => setChefPage((p) => Math.min(totalChefPages, p + 1))}
                 disabled={chefPage === totalChefPages}
-                style={[styles.paginationButton, chefPage === totalChefPages && styles.paginationButtonDisabled]}
+                style={[styles.paginationArrowButton, chefPage === totalChefPages && styles.paginationArrowButtonDisabled]}
               >
-                <Text style={[styles.paginationButtonText, chefPage === totalChefPages && styles.paginationButtonTextDisabled]}>Next</Text>
+                <Text style={[styles.paginationArrowText, chefPage === totalChefPages && styles.paginationArrowTextDisabled]}>
+                  →
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : null}
-        </>
+          )}
+        </View>
       )}
-    </ScrollView>
+      
+      {/* Fixed page number and total count in bottom of viewport - hidden on mobile */}
+      {shouldShowFixedElements && totalChefPages > 0 && (
+        <View style={styles.issuesPageNumberFixed}>
+          <Text style={styles.paginationStatus}>
+            Page {chefPage} of {totalChefPages}
+          </Text>
+        </View>
+      )}
+      {shouldShowFixedElements && (
+        <View style={styles.issuesTotalFixed}>
+          <Text style={styles.issuesTotalText}>{filteredChefs.length} total</Text>
+        </View>
+      )}
+    </View>
   );
 
   const UsersTab = (
-    <ScrollView contentContainerStyle={styles.tabScroll}>
-      <Text style={styles.sectionTitle}>Users (non-chefs)</Text>
-      <View style={styles.searchWrapper}>
-        <TextInput
-          value={userSearch}
-          onChangeText={setUserSearch}
-          placeholder="Search by email, name, or ID..."
-          placeholderTextColor="#94a3b8"
-          style={styles.searchInput}
-        />
-      </View>
+    <View style={styles.issuesTabWrapper}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.issuesTabScrollContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={!isMobile}
+      >
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={!isMobile}
+          contentContainerStyle={styles.tabScroll}
+        >
+          <View style={styles.issuesTabInner}>
+          <View style={styles.searchWrapper}>
+            <TextInput
+              value={userSearch}
+              onChangeText={setUserSearch}
+              placeholder="Search by email, name, or ID..."
+              placeholderTextColor="#94a3b8"
+              style={styles.searchInput}
+            />
+          </View>
 
-      {loading && users.length === 0 ? (
-        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-      ) : paginatedUsers.length === 0 ? (
-        <View style={styles.emptyState}><Text style={styles.emptyText}>{userSearch ? 'No users found matching your search.' : 'No non-chef users found.'}</Text></View>
-      ) : (
-        <>
-          {paginatedUsers.map((u) => (
-            <View key={u.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-              <Text style={styles.cardTitle}>{u.name || u.email || u.id}</Text>
-              <Text style={styles.cardMeta}>{u.email || 'No email'}</Text>
-              <Text style={styles.cardId}>ID: {u.id}</Text>
-                  {u.role === 'banned' && <Text style={{ color: palette.dangerText, fontWeight: '700', marginTop: 4 }}>Banned</Text>}
+          {loading && users.length === 0 ? (
+            <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+          ) : paginatedUsers.length === 0 ? (
+            <View style={styles.emptyState}><Text style={styles.emptyText}>{userSearch ? 'No users found matching your search.' : 'No users found.'}</Text></View>
+          ) : (
+            <View style={styles.tableContainer}>
+              {/* Table Header */}
+              <View style={[styles.tableHeader, !isMobile && { minWidth: 1060 }]}>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Name</Text>
                 </View>
-                {u.role !== 'banned' && (
-                  <TouchableOpacity
-                    onPress={() => handleDeactivateUser(u.id)}
-                    style={styles.primaryButton}
-                  >
-                    <Text style={styles.primaryButtonText}>Deactivate</Text>
-                  </TouchableOpacity>
-                )}
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 200, minWidth: 200 } : { flex: 2.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Email</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                  <Text style={styles.tableHeaderCellText}>Role</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 70, minWidth: 70 } : { flex: 1 }]}>
+                  <Text style={styles.tableHeaderCellText}>Orders</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 1.2 }]}>
+                  <Text style={styles.tableHeaderCellText}>Spend</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                  <Text style={styles.tableHeaderCellText}>Action</Text>
+                </View>
               </View>
-            </View>
-          ))}
 
-          {totalUserPages > 1 ? (
-            <View style={styles.paginationRow}>
+              {/* Table Rows */}
+              {paginatedUsers.map((u: any) => (
+                <View key={u.id} style={[styles.tableRow, !isMobile && { minWidth: 1060 }]}>
+                  <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.5 }]}>
+                    <Text style={{ fontWeight: '600', color: palette.text }} numberOfLines={1}>{u.name || 'Unknown'}</Text>
+                  </View>
+                  <Text style={[styles.tableCell, isMobile ? { width: 200, minWidth: 200 } : { flex: 2.5 }]} numberOfLines={1}>
+                    {u.email || 'No email'}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                    {u.is_admin ? 'Admin' : u.is_chef ? 'Chef' : (u.role === 'banned' ? 'Banned' : 'User')}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 70, minWidth: 70 } : { flex: 1 }]}>
+                    {u.orderCount || 0}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 1.2 }]}>
+                    {cents(u.totalSpend || 0)}
+                  </Text>
+                  <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                    {u.role !== 'banned' ? (
+                      <TouchableOpacity
+                        onPress={() => handleDeactivateUser(u.id)}
+                        style={[styles.primaryButton, { paddingVertical: 8, paddingHorizontal: 8 }]}
+                      >
+                        <Text style={[styles.primaryButtonText, { fontSize: 12 }]}>Deactivate</Text>
+                      </TouchableOpacity>
+                    ) : (
+                      <Text style={{ color: palette.muted, fontSize: 12 }}>Banned</Text>
+                    )}
+                  </View>
+                </View>
+              ))}
+            </View>
+          )}
+          </View>
+        </ScrollView>
+      </ScrollView>
+      
+      {/* Pagination - Outside ScrollViews */}
+      {totalUserPages > 0 && (
+        <View style={styles.issuesPaginationWrap}>
+          {isMobile && (
+            <View style={styles.issuesPaginationMobileInfo}>
+              <Text style={styles.paginationStatus}>
+                Page {userPage} of {totalUserPages}
+              </Text>
+              <Text style={styles.issuesTotalText}>{filteredUsers.length} total</Text>
+            </View>
+          )}
+          {totalUserPages > 1 && (
+            <View style={[styles.paginationControlsContainer, isMobile && styles.paginationControlsContainerMobile]}>
               <TouchableOpacity
                 onPress={() => setUserPage((p) => Math.max(1, p - 1))}
                 disabled={userPage === 1}
-                style={[styles.paginationButton, userPage === 1 && styles.paginationButtonDisabled]}
+                style={[styles.paginationArrowButton, userPage === 1 && styles.paginationArrowButtonDisabled]}
               >
-                <Text style={[styles.paginationButtonText, userPage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
+                <Text style={[styles.paginationArrowText, userPage === 1 && styles.paginationArrowTextDisabled]}>
+                  ←
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.paginationStatus}>Page {userPage} of {totalUserPages} ({filteredUsers.length} total)</Text>
+              <ScrollView
+                ref={userPageScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={!isMobile}
+                contentContainerStyle={styles.issuesPageScrollContent}
+                style={[styles.issuesPageScroll, isMobile && styles.issuesPageScrollMobile]}
+                nestedScrollEnabled
+                scrollEnabled
+              >
+                {Array.from({ length: totalUserPages }, (_, i) => i + 1).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => {
+                      setUserPage(p);
+                    }}
+                    activeOpacity={0.7}
+                    style={[styles.issuesPageButton, userPage === p && styles.issuesPageButtonActive]}
+                  >
+                    <Text style={[styles.issuesPageButtonText, userPage === p && styles.issuesPageButtonTextActive]}>
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               <TouchableOpacity
                 onPress={() => setUserPage((p) => Math.min(totalUserPages, p + 1))}
                 disabled={userPage === totalUserPages}
-                style={[styles.paginationButton, userPage === totalUserPages && styles.paginationButtonDisabled]}
+                style={[styles.paginationArrowButton, userPage === totalUserPages && styles.paginationArrowButtonDisabled]}
               >
-                <Text style={[styles.paginationButtonText, userPage === totalUserPages && styles.paginationButtonTextDisabled]}>Next</Text>
+                <Text style={[styles.paginationArrowText, userPage === totalUserPages && styles.paginationArrowTextDisabled]}>
+                  →
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : null}
-        </>
+          )}
+        </View>
       )}
-    </ScrollView>
+      
+      {/* Fixed page number and total count in bottom of viewport - hidden on mobile */}
+      {shouldShowFixedElements && totalUserPages > 0 && (
+        <View style={styles.issuesPageNumberFixed}>
+          <Text style={styles.paginationStatus}>
+            Page {userPage} of {totalUserPages}
+          </Text>
+        </View>
+      )}
+      {shouldShowFixedElements && (
+        <View style={styles.issuesTotalFixed}>
+          <Text style={styles.issuesTotalText}>{filteredUsers.length} total</Text>
+        </View>
+      )}
+    </View>
   );
 
   const OrdersTab = (
-    <ScrollView contentContainerStyle={styles.tabScroll}>
-      <Text style={styles.sectionTitle}>Orders ({filteredOrders.length} total)</Text>
-      <View style={styles.searchWrapper}>
-        <TextInput
-          value={orderSearch}
-          onChangeText={setOrderSearch}
-          placeholder="Search by status, email, or order ID..."
-          placeholderTextColor="#94a3b8"
-          style={styles.searchInput}
-        />
-      </View>
+    <View style={styles.issuesTabWrapper}>
+      <ScrollView 
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.issuesTabScrollContent}
+        nestedScrollEnabled
+        showsVerticalScrollIndicator={!isMobile}
+      >
+        <ScrollView 
+          horizontal
+          showsHorizontalScrollIndicator={!isMobile}
+          contentContainerStyle={styles.tabScroll}
+        >
+          <View style={styles.issuesTabInner}>
+        <View style={styles.searchWrapper}>
+          <TextInput
+            value={orderSearch}
+            onChangeText={setOrderSearch}
+            placeholder="Search by status, email, order ID, or chef name..."
+            placeholderTextColor="#94a3b8"
+            style={styles.searchInput}
+          />
+        </View>
 
-      {loading && orders.length === 0 ? (
-        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-      ) : paginatedOrders.length === 0 ? (
-        <View style={styles.emptyState}><Text style={styles.emptyText}>{orderSearch ? 'No orders found matching your search.' : 'No orders found.'}</Text></View>
-      ) : (
-        <>
-          {paginatedOrders.map((o) => (
-            <OrderCard key={o.id} order={o} onStatusUpdate={handleUpdateOrderStatus} />
-          ))}
-          {totalOrderPages > 1 ? (
-            <View style={styles.paginationRow}>
+        {loading && ordersWithChefs.length === 0 ? (
+          <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+        ) : paginatedOrders.length === 0 ? (
+          <View style={styles.emptyState}><Text style={styles.emptyText}>{orderSearch ? 'No orders found matching your search.' : 'No orders found.'}</Text></View>
+        ) : (
+          <View style={styles.tableContainer}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.issueIdHeaderCell]}>
+                <Text style={styles.tableHeaderCellText}>Order ID</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                <Text style={styles.tableHeaderCellText}>Chef</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 180, minWidth: 180 } : { flex: 2 }]}>
+                <Text style={styles.tableHeaderCellText}>Customer</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.tableHeaderCellSortable, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }]}
+                onPress={() => toggleOrderSort('total')}
+              >
+                <Text style={styles.tableHeaderCellText}>Amount</Text>
+                <Text style={[styles.sortIcon, { color: palette.primary }]}>
+                  {orderSortBy === 'total' ? (orderSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                </Text>
+              </TouchableOpacity>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }]}>
+                <Text style={styles.tableHeaderCellText}>Status</Text>
+              </View>
+              <TouchableOpacity
+                style={[styles.tableHeaderCellSortable, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, styles.createdHeaderCell]}
+                onPress={() => toggleOrderSort('created')}
+              >
+                <Text style={styles.tableHeaderCellText}>Date</Text>
+                <Text style={[styles.sortIcon, { color: palette.primary }]}>
+                  {orderSortBy === 'created' ? (orderSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Table Rows */}
+            {paginatedOrders.map((order: any) => {
+              const statusStyles = orderStatusStyles(order.status);
+              
+              return (
+                <View key={order.id} style={styles.tableRow}>
+                  <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.issueIdCell]}>
+                    <Text>{order.id}</Text>
+                    <TouchableOpacity onPress={() => setOrderDetailModalId(order.id)}>
+                      <Text style={styles.viewDetailsLink}>View details</Text>
+                    </TouchableOpacity>
+                  </View>
+                  {order.chef?.id ? (
+                    <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }, styles.chefCell]}>
+                      <Text style={styles.chefNameText}>{order.chef.name || 'Unknown'}</Text>
+                      <Link href={`/chef/${order.chef.id}`} asChild>
+                        <TouchableOpacity style={styles.chefLinkIcon}>
+                          <Text style={styles.chefLinkIconText}>↗</Text>
+                        </TouchableOpacity>
+                      </Link>
+                    </View>
+                  ) : (
+                    <Text style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>Unknown</Text>
+                  )}
+                  <Text style={[styles.tableCell, isMobile ? { width: 180, minWidth: 180 } : { flex: 2 }]} numberOfLines={1}>
+                    {order.user_email || 'Unknown'}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }]}>
+                    {cents(order.total_cents || 0)}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }, { color: statusStyles.text.color }]}>
+                    {orderStatusLabel(order.status)}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, styles.createdCell]}>
+                    {formatEst(order.created_at)}
+                  </Text>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        </View>
+        </ScrollView>
+      </ScrollView>
+      
+      {/* Pagination - Outside ScrollViews */}
+      {totalOrderPages > 0 && (
+        <View style={styles.issuesPaginationWrap}>
+          {isMobile && (
+            <View style={styles.issuesPaginationMobileInfo}>
+              <Text style={styles.paginationStatus}>
+                Page {orderPage} of {totalOrderPages}
+              </Text>
+              <Text style={styles.issuesTotalText}>{filteredOrders.length} total</Text>
+            </View>
+          )}
+          {totalOrderPages > 1 && (
+            <View style={[styles.paginationControlsContainer, isMobile && styles.paginationControlsContainerMobile]}>
               <TouchableOpacity
                 onPress={() => setOrderPage((p) => Math.max(1, p - 1))}
                 disabled={orderPage === 1}
-                style={[styles.paginationButton, orderPage === 1 && styles.paginationButtonDisabled]}
+                style={[styles.paginationArrowButton, orderPage === 1 && styles.paginationArrowButtonDisabled]}
               >
-                <Text style={[styles.paginationButtonText, orderPage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
+                <Text style={[styles.paginationArrowText, orderPage === 1 && styles.paginationArrowTextDisabled]}>
+                  ←
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.paginationStatus}>Page {orderPage} of {totalOrderPages} ({filteredOrders.length} total)</Text>
+              <ScrollView
+                ref={orderPageScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={!isMobile}
+                contentContainerStyle={styles.issuesPageScrollContent}
+                style={[styles.issuesPageScroll, isMobile && styles.issuesPageScrollMobile]}
+                nestedScrollEnabled
+                scrollEnabled
+              >
+                {Array.from({ length: totalOrderPages }, (_, i) => i + 1).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => {
+                      setOrderPage(p);
+                    }}
+                    activeOpacity={0.7}
+                    style={[styles.issuesPageButton, orderPage === p && styles.issuesPageButtonActive]}
+                  >
+                    <Text style={[styles.issuesPageButtonText, orderPage === p && styles.issuesPageButtonTextActive]}>
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
               <TouchableOpacity
                 onPress={() => setOrderPage((p) => Math.min(totalOrderPages, p + 1))}
                 disabled={orderPage === totalOrderPages}
-                style={[styles.paginationButton, orderPage === totalOrderPages && styles.paginationButtonDisabled]}
+                style={[styles.paginationArrowButton, orderPage === totalOrderPages && styles.paginationArrowButtonDisabled]}
               >
-                <Text style={[styles.paginationButtonText, orderPage === totalOrderPages && styles.paginationButtonTextDisabled]}>Next</Text>
+                <Text style={[styles.paginationArrowText, orderPage === totalOrderPages && styles.paginationArrowTextDisabled]}>
+                  →
+                </Text>
               </TouchableOpacity>
             </View>
-          ) : null}
-        </>
+          )}
+        </View>
       )}
-    </ScrollView>
+      {/* Fixed page number and total count in bottom of viewport - hidden on mobile */}
+      {shouldShowFixedElements && totalOrderPages > 0 && (
+        <View style={styles.issuesPageNumberFixed}>
+          <Text style={styles.paginationStatus}>
+            Page {orderPage} of {totalOrderPages}
+          </Text>
+        </View>
+      )}
+      {shouldShowFixedElements && (
+        <View style={styles.issuesTotalFixed}>
+          <Text style={styles.issuesTotalText}>{filteredOrders.length} total</Text>
+        </View>
+      )}
+
+    </View>
   );
 
   const IssuesTab = (
@@ -1574,40 +2271,6 @@ export default function AdminPage() {
                 </View>
               );
             })}
-
-            {totalIssuePages > 0 && (
-              <View style={styles.issuesPaginationWrap}>
-                {isMobile && (
-                  <View style={styles.issuesPaginationMobileInfo}>
-                    <Text style={styles.paginationStatus}>
-                      Page {issuePage} of {totalIssuePages}
-                    </Text>
-                    <Text style={styles.issuesTotalText}>{filteredIssues.length} total</Text>
-                  </View>
-                )}
-                {totalIssuePages > 1 && (
-                  <ScrollView
-                    ref={issuePageScrollRef}
-                    horizontal
-                    showsHorizontalScrollIndicator
-                    contentContainerStyle={styles.issuesPageScrollContent}
-                    style={styles.issuesPageScroll}
-                  >
-                    {Array.from({ length: totalIssuePages }, (_, i) => i + 1).map((p) => (
-                      <TouchableOpacity
-                        key={p}
-                        onPress={() => setIssuePage(p)}
-                        style={[styles.issuesPageButton, issuePage === p && styles.issuesPageButtonActive]}
-                      >
-                        <Text style={[styles.issuesPageButtonText, issuePage === p && styles.issuesPageButtonTextActive]}>
-                          {p}
-                        </Text>
-                      </TouchableOpacity>
-                    ))}
-                  </ScrollView>
-                )}
-              </View>
-            )}
 
             {isMobile && openActionDropdownIssueId !== null && (() => {
               const issue = paginatedIssues.find((i: any) => i.id === openActionDropdownIssueId);
@@ -2028,6 +2691,67 @@ export default function AdminPage() {
         )}
         </View>
       </ScrollView>
+      
+      {/* Pagination - Outside horizontal ScrollView */}
+      {totalIssuePages > 0 && (
+        <View style={styles.issuesPaginationWrap}>
+          {isMobile && (
+            <View style={styles.issuesPaginationMobileInfo}>
+              <Text style={styles.paginationStatus}>
+                Page {issuePage} of {totalIssuePages}
+              </Text>
+              <Text style={styles.issuesTotalText}>{filteredIssues.length} total</Text>
+            </View>
+          )}
+          {totalIssuePages > 1 && (
+            <View style={[styles.paginationControlsContainer, isMobile && styles.paginationControlsContainerMobile]}>
+              <TouchableOpacity
+                onPress={() => setIssuePage((p) => Math.max(1, p - 1))}
+                disabled={issuePage === 1}
+                style={[styles.paginationArrowButton, issuePage === 1 && styles.paginationArrowButtonDisabled]}
+              >
+                <Text style={[styles.paginationArrowText, issuePage === 1 && styles.paginationArrowTextDisabled]}>
+                  ←
+                </Text>
+              </TouchableOpacity>
+              <ScrollView
+                ref={issuePageScrollRef}
+                horizontal
+                showsHorizontalScrollIndicator={!isMobile}
+                contentContainerStyle={styles.issuesPageScrollContent}
+                style={[styles.issuesPageScroll, isMobile && styles.issuesPageScrollMobile]}
+                nestedScrollEnabled
+                scrollEnabled
+              >
+                {Array.from({ length: totalIssuePages }, (_, i) => i + 1).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => {
+                      setIssuePage(p);
+                    }}
+                    activeOpacity={0.7}
+                    style={[styles.issuesPageButton, issuePage === p && styles.issuesPageButtonActive]}
+                  >
+                    <Text style={[styles.issuesPageButtonText, issuePage === p && styles.issuesPageButtonTextActive]}>
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setIssuePage((p) => Math.min(totalIssuePages, p + 1))}
+                disabled={issuePage === totalIssuePages}
+                style={[styles.paginationArrowButton, issuePage === totalIssuePages && styles.paginationArrowButtonDisabled]}
+              >
+                <Text style={[styles.paginationArrowText, issuePage === totalIssuePages && styles.paginationArrowTextDisabled]}>
+                  →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+      
       {/* Fixed page number and total count in bottom of viewport - hidden on mobile */}
       {shouldShowFixedElements && totalIssuePages > 0 && (
         <View style={styles.issuesPageNumberFixed}>
@@ -2153,7 +2877,7 @@ export default function AdminPage() {
         <View style={styles.headerRow}>
           <View>
             <Text style={styles.headerTitle}>Welcome, {profile?.name ? profile.name.split(' ')[0] : 'Admin'}!</Text>
-            <Text style={styles.headerSubtitle}>Monitor requests, chefs, users, and orders at a glance.</Text>
+            <Text style={styles.headerSubtitle}>Review marketplace operations now.</Text>
           </View>
         </View>
         {err ? (
@@ -2167,20 +2891,239 @@ export default function AdminPage() {
           onTabChange={(key) => router.setParams({ tab: key })}
           tabs={[
             { key: 'overview', title: 'Overview', content: OverviewTab },
-            { key: 'chef-requests', title: 'Chef Requests', content: ChefRequestsTab },
+            { key: 'orders', title: 'Orders', content: OrdersTab },
             { key: 'chefs', title: 'Chefs', content: ChefsTab },
             { key: 'users', title: 'Users', content: UsersTab },
-            { key: 'orders', title: 'Orders', content: OrdersTab },
             { key: 'issues', title: 'Issues', content: IssuesTab },
           ]}
         />
       </View>
     </View>
   );
- 
-   return (
+
+  return (
     <Screen style={{ backgroundColor: palette.background }} contentStyle={styles.screenContent}>
       {content}
+      
+      {/* Chef Application Modal - Root level so it works from any tab */}
+      {chefApplicationModalId && (
+        <Modal
+          visible
+          transparent
+          animationType="fade"
+          onRequestClose={() => {
+            setChefApplicationModalId(null);
+            setChefApplicationData(null);
+            setChefApplicationPage(1);
+          }}
+        >
+          <TouchableOpacity
+            style={styles.issueDetailOverlay}
+            activeOpacity={1}
+            onPress={() => {
+              setChefApplicationModalId(null);
+              setChefApplicationData(null);
+              setChefApplicationPage(1);
+            }}
+          >
+            <TouchableOpacity
+              style={[styles.issueDetailContent, { maxHeight: '90%', width: isMobile ? '95%' : '80%', maxWidth: 800 }]}
+              activeOpacity={1}
+              onPress={(e) => e.stopPropagation()}
+            >
+                    <View style={styles.issueDetailHeader}>
+                      <Text style={styles.issueDetailTitle}>
+                        Chef application{chefApplicationData?.name ? ` (${chefApplicationData.name})` : ''}
+                      </Text>
+                      <TouchableOpacity
+                        onPress={() => {
+                          setChefApplicationModalId(null);
+                          setChefApplicationData(null);
+                          setChefApplicationPage(1);
+                        }}
+                      >
+                        <Text style={styles.issueDetailClose}>✕</Text>
+                      </TouchableOpacity>
+                    </View>
+
+                    <ScrollView style={{ flex: 1 }} showsVerticalScrollIndicator>
+                {!chefApplicationData ? (
+                  <View style={{ padding: 16, alignItems: 'center', justifyContent: 'center', minHeight: 200 }}>
+                    <ActivityIndicator size="large" color={palette.primary} />
+                          <Text style={{ marginTop: 16, color: palette.muted }}>Loading application</Text>
+                  </View>
+                ) : (
+                  <>
+                    {/* Page 1: Basic Information */}
+                    {chefApplicationPage === 1 && (
+                      <View style={{ padding: 16, gap: 16 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Basic information</Text>
+                        <View style={{ gap: 12 }}>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Full name</Text>
+                            <Text>{chefApplicationData.name || chefApplicationData.fullName || '—'}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Brand name</Text>
+                            <Text>{chefApplicationData.brandName || chefApplicationData.name || '—'}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Email</Text>
+                            <Text>{chefApplicationData.email || '—'}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Phone</Text>
+                            <Text>{chefApplicationData.phone || '—'}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Location</Text>
+                            <Text>{chefApplicationData.location || chefApplicationData.address || '—'}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Brief description</Text>
+                            <Text>{chefApplicationData.short_bio || chefApplicationData.briefDescription || chefApplicationData.bio || '—'}</Text>
+                          </View>
+                          <View>
+                            <Text style={{ fontWeight: '600', marginBottom: 4 }}>Cuisine type</Text>
+                            <Text>{chefApplicationData.cuisine_specialty || chefApplicationData.cuisine || '—'}</Text>
+                          </View>
+                          {chefApplicationData.experience && (
+                            <View>
+                              <Text style={{ fontWeight: '600', marginBottom: 4 }}>Experience</Text>
+                              <Text>{chefApplicationData.experience}</Text>
+                            </View>
+                          )}
+                        </View>
+                      </View>
+                    )}
+
+                    {/* Page 2: Availability & Pickup */}
+                    {chefApplicationPage === 2 && (
+                      <View style={{ padding: 16, gap: 16 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Availability & pickup</Text>
+                        {chefApplicationData.pickup_availability && Array.isArray(chefApplicationData.pickup_availability) && chefApplicationData.pickup_availability.length > 0 ? (
+                          <View style={{ gap: 12 }}>
+                            {Object.entries(
+                              chefApplicationData.pickup_availability.reduce((acc: any, slot: any) => {
+                                if (!acc[slot.day]) acc[slot.day] = [];
+                                acc[slot.day].push(slot.timeWindow);
+                                return acc;
+                              }, {})
+                            ).map(([day, timeWindows]: [string, any]) => (
+                              <View key={day}>
+                                <Text style={{ fontWeight: '600', marginBottom: 4 }}>{day.charAt(0).toUpperCase() + day.slice(1).toLowerCase()}</Text>
+                                <Text>{timeWindows.join(', ')}</Text>
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text>No pickup availability set</Text>
+                        )}
+                      </View>
+                    )}
+
+                    {/* Page 3: Dishes */}
+                    {chefApplicationPage === 3 && (
+                      <View style={{ padding: 16, gap: 16 }}>
+                        <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 8 }}>Dishes ({chefApplicationData.dishes?.length || 0})</Text>
+                        {chefApplicationData.dishes && chefApplicationData.dishes.length > 0 ? (
+                          <View style={{ gap: 16 }}>
+                            {chefApplicationData.dishes.map((dish: any, idx: number) => (
+                              <View key={dish.id || idx} style={{ borderWidth: 1, borderColor: palette.border, borderRadius: 8, padding: 12, gap: 8 }}>
+                                {dish.image && (
+                                  <Image source={{ uri: dish.image }} style={{ width: '100%', height: 200, borderRadius: 8 }} resizeMode="cover" />
+                                )}
+                                <Text style={{ fontWeight: '700', fontSize: 16 }}>{dish.name}</Text>
+                                <Text style={{ fontWeight: '600' }}>{cents((dish.price || 0) * 100)}</Text>
+                                {dish.description && <Text>{dish.description}</Text>}
+                                {dish.ingredients && (
+                                  <View>
+                                    <Text style={{ fontWeight: '600', marginBottom: 4 }}>Ingredients</Text>
+                                    <Text>{dish.ingredients}</Text>
+                                  </View>
+                                )}
+                                {dish.portion && (
+                                  <Text style={{ color: palette.muted }}>Portion: {dish.portion}</Text>
+                                )}
+                              </View>
+                            ))}
+                          </View>
+                        ) : (
+                          <Text>No dishes added</Text>
+                        )}
+                        {/* Approve/Reject Buttons - Only on last page */}
+                        {chefApplicationData && (
+                          <View style={{ flexDirection: 'row', gap: 8, marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: palette.border }}>
+                            {chefApplicationData.status === 'submitted' || chefApplicationData.status === 'pending' ? (
+                              <>
+                                <TouchableOpacity
+                                  onPress={() => handleApproveChefApplication(chefApplicationModalId, chefApplicationData.id)}
+                                  style={styles.approveButton}
+                                >
+                                  <Text style={styles.approveButtonText}>Approve</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  onPress={() => handleRejectChefApplication(chefApplicationModalId, chefApplicationData.id)}
+                                  style={styles.rejectButton}
+                                >
+                                  <Text style={styles.rejectButtonText}>Reject</Text>
+                                </TouchableOpacity>
+                              </>
+                            ) : chefApplicationData.status === 'approved' ? (
+                              <TouchableOpacity
+                                style={[styles.approveButton, { opacity: 0.6 }]}
+                                disabled
+                              >
+                                <Text style={styles.approveButtonText}>Approved</Text>
+                              </TouchableOpacity>
+                            ) : chefApplicationData.status === 'rejected' ? (
+                              <>
+                                <TouchableOpacity
+                                  onPress={() => handleApproveChefApplication(chefApplicationModalId, chefApplicationData.id)}
+                                  style={styles.approveButton}
+                                >
+                                  <Text style={styles.approveButtonText}>Approve</Text>
+                                </TouchableOpacity>
+                                <TouchableOpacity
+                                  style={[styles.rejectButton, { opacity: 0.6 }]}
+                                  disabled
+                                >
+                                  <Text style={styles.rejectButtonText}>Rejected</Text>
+                                </TouchableOpacity>
+                              </>
+                            ) : null}
+                          </View>
+                        )}
+                      </View>
+                    )}
+                  </>
+                )}
+              </ScrollView>
+
+              {/* Page Navigation */}
+              <View style={{ flexDirection: 'row', justifyContent: 'center', alignItems: 'center', padding: 16, borderTopWidth: 1, borderTopColor: palette.border }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+                  <TouchableOpacity
+                    onPress={() => setChefApplicationPage(p => Math.max(1, p - 1))}
+                    disabled={chefApplicationPage === 1}
+                    style={[styles.paginationArrowButton, chefApplicationPage === 1 && styles.paginationArrowButtonDisabled]}
+                  >
+                    <Text style={[styles.paginationArrowText, chefApplicationPage === 1 && styles.paginationArrowTextDisabled]}>←</Text>
+                  </TouchableOpacity>
+                  <Text style={{ color: palette.muted, fontSize: 14 }}>Page {chefApplicationPage} of 3</Text>
+                  <TouchableOpacity
+                    onPress={() => setChefApplicationPage(p => Math.min(3, p + 1))}
+                    disabled={chefApplicationPage === 3}
+                    style={[styles.paginationArrowButton, chefApplicationPage === 3 && styles.paginationArrowButtonDisabled]}
+                  >
+                    <Text style={[styles.paginationArrowText, chefApplicationPage === 3 && styles.paginationArrowTextDisabled]}>→</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </Modal>
+      )}
     </Screen>
   );
 }
@@ -2314,6 +3257,7 @@ const styles = StyleSheet.create({
   searchWrapper: {
     paddingHorizontal: 12,
     marginBottom: 16,
+    paddingRight: 8,
   },
   searchInput: {
     backgroundColor: '#F8FAFC',
@@ -2503,6 +3447,12 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 18,
   },
+  paginationButtonMobile: {
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    minWidth: 70,
+  },
   paginationButtonDisabled: {
     opacity: 0.5,
   },
@@ -2513,6 +3463,32 @@ const styles = StyleSheet.create({
   paginationButtonTextDisabled: {
     color: palette.muted,
   },
+  paginationArrowButton: {
+    backgroundColor: 'transparent',
+    borderWidth: 0,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    minWidth: 44,
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginHorizontal: 0,
+    zIndex: 10,
+    flexShrink: 0,
+    overflow: 'visible',
+  },
+  paginationArrowButtonDisabled: {
+    opacity: 0.3,
+  },
+  paginationArrowText: {
+    color: palette.primary,
+    fontSize: 24,
+    fontWeight: '600',
+    lineHeight: 24,
+  },
+  paginationArrowTextDisabled: {
+    color: palette.muted,
+  },
   paginationStatus: {
     color: palette.muted,
     fontWeight: '600',
@@ -2521,11 +3497,27 @@ const styles = StyleSheet.create({
   },
   issuesPaginationWrap: {
     marginTop: 16,
-    paddingHorizontal: 12,
+    paddingHorizontal: 0,
     paddingVertical: 0,
     gap: 12,
+    width: '100%',
+    overflow: 'visible',
+  },
+  paginationControlsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 0,
+    flex: 1,
+    width: '100%',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    overflow: 'visible',
+  },
+  paginationControlsContainerMobile: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+    width: '100%',
   },
   issuesPaginationMobileInfo: {
     flexDirection: 'row',
@@ -2536,13 +3528,19 @@ const styles = StyleSheet.create({
   },
   issuesPageScroll: {
     maxHeight: 44,
+    flex: 1,
+    marginHorizontal: 8,
+  },
+  issuesPageScrollMobile: {
+    flex: 1,
+    minWidth: 0,
   },
   issuesPageScrollContent: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
     paddingVertical: 4,
-    paddingRight: 16,
+    paddingHorizontal: 0,
   },
   issuesPageButton: {
     minWidth: 40,
@@ -2569,12 +3567,14 @@ const styles = StyleSheet.create({
   issuesTabWrapper: {
     position: 'relative',
     flex: 1,
+    overflow: 'visible',
   },
   issuesTabScrollContent: {
     paddingBottom: 60,
   },
   issuesTabInner: {
     paddingBottom: 0,
+    paddingRight: 0,
   },
   issuesPageNumberFixed: {
     position: 'absolute',
@@ -2827,6 +3827,32 @@ const styles = StyleSheet.create({
   },
   successOutlineButtonText: {
     color: palette.successText,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  approveButton: {
+    backgroundColor: '#1E794F',
+    borderColor: '#1E794F',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  approveButtonText: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  rejectButton: {
+    backgroundColor: '#B91C1C',
+    borderColor: '#B91C1C',
+    borderWidth: 1,
+    borderRadius: 12,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
+  },
+  rejectButtonText: {
+    color: '#FFFFFF',
     fontWeight: '700',
     textAlign: 'center',
   },
@@ -3089,10 +4115,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
-    paddingHorizontal: 16,
+    paddingLeft: 12,
+    paddingRight: 6,
     borderBottomWidth: 1,
     borderBottomColor: palette.border,
-    minWidth: 1060,
   },
   tableHeaderCell: {
     flexDirection: 'row',
@@ -3103,6 +4129,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     paddingHorizontal: 4,
+    gap: 4,
   },
   tableHeaderCellText: {
     color: palette.text,
@@ -3120,8 +4147,8 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: palette.border,
     paddingVertical: 12,
-    paddingHorizontal: 16,
-    minWidth: 1060,
+    paddingLeft: 12,
+    paddingRight: 6,
   },
   tableCell: {
     color: palette.text,
@@ -3132,10 +4159,10 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   createdCell: {
-    paddingRight: 4,
+    paddingHorizontal: 2,
   },
   createdHeaderCell: {
-    paddingRight: 4,
+    paddingHorizontal: 2,
   },
   issueIdHeaderCell: {
     paddingLeft: 4,
@@ -3165,6 +4192,7 @@ const styles = StyleSheet.create({
   chefNameText: {
     color: palette.text,
     fontSize: 14,
+    flexShrink: 1,
   },
   chefLinkIcon: {
     padding: 0,

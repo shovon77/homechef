@@ -10,7 +10,12 @@ export default function SearchScreen() {
     const t = setTimeout(async () => {
       if (!q) { setRows([]); return; }
       const lower = q.toLowerCase();
-      const { data } = await supabase.from("dishes").select("id,name,chef").limit(50);
+      // Only show dishes from active chefs (exclude suspended)
+      const { data } = await supabase
+        .from("dishes")
+        .select("id,name,chef, chefs!inner(status)")
+        .eq("chefs.status", "active")
+        .limit(50);
       setRows((data||[]).filter((d:any)=> (d.name||"").toLowerCase().includes(lower) || (d.chef||"").toLowerCase().includes(lower)));
     }, 250);
     return () => clearTimeout(t);
