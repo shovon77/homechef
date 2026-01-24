@@ -70,7 +70,7 @@ const styles = StyleSheet.create({
     paddingLeft: 48,
     paddingRight: 48,
     paddingTop: 24,
-    paddingBottom: 8,
+    paddingBottom: 0,
     ...Platform.select({
       web: {
         overflow: 'visible',
@@ -80,6 +80,8 @@ const styles = StyleSheet.create({
   contentWrapper: {
     width: '100%',
     alignItems: 'flex-start',
+    marginBottom: 0,
+    paddingBottom: 0,
   },
   inner: {
     gap: 12,
@@ -121,6 +123,7 @@ const styles = StyleSheet.create({
   },
   legal: {
     marginTop: 12,
+    marginBottom: 0,
     color: '#33393A',
     fontSize: 12,
     fontFamily: theme.typography.fontFamily.body,

@@ -41,10 +41,9 @@ export function Tabs({ tabs, initial = 0, onTabChange, activeColor, indicatorCol
               accessibilityRole="tab"
               accessibilityState={{ selected: i === idx }}
             >
-              <Text style={[styles.tabText, i === idx && { color: resolvedActiveColor }]}>
+              <Text style={[styles.tabText, i === idx && styles.tabTextActive]}>
                 {t.title}
               </Text>
-              {i === idx && <View style={[styles.tabIndicator, { backgroundColor: resolvedIndicatorColor }]} />}
             </TouchableOpacity>
           ))}
         </ScrollView>
@@ -76,24 +75,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   tabActive: {
-    // Active state handled by indicator
+    backgroundColor: '#FE734C',
+    borderRadius: 8,
   },
   tabText: {
     color: '#33393A',
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: '600',
     letterSpacing: theme.typography.letterSpacing.wide,
   },
   tabTextActive: {
-    color: theme.colors.text,
-  },
-  tabIndicator: {
-    position: 'absolute',
-    bottom: -1,
-    left: 0,
-    right: 0,
-    height: 3,
-    borderRadius: theme.radius.sm,
+    color: '#FFFFFF',
+    fontWeight: '700',
   },
   content: {
     flex: 1,

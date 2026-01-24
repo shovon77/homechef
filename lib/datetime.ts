@@ -9,6 +9,33 @@ export function formatLocal(dtISO?: string | null, options: Intl.DateTimeFormatO
   return d.toLocaleString(undefined, options);
 }
 
+const EST_OPTIONS: Intl.DateTimeFormatOptions = {
+  timeZone: 'America/New_York',
+  weekday: 'short',
+  month: 'short',
+  day: 'numeric',
+  hour: 'numeric',
+  minute: '2-digit',
+  hour12: true,
+};
+
+export function formatEst(dtISO?: string | null, options?: Intl.DateTimeFormatOptions): string {
+  if (!dtISO) return '—';
+  const d = new Date(dtISO);
+  if (Number.isNaN(d.getTime())) return '—';
+  const opts = options ? { ...EST_OPTIONS, ...options } : EST_OPTIONS;
+  const parts = new Intl.DateTimeFormat('en-US', opts).formatToParts(d);
+  const day = parts.find(p => p.type === 'weekday')?.value ?? '';
+  const month = parts.find(p => p.type === 'month')?.value ?? '';
+  const dayNum = parts.find(p => p.type === 'day')?.value ?? '';
+  const hour = parts.find(p => p.type === 'hour')?.value ?? '';
+  const minute = parts.find(p => p.type === 'minute')?.value ?? '';
+  const ampm = parts.find(p => p.type === 'dayPeriod')?.value ?? '';
+  const datePart = `${day} ${month} ${dayNum}`;
+  const timePart = `${hour}:${minute} ${ampm}`;
+  return `${datePart}\n${timePart}`;
+}
+
 export function combineLocalDateTime(dateInput: string, timeInput: string): Date | null {
   const dateParts = dateInput.split('-').map(Number);
   const timeParts = timeInput.split(':').map(Number);

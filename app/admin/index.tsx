@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet, Image } from 'react-native';
-import { useRouter, useLocalSearchParams } from 'expo-router';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet, Image, Platform, useWindowDimensions, Modal } from 'react-native';
+import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
 import FilePicker from '../../components/FilePicker';
@@ -11,8 +11,11 @@ import { Screen } from '../../components/Screen';
 import { getChefsPaginated, getOrders } from '../../lib/db';
 import type { Chef, OrderWithItems, Profile } from '../../lib/types';
 import { callFn } from '../../lib/fn';
+import { formatEst } from '../../lib/datetime';
+import { cents } from '../../lib/money';
 
 const ITEMS_PER_PAGE = 25;
+const ISSUES_PER_PAGE = 10;
 
 const palette = {
   background: '#F2F0EF',
@@ -34,6 +37,11 @@ const palette = {
 
 export default function AdminPage() {
   const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+  
+  // Ensure fixed elements are not rendered on mobile
+  const shouldShowFixedElements = !isMobile;
   const { tab } = useLocalSearchParams<{ tab?: string }>();
   const tabKeys = ['overview', 'chef-requests', 'chefs', 'users', 'orders', 'issues'];
   const initialTabIdx = tabKeys.indexOf(tab || 'overview');
@@ -62,6 +70,156 @@ export default function AdminPage() {
   const [originalBannerUrl, setOriginalBannerUrl] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [issueActions, setIssueActions] = useState<{ [issueId: number]: string }>({});
+  
+  // Persist issueActions to localStorage whenever it changes
+  useEffect(() => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      try {
+        localStorage.setItem('admin_issue_actions', JSON.stringify(issueActions));
+      } catch (e) {
+        console.warn('Failed to save issue actions to localStorage:', e);
+      }
+    }
+  }, [issueActions]);
+  const [openActionDropdownIssueId, setOpenActionDropdownIssueId] = useState<number | null>(null);
+  const [issueDetailModalId, setIssueDetailModalId] = useState<number | null>(null);
+  const [orderDetailModalId, setOrderDetailModalId] = useState<number | null>(null);
+  const [orderDetails, setOrderDetails] = useState<{
+    pickupAt: string | null;
+    chefLocation: string | null;
+    items: Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }>;
+    totalCents: number | null;
+    chef: { id: number; name: string; photo?: string | null } | null;
+  } | null>(null);
+  const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
+  const [isPickupAddressExpanded, setIsPickupAddressExpanded] = useState(false);
+  const [isPickupDateTimeExpanded, setIsPickupDateTimeExpanded] = useState(false);
+  const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(false);
+  const [issueSortBy, setIssueSortBy] = useState<'created' | 'status' | 'action' | null>(null);
+  const [issueSortDir, setIssueSortDir] = useState<'asc' | 'desc'>('asc');
+
+  function formatIssueType(type?: string) {
+    switch ((type || '').toLowerCase()) {
+      case 'chef_unresponsive': return 'Chef is unresponsive';
+      case 'pickup_location_unclear': return 'Pickup location unclear';
+      case 'chef_running_late': return "Chef's running late";
+      case 'food_unavailable': return 'Food unavailable';
+      case 'other': return 'Other';
+      default: return type || 'Unknown';
+    }
+  }
+
+  function formatPickupDateTime(pickupAt: string | null): string {
+    if (!pickupAt) return 'Not available';
+    try {
+      const date = new Date(pickupAt);
+      if (Number.isNaN(date.getTime())) return 'Not available';
+      
+      const dateStr = date.toLocaleDateString('en-US', { 
+        month: 'long', 
+        day: 'numeric', 
+        year: 'numeric' 
+      });
+      
+      const hour = date.getHours();
+      const minute = date.getMinutes();
+      const hourStr = hour.toString().padStart(2, '0');
+      const minuteStr = minute.toString().padStart(2, '0');
+      const startTimeStr = `${hourStr}:${minuteStr}`;
+      
+      const endDate = new Date(date);
+      endDate.setHours(endDate.getHours() + 1);
+      const endHour = endDate.getHours();
+      const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
+      const endAmpm = endHour >= 12 ? 'PM' : 'AM';
+      const endMinuteStr = endDate.getMinutes().toString().padStart(2, '0');
+      const endTimeStr = `${endHour12}:${endMinuteStr}${endAmpm}`;
+      
+      return `${dateStr} - ${startTimeStr} - ${endTimeStr}`;
+    } catch {
+      return 'Not available';
+    }
+  }
+
+  async function fetchOrderDetails(orderId: number) {
+    setLoadingOrderDetails(true);
+    try {
+      const { data: order } = await supabase
+        .from('orders')
+        .select('id, pickup_at, chef_id, total_cents')
+        .eq('id', orderId)
+        .maybeSingle();
+      
+      if (!order) {
+        Alert.alert('Error', 'Order not found');
+        setOrderDetailModalId(null);
+        return;
+      }
+
+      let chefLocation: string | null = null;
+      let chef: { id: number; name: string; photo?: string | null } | null = null;
+
+      if (order.chef_id) {
+        const { data: chefData } = await supabase
+          .from('chefs')
+          .select('id, location, name, photo')
+          .eq('id', order.chef_id)
+          .maybeSingle();
+        
+        if (chefData) {
+          chefLocation = chefData.location || null;
+          chef = { id: chefData.id, name: chefData.name, photo: chefData.photo || null };
+        }
+      }
+
+      const { data: orderItems } = await supabase
+        .from('order_items')
+        .select('*')
+        .eq('order_id', orderId);
+      
+      let items: Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }> = [];
+      
+      if (orderItems && orderItems.length > 0) {
+        const dishIds = orderItems.map(it => it.dish_id).filter((id): id is number => typeof id === 'number');
+        const { data: dishes } = dishIds.length
+          ? await supabase.from('dishes').select('id,name').in('id', dishIds)
+          : { data: [] };
+        
+        const dishMap = new Map();
+        (dishes || []).forEach((d: any) => dishMap.set(d.id, d));
+        
+        items = orderItems.map((it: any) => ({
+          ...it,
+          dish: it.dish_id ? dishMap.get(it.dish_id) || null : null
+        }));
+      }
+
+      setOrderDetails({
+        pickupAt: order.pickup_at,
+        chefLocation,
+        items,
+        totalCents: order.total_cents,
+        chef,
+      });
+    } catch (e) {
+      Alert.alert('Error', 'Failed to load order details');
+      setOrderDetailModalId(null);
+    } finally {
+      setLoadingOrderDetails(false);
+    }
+  }
+
+  useEffect(() => {
+    if (orderDetailModalId) {
+      fetchOrderDetails(orderDetailModalId);
+      setIsPickupAddressExpanded(false);
+      setIsPickupDateTimeExpanded(false);
+      setIsOrderSummaryExpanded(false);
+    } else {
+      setOrderDetails(null);
+    }
+  }, [orderDetailModalId]);
 
   async function fetchChefRequests() {
     // Fetch pending chefs that have a profile record (linked via user_id)
@@ -187,18 +345,21 @@ export default function AdminPage() {
             .select('*')
             .eq('issue_id', issue.id);
           
-          // Fetch user email
+          // Fetch user info (email and name)
           let userEmail = '';
-          if (issue.user_id) {
+          let userName = '';
+          const userId = issue.orders?.user_id || issue.user_id;
+          if (userId) {
             const { data: userData } = await supabase
               .from('profiles')
-              .select('email')
-              .eq('id', issue.user_id)
+              .select('email, name')
+              .eq('id', userId)
               .single();
             userEmail = userData?.email || '';
+            userName = userData?.name || '';
           }
           
-          return { ...issue, images: images || [], user_email: userEmail };
+          return { ...issue, images: images || [], user_email: userEmail, user_name: userName };
         })
       );
 
@@ -207,6 +368,35 @@ export default function AdminPage() {
       setUsers((userRows as any[]) || []);
       setApplications((applicationRows as any[]) || []);
       setIssues(issuesWithImages);
+      
+      // Restore persisted issue actions from localStorage, filtering for existing issues
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        try {
+          const saved = localStorage.getItem('admin_issue_actions');
+          if (saved) {
+            const parsed = JSON.parse(saved);
+            // Only restore actions for issues that still exist
+            const validActions: { [issueId: number]: string } = {};
+            issuesWithImages.forEach((issue: any) => {
+              if (parsed[issue.id]) {
+                validActions[issue.id] = parsed[issue.id];
+              }
+            });
+            // Merge with existing actions (don't overwrite if user made changes before issues loaded)
+            setIssueActions(prev => {
+              const merged = { ...prev };
+              Object.keys(validActions).forEach(issueId => {
+                if (!merged[Number(issueId)]) {
+                  merged[Number(issueId)] = validActions[Number(issueId)];
+                }
+              });
+              return merged;
+            });
+          }
+        } catch (e) {
+          console.warn('Failed to load issue actions from localStorage:', e);
+        }
+      }
     } catch (e: any) {
       setErr(e.message || String(e));
     } finally {
@@ -523,16 +713,51 @@ export default function AdminPage() {
     );
   }, [issues, issueSearch]);
 
+  const sortedIssues = useMemo(() => {
+    return [...filteredIssues].sort((a, b) => {
+      const idA = Number(a.id ?? 0);
+      const idB = Number(b.id ?? 0);
+      const dir = issueSortDir === 'asc' ? 1 : -1;
+      let cmp = 0;
+      if (issueSortBy === 'created') {
+        const ta = (a as any).created_at ? new Date((a as any).created_at).getTime() : 0;
+        const tb = (b as any).created_at ? new Date((b as any).created_at).getTime() : 0;
+        cmp = ta - tb;
+      } else if (issueSortBy === 'status') {
+        const sa = (a.status ?? '').toLowerCase();
+        const sb = (b.status ?? '').toLowerCase();
+        cmp = sa.localeCompare(sb);
+      } else if (issueSortBy === 'action') {
+        const aa = issueActions[a.id] ?? '';
+        const ab = issueActions[b.id] ?? '';
+        cmp = aa.localeCompare(ab);
+      }
+      if (cmp !== 0) return dir * cmp;
+      return idB - idA; // always secondary: issue id descending
+    });
+  }, [filteredIssues, issueSortBy, issueSortDir, issueActions]);
+
+  function toggleIssueSort(col: 'created' | 'status' | 'action') {
+    if (issueSortBy === col) {
+      setIssueSortDir(d => d === 'asc' ? 'desc' : 'asc');
+    } else {
+      setIssueSortBy(col);
+      setIssueSortDir('asc');
+    }
+    setIssuePage(1);
+  }
+
   useEffect(() => {
     setIssuePage(1);
   }, [issueSearch]);
 
   const paginatedIssues = useMemo(() => {
-    const start = (issuePage - 1) * ITEMS_PER_PAGE;
-    return filteredIssues.slice(start, start + ITEMS_PER_PAGE);
-  }, [filteredIssues, issuePage]);
+    const start = (issuePage - 1) * ISSUES_PER_PAGE;
+    return sortedIssues.slice(start, start + ISSUES_PER_PAGE);
+  }, [sortedIssues, issuePage]);
 
-  const totalIssuePages = Math.ceil(filteredIssues.length / ITEMS_PER_PAGE);
+  const totalIssuePages = Math.ceil(filteredIssues.length / ISSUES_PER_PAGE);
+  const issuePageScrollRef = React.useRef<ScrollView>(null);
 
   async function handleUpdateIssueStatus(issueId: number, newStatus: string) {
     const { error } = await supabase
@@ -553,6 +778,64 @@ export default function AdminPage() {
           : i
       ));
       Alert.alert('Success', 'Issue status updated');
+    }
+  }
+
+  async function handleIssueAction(issueId: number, action: string, issue?: { order_id?: number }) {
+    if (!action || action === '') return;
+
+    if (action === 'Refund') {
+      const orderId = issue?.order_id ?? null;
+      if (!orderId || !Number.isFinite(orderId)) {
+        Alert.alert('Error', 'Cannot refund: order not found for this issue.');
+        setOpenActionDropdownIssueId(null);
+        return;
+      }
+      setOpenActionDropdownIssueId(null);
+      Alert.alert(
+        'Confirm refund',
+        'Are you sure you want to refund this order?',
+        [
+          { 
+            text: 'Cancel', 
+            style: 'cancel',
+            onPress: () => {
+              // Don't set the action if cancelled
+            }
+          },
+          {
+            text: 'Refund',
+            onPress: async () => {
+              setIssueActions(prev => ({ ...prev, [issueId]: 'Refund' }));
+              try {
+                await callFn('cancel-payment', { orderId: Number(orderId), reason: 'chef_rejected' });
+                Alert.alert('Success', 'Refund has been initiated for the order.');
+              } catch (e) {
+                const msg = e instanceof Error ? e.message : 'Failed to initiate refund. Please try again.';
+                Alert.alert('Refund failed', msg);
+                // Remove Refund from actions if it failed
+                setIssueActions(prev => {
+                  const next = { ...prev };
+                  delete next[issueId];
+                  return next;
+                });
+              }
+            },
+          },
+        ]
+      );
+      return;
+    }
+
+    setOpenActionDropdownIssueId(null);
+    setIssueActions(prev => ({ ...prev, [issueId]: action }));
+
+    if (action === 'Resolve') {
+      await handleUpdateIssueStatus(issueId, 'resolved');
+    } else if (action === 'Pending') {
+      await handleUpdateIssueStatus(issueId, 'pending');
+    } else if (action === 'Reviewing') {
+      await handleUpdateIssueStatus(issueId, 'reviewing');
     }
   }
 
@@ -595,13 +878,13 @@ export default function AdminPage() {
   const issueStatusStyles = (status?: string) => {
     switch ((status || '').toLowerCase()) {
       case 'resolved':
-        return { container: [styles.statusPill, styles.statusSuccess], text: styles.statusTextSuccess };
+        return { color: palette.successText, label: 'Resolved' };
       case 'reviewing':
-        return { container: [styles.statusPill, styles.statusAccent], text: styles.statusTextAccent };
+        return { color: palette.primary, label: 'In review' };
       case 'dismissed':
-        return { container: [styles.statusPill, styles.statusNeutral], text: styles.statusTextNeutral };
+        return { color: palette.neutralText, label: 'Dismissed' };
       default:
-        return { container: [styles.statusPill, styles.statusPending], text: styles.statusTextPending };
+        return { color: palette.dangerText, label: 'Pending' };
     }
   };
 
@@ -1112,134 +1395,560 @@ export default function AdminPage() {
   );
 
   const IssuesTab = (
-    <ScrollView contentContainerStyle={styles.tabScroll}>
-      <Text style={styles.sectionTitle}>Order Issues ({filteredIssues.length} total)</Text>
-      <View style={styles.searchWrapper}>
-        <TextInput
-          value={issueSearch}
-          onChangeText={setIssueSearch}
-          placeholder="Search by order ID, issue type, status, or chef name..."
-          placeholderTextColor="#94a3b8"
-          style={styles.searchInput}
-        />
-      </View>
+    <View style={styles.issuesTabWrapper}>
+      <ScrollView contentContainerStyle={[styles.tabScroll, styles.issuesTabScrollContent]} horizontal>
+        <View style={styles.issuesTabInner}>
+        <View style={styles.searchWrapper}>
+          <TextInput
+            value={issueSearch}
+            onChangeText={setIssueSearch}
+            placeholder="Search by order ID, issue type, status, or chef name..."
+            placeholderTextColor="#94a3b8"
+            style={styles.searchInput}
+          />
+        </View>
 
-      {loading && issues.length === 0 ? (
-        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-      ) : paginatedIssues.length === 0 ? (
-        <View style={styles.emptyState}><Text style={styles.emptyText}>{issueSearch ? 'No issues found matching your search.' : 'No issues reported.'}</Text></View>
-      ) : (
-        <>
-          {paginatedIssues.map((issue) => {
-            const statusStyles = issueStatusStyles(issue.status);
-            const statusOptions = ['pending', 'reviewing', 'resolved', 'dismissed'];
-            const currentStatus = (issue.status || '').toLowerCase();
-            
-            return (
-              <View key={issue.id} style={styles.card}>
-                <View style={styles.cardHeader}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>Issue #{issue.id}</Text>
-                    <Text style={styles.cardMeta}>Order #{issue.order_id}</Text>
-                    <Text style={styles.cardMeta}>Chef: {issue.chefs?.name || 'Unknown'}</Text>
-                    <Text style={styles.cardMeta}>Customer: {issue.user_email || 'Unknown'}</Text>
-                    {issue.created_at && (
-                      <Text style={styles.cardTimestamp}>
-                        Reported: {new Date(issue.created_at).toLocaleString()}
-                      </Text>
-                    )}
-                  </View>
-                  <View style={statusStyles.container}>
-                    <Text style={[styles.statusPillText, statusStyles.text]}>
-                      {issue.status ? issue.status.charAt(0).toUpperCase() + issue.status.slice(1) : 'Pending'}
-                    </Text>
-                  </View>
-                </View>
-
-                <View style={styles.dividerSection}>
-                  <Text style={styles.sectionLabel}>Issue Type</Text>
-                  <View style={[styles.statusPill, styles.statusPending, { alignSelf: 'flex-start', marginTop: 4 }]}>
-                    <Text style={[styles.statusPillText, styles.statusTextPending]}>{issueTypeLabel(issue.issue_type)}</Text>
-                  </View>
-                </View>
-
-                {issue.additional_details && (
-                  <View style={styles.dividerSection}>
-                    <Text style={styles.sectionLabel}>Additional Details</Text>
-                    <Text style={styles.cardBodyMuted}>{issue.additional_details}</Text>
-                  </View>
-                )}
-
-                {issue.images && issue.images.length > 0 && (
-                  <View style={styles.dividerSection}>
-                    <Text style={styles.sectionLabel}>Attached Images ({issue.images.length})</Text>
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                      {issue.images.map((img: any) => (
-                        <Image
-                          key={img.id}
-                          source={{ uri: img.image_url }}
-                          style={{ width: 80, height: 80, borderRadius: 8, backgroundColor: palette.border }}
-                          resizeMode="cover"
-                        />
-                      ))}
-                    </View>
-                  </View>
-                )}
-
-                {issue.reviewed_at && (
-                  <View style={styles.dividerSection}>
-                    <Text style={styles.sectionLabel}>Review Info</Text>
-                    <Text style={styles.cardMeta}>
-                      Reviewed: {new Date(issue.reviewed_at).toLocaleString()}
-                    </Text>
-                    {issue.resolution_notes && (
-                      <Text style={styles.cardBodyMuted}>{issue.resolution_notes}</Text>
-                    )}
-                  </View>
-                )}
-
-                <View style={styles.segmentRow}>
-                  {statusOptions.map((status) => {
-                    const active = currentStatus === status;
-                    return (
-                      <TouchableOpacity
-                        key={status}
-                        onPress={() => handleUpdateIssueStatus(issue.id, status)}
-                        disabled={active}
-                        style={[styles.segmentButton, active && styles.segmentButtonActive]}
-                      >
-                        <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>
-                          {status.charAt(0).toUpperCase() + status.slice(1)}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                </View>
-              </View>
-            );
-          })}
-          {totalIssuePages > 1 && (
-            <View style={styles.paginationRow}>
+        {loading && issues.length === 0 ? (
+          <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+        ) : paginatedIssues.length === 0 ? (
+          <View style={styles.emptyState}><Text style={styles.emptyText}>{issueSearch ? 'No issues found matching your search.' : 'No issues reported.'}</Text></View>
+        ) : (
+          <View style={styles.tableContainer}>
+            {/* Table Header */}
+            <View style={styles.tableHeader}>
               <TouchableOpacity
-                onPress={() => setIssuePage((p) => Math.max(1, p - 1))}
-                disabled={issuePage === 1}
-                style={[styles.paginationButton, issuePage === 1 && styles.paginationButtonDisabled]}
+                style={[styles.tableHeaderCellSortable, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.createdHeaderCell]}
+                onPress={() => toggleIssueSort('created')}
               >
-                <Text style={[styles.paginationButtonText, issuePage === 1 && styles.paginationButtonTextDisabled]}>Previous</Text>
+                <Text style={styles.tableHeaderCellText}>Created</Text>
+                <Text style={[styles.sortIcon, { color: palette.primary }]}>
+                  {issueSortBy === 'created' ? (issueSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                </Text>
               </TouchableOpacity>
-              <Text style={styles.paginationStatus}>Page {issuePage} of {totalIssuePages} ({filteredIssues.length} total)</Text>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.issueIdHeaderCell]}>
+                <Text style={styles.tableHeaderCellText}>Issue ID</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }]}>
+                <Text style={styles.tableHeaderCellText}>Order</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                <Text style={styles.tableHeaderCellText}>Chef</Text>
+              </View>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
+                <Text style={styles.tableHeaderCellText}>User</Text>
+              </View>
               <TouchableOpacity
-                onPress={() => setIssuePage((p) => Math.min(totalIssuePages, p + 1))}
-                disabled={issuePage === totalIssuePages}
-                style={[styles.paginationButton, issuePage === totalIssuePages && styles.paginationButtonDisabled]}
+                style={[styles.tableHeaderCellSortable, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }]}
+                onPress={() => toggleIssueSort('status')}
               >
-                <Text style={[styles.paginationButtonText, issuePage === totalIssuePages && styles.paginationButtonTextDisabled]}>Next</Text>
+                <Text style={styles.tableHeaderCellText}>Status</Text>
+                <Text style={[styles.sortIcon, { color: palette.primary }]}>
+                  {issueSortBy === 'status' ? (issueSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.tableHeaderCellSortable, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }]}
+                onPress={() => toggleIssueSort('action')}
+              >
+                <Text style={styles.tableHeaderCellText}>Action</Text>
+                <Text style={[styles.sortIcon, { color: palette.primary }]}>
+                  {issueSortBy === 'action' ? (issueSortDir === 'asc' ? '▲' : '▼') : '↕'}
+                </Text>
               </TouchableOpacity>
             </View>
-          )}
-        </>
+
+            {/* Table Rows */}
+            {paginatedIssues.map((issue) => {
+              const statusStyles = issueStatusStyles(issue.status);
+              
+              return (
+                <View key={issue.id} style={styles.tableRow}>
+                  <Text style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.createdCell]}>
+                    {formatEst(issue.created_at)}
+                  </Text>
+                  <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.issueIdCell]}>
+                    <Text>{issue.id}</Text>
+                    <TouchableOpacity onPress={() => setIssueDetailModalId(issue.id)}>
+                      <Text style={styles.viewDetailsLink}>View details</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={[styles.tableCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }, styles.orderIdCell]}>
+                    <Text>{issue.order_id}</Text>
+                    <TouchableOpacity onPress={() => setOrderDetailModalId(issue.order_id)}>
+                      <Text style={styles.viewDetailsLink}>View details</Text>
+                    </TouchableOpacity>
+                  </View>
+                  <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }, styles.chefCell]}>
+                    <Text style={styles.chefNameText} numberOfLines={1}>{issue.chefs?.name || 'Unknown'}</Text>
+                    {issue.chefs?.id && (
+                      <Link href={`/chef/${issue.chefs.id}`} asChild>
+                        <TouchableOpacity style={styles.chefLinkIcon}>
+                          <Text style={styles.chefLinkIconText}>↗</Text>
+                        </TouchableOpacity>
+                      </Link>
+                    )}
+                  </View>
+                  <Text style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]} numberOfLines={1}>
+                    {(issue as any).user_name || 'Unknown'}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }, { color: statusStyles.color }]}>
+                    {statusStyles.label}
+                  </Text>
+                  <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.actionCellWrapper]}>
+                    <View style={styles.actionDropdownWrapper}>
+                      {issueActions[issue.id] === 'Refund' ? (
+                        <View style={[styles.actionButton, styles.actionButtonReadOnly]}>
+                          <Text style={[styles.actionButtonText, styles.actionButtonTextReadOnly]}>Refund</Text>
+                        </View>
+                      ) : issueActions[issue.id] ? (
+                        <>
+                          <TouchableOpacity
+                            style={styles.actionButtonSelected}
+                            onPress={() => setOpenActionDropdownIssueId(prev => prev === issue.id ? null : issue.id)}
+                          >
+                            <Text style={styles.actionButtonTextSelected}>{issueActions[issue.id]}</Text>
+                            <Text style={styles.actionDropdownIcon}>▼</Text>
+                          </TouchableOpacity>
+                          {!isMobile && openActionDropdownIssueId === issue.id && (
+                            <View style={styles.actionDropdownMenu}>
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
+                              >
+                                <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Resolve' && styles.actionDropdownOptionTextSelected]}>Resolve</Text>
+                              </TouchableOpacity>
+                              {issueActions[issue.id] !== 'Refund' && (
+                                <TouchableOpacity
+                                  style={styles.actionDropdownOption}
+                                  onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
+                                >
+                                  <Text style={styles.actionDropdownOptionText}>Refund</Text>
+                                </TouchableOpacity>
+                              )}
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
+                              >
+                                <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Pending' && styles.actionDropdownOptionTextSelected]}>Pending</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
+                              >
+                                <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Reviewing' && styles.actionDropdownOptionTextSelected]}>Reviewing</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.actionButton}
+                            onPress={() => setOpenActionDropdownIssueId(prev => prev === issue.id ? null : issue.id)}
+                          >
+                            <Text style={styles.actionButtonText}>Select...</Text>
+                            <Text style={styles.actionDropdownIcon}>▼</Text>
+                          </TouchableOpacity>
+                          {!isMobile && openActionDropdownIssueId === issue.id && (
+                            <View style={styles.actionDropdownMenu}>
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
+                              >
+                                <Text style={styles.actionDropdownOptionText}>Resolve</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
+                              >
+                                <Text style={styles.actionDropdownOptionText}>Refund</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
+                              >
+                                <Text style={styles.actionDropdownOptionText}>Pending</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                style={styles.actionDropdownOption}
+                                onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
+                              >
+                                <Text style={styles.actionDropdownOptionText}>Reviewing</Text>
+                              </TouchableOpacity>
+                            </View>
+                          )}
+                        </>
+                      )}
+                    </View>
+                  </View>
+                </View>
+              );
+            })}
+
+            {totalIssuePages > 0 && (
+              <View style={styles.issuesPaginationWrap}>
+                {isMobile && (
+                  <View style={styles.issuesPaginationMobileInfo}>
+                    <Text style={styles.paginationStatus}>
+                      Page {issuePage} of {totalIssuePages}
+                    </Text>
+                    <Text style={styles.issuesTotalText}>{filteredIssues.length} total</Text>
+                  </View>
+                )}
+                {totalIssuePages > 1 && (
+                  <ScrollView
+                    ref={issuePageScrollRef}
+                    horizontal
+                    showsHorizontalScrollIndicator
+                    contentContainerStyle={styles.issuesPageScrollContent}
+                    style={styles.issuesPageScroll}
+                  >
+                    {Array.from({ length: totalIssuePages }, (_, i) => i + 1).map((p) => (
+                      <TouchableOpacity
+                        key={p}
+                        onPress={() => setIssuePage(p)}
+                        style={[styles.issuesPageButton, issuePage === p && styles.issuesPageButtonActive]}
+                      >
+                        <Text style={[styles.issuesPageButtonText, issuePage === p && styles.issuesPageButtonTextActive]}>
+                          {p}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </ScrollView>
+                )}
+              </View>
+            )}
+
+            {isMobile && openActionDropdownIssueId !== null && (() => {
+              const issue = paginatedIssues.find((i: any) => i.id === openActionDropdownIssueId);
+              if (!issue) return null;
+              return (
+                <Modal
+                  visible
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setOpenActionDropdownIssueId(null)}
+                >
+                  <TouchableOpacity
+                    style={styles.actionModalOverlay}
+                    activeOpacity={1}
+                    onPress={() => setOpenActionDropdownIssueId(null)}
+                  >
+                    <TouchableOpacity
+                      style={styles.actionModalContent}
+                      activeOpacity={1}
+                      onPress={() => {}}
+                    >
+                      {issueActions[issue.id] === 'Refund' ? (
+                        <View style={styles.actionDropdownOption}>
+                          <Text style={[styles.actionDropdownOptionText, styles.actionDropdownOptionTextReadOnly]}>Refund</Text>
+                        </View>
+                      ) : issueActions[issue.id] ? (
+                        <>
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
+                          >
+                            <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Resolve' && styles.actionDropdownOptionTextSelected]}>Resolve</Text>
+                          </TouchableOpacity>
+                          {issueActions[issue.id] !== 'Refund' && (
+                            <TouchableOpacity
+                              style={styles.actionDropdownOption}
+                              onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
+                            >
+                              <Text style={styles.actionDropdownOptionText}>Refund</Text>
+                            </TouchableOpacity>
+                          )}
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
+                          >
+                            <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Pending' && styles.actionDropdownOptionTextSelected]}>Pending</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
+                          >
+                            <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Reviewing' && styles.actionDropdownOptionTextSelected]}>Reviewing</Text>
+                          </TouchableOpacity>
+                        </>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
+                          >
+                            <Text style={styles.actionDropdownOptionText}>Resolve</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
+                          >
+                            <Text style={styles.actionDropdownOptionText}>Refund</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
+                          >
+                            <Text style={styles.actionDropdownOptionText}>Pending</Text>
+                          </TouchableOpacity>
+                          <TouchableOpacity
+                            style={styles.actionDropdownOption}
+                            onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
+                          >
+                            <Text style={styles.actionDropdownOptionText}>Reviewing</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </Modal>
+              );
+            })()}
+
+            {issueDetailModalId !== null && (() => {
+              const issue = issues.find((i: any) => i.id === issueDetailModalId);
+              if (!issue) return null;
+              const imgs = (issue.images || []) as Array<{ id: number; image_url: string }>;
+              return (
+                <Modal
+                  visible
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setIssueDetailModalId(null)}
+                >
+                  <TouchableOpacity
+                    style={styles.issueDetailOverlay}
+                    activeOpacity={1}
+                    onPress={() => setIssueDetailModalId(null)}
+                  >
+                    <TouchableOpacity
+                      style={styles.issueDetailContent}
+                      activeOpacity={1}
+                      onPress={() => {}}
+                    >
+                      <View style={styles.issueDetailHeader}>
+                        <Text style={styles.issueDetailTitle}>Issue #{issue.id}</Text>
+                        <TouchableOpacity
+                          style={styles.issueDetailClose}
+                          onPress={() => setIssueDetailModalId(null)}
+                        >
+                          <Text style={styles.issueDetailCloseText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <ScrollView
+                        style={styles.issueDetailBody}
+                        contentContainerStyle={styles.issueDetailBodyContent}
+                        showsVerticalScrollIndicator
+                      >
+                        <View style={styles.issueDetailRow}>
+                          <Text style={styles.issueDetailLabel}>User</Text>
+                          <Text style={styles.issueDetailValue}>{issue.user_email || '—'}</Text>
+                        </View>
+                        <View style={styles.issueDetailRow}>
+                          <Text style={styles.issueDetailLabel}>Chef</Text>
+                          <Text style={styles.issueDetailValue}>{issue.chefs?.name || '—'}{issue.chefs?.email ? ` (${issue.chefs.email})` : ''}</Text>
+                        </View>
+                        <View style={styles.issueDetailRow}>
+                          <Text style={styles.issueDetailLabel}>Order</Text>
+                          <Text style={styles.issueDetailValue}>{issue.order_id ?? '—'}</Text>
+                        </View>
+                        <View style={styles.issueDetailRow}>
+                          <Text style={styles.issueDetailLabel}>Issue type</Text>
+                          <Text style={styles.issueDetailValue}>{formatIssueType(issue.issue_type)}</Text>
+                        </View>
+                        <View style={styles.issueDetailRow}>
+                          <Text style={styles.issueDetailLabel}>Status</Text>
+                          <Text style={[styles.issueDetailValue, { color: issueStatusStyles(issue.status).color }]}>
+                            {issueStatusStyles(issue.status).label}
+                          </Text>
+                        </View>
+                        <View style={styles.issueDetailRow}>
+                          <Text style={styles.issueDetailLabel}>Created</Text>
+                          <Text style={styles.issueDetailValue}>{formatEst(issue.created_at)}</Text>
+                        </View>
+                        {(issue.additional_details?.trim() ?? '') !== '' && (
+                          <View style={styles.issueDetailRow}>
+                            <Text style={styles.issueDetailLabel}>Additional comments</Text>
+                            <Text style={styles.issueDetailValue}>{issue.additional_details}</Text>
+                          </View>
+                        )}
+                        {imgs.length > 0 && (
+                          <View style={styles.issueDetailRow}>
+                            <Text style={styles.issueDetailLabel}>Pictures</Text>
+                            <View style={styles.issueDetailImages}>
+                              {imgs.map((img) => (
+                                <Image
+                                  key={img.id}
+                                  source={{ uri: img.image_url }}
+                                  style={styles.issueDetailImage}
+                                  resizeMode="cover"
+                                />
+                              ))}
+                            </View>
+                          </View>
+                        )}
+                      </ScrollView>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </Modal>
+              );
+            })()}
+
+            {orderDetailModalId !== null && (() => {
+              if (loadingOrderDetails) {
+                return (
+                  <Modal visible transparent animationType="fade" onRequestClose={() => setOrderDetailModalId(null)}>
+                    <View style={styles.issueDetailOverlay}>
+                      <View style={styles.issueDetailContent}>
+                        <ActivityIndicator size="large" color={palette.primary} />
+                        <Text style={{ marginTop: 16, color: palette.text }}>Loading order details...</Text>
+                      </View>
+                    </View>
+                  </Modal>
+                );
+              }
+              
+              if (!orderDetails) return null;
+              
+              const subtotalCents = orderDetails.items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
+              const platformFeeCents = 150;
+              const taxesCents = Math.round(subtotalCents * 0.13);
+              const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents + taxesCents;
+              
+              return (
+                <Modal
+                  visible
+                  transparent
+                  animationType="fade"
+                  onRequestClose={() => setOrderDetailModalId(null)}
+                >
+                  <TouchableOpacity
+                    style={styles.issueDetailOverlay}
+                    activeOpacity={1}
+                    onPress={() => setOrderDetailModalId(null)}
+                  >
+                    <TouchableOpacity
+                      style={styles.issueDetailContent}
+                      activeOpacity={1}
+                      onPress={() => {}}
+                    >
+                      <View style={styles.issueDetailHeader}>
+                        <Text style={styles.issueDetailTitle}>Order #{String(orderDetailModalId).padStart(5, '0')}</Text>
+                        <TouchableOpacity
+                          style={styles.issueDetailClose}
+                          onPress={() => setOrderDetailModalId(null)}
+                        >
+                          <Text style={styles.issueDetailCloseText}>✕</Text>
+                        </TouchableOpacity>
+                      </View>
+                      <ScrollView
+                        style={styles.issueDetailBody}
+                        contentContainerStyle={styles.issueDetailBodyContent}
+                        showsVerticalScrollIndicator
+                      >
+                        {orderDetails.chefLocation && (
+                          <View style={styles.orderDetailSectionCard}>
+                            <TouchableOpacity
+                              style={styles.orderDetailSectionHeader}
+                              onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}
+                            >
+                              <Text style={styles.issueDetailLabel}>Pickup address</Text>
+                              <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
+                            </TouchableOpacity>
+                            {isPickupAddressExpanded && (
+                              <View style={styles.orderDetailSectionContent}>
+                                <Text style={styles.issueDetailValue}>{orderDetails.chefLocation}</Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                        {orderDetails.pickupAt && (
+                          <View style={styles.orderDetailSectionCard}>
+                            <TouchableOpacity
+                              style={styles.orderDetailSectionHeader}
+                              onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}
+                            >
+                              <Text style={styles.issueDetailLabel}>Pickup date & time</Text>
+                              <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
+                            </TouchableOpacity>
+                            {isPickupDateTimeExpanded && (
+                              <View style={styles.orderDetailSectionContent}>
+                                <Text style={styles.issueDetailValue}>{formatPickupDateTime(orderDetails.pickupAt)}</Text>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                        {orderDetails.items.length > 0 && (
+                          <View style={styles.orderDetailSectionCard}>
+                            <TouchableOpacity
+                              style={styles.orderDetailSectionHeader}
+                              onPress={() => setIsOrderSummaryExpanded(!isOrderSummaryExpanded)}
+                            >
+                              <Text style={styles.issueDetailLabel}>Order summary</Text>
+                              <Text style={styles.expandIcon}>{isOrderSummaryExpanded ? '−' : '+'}</Text>
+                            </TouchableOpacity>
+                            {isOrderSummaryExpanded && (
+                              <View style={styles.orderDetailSectionContent}>
+                                {orderDetails.items.map(item => (
+                                  <View key={item.id} style={styles.orderItemRow}>
+                                    <View style={styles.orderItemInfo}>
+                                      <Text style={styles.orderItemName}>
+                                        {item.dish?.name ?? `Dish #${item.dish_id}`} {orderDetails.chef ? `(${orderDetails.chef.name})` : ''}
+                                      </Text>
+                                    </View>
+                                    <View style={styles.orderItemQuantityPrice}>
+                                      <Text style={styles.orderItemQuantity}>{item.quantity}</Text>
+                                      <Text style={styles.orderItemPrice}>{cents(item.unit_price_cents * item.quantity)}</Text>
+                                    </View>
+                                  </View>
+                                ))}
+                                <View style={styles.summaryDivider} />
+                                <View style={styles.summaryRow}>
+                                  <Text style={styles.summaryLabel}>Subtotal</Text>
+                                  <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
+                                </View>
+                                <View style={styles.summaryRow}>
+                                  <Text style={styles.summaryLabel}>Platform service fee</Text>
+                                  <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
+                                </View>
+                                <View style={styles.summaryRow}>
+                                  <Text style={styles.summaryLabel}>Taxes</Text>
+                                  <Text style={styles.summaryValue}>{cents(taxesCents)}</Text>
+                                </View>
+                                <View style={[styles.summaryRow, { marginTop: 8 }]}>
+                                  <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>Total</Text>
+                                  <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>
+                                </View>
+                              </View>
+                            )}
+                          </View>
+                        )}
+                      </ScrollView>
+                    </TouchableOpacity>
+                  </TouchableOpacity>
+                </Modal>
+              );
+            })()}
+
+          </View>
+        )}
+        </View>
+      </ScrollView>
+      {/* Fixed page number and total count in bottom of viewport - hidden on mobile */}
+      {shouldShowFixedElements && totalIssuePages > 0 && (
+        <View style={styles.issuesPageNumberFixed}>
+          <Text style={styles.paginationStatus}>
+            Page {issuePage} of {totalIssuePages}
+          </Text>
+        </View>
       )}
-    </ScrollView>
+      {shouldShowFixedElements && (
+        <View style={styles.issuesTotalFixed}>
+          <Text style={styles.issuesTotalText}>{filteredIssues.length} total</Text>
+        </View>
+      )}
+    </View>
   );
 
   function OrderCard({ order, onStatusUpdate }: { order: OrderWithItems; onStatusUpdate: (id: number, status: string) => void }) {
@@ -1323,7 +2032,7 @@ export default function AdminPage() {
       <Screen style={{ backgroundColor: palette.background }}>
         <View style={styles.loadingScreen}>
           <ActivityIndicator size="large" color={palette.primary} />
-          <Text style={styles.loadingText}>Checking admin access…</Text>
+          <Text style={styles.loadingText}>Loading</Text>
         </View>
       </Screen>
     );
@@ -1352,18 +2061,6 @@ export default function AdminPage() {
           <View>
             <Text style={styles.headerTitle}>Welcome, {profile?.name ? profile.name.split(' ')[0] : 'Admin'}!</Text>
             <Text style={styles.headerSubtitle}>Monitor requests, chefs, users, and orders at a glance.</Text>
-          </View>
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              onPress={() => {
-                loadAll();
-                fetchChefRequests().then(setChefRequests);
-              }}
-              disabled={loading}
-              style={[styles.actionButton, styles.primaryButton, loading && styles.disabledButton]}
-            >
-              <Text style={styles.primaryButtonText}>{loading ? 'Refreshing…' : 'Refresh'}</Text>
-            </TouchableOpacity>
           </View>
         </View>
         {err ? (
@@ -1711,6 +2408,291 @@ const styles = StyleSheet.create({
   paginationStatus: {
     color: palette.muted,
     fontWeight: '600',
+    fontSize: 13,
+    lineHeight: 20,
+  },
+  issuesPaginationWrap: {
+    marginTop: 16,
+    paddingHorizontal: 12,
+    paddingVertical: 0,
+    gap: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  issuesPaginationMobileInfo: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    width: '100%',
+    marginBottom: 8,
+  },
+  issuesPageScroll: {
+    maxHeight: 44,
+  },
+  issuesPageScrollContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingVertical: 4,
+    paddingRight: 16,
+  },
+  issuesPageButton: {
+    minWidth: 40,
+    height: 36,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    backgroundColor: palette.surface,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  issuesPageButtonActive: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
+  },
+  issuesPageButtonText: {
+    color: palette.text,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  issuesPageButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  issuesTabWrapper: {
+    position: 'relative',
+    flex: 1,
+  },
+  issuesTabScrollContent: {
+    paddingBottom: 60,
+  },
+  issuesTabInner: {
+    paddingBottom: 0,
+  },
+  issuesPageNumberFixed: {
+    position: 'absolute',
+    bottom: 16,
+    left: 16,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    backgroundColor: palette.surface,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    zIndex: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 20,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      },
+      default: {
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  issuesTotalFixed: {
+    position: 'absolute',
+    bottom: 16,
+    right: 16,
+    paddingVertical: 0,
+    paddingHorizontal: 12,
+    backgroundColor: palette.surface,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    zIndex: 100,
+    justifyContent: 'center',
+    alignItems: 'center',
+    minHeight: 20,
+    ...Platform.select({
+      web: {
+        boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
+      },
+      default: {
+        elevation: 4,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 8,
+      },
+    }),
+  },
+  issuesTotalText: {
+    color: palette.muted,
+    fontSize: 13,
+    fontWeight: '600',
+    lineHeight: 20,
+  },
+  issueDetailOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  issueDetailContent: {
+    backgroundColor: palette.surface,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    width: '100%',
+    maxWidth: 480,
+    maxHeight: '85%',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { boxShadow: '0 8px 24px rgba(0,0,0,0.15)' },
+      default: {
+        elevation: 12,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 8 },
+        shadowOpacity: 0.15,
+        shadowRadius: 24,
+      },
+    }),
+  },
+  issueDetailHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingVertical: 16,
+    paddingHorizontal: 20,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  issueDetailTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: palette.text,
+  },
+  issueDetailClose: {
+    padding: 4,
+  },
+  issueDetailCloseText: {
+    fontSize: 18,
+    color: palette.muted,
+    fontWeight: '600',
+  },
+  issueDetailBody: {
+    flex: 1,
+  },
+  issueDetailBodyContent: {
+    padding: 20,
+    paddingBottom: 24,
+    gap: 16,
+  },
+  issueDetailRow: {
+    gap: 6,
+  },
+  issueDetailLabel: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: palette.muted,
+    textTransform: 'uppercase',
+  },
+  issueDetailValue: {
+    fontSize: 15,
+    color: palette.text,
+    lineHeight: 22,
+  },
+  issueDetailImages: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 12,
+    marginTop: 4,
+  },
+  issueDetailImage: {
+    width: 100,
+    height: 100,
+    borderRadius: 8,
+    backgroundColor: palette.border,
+  },
+  orderDetailSectionCard: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    borderWidth: 0,
+    padding: 12,
+    marginBottom: 24,
+  },
+  orderDetailSectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingLeft: 12,
+  },
+  orderDetailSectionContent: {
+    paddingTop: 12,
+    paddingLeft: 24,
+  },
+  orderItemRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    marginBottom: 12,
+  },
+  orderItemInfo: {
+    flex: 1,
+    marginRight: 12,
+  },
+  orderItemName: {
+    fontSize: 15,
+    color: palette.text,
+    lineHeight: 22,
+  },
+  orderItemQuantityPrice: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  orderItemQuantity: {
+    fontSize: 15,
+    color: palette.text,
+    minWidth: 24,
+    textAlign: 'right',
+  },
+  orderItemPrice: {
+    fontSize: 15,
+    color: palette.text,
+    fontWeight: '600',
+    minWidth: 80,
+    textAlign: 'right',
+  },
+  summaryDivider: {
+    height: 1,
+    backgroundColor: palette.border,
+    marginVertical: 12,
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  summaryLabel: {
+    fontSize: 15,
+    color: palette.text,
+  },
+  summaryValue: {
+    fontSize: 15,
+    color: palette.text,
+    fontWeight: '600',
+  },
+  summaryTotalLabel: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  summaryTotalValue: {
+    fontSize: 16,
+    fontWeight: '700',
+  },
+  expandIcon: {
+    fontSize: 18,
+    color: palette.text,
+    fontWeight: '600',
   },
   cardActionButton: {
     alignSelf: 'flex-start',
@@ -1991,6 +2973,224 @@ const styles = StyleSheet.create({
     fontSize: 12,
     marginBottom: 12,
     fontStyle: 'italic',
+  },
+  tableContainer: {
+    position: 'relative',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    minWidth: 1060,
+  },
+  tableHeaderCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  tableHeaderCellSortable: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 8,
+  },
+  tableHeaderCellText: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: '700',
+  },
+  sortIcon: {
+    fontSize: 16,
+    marginLeft: 6,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: palette.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    minWidth: 1060,
+  },
+  tableCell: {
+    color: palette.text,
+    fontSize: 14,
+    paddingVertical: 8,
+    paddingHorizontal: 8,
+    textAlignVertical: 'center',
+    overflow: 'hidden',
+  },
+  createdCell: {
+    paddingRight: 4,
+  },
+  createdHeaderCell: {
+    paddingRight: 4,
+  },
+  issueIdHeaderCell: {
+    paddingLeft: 4,
+  },
+  issueIdCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    flexWrap: 'wrap',
+    paddingLeft: 4,
+  },
+  orderIdCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  viewDetailsLink: {
+    color: palette.primary,
+    fontSize: 14,
+    textDecorationLine: 'underline',
+  },
+  chefCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 0,
+  },
+  chefNameText: {
+    color: palette.text,
+    fontSize: 14,
+  },
+  chefLinkIcon: {
+    padding: 0,
+    marginLeft: 2,
+  },
+  chefLinkIconText: {
+    color: palette.primary,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionCellWrapper: {
+    paddingVertical: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionDropdownWrapper: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    minWidth: 120,
+    position: 'relative',
+    zIndex: 1,
+    gap: 4,
+  },
+  actionButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: palette.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minWidth: 120,
+    width: '100%',
+  },
+  actionButtonText: {
+    color: palette.text,
+    fontSize: 14,
+  },
+  actionButtonReadOnly: {
+    opacity: 0.6,
+    borderColor: palette.muted,
+  },
+  actionButtonTextReadOnly: {
+    color: palette.muted,
+  },
+  actionButtonSelected: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: palette.primary,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+    minWidth: 120,
+    width: '100%',
+  },
+  actionButtonTextSelected: {
+    color: palette.text,
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  actionDropdownIcon: {
+    color: palette.primary,
+    fontSize: 12,
+    marginLeft: 6,
+  },
+  actionModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.4)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  actionModalContent: {
+    backgroundColor: palette.surface,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    minWidth: 180,
+    alignSelf: 'center',
+    overflow: 'hidden',
+    ...Platform.select({
+      web: { boxShadow: '0 4px 12px rgba(0,0,0,0.15)' },
+      default: {
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  actionDropdownMenu: {
+    position: 'absolute',
+    top: 44,
+    left: 0,
+    right: 0,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: palette.border,
+    minWidth: 120,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+      },
+      default: {
+        elevation: 8,
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 4 },
+        shadowOpacity: 0.15,
+        shadowRadius: 12,
+      },
+    }),
+  },
+  actionDropdownOption: {
+    paddingVertical: 10,
+    paddingHorizontal: 12,
+  },
+  actionDropdownOptionText: {
+    color: palette.text,
+    fontSize: 14,
+  },
+  actionDropdownOptionTextSelected: {
+    color: palette.primary,
+    fontWeight: '600',
+  },
+  actionDropdownOptionTextReadOnly: {
+    color: palette.muted,
+    opacity: 0.6,
   },
   bannerPreviewContainer: {
     marginBottom: 16,

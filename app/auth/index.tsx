@@ -31,6 +31,10 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [googleLoading, setGoogleLoading] = useState(false);
+  
+  // Button press animation
+  const googleButtonScale = useRef(new Animated.Value(1)).current;
 
   const { loading, user, isChef, isAdmin, role } = useRole();
 
@@ -76,6 +80,22 @@ export default function AuthPage() {
 
   async function doGoogle() {
     setErr(null);
+    setGoogleLoading(true);
+    
+    // Animate button press
+    Animated.sequence([
+      Animated.timing(googleButtonScale, {
+        toValue: 0.95,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+      Animated.timing(googleButtonScale, {
+        toValue: 1,
+        duration: 100,
+        useNativeDriver: true,
+      }),
+    ]).start();
+    
     const redirectTo = getAuthRedirect();
     console.log('Google Auth Redirect:', redirectTo);
     await supabase.auth.signInWithOAuth({
@@ -178,23 +198,29 @@ export default function AuthPage() {
 
         {/* Google Button with real icon */}
         <View>
-          <TouchableOpacity
-            onPress={doGoogle}
-            activeOpacity={0.8}
-            style={{
-              backgroundColor:'#FFFFFF',
-              borderWidth:1, borderColor:C.border,
-              paddingVertical:12, paddingHorizontal:16,
-              borderRadius:12, alignItems:'center',
-              flexDirection:'row', justifyContent:'center', gap:10,
-              shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2}
-            }}>
-            <Image
-              source={{ uri:'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
-              style={{ width:18, height:18 }}
-            />
-            <Text style={{ color:C.text, fontWeight:'800', fontFamily: theme.typography.fontFamily.display }}>Continue with Google</Text>
-          </TouchableOpacity>
+          <Animated.View style={{ transform: [{ scale: googleButtonScale }] }}>
+            <TouchableOpacity
+              onPress={doGoogle}
+              disabled={googleLoading}
+              activeOpacity={0.7}
+              style={{
+                backgroundColor: googleLoading ? '#F5F5F5' : '#FFFFFF',
+                borderWidth:1, borderColor:C.border,
+                paddingVertical:12, paddingHorizontal:16,
+                borderRadius:12, alignItems:'center',
+                flexDirection:'row', justifyContent:'center', gap:10,
+                shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2},
+                opacity: googleLoading ? 0.7 : 1,
+              }}>
+              <Image
+                source={{ uri:'https://www.gstatic.com/firebasejs/ui/2.0.0/images/auth/google.svg' }}
+                style={{ width:18, height:18 }}
+              />
+              <Text style={{ color:C.text, fontWeight:'800', fontFamily: theme.typography.fontFamily.display }}>
+                {googleLoading ? 'Continuing...' : 'Continue with Google'}
+              </Text>
+            </TouchableOpacity>
+          </Animated.View>
         </View>
 
         <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>

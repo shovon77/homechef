@@ -642,7 +642,7 @@ export default function NavBar() {
             {(isAdmin || isChef) && !isCartPage && !isCheckoutPage && !isChefSignupPage && (
             <NavButton 
               href={isAdmin ? '/admin' : '/chef'} 
-              label={isAdmin ? (isMobile ? 'Dash' : 'Dashboard') : 'Sales'} 
+              label={isAdmin ? (isMobile ? 'Admin' : 'Dashboard') : 'Sales'} 
               isActive={isDashboardActive} 
             />
           )}

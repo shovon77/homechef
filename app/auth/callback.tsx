@@ -111,9 +111,9 @@ export default function AuthCallback() {
   }, [sessionEstablished, loading, role, router, params.redirect, profile, isChef, isAdmin]);
 
   return (
-    <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: theme.colors.surface}}>
+    <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: '#F2F0EF'}}>
       <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginBottom: 16 }} />
-      <Text style={{color: theme.colors.text, fontSize: 16, marginBottom: 8}}>{msg}</Text>
+      <Text style={{color: theme.colors.text, fontSize: 16, marginBottom: 8}}>Loading</Text>
       {error && (
         <Text style={{color: '#ef4444', fontSize: 14, textAlign: 'center', marginTop: 8}}>{error}</Text>
       )}
