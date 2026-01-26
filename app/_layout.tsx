@@ -71,7 +71,52 @@ export default function RootLayout() {
     }
   }, []);
 
-  // ... existing useEffects ...
+  // Ensure profile and welcome notification on auth state changes
+  useEffect(() => {
+    let mounted = true;
+    let unsubscribe: (() => void) | null = null;
+
+    async function handleAuthStateChange() {
+      try {
+        // Check initial session
+        const { data: sessionData } = await supabase.auth.getSession();
+        if (sessionData?.session?.user && mounted) {
+          const profileResult = await ensureProfile();
+          if (!profileResult.ok) {
+            console.warn('ensureProfile on initial load:', profileResult.error);
+          }
+        }
+
+        // Subscribe to auth state changes
+        const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+          if (mounted && session?.user) {
+            // Ensure profile exists and welcome notification is created
+            const profileResult = await ensureProfile();
+            if (!profileResult.ok) {
+              console.warn('ensureProfile on auth state change:', profileResult.error);
+            }
+          }
+        });
+
+        unsubscribe = subscription?.unsubscribe?.bind(subscription) || null;
+      } catch (e: any) {
+        console.warn('Error in auth state change handler:', e?.message || e);
+      }
+    }
+
+    handleAuthStateChange();
+
+    return () => {
+      mounted = false;
+      if (unsubscribe) {
+        try {
+          unsubscribe();
+        } catch (e) {
+          // Ignore unsubscribe errors
+        }
+      }
+    };
+  }, []);
 
   if (!fontsLoaded) {
     return null;

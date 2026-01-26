@@ -108,14 +108,39 @@ export async function createNotification(
 
 /**
  * Create welcome notification for new users
+ * Always uses direct insert since welcome notifications are always for the current user
  */
 export async function createWelcomeNotification(userId: string): Promise<Notification | null> {
-  return createNotification(
-    userId,
-    'welcome',
-    'Welcome to YourHomeChef!',
-    'Thank you for joining YourHomeChef. Start exploring delicious homemade meals from local chefs!'
-  );
+  try {
+    // For welcome notifications, always use direct insert since they're for the current user
+    // This avoids any timing issues with session establishment
+    const { data, error } = await supabase
+      .from('notifications')
+      .insert({
+        user_id: userId,
+        type: 'welcome',
+        title: 'Welcome to YourHomeChef!',
+        message: 'Thank you for joining YourHomeChef. Start exploring delicious homemade meals from local chefs!',
+        read: false,
+      })
+      .select()
+      .single();
+
+    if (error) {
+      // If error is about duplicate or constraint violation, that's okay - notification already exists
+      if (error.code === '23505' || error.message?.includes('duplicate') || error.message?.includes('already exists')) {
+        console.log('Welcome notification already exists for user');
+        return null;
+      }
+      console.error('Error creating welcome notification:', error);
+      return null;
+    }
+
+    return data;
+  } catch (err: any) {
+    console.error('Error creating welcome notification:', err);
+    return null;
+  }
 }
 
 /**

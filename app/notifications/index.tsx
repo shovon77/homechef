@@ -6,6 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
 import { Screen } from '../../components/Screen';
 import { theme } from '../../lib/theme';
+import WelcomeModal from '../../components/WelcomeModal';
 
 const palette = {
   background: '#F2F0EF',
@@ -158,6 +159,12 @@ export default function NotificationsPage() {
       await markAsRead(notification.id);
     }
     
+    // Handle welcome notification - show modal
+    if (notification.type === 'welcome') {
+      setShowWelcomeModal(true);
+      return;
+    }
+    
     // Handle navigation based on notification type
     if (notification.related_id && notification.related_type === 'order') {
       router.push(`/orders/track?id=${notification.related_id}`);
@@ -260,6 +267,12 @@ export default function NotificationsPage() {
           </ScrollView>
         )}
       </View>
+      
+      {/* Welcome Modal */}
+      <WelcomeModal
+        visible={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+      />
     </Screen>
   );
 }

@@ -12,6 +12,7 @@ import { NAVBAR_HEIGHT } from '../constants/layout'
 import { theme } from '../lib/theme'
 import { getProfile } from '../lib/db'
 import LocationPicker from './LocationPicker'
+import WelcomeModal from './WelcomeModal'
 
 // Web-only imports for animations
 let motion: any = null;
@@ -143,6 +144,7 @@ export default function NavBar() {
     related_type?: string;
   }>>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false)
 
   // Calculate unread count - memoized for performance
   const unreadCount = useMemo(() => {
@@ -842,6 +844,25 @@ export default function NavBar() {
               {!(loggedIn && location) && (
                 <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
               )}
+              {loggedIn && (
+                <TouchableOpacity 
+                  onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                  style={styles.notificationsButton}
+                >
+                  <Image 
+                    source={require('../assets/alarm.png')} 
+                    style={styles.notificationsIconImage as any}
+                    resizeMode="contain"
+                  />
+                  {unreadCount > 0 && (
+                    <View style={styles.notificationBadge}>
+                      <Text style={styles.notificationBadgeText}>
+                        {unreadCount > 9 ? '9+' : unreadCount}
+                      </Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              )}
               {!isChefSignupPage && (
               <Link href="/cart" asChild>
                 <TouchableOpacity style={styles.cartButton}>
@@ -858,23 +879,6 @@ export default function NavBar() {
                 </TouchableOpacity>
               </Link>
               )}
-              <TouchableOpacity 
-                onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
-                style={styles.notificationsButton}
-              >
-                <Image 
-                  source={require('../assets/alarm.png')} 
-                  style={styles.notificationsIconImage as any}
-                  resizeMode="contain"
-                />
-                {unreadCount > 0 && (
-                  <View style={styles.notificationBadge}>
-                    <Text style={styles.notificationBadgeText}>
-                      {unreadCount > 9 ? '9+' : unreadCount}
-                    </Text>
-                  </View>
-                )}
-              </TouchableOpacity>
               <TouchableOpacity 
                 onPress={() => setIsMenuOpen(!isMenuOpen)}
                 style={[styles.iconButton, { backgroundColor: 'transparent' }]}
@@ -999,6 +1003,25 @@ export default function NavBar() {
           )}
 
           <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
+          {loggedIn && (
+            <TouchableOpacity 
+              onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              style={styles.notificationsButton}
+            >
+              <Image 
+                source={require('../assets/alarm.png')} 
+                style={styles.notificationsIconImage as any}
+                resizeMode="contain"
+              />
+              {notifications.filter(n => !n.read).length > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {notifications.filter(n => !n.read).length > 9 ? '9+' : notifications.filter(n => !n.read).length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
           {!isChefSignupPage && (
           <Link href="/cart" asChild>
             <TouchableOpacity style={styles.cartButton}>
@@ -1015,23 +1038,6 @@ export default function NavBar() {
             </TouchableOpacity>
           </Link>
           )}
-          <TouchableOpacity 
-            onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
-            style={styles.notificationsButton}
-          >
-            <Image 
-              source={require('../assets/alarm.png')} 
-              style={styles.notificationsIconImage as any}
-              resizeMode="contain"
-            />
-            {notifications.filter(n => !n.read).length > 0 && (
-              <View style={styles.notificationBadge}>
-                <Text style={styles.notificationBadgeText}>
-                  {notifications.filter(n => !n.read).length > 9 ? '9+' : notifications.filter(n => !n.read).length}
-                </Text>
-              </View>
-            )}
-          </TouchableOpacity>
             </>
           )}
             </>
@@ -1244,6 +1250,14 @@ export default function NavBar() {
                           console.error('Error marking notification as read:', err);
                         }
                       }
+                      
+                      // Handle welcome notification - show modal
+                      if (notification.type === 'welcome') {
+                        setIsNotificationsOpen(false);
+                        setShowWelcomeModal(true);
+                        return;
+                      }
+                      
                       // Handle navigation based on notification type
                       if (notification.related_id && notification.related_type === 'order') {
                         router.push(`/orders/track?id=${notification.related_id}`);
@@ -1387,6 +1401,12 @@ export default function NavBar() {
           </View>
         </View>
       </Modal>
+
+      {/* Welcome Modal */}
+      <WelcomeModal
+        visible={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+      />
     </View>
   )
 }
@@ -1493,7 +1513,7 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 2,
+    gap: 0,
   },
   locationNavButton: {
     flexDirection: 'row',
@@ -1654,7 +1674,7 @@ const styles = StyleSheet.create({
     marginLeft: 0,
   },
   rightSectionMobile: {
-    gap: 2,
+    gap: 0,
   },
   iconButton: {
     width: 36,

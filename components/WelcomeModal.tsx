@@ -1,0 +1,236 @@
+'use client';
+import React from 'react';
+import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { useRouter } from 'expo-router';
+import { theme } from '../lib/theme';
+
+const PRIMARY_COLOR = '#FE734C';
+const BG_LIGHT = '#F2F0EF';
+const TEXT_DARK = '#0e1b18';
+const BORDER_LIGHT = '#E5E7EB';
+
+interface WelcomeModalProps {
+  visible: boolean;
+  onClose: () => void;
+}
+
+export default function WelcomeModal({ visible, onClose }: WelcomeModalProps) {
+  const router = useRouter();
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
+
+  return (
+    <Modal
+      visible={visible}
+      animationType="fade"
+      transparent={true}
+      onRequestClose={onClose}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Welcome!</Text>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.closeButton}
+            >
+              <Text style={styles.closeButtonText}>×</Text>
+            </TouchableOpacity>
+          </View>
+          
+          <ScrollView 
+            style={styles.modalBody}
+            contentContainerStyle={styles.modalBodyContent}
+            showsVerticalScrollIndicator={!isMobile}
+          >
+            <Text style={styles.introText}>
+              To keep things transparent, here's how we work:
+            </Text>
+            
+            <View style={styles.bulletPoint}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.bulletText}>
+                <Text style={styles.bulletLabel}>Platform fees:</Text> A small service fee supports customer service, payments & operations
+              </Text>
+            </View>
+            
+            <View style={styles.bulletPoint}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.bulletText}>
+                <Text style={styles.bulletLabel}>Pickup-only marketplace:</Text> Orders are picked up directly from the chef. No courier or delivery fees apply for you.
+              </Text>
+            </View>
+            
+            <View style={styles.bulletPoint}>
+              <Text style={styles.bullet}>•</Text>
+              <Text style={styles.bulletText}>
+                <Text style={styles.bulletLabel}>Independent home chefs:</Text> All meals are prepared by independent home chefs, not YourHomeChef.
+              </Text>
+            </View>
+            
+            <Text style={styles.footerText}>
+              All details & fees are shown before you order.
+            </Text>
+          </ScrollView>
+          
+          <View style={styles.modalFooter}>
+            <TouchableOpacity
+              onPress={onClose}
+              style={styles.gotItButton}
+            >
+              <Text style={styles.gotItButtonText}>Got it</Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              onPress={() => {
+                onClose();
+                router.push('/terms');
+              }}
+              style={styles.viewTermsButton}
+            >
+              <Text style={styles.viewTermsButtonText}>View full terms</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+const styles = StyleSheet.create({
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: BG_LIGHT,
+    borderRadius: 16,
+    width: '100%',
+    maxWidth: 600,
+    maxHeight: '80%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04)',
+      },
+      default: {
+        elevation: 10,
+      },
+    }),
+  },
+  modalContentMobile: {
+    maxWidth: '100%',
+    maxHeight: '90%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 24,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  modalTitle: {
+    fontSize: 24,
+    fontWeight: '900',
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  closeButton: {
+    width: 32,
+    height: 32,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 16,
+    backgroundColor: BORDER_LIGHT,
+  },
+  closeButtonText: {
+    fontSize: 24,
+    color: TEXT_DARK,
+    fontWeight: '300',
+    lineHeight: 24,
+  },
+  modalBody: {
+    flex: 1,
+  },
+  modalBodyContent: {
+    padding: 24,
+    gap: 16,
+  },
+  introText: {
+    fontSize: 16,
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+    marginBottom: 8,
+  },
+  bulletPoint: {
+    flexDirection: 'row',
+    gap: 12,
+    marginBottom: 12,
+  },
+  bullet: {
+    fontSize: 18,
+    color: PRIMARY_COLOR,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 24,
+  },
+  bulletText: {
+    flex: 1,
+    fontSize: 15,
+    color: TEXT_DARK,
+    lineHeight: 24,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  bulletLabel: {
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  footerText: {
+    fontSize: 15,
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 8,
+    fontStyle: 'italic',
+  },
+  modalFooter: {
+    flexDirection: 'row',
+    gap: 12,
+    padding: 24,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_LIGHT,
+  },
+  gotItButton: {
+    flex: 1,
+    backgroundColor: PRIMARY_COLOR,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  gotItButtonText: {
+    color: '#FFFFFF',
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  viewTermsButton: {
+    flex: 1,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
+    paddingVertical: 14,
+    paddingHorizontal: 24,
+    borderRadius: 8,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewTermsButtonText: {
+    color: PRIMARY_COLOR,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+});

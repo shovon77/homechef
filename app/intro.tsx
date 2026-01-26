@@ -1,12 +1,13 @@
 'use client';
-import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, useWindowDimensions, Image } from 'react-native';
+import React, { useEffect, useState, useMemo } from 'react';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, useWindowDimensions, Image, ScrollView, ActivityIndicator, Pressable } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import Screen from '../components/Screen';
 import { theme } from '../lib/theme';
 import Footer from '../components/Footer';
 import { useRole } from '../hooks/useRole';
 import { supabase } from '../lib/supabase';
+import WelcomeModal from '../components/WelcomeModal';
 
 const PRIMARY_COLOR = '#FE734C';
 const BG_LIGHT = '#F2F0EF';
@@ -22,6 +23,19 @@ export default function IntroPage() {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [hasActiveOrder, setHasActiveOrder] = useState(false);
   const [hasReadyOrder, setHasReadyOrder] = useState(false);
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false);
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    read: boolean;
+    created_at: string;
+    related_id?: number;
+    related_type?: string;
+  }>>([]);
+  const [notificationsLoading, setNotificationsLoading] = useState(false);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   // Redirect admins and chefs away from intro page
   useEffect(() => {
@@ -74,6 +88,92 @@ export default function IntroPage() {
     };
   }, [user]);
 
+  // Load notifications
+  useEffect(() => {
+    if (user?.id) {
+      loadNotifications();
+      
+      // Subscribe to real-time notification updates
+      const channel = supabase
+        .channel(`intro-notifications-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            loadNotifications();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      setNotifications([]);
+    }
+  }, [user?.id, isAdmin, isChef]);
+
+  // Refresh notifications when dropdown opens - load immediately
+  useEffect(() => {
+    if (isNotificationsOpen && user?.id) {
+      // Load notifications immediately when dropdown opens
+      loadNotifications();
+    }
+  }, [isNotificationsOpen, user?.id]);
+
+  async function loadNotifications() {
+    if (!user?.id) {
+      setNotifications([]);
+      setNotificationsLoading(false);
+      return;
+    }
+    
+    setNotificationsLoading(true);
+    try {
+      // Define allowed notification types based on user role
+      const allowedTypes: string[] = [
+        'welcome',
+        'order_placed',
+        'order_ready',
+        'order_issue_updated',
+        'order_message'
+      ];
+
+      if (isAdmin) {
+        allowedTypes.push('issue_reported', 'chef_request', 'new_user_signup');
+      }
+
+      if (isChef) {
+        allowedTypes.push('chef_application_submitted', 'chef_application_approved', 'chef_application_rejected', 'new_order_request');
+      }
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('type', allowedTypes)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Error loading notifications:', err);
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }
+
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
+
   // Native Icon Fallbacks - memoized to prevent re-renders and blinking (matching NavBar)
   const MenuIcon = React.useMemo(() => (
     <Image 
@@ -118,13 +218,32 @@ export default function IntroPage() {
             </View>
           )}
 
-          {/* Right Section: FAQ and Menu */}
+          {/* Right Section: FAQ, Notifications, and Menu */}
           <View style={styles.rightSection}>
             <Link href="/faq" asChild>
               <TouchableOpacity style={styles.iconButton}>
                 <Text style={styles.faqButtonText}>FAQ</Text>
               </TouchableOpacity>
             </Link>
+            {user && (
+              <TouchableOpacity 
+                onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                style={styles.notificationsButton}
+              >
+                <Image 
+                  source={require('../assets/alarm.png')} 
+                  style={styles.notificationsIconImage}
+                  resizeMode="contain"
+                />
+                {unreadCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+            )}
             <TouchableOpacity 
               onPress={() => setIsMenuOpen(!isMenuOpen)}
               style={styles.iconButton}
@@ -228,6 +347,115 @@ export default function IntroPage() {
           </View>
         </View>
       </View>
+
+      {/* Notifications Dropdown */}
+      {isNotificationsOpen && user && (
+        <Pressable 
+          style={styles.notificationsOverlay}
+          onPress={() => setIsNotificationsOpen(false)}
+        >
+          <Pressable 
+            style={styles.notificationsDropdown}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.notificationsHeader}>
+              <Text style={styles.notificationsTitle}>Notifications</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsNotificationsOpen(false);
+                  router.push('/notifications');
+                }}
+                style={styles.allNotificationsButton}
+              >
+                <Text style={styles.allNotificationsButtonText}>All notifications</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flex: 1, minHeight: 150 }}>
+              {notificationsLoading ? (
+                <View style={styles.notificationsContent}>
+                  <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+                  <Text style={[styles.noNotificationsText, { marginTop: 8 }]}>Loading...</Text>
+                </View>
+              ) : notifications.length === 0 ? (
+                <View style={styles.notificationsContent}>
+                  <Text style={styles.noNotificationsText}>No notifications yet!</Text>
+                </View>
+              ) : (
+                <ScrollView 
+                  style={styles.notificationsList}
+                  contentContainerStyle={styles.notificationsListContent}
+                  showsVerticalScrollIndicator={!isMobile}
+                >
+                  {notifications.map((notification) => (
+                    <TouchableOpacity
+                      key={notification.id}
+                      style={[
+                        styles.notificationItem,
+                        !notification.read && styles.notificationItemUnread
+                      ]}
+                      onPress={async () => {
+                        // Mark as read if unread
+                        if (!notification.read) {
+                          try {
+                            const { error } = await supabase
+                              .from('notifications')
+                              .update({ read: true })
+                              .eq('id', notification.id);
+                            
+                            if (!error) {
+                              setNotifications(prev => 
+                                prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+                              );
+                            }
+                          } catch (err) {
+                            console.error('Error marking notification as read:', err);
+                          }
+                        }
+                        
+                        // Handle welcome notification - show modal
+                        if (notification.type === 'welcome') {
+                          setIsNotificationsOpen(false);
+                          setShowWelcomeModal(true);
+                          return;
+                        }
+                        
+                        // Handle navigation based on notification type
+                        if (notification.related_id && notification.related_type === 'order') {
+                          router.push(`/orders/track?id=${notification.related_id}`);
+                          setIsNotificationsOpen(false);
+                        }
+                      }}
+                    >
+                      <View style={styles.notificationItemContent}>
+                        <Text style={styles.notificationItemTitle}>{notification.title}</Text>
+                        <Text style={styles.notificationItemMessage}>{notification.message}</Text>
+                        <Text style={styles.notificationItemTime}>
+                          {new Date(notification.created_at).toLocaleDateString('en-US', {
+                            timeZone: 'America/New_York',
+                            month: 'long',
+                            day: 'numeric',
+                            year: 'numeric'
+                          })}
+                        </Text>
+                      </View>
+                      {!notification.read && (
+                        <View style={styles.notificationUnreadDot} />
+                      )}
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+              )}
+            </View>
+          </Pressable>
+        </Pressable>
+      )}
+
+      {/* Welcome Modal */}
+      <WelcomeModal
+        visible={showWelcomeModal}
+        onClose={() => setShowWelcomeModal(false)}
+      />
+
       <Footer />
     </Screen>
   );
@@ -385,7 +613,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
-    gap: theme.spacing.sm,
+    gap: 2,
   },
   iconButton: {
     width: 36,
@@ -395,6 +623,19 @@ const styles = StyleSheet.create({
     backgroundColor: '#F3F4F6',
     borderRadius: 18,
     display: 'flex',
+  },
+  notificationsButton: {
+    width: 40,
+    height: 40,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: 'transparent',
+    borderRadius: 8,
+  },
+  notificationsIconImage: {
+    width: 20,
+    height: 20,
+    tintColor: PRIMARY_COLOR,
   },
   faqButtonText: {
     fontSize: 14,
@@ -447,6 +688,146 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '600',
     color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  notificationsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    zIndex: 1000,
+    justifyContent: 'flex-start',
+    alignItems: 'flex-end',
+    paddingTop: Platform.select({
+      web: 80,
+      default: 60,
+    }),
+    paddingRight: Platform.select({
+      web: 16,
+      default: 8,
+    }),
+  },
+  notificationsDropdown: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    width: Platform.select({
+      web: 400,
+      default: '90%',
+    }),
+    minHeight: 200,
+    maxHeight: '70%',
+    ...Platform.select({
+      web: {
+        boxShadow: '0 10px 25px rgba(0, 0, 0, 0.15)',
+      },
+      default: {
+        elevation: 8,
+      },
+    }),
+  },
+  notificationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    padding: 16,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  notificationsTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  allNotificationsButton: {
+    paddingVertical: 6,
+    paddingHorizontal: 12,
+    borderRadius: 6,
+    backgroundColor: PRIMARY_COLOR + '15',
+  },
+  allNotificationsButtonText: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: PRIMARY_COLOR,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  notificationsContent: {
+    padding: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 150,
+    flex: 1,
+  },
+  noNotificationsText: {
+    fontSize: 14,
+    color: TEXT_GREY,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  notificationsList: {
+    flex: 1,
+    maxHeight: 400,
+  },
+  notificationsListContent: {
+    padding: 8,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    padding: 12,
+    borderRadius: 8,
+    marginBottom: 4,
+    backgroundColor: '#FFFFFF',
+  },
+  notificationItemUnread: {
+    backgroundColor: '#FFF9F7',
+  },
+  notificationItemContent: {
+    flex: 1,
+    gap: 4,
+  },
+  notificationItemTitle: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  notificationItemMessage: {
+    fontSize: 13,
+    color: TEXT_GREY,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  notificationItemTime: {
+    fontSize: 11,
+    color: TEXT_GREY,
+    fontFamily: theme.typography.fontFamily.body,
+    marginTop: 4,
+  },
+  notificationUnreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: PRIMARY_COLOR,
+    alignSelf: 'center',
+    marginLeft: 8,
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -4,
+    right: -4,
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '700',
     fontFamily: theme.typography.fontFamily.body,
   },
 });
