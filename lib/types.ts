@@ -19,6 +19,8 @@ export type Profile = {
   is_admin: boolean; // default false
   photo_url?: string | null; // Avatar URL (stored in Supabase Storage)
   location?: string | null; // User location from Google Places
+  latitude?: number | null; // Geocoded latitude for faster distance calculations
+  longitude?: number | null; // Geocoded longitude for faster distance calculations
 };
 
 // ============================================================================
@@ -38,6 +40,8 @@ export type Chef = {
   created_at: string | null; // timestamptz
   cuisine: string | null; // cuisine specialty from application
   user_id?: string | null; // FK -> auth.users.id
+  latitude?: number | null; // Geocoded latitude for faster distance calculations
+  longitude?: number | null; // Geocoded longitude for faster distance calculations
 };
 
 // ============================================================================

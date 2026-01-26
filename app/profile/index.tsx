@@ -211,12 +211,54 @@ export default function ProfilePage() {
       
       console.log("Attempting to update profile:", { userId: user.id, name: fullName, phone, photoUrl });
       
-      // Build update object with name, phone, location, and photo_url if changed
-      const updateData: { name: string; phone?: string | null; location?: string | null; photo_url?: string | null } = {
+      // Geocode location if it changed
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      const locationValue = location.trim() || null;
+      if (locationValue && locationValue !== profile?.location) {
+        try {
+          const { geocodeAddress } = await import('../../lib/geocode');
+          const coords = await geocodeAddress(locationValue);
+          if (coords) {
+            latitude = coords.lat;
+            longitude = coords.lon;
+          }
+        } catch (error) {
+          console.warn('Failed to geocode location:', error);
+          // Continue without coordinates - location text will still be saved
+        }
+      } else if (locationValue === profile?.location && profile) {
+        // Location unchanged, preserve existing coordinates if available
+        const existingProfile = profile as any;
+        if (existingProfile.latitude && existingProfile.longitude) {
+          latitude = existingProfile.latitude;
+          longitude = existingProfile.longitude;
+        }
+      }
+      
+      // Build update object with name, phone, location, coordinates, and photo_url if changed
+      const updateData: { 
+        name: string; 
+        phone?: string | null; 
+        location?: string | null; 
+        latitude?: number | null;
+        longitude?: number | null;
+        photo_url?: string | null 
+      } = {
         name: fullName,
         phone: phone.trim() || null,
-        location: location.trim() || null,
+        location: locationValue,
       };
+      
+      // Add coordinates if we have them
+      if (latitude !== null && longitude !== null) {
+        updateData.latitude = latitude;
+        updateData.longitude = longitude;
+      } else if (locationValue === null) {
+        // Clear coordinates if location is cleared
+        updateData.latitude = null;
+        updateData.longitude = null;
+      }
       
       // Include photo_url if it has changed and is not null
       if (photoUrl !== null && photoUrl !== profile?.photo_url) {

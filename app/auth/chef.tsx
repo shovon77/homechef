@@ -678,18 +678,18 @@ export default function ChefSignup() {
         const { data: newApp, error: appError } = await supabase
           .from('chef_applications')
           .insert({
-            user_id: session.user.id,
+          user_id: session.user.id,
             name: chefName,
             email: email || null,
-            phone: phone || null,
+          phone: phone || null,
             location: chefLocation,
             short_bio: chefBio,
             cuisine_specialty: chefCuisine,
-            status: 'submitted',
+          status: 'submitted',
           })
-          .select('id')
-          .single();
-        
+        .select('id')
+        .single();
+
         if (!appError && newApp) {
           applicationId = newApp.id;
         } else {
@@ -998,7 +998,7 @@ export default function ChefSignup() {
 
                   {/* Action Buttons */}
                   <View style={styles.actions}>
-                    <TouchableOpacity
+                        <TouchableOpacity
                       style={[styles.nextButton, (!canProceedToStep2 || busy) && styles.nextButtonDisabled]}
                       onPress={handleNext}
                       disabled={!canProceedToStep2 || busy}
@@ -1140,7 +1140,7 @@ export default function ChefSignup() {
                                   >
                                     <Text style={styles.removeSlotButtonText}>✕</Text>
                         </TouchableOpacity>
-                    </View>
+                      </View>
                               );
                             });
                           }).flat();
@@ -1196,7 +1196,7 @@ export default function ChefSignup() {
                                   );
                                 })}
                               </ScrollView>
-                    </View>
+                  </View>
 
                             {/* Time Window Picker Wheel */}
                             <View style={styles.inlinePickerWheel}>
@@ -1241,7 +1241,7 @@ export default function ChefSignup() {
                         </View>
                       </View>
                     </Modal>
-        </View>
+                  </View>
 
                   {/* Action Buttons */}
                   <View style={styles.actions}>
@@ -1260,7 +1260,7 @@ export default function ChefSignup() {
                       <Text style={styles.nextButtonText}>Next Step</Text>
                       <Text style={styles.nextButtonIcon}>→</Text>
                     </TouchableOpacity>
-                      </View>
+                  </View>
                 </>
               ) : step === 3 ? (
                 <>
@@ -1368,7 +1368,7 @@ export default function ChefSignup() {
                   >
                         <View style={[styles.checkbox, foodSafetyAcknowledged && styles.checkboxChecked]}>
                           {foodSafetyAcknowledged && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
+                      </View>
                     <Text style={styles.checkboxLabel}>
                           I'm responsible for food preparation and safety
                     </Text>

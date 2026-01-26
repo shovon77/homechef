@@ -99,13 +99,11 @@ export default function CartScreen() {
 
     setSavingLocation(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ location: currentLocation.trim() || null })
-        .eq("id", user.id);
-
-      if (error) {
-        throw new Error(error.message || "Failed to update location");
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, currentLocation.trim() || null);
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to update location");
       }
 
       setLocation(currentLocation);
@@ -145,13 +143,11 @@ export default function CartScreen() {
 
     setSavingLocation(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ location: selectedLocation.trim() })
-        .eq("id", user.id);
-
-      if (error) {
-        throw new Error(error.message || "Failed to update location");
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, selectedLocation.trim());
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to update location");
       }
 
       // Update all location states after successful save
@@ -278,13 +274,11 @@ export default function CartScreen() {
     
     setSavingLocation(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ location: fullAddress })
-        .eq("id", user.id);
-
-      if (error) {
-        throw new Error(error.message || "Failed to update location");
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, fullAddress);
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to update location");
       }
 
       // Update all location-related state
@@ -344,13 +338,11 @@ export default function CartScreen() {
           // Automatically save to user profile
           if (user) {
             try {
-              const { error: saveError } = await supabase
-                .from("profiles")
-                .update({ location: address })
-                .eq("id", user.id);
+              const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+              const result = await updateLocationWithCoordinates(user.id, address);
               
-              if (saveError) {
-                console.error("Error auto-saving location:", saveError);
+              if (!result.ok) {
+                console.error("Error auto-saving location:", result.error);
               } else {
                 setLocation(address);
                 setManualInputLocation(address);
@@ -375,13 +367,11 @@ export default function CartScreen() {
         // Automatically save fallback address to user profile
         if (user) {
           try {
-            const { error: saveError } = await supabase
-              .from("profiles")
-              .update({ location: fallbackAddress })
-              .eq("id", user.id);
+            const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+            const result = await updateLocationWithCoordinates(user.id, fallbackAddress);
             
-            if (saveError) {
-              console.error("Error auto-saving location:", saveError);
+            if (!result.ok) {
+              console.error("Error auto-saving location:", result.error);
             } else {
               setLocation(fallbackAddress);
               setManualInputLocation(fallbackAddress);

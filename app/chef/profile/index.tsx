@@ -300,11 +300,52 @@ export default function ChefProfilePage() {
     try {
       const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
       
-      const updateData: { name: string; phone?: string | null; location?: string | null; photo_url?: string | null } = {
+      // Geocode location if it changed
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      const locationValue = location.trim() || null;
+      if (locationValue && locationValue !== profile?.location) {
+        try {
+          const { geocodeAddress } = await import('../../lib/geocode');
+          const coords = await geocodeAddress(locationValue);
+          if (coords) {
+            latitude = coords.lat;
+            longitude = coords.lon;
+          }
+        } catch (error) {
+          console.warn('Failed to geocode location:', error);
+        }
+      } else if (locationValue === profile?.location && profile) {
+        // Location unchanged, preserve existing coordinates if available
+        const existingProfile = profile as any;
+        if (existingProfile.latitude && existingProfile.longitude) {
+          latitude = existingProfile.latitude;
+          longitude = existingProfile.longitude;
+        }
+      }
+      
+      const updateData: { 
+        name: string; 
+        phone?: string | null; 
+        location?: string | null; 
+        latitude?: number | null;
+        longitude?: number | null;
+        photo_url?: string | null 
+      } = {
         name: fullName,
         phone: phone.trim() || null,
-        location: location.trim() || null,
+        location: locationValue,
       };
+      
+      // Add coordinates if we have them
+      if (latitude !== null && longitude !== null) {
+        updateData.latitude = latitude;
+        updateData.longitude = longitude;
+      } else if (locationValue === null) {
+        // Clear coordinates if location is cleared
+        updateData.latitude = null;
+        updateData.longitude = null;
+      }
       
       if (photoUrl !== null && photoUrl !== profile?.photo_url) {
         updateData.photo_url = photoUrl;
@@ -316,6 +357,29 @@ export default function ChefProfilePage() {
         .eq("id", user.id);
 
       if (profileError) throw profileError;
+      
+      // Also update chef's location in chefs table if location changed
+      if (locationValue !== profile?.location) {
+        const chefLocationUpdate: {
+          location?: string | null;
+          latitude?: number | null;
+          longitude?: number | null;
+        } = {
+          location: locationValue,
+        };
+        if (latitude !== null && longitude !== null) {
+          chefLocationUpdate.latitude = latitude;
+          chefLocationUpdate.longitude = longitude;
+        } else if (locationValue === null) {
+          chefLocationUpdate.latitude = null;
+          chefLocationUpdate.longitude = null;
+        }
+        
+        await supabase
+          .from("chefs")
+          .update(chefLocationUpdate)
+          .eq("user_id", user.id);
+      }
 
       // Update chefs table with onboarding fields
       const chefUpdateData: {

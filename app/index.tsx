@@ -14,6 +14,215 @@ type Dish = { id: number; name: string; image?: string | null; price?: number | 
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 
+// Coordinate cache with persistent storage
+const coordinateCache = new Map<string, { lat: number; lon: number } | null>();
+
+// Load cache from localStorage on initialization
+if (Platform.OS === 'web' && typeof window !== 'undefined') {
+  try {
+    const cached = localStorage.getItem('geocode_cache');
+    if (cached) {
+      const parsed = JSON.parse(cached);
+      Object.entries(parsed).forEach(([key, value]: [string, any]) => {
+        if (value) {
+          coordinateCache.set(key, value);
+        }
+      });
+    }
+  } catch (e) {
+    console.warn('Failed to load geocode cache:', e);
+  }
+}
+
+// Save cache to localStorage
+function saveCacheToStorage() {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    try {
+      const cacheObj: Record<string, { lat: number; lon: number } | null> = {};
+      coordinateCache.forEach((value, key) => {
+        cacheObj[key] = value;
+      });
+      localStorage.setItem('geocode_cache', JSON.stringify(cacheObj));
+    } catch (e) {
+      console.warn('Failed to save geocode cache:', e);
+    }
+  }
+}
+
+// Geocode an address with persistent caching and retry logic
+async function geocodeAddress(address: string, retries = 2): Promise<{ lat: number; lon: number } | null> {
+  if (!address) return null;
+  
+  // Check in-memory cache first
+  if (coordinateCache.has(address)) {
+    const cached = coordinateCache.get(address);
+    if (cached) return cached; // Only return if we have valid coordinates
+    // If cached as null, don't retry immediately (was a persistent failure)
+    // But allow one retry attempt
+  }
+
+  // Try different address formats
+  const addressVariants = [
+    address, // Full address first
+    address.split(',').slice(0, 2).join(',').trim(), // City, State
+    address.split(',')[0]?.trim(), // Just city
+  ].filter((v, i, arr) => v && arr.indexOf(v) === i); // Remove duplicates
+
+  for (let variantIndex = 0; variantIndex < addressVariants.length; variantIndex++) {
+    const addressToTry = addressVariants[variantIndex];
+    
+    // Check cache for this variant
+    if (coordinateCache.has(addressToTry)) {
+      const cached = coordinateCache.get(addressToTry);
+      if (cached) {
+        // Cache the result for the original address too
+        coordinateCache.set(address, cached);
+        saveCacheToStorage();
+        return cached;
+      }
+    }
+
+    for (let attempt = 0; attempt <= retries; attempt++) {
+      try {
+        const encodedAddress = encodeURIComponent(addressToTry);
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
+        
+        const response = await fetch(
+          `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1&addressdetails=0`,
+          {
+            headers: {
+              'User-Agent': 'YourHomeChef/1.0'
+            },
+            signal: controller.signal
+          }
+        );
+        
+        clearTimeout(timeoutId);
+        
+        if (!response.ok) {
+          throw new Error(`Geocoding failed: ${response.status}`);
+        }
+        
+        const data = await response.json();
+        if (data && data.length > 0) {
+          const coords = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+          // Validate coordinates
+          if (isNaN(coords.lat) || isNaN(coords.lon)) {
+            throw new Error('Invalid coordinates returned');
+          }
+          // Cache for both the variant and original address
+          coordinateCache.set(addressToTry, coords);
+          coordinateCache.set(address, coords);
+          saveCacheToStorage();
+          return coords;
+        }
+        
+        // If no results, try next variant or retry
+        if (attempt < retries) {
+          await new Promise(resolve => setTimeout(resolve, 300)); // Small delay between retries
+          continue;
+        }
+        
+        // This variant failed, try next one
+        break;
+      } catch (error: any) {
+        if (attempt === retries) {
+          // Final attempt for this variant failed, try next variant
+          if (variantIndex === addressVariants.length - 1) {
+            // All variants failed
+            if (error.name === 'AbortError') {
+              console.warn('Geocoding timeout for:', address);
+            } else {
+              console.warn('Geocoding error for:', address, error);
+            }
+            // Don't cache failures - allow retry on next load
+            return null;
+          }
+          break; // Try next variant
+        }
+        // Wait before retry
+        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
+      }
+    }
+  }
+  
+  return null;
+}
+
+// Calculate distance using Haversine formula
+function calculateDistanceFromCoords(userCoords: { lat: number; lon: number }, chefCoords: { lat: number; lon: number }): number {
+  const R = 6371; // Earth's radius in km
+  const dLat = (chefCoords.lat - userCoords.lat) * Math.PI / 180;
+  const dLon = (chefCoords.lon - userCoords.lon) * Math.PI / 180;
+  const a = 
+    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(userCoords.lat * Math.PI / 180) * Math.cos(chefCoords.lat * Math.PI / 180) *
+    Math.sin(dLon / 2) * Math.sin(dLon / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
+
+// Calculate distance between two addresses (with caching)
+async function getDistance(userLocation: string | null, chefLocation: string | null): Promise<number | null> {
+  if (!userLocation || !chefLocation) return null;
+  
+  try {
+    const [userCoords, chefCoords] = await Promise.all([
+      geocodeAddress(userLocation),
+      geocodeAddress(chefLocation)
+    ]);
+
+    if (!userCoords || !chefCoords) return null;
+
+    return calculateDistanceFromCoords(userCoords, chefCoords);
+  } catch (error) {
+    console.warn('Distance calculation error:', error);
+    return null;
+  }
+}
+
+// Batch calculate distances for all chefs (optimized with parallel processing and caching)
+async function calculateAllDistances(userLocation: string | null, chefs: Chef[]): Promise<Map<string, number>> {
+  const distances = new Map<string, number>();
+  
+  if (!userLocation) return distances;
+
+  try {
+    // Geocode user location once (check cache first)
+    const userCoords = await geocodeAddress(userLocation);
+    if (!userCoords) return distances;
+
+    // Filter chefs with locations and batch geocode in parallel (with concurrency limit)
+    const chefsWithLocations = chefs.filter(chef => chef.location);
+    
+    // Process in batches of 5 to avoid overwhelming the API
+    const BATCH_SIZE = 5;
+    for (let i = 0; i < chefsWithLocations.length; i += BATCH_SIZE) {
+      const batch = chefsWithLocations.slice(i, i + BATCH_SIZE);
+      
+      const batchPromises = batch.map(async (chef) => {
+        const coords = await geocodeAddress(chef.location!);
+        return { chefId: normalizeId(chef.id), coords };
+      });
+
+      const batchResults = await Promise.all(batchPromises);
+
+      // Calculate distances for this batch
+      batchResults.forEach(({ chefId, coords }) => {
+        if (coords) {
+          const distance = calculateDistanceFromCoords(userCoords, coords);
+          distances.set(chefId, distance);
+        }
+      });
+    }
+  } catch (error) {
+    console.warn('Batch distance calculation error:', error);
+  }
+
+  return distances;
+}
+
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
   if (!cuisine) return 'Chef';
@@ -96,6 +305,67 @@ function CircularDishCard({ dish }: { dish: Dish }) {
   );
 }
 
+// Chef card with distance calculation
+function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distance: number | null, isMobile: boolean }) {
+
+  return (
+    <View style={[styles.featuredChefCardWrapper, isMobile && styles.featuredChefCardWrapperMobile]}>
+      <Link href={{ 
+        pathname: "/chef/[id]", 
+        params: { 
+          id: normalizeId(chef.id),
+          name: chef.name,
+          photo: chef.photo || chef.avatar || "",
+          location: chef.location || "",
+          rating: chef.rating?.toString() || "",
+          rating_count: chef.rating_count?.toString() || "",
+          cuisine: chef.cuisine || ""
+        } 
+      }} asChild>
+        <TouchableOpacity activeOpacity={0.9} style={StyleSheet.flatten([styles.featuredChefCard, isMobile && styles.featuredChefCardMobile])}>
+          <Image
+            source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
+            style={[styles.featuredChefAvatar, isMobile && styles.featuredChefAvatarMobile]}
+          />
+          <Text style={styles.featuredChefName}>{chef.name}</Text>
+          <Text style={styles.featuredChefCuisine}>{formatCuisine(chef.cuisine)}</Text>
+          <View style={styles.featuredChefLocationRatingRow}>
+            {chef.location && (
+              <View style={styles.featuredChefLocationContainer}>
+                <Image 
+                  source={require('../assets/locationnewicon.png')} 
+                  style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
+                  resizeMode="contain" 
+                />
+                <Text style={styles.featuredChefLocation} numberOfLines={1}>
+                  {chef.location?.split(',')[1]?.trim() || chef.location?.split(',')[0]}
+                </Text>
+              </View>
+            )}
+            <View style={styles.featuredChefRating}>
+              <Text style={styles.starIcon}>★</Text>
+              <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
+            </View>
+          </View>
+          {/* Distance display - only show if distance is calculated */}
+          {distance !== null && (
+            <View style={styles.featuredChefDistanceRow}>
+              <Image 
+                source={require('../assets/map.png')} 
+                style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
+                resizeMode="contain" 
+              />
+              <Text style={styles.featuredChefDistance}>
+                {distance > 20 ? '>20 km' : `${distance.toFixed(1)} km`}
+              </Text>
+            </View>
+          )}
+        </TouchableOpacity>
+      </Link>
+    </View>
+  );
+}
+
 // Dish card matching HTML design
 function HomeDishCard({ dish }: { dish: Dish }) {
   const [rating, setRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
@@ -153,10 +423,124 @@ export default function HomePage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
-  const { isChef, isAdmin } = useRole();
+  const { isChef, isAdmin, profile } = useRole();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
+  const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
+
+  // Create a stable key from chef IDs to track changes
+  const chefsKey = useMemo(() => {
+    return chefs.map(c => normalizeId(c.id)).join(',');
+  }, [chefs]);
+
+  // Recalculate distances when profile location or chefs change (optimized with batching and retries)
+  useEffect(() => {
+    if (profile?.location && chefs.length > 0) {
+      let mounted = true;
+      const distancesMap = new Map<string, number>();
+      let updateTimer: NodeJS.Timeout | null = null;
+      let lastUpdateTime = 0;
+      
+      // Helper to batch state updates (but ensure updates happen)
+      const scheduleUpdate = (force = false) => {
+        const now = Date.now();
+        if (updateTimer && !force) return;
+        
+        if (force || now - lastUpdateTime > 200) {
+          // Immediate update if forced or enough time has passed
+          if (updateTimer) clearTimeout(updateTimer);
+          if (mounted) {
+            setChefDistances(new Map(distancesMap));
+            lastUpdateTime = now;
+          }
+          updateTimer = null;
+        } else {
+          // Schedule batched update
+          if (updateTimer) return;
+          updateTimer = setTimeout(() => {
+            if (mounted) {
+              setChefDistances(new Map(distancesMap));
+              lastUpdateTime = Date.now();
+            }
+            updateTimer = null;
+          }, 200);
+        }
+      };
+      
+      // Calculate distances using stored coordinates (much faster!)
+      (async () => {
+        // Get user coordinates - prefer stored, fallback to geocoding
+        let userCoords: { lat: number; lon: number } | null = null;
+        if (profile.latitude && profile.longitude) {
+          userCoords = { lat: profile.latitude, lon: profile.longitude };
+        } else if (profile.location) {
+          // Fallback to geocoding if coordinates not stored
+          userCoords = await geocodeAddress(profile.location);
+          if (!userCoords) {
+            console.warn('Failed to geocode user location:', profile.location);
+            return;
+          }
+        } else {
+          return; // No location available
+        }
+        
+        if (!mounted) return;
+        
+        const chefsWithLocations = chefs.filter(chef => chef.location);
+        const totalChefs = chefsWithLocations.length;
+        let completedCount = 0;
+        
+        // Process all chefs - use stored coordinates when available
+        for (const chef of chefsWithLocations) {
+          if (!mounted) break;
+          
+          try {
+            let chefCoords: { lat: number; lon: number } | null = null;
+            
+            // Prefer stored coordinates
+            if (chef.latitude && chef.longitude) {
+              chefCoords = { lat: chef.latitude, lon: chef.longitude };
+            } else if (chef.location) {
+              // Fallback to geocoding if coordinates not stored
+              chefCoords = await geocodeAddress(chef.location);
+            }
+            
+            if (chefCoords) {
+              const distance = calculateDistanceFromCoords(userCoords, chefCoords);
+              const chefId = normalizeId(chef.id);
+              distancesMap.set(chefId, distance);
+              completedCount++;
+              scheduleUpdate(); // Schedule batched update
+            } else {
+              completedCount++;
+              console.warn('Failed to get coordinates for chef:', chef.id, chef.location);
+            }
+          } catch (error) {
+            console.warn('Error calculating distance for chef:', chef.id, error);
+            if (mounted) completedCount++;
+          }
+        }
+        
+        // Final update to ensure all calculated distances are shown
+        if (mounted) {
+          if (updateTimer) {
+            clearTimeout(updateTimer);
+            updateTimer = null;
+          }
+          setChefDistances(new Map(distancesMap));
+          console.log(`Distance calculation complete: ${distancesMap.size}/${totalChefs} chefs`);
+        }
+      })();
+      
+      return () => { 
+        mounted = false;
+        if (updateTimer) clearTimeout(updateTimer);
+      };
+    } else {
+      setChefDistances(new Map());
+    }
+  }, [profile?.location, chefsKey, chefs]);
   const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
@@ -329,6 +713,19 @@ export default function HomePage() {
       setDishes((d || []) as Dish[]);
       setLoading(false);
 
+      // Calculate distances for all chefs in parallel (non-blocking)
+      if (profile?.location && c && c.length > 0) {
+        calculateAllDistances(profile.location, c as Chef[])
+          .then(distances => {
+            if (mounted) {
+              setChefDistances(distances);
+            }
+          })
+          .catch(err => {
+            console.warn('Error calculating distances:', err);
+          });
+      }
+
       // Subscribe to real-time updates for chefs table
       channel = supabase
         .channel('homepage-chefs-updates')
@@ -352,6 +749,18 @@ export default function HomePage() {
                 .limit(5);
               if (mounted && updatedChefs) {
                 setChefs(updatedChefs as Chef[]);
+                // Recalculate distances when chefs are updated
+                if (profile?.location) {
+                  calculateAllDistances(profile.location, updatedChefs as Chef[])
+                    .then(distances => {
+                      if (mounted) {
+                        setChefDistances(distances);
+                      }
+                    })
+                    .catch(err => {
+                      console.warn('Error calculating distances:', err);
+                    });
+                }
               }
             }
           }
@@ -509,47 +918,12 @@ export default function HomePage() {
               contentContainerStyle={styles.horizontalScrollContent}
             >
               {chefs.map((chef, i) => (
-                <View key={`${normalizeId(chef.id)}-${i}`} style={[styles.featuredChefCardWrapper, isMobile && styles.featuredChefCardWrapperMobile]}>
-                  <Link href={{ 
-                    pathname: "/chef/[id]", 
-                    params: { 
-                      id: normalizeId(chef.id),
-                      name: chef.name,
-                      photo: chef.photo || chef.avatar || "",
-                      location: chef.location || "",
-                      rating: chef.rating?.toString() || "",
-                      rating_count: chef.rating_count?.toString() || "",
-                      cuisine: chef.cuisine || ""
-                    } 
-                  }} asChild>
-                    <TouchableOpacity activeOpacity={0.9} style={StyleSheet.flatten([styles.featuredChefCard, isMobile && styles.featuredChefCardMobile])}>
-                      <Image
-                        source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
-                        style={[styles.featuredChefAvatar, isMobile && styles.featuredChefAvatarMobile]}
-                      />
-                      <Text style={styles.featuredChefName}>{chef.name}</Text>
-                      <Text style={styles.featuredChefCuisine}>{formatCuisine(chef.cuisine)}</Text>
-                      <View style={styles.featuredChefLocationRatingRow}>
-                        {chef.location && (
-                          <View style={styles.featuredChefLocationContainer}>
-                            <Image 
-                              source={require('../assets/locationnewicon.png')} 
-                              style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
-                              resizeMode="contain" 
-                            />
-                            <Text style={styles.featuredChefLocation} numberOfLines={1}>
-                              {chef.location?.split(',')[1]?.trim() || chef.location?.split(',')[0]}
-                            </Text>
-                          </View>
-                        )}
-                        <View style={styles.featuredChefRating}>
-                          <Text style={styles.starIcon}>★</Text>
-                          <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
-                        </View>
-                      </View>
-                    </TouchableOpacity>
-                  </Link>
-                </View>
+                <ChefCardWithDistance 
+                  key={`${normalizeId(chef.id)}-${i}`} 
+                  chef={chef} 
+                  distance={chefDistances.get(normalizeId(chef.id)) || null}
+                  isMobile={isMobile}
+                />
               ))}
             </ScrollView>
           </View>
@@ -1156,6 +1530,18 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.xs / 2,
+  },
+  featuredChefDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: theme.spacing.xs / 2,
+  },
+  featuredChefDistance: {
+    fontFamily: theme.typography.fontFamily.body,
+    color: '#777777',
+    fontSize: theme.typography.fontSize.xs,
   },
   // Mobile Styles
   containerMobile: {

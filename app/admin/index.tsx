@@ -947,7 +947,7 @@ export default function AdminPage() {
               Alert.alert('Error', error.message || 'Failed to reject chef');
             } else {
               Alert.alert('Success', 'Chef rejected');
-              setChefRequests(prev => prev.filter(r => r.id !== id));
+      setChefRequests(prev => prev.filter(r => r.id !== id));
               loadAll();
             }
           }
@@ -964,9 +964,9 @@ export default function AdminPage() {
         if (result.ok) {
           setUsers(us => us.map(u => u.id === id ? { ...u, role: 'banned' } : u));
           Alert.alert('Success', 'User deactivated');
-        } else {
+    } else {
           setErr(result.error || 'Failed to deactivate user');
-        }
+    }
       }}
     ]);
   }
@@ -1227,7 +1227,7 @@ export default function AdminPage() {
       setUploadingChefOnboardingBanner(false);
     }
   }
-
+  
   const filteredUsers = useMemo(() => {
     if (!Array.isArray(users)) return [];
     const q = (userSearch ?? '').toLowerCase().trim();
@@ -1672,19 +1672,19 @@ export default function AdminPage() {
           }
 
           return (
-            <View key={req.id} style={styles.card}>
-              <View style={styles.cardHeader}>
-                <View style={{ flex: 1 }}>
-                  <Text style={styles.cardTitle}>{req.name || 'Unnamed Request'}</Text>
-                  {req.created_at ? (
-                    <Text style={styles.cardTimestamp}>Submitted: {new Date(req.created_at).toLocaleString()}</Text>
-                  ) : null}
+          <View key={req.id} style={styles.card}>
+            <View style={styles.cardHeader}>
+              <View style={{ flex: 1 }}>
+                <Text style={styles.cardTitle}>{req.name || 'Unnamed Request'}</Text>
+                {req.created_at ? (
+                  <Text style={styles.cardTimestamp}>Submitted: {new Date(req.created_at).toLocaleString()}</Text>
+                ) : null}
                   <Text style={styles.cardId}>ID: {String(req.id)}</Text>
-                </View>
-                <View style={[styles.statusPill, styles.statusPending]}>
-                  <Text style={[styles.statusPillText, styles.statusTextPending]}>Pending</Text>
-                </View>
               </View>
+              <View style={[styles.statusPill, styles.statusPending]}>
+                <Text style={[styles.statusPillText, styles.statusTextPending]}>Pending</Text>
+              </View>
+            </View>
 
               {/* Chef profile basics - Collapsible */}
               <View style={styles.reviewSection}>
@@ -1702,7 +1702,7 @@ export default function AdminPage() {
                     {req.location ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Address:</Text> {req.location}</Text> : null}
                     {req.bio ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Brief Description:</Text> {req.bio}</Text> : null}
                     {req.cuisine ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Cuisine Type:</Text> {req.cuisine}</Text> : null}
-                  </View>
+              </View>
                 )}
               </View>
 
@@ -1726,7 +1726,7 @@ export default function AdminPage() {
                     </View>
                   )}
                 </View>
-              ) : null}
+                ) : null}
 
               {/* Dishes - Collapsible */}
               {req.dishes && req.dishes.length > 0 ? (
@@ -1762,18 +1762,18 @@ export default function AdminPage() {
                       ))}
                     </View>
                   )}
-                </View>
-              ) : null}
-
-              <View style={styles.cardActionsRow}>
-                <TouchableOpacity style={[styles.chipButton, styles.approveButton]} onPress={() => approveChefRequest(req.id)}>
-                  <Text style={[styles.chipButtonText, styles.approveButtonText]}>✓ Approve</Text>
-                </TouchableOpacity>
-                <TouchableOpacity style={[styles.chipButton, styles.rejectButton]} onPress={() => rejectChefRequest(req.id)}>
-                  <Text style={[styles.chipButtonText, styles.rejectButtonText]}>✗ Reject</Text>
-                </TouchableOpacity>
               </View>
+            ) : null}
+
+            <View style={styles.cardActionsRow}>
+              <TouchableOpacity style={[styles.chipButton, styles.approveButton]} onPress={() => approveChefRequest(req.id)}>
+                <Text style={[styles.chipButtonText, styles.approveButtonText]}>✓ Approve</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={[styles.chipButton, styles.rejectButton]} onPress={() => rejectChefRequest(req.id)}>
+                <Text style={[styles.chipButtonText, styles.rejectButtonText]}>✗ Reject</Text>
+              </TouchableOpacity>
             </View>
+          </View>
           );
         })
       )}
@@ -1856,21 +1856,21 @@ export default function AdminPage() {
           contentContainerStyle={styles.tabScroll}
         >
           <View style={styles.issuesTabInner}>
-          <View style={styles.searchWrapper}>
-            <TextInput
-              value={chefSearch}
-              onChangeText={setChefSearch}
-              placeholder="Search by name, location, email, or ID..."
-              placeholderTextColor="#94a3b8"
-              style={styles.searchInput}
-            />
-          </View>
+      <View style={styles.searchWrapper}>
+        <TextInput
+          value={chefSearch}
+          onChangeText={setChefSearch}
+          placeholder="Search by name, location, email, or ID..."
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
+        />
+      </View>
 
           {loading && chefsWithStats.length === 0 ? (
-            <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-          ) : paginatedChefs.length === 0 ? (
-            <View style={styles.emptyState}><Text style={styles.emptyText}>{chefSearch ? 'No chefs found matching your search.' : 'No chefs found.'}</Text></View>
-          ) : (
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+      ) : paginatedChefs.length === 0 ? (
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{chefSearch ? 'No chefs found matching your search.' : 'No chefs found.'}</Text></View>
+      ) : (
             <View style={styles.tableContainer}>
               {/* Table Header */}
               <View style={[styles.tableHeader, !isMobile && { minWidth: 1320 }]}>
@@ -1902,13 +1902,13 @@ export default function AdminPage() {
 
               {/* Table Rows */}
               {paginatedChefs.map((c: any) => {
-                const statusStyles = chefStatusStyles(c.status);
-                return (
+            const statusStyles = chefStatusStyles(c.status);
+            return (
                   <View key={c.id} style={[styles.tableRow, !isMobile && { minWidth: 1320 }]}>
                     <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
                       <Text style={{ fontWeight: '600', color: '#000000', fontFamily: theme.typography.fontFamily.body }} numberOfLines={1}>
                         {c.name || `Chef #${c.id}`}
-                      </Text>
+                    </Text>
                       {c.id && (
                         <Link href={`/chef/${c.id}`} asChild>
                           <TouchableOpacity>
@@ -1916,18 +1916,18 @@ export default function AdminPage() {
                           </TouchableOpacity>
                         </Link>
                       )}
-                    </View>
+                  </View>
                     <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
                       <Text numberOfLines={1}>{c.name || '—'}</Text>
                     </View>
                     <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                      <View style={statusStyles.container}>
-                        <Text style={[styles.statusPillText, statusStyles.text]}>{chefStatusText(c.status)}</Text>
-                      </View>
-                    </View>
+                  <View style={statusStyles.container}>
+                    <Text style={[styles.statusPillText, statusStyles.text]}>{chefStatusText(c.status)}</Text>
+                  </View>
+                </View>
                     <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
                       {c.user_id ? (
-                        <TouchableOpacity 
+                  <TouchableOpacity
                           onPress={() => {
                             console.log('View application clicked for chef:', c.id, 'user_id:', c.user_id);
                             handleViewApplication(c.id, c.user_id);
@@ -1935,7 +1935,7 @@ export default function AdminPage() {
                           activeOpacity={0.7}
                         >
                           <Text style={styles.viewDetailsLink}>View application</Text>
-                        </TouchableOpacity>
+                  </TouchableOpacity>
                       ) : (
                         <Text>{c.created_at ? formatEst(c.created_at) : '—'}</Text>
                       )}
@@ -1964,20 +1964,20 @@ export default function AdminPage() {
                       )}
                     </View>
                     <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                      <TouchableOpacity
-                        onPress={() => handleToggleChefFeatured(c.id, !(c as any).featured)}
-                        style={(c as any).featured
+                  <TouchableOpacity
+                    onPress={() => handleToggleChefFeatured(c.id, !(c as any).featured)}
+                    style={(c as any).featured
                           ? [styles.successOutlineButton, { paddingVertical: 6, paddingHorizontal: 8 }]
                           : [styles.neutralOutlineButton, { paddingVertical: 6, paddingHorizontal: 8 }]}
-                      >
-                        <Text style={(c as any).featured ? styles.successOutlineButtonText : styles.neutralOutlineButtonText}>
-                          {(c as any).featured ? '★ Featured' : '☆ Feature'}
-                        </Text>
-                      </TouchableOpacity>
-                    </View>
-                  </View>
-                );
-              })}
+                  >
+                    <Text style={(c as any).featured ? styles.successOutlineButtonText : styles.neutralOutlineButtonText}>
+                      {(c as any).featured ? '★ Featured' : '☆ Feature'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })}
             </View>
           )}
           </View>
@@ -2074,19 +2074,19 @@ export default function AdminPage() {
           contentContainerStyle={styles.tabScroll}
         >
           <View style={styles.issuesTabInner}>
-          <View style={styles.searchWrapper}>
-            <TextInput
-              value={userSearch}
-              onChangeText={setUserSearch}
-              placeholder="Search by email, name, or ID..."
-              placeholderTextColor="#94a3b8"
-              style={styles.searchInput}
-            />
-          </View>
+      <View style={styles.searchWrapper}>
+        <TextInput
+          value={userSearch}
+          onChangeText={setUserSearch}
+          placeholder="Search by email, name, or ID..."
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
+        />
+      </View>
 
-          {loading && users.length === 0 ? (
-            <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-          ) : paginatedUsers.length === 0 ? (
+      {loading && users.length === 0 ? (
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+      ) : paginatedUsers.length === 0 ? (
             <View style={styles.emptyState}><Text style={styles.emptyText}>{userSearch ? 'No users found matching your search.' : 'No users found.'}</Text></View>
           ) : (
             <View style={styles.tableContainer}>
@@ -2142,8 +2142,8 @@ export default function AdminPage() {
                       <Text style={{ color: palette.muted, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Banned</Text>
                     )}
                   </View>
-                </View>
-              ))}
+            </View>
+          ))}
             </View>
           )}
           </View>
@@ -2240,21 +2240,21 @@ export default function AdminPage() {
           contentContainerStyle={styles.tabScroll}
         >
           <View style={styles.issuesTabInner}>
-        <View style={styles.searchWrapper}>
-          <TextInput
-            value={orderSearch}
-            onChangeText={setOrderSearch}
+      <View style={styles.searchWrapper}>
+        <TextInput
+          value={orderSearch}
+          onChangeText={setOrderSearch}
             placeholder="Search by status, email, order ID, or chef name..."
-            placeholderTextColor="#94a3b8"
-            style={styles.searchInput}
-          />
-        </View>
+          placeholderTextColor="#94a3b8"
+          style={styles.searchInput}
+        />
+      </View>
 
         {loading && ordersWithChefs.length === 0 ? (
-          <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-        ) : paginatedOrders.length === 0 ? (
-          <View style={styles.emptyState}><Text style={styles.emptyText}>{orderSearch ? 'No orders found matching your search.' : 'No orders found.'}</Text></View>
-        ) : (
+        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+      ) : paginatedOrders.length === 0 ? (
+        <View style={styles.emptyState}><Text style={styles.emptyText}>{orderSearch ? 'No orders found matching your search.' : 'No orders found.'}</Text></View>
+      ) : (
           <View style={styles.tableContainer}>
             {/* Table Header */}
             <View style={styles.tableHeader}>
@@ -2972,8 +2972,8 @@ export default function AdminPage() {
                               ))}
                             </View>
                           </View>
-                        )}
-                      </ScrollView>
+      )}
+    </ScrollView>
                     </TouchableOpacity>
                   </TouchableOpacity>
                 </Modal>
@@ -3433,8 +3433,8 @@ export default function AdminPage() {
       </View>
     </View>
   );
-
-  return (
+ 
+   return (
     <Screen style={{ backgroundColor: palette.background }} contentStyle={styles.screenContent}>
       {content}
       

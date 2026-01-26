@@ -219,6 +219,18 @@ export async function approveChefApplication(
 
     if (profileError) throw profileError;
 
+    // Geocode chef location if available
+    let latitude: number | null = null;
+    let longitude: number | null = null;
+    if (application.location) {
+      const { geocodeAddress } = await import('./geocode');
+      const coords = await geocodeAddress(application.location);
+      if (coords) {
+        latitude = coords.lat;
+        longitude = coords.lon;
+      }
+    }
+
     // Create or update chefs table entry
     const { error: chefError } = await supabase
       .from('chefs')
@@ -230,6 +242,8 @@ export async function approveChefApplication(
         bio: application.short_bio,
         cuisine: application.cuisine_specialty || null,
         status: 'active',
+        latitude,
+        longitude,
       }, {
         onConflict: 'name',
       });
@@ -245,6 +259,8 @@ export async function approveChefApplication(
           bio: application.short_bio,
           cuisine: application.cuisine_specialty || null,
           status: 'active',
+          latitude,
+          longitude,
         })
         .eq('name', application.name);
 

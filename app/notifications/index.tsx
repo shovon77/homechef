@@ -33,6 +33,7 @@ export default function NotificationsPage() {
     related_type?: string;
   }>>([]);
   const [loading, setLoading] = useState(true);
+  const [showWelcomeModal, setShowWelcomeModal] = useState(false);
 
   useEffect(() => {
     if (user?.id) {

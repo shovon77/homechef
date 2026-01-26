@@ -1320,7 +1320,7 @@ export default function ChefDashboard() {
 
   const Sidebar = (
     <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
-      {!isMobile && (
+        {!isMobile && (
         <View style={styles.sidebarHeader}>
           <View style={styles.sidebarIconWrap}>
             {chef?.photo ? (
@@ -1340,9 +1340,9 @@ export default function ChefDashboard() {
             ) : null}
           </View>
         </View>
-      )}
-      
-      {!isMobile && (
+        )}
+        
+        {!isMobile && (
         <View style={styles.sidebarSectionFooter}>
           {footerNavItems.map(item => {
             const handlePress = item.action === 'logout'
@@ -1366,7 +1366,7 @@ export default function ChefDashboard() {
             );
           })}
         </View>
-      )}
+        )}
     </View>
   );
 
@@ -1546,13 +1546,13 @@ export default function ChefDashboard() {
           style={{ marginHorizontal: isMobile ? -16 : 0 }}
         >
           <View style={[styles.tableContainer, isMobile && { minWidth: 720 }]}>
-            {filteredOrders.length > 0 ? (
+          {filteredOrders.length > 0 ? (
               <>
                 {/* Table Header */}
                 <View style={[styles.tableHeader, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
                   <View style={[styles.tableHeaderCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
                     <Text style={styles.tableHeaderCellText}>Order ID</Text>
-                  </View>
+                </View>
                   <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
                     <Text style={styles.tableHeaderCellText}>Customer</Text>
                   </View>
@@ -1598,82 +1598,82 @@ export default function ChefDashboard() {
                       </TouchableOpacity>
                       {/* Status-specific actions */}
                       {order.status === 'requested' && (
-                        <>
-                          {(() => {
-                            const transferSent = Boolean(order.stripe_transfer_id);
-                            const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
-                            return (
-                              <TouchableOpacity
-                                disabled={!canAccept}
-                                onPress={async () => {
-                                  if (!canAccept) {
-                                    if (!chargesEnabled || !stripeAccountId) {
-                                      Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
-                                    } else if (transferSent) {
-                                      Alert.alert('Order already accepted', 'This order has already been accepted.');
-                                    }
-                                    return;
-                                  }
-                                  try {
-                                    await callFn('accept-order', { orderId: order.id });
-                                    Alert.alert('Success', 'Order accepted! Payment has been captured.');
-                                    await refreshOrdersForChef(chef!.id);
-                                  } catch (err: any) {
-                                    Alert.alert('Accept failed', err?.message || 'Unable to accept order');
-                                  }
-                                }}
-                                style={{
-                                  backgroundColor: PRIMARY_COLOR,
+                    <>
+                      {(() => {
+                        const transferSent = Boolean(order.stripe_transfer_id);
+                        const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                        return (
+                          <TouchableOpacity
+                            disabled={!canAccept}
+                            onPress={async () => {
+                              if (!canAccept) {
+                                if (!chargesEnabled || !stripeAccountId) {
+                                  Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                                } else if (transferSent) {
+                                  Alert.alert('Order already accepted', 'This order has already been accepted.');
+                                }
+                                return;
+                              }
+                              try {
+                                await callFn('accept-order', { orderId: order.id });
+                                Alert.alert('Success', 'Order accepted! Payment has been captured.');
+                                await refreshOrdersForChef(chef!.id);
+                              } catch (err: any) {
+                                Alert.alert('Accept failed', err?.message || 'Unable to accept order');
+                              }
+                            }}
+                            style={{
+                              backgroundColor: PRIMARY_COLOR,
                                   paddingVertical: 6,
                                   paddingHorizontal: 12,
                                   borderRadius: 6,
-                                  opacity: canAccept ? 1 : 0.5,
-                                }}
-                              >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
-                              </TouchableOpacity>
-                            );
-                          })()}
-                          <TouchableOpacity
-                            onPress={async () => {
-                              try {
-                                await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
-                                await refreshOrdersForChef(chef!.id);
-                              } catch (err: any) {
-                                Alert.alert('Reject failed', err?.message || 'Unable to reject order');
-                              }
+                              opacity: canAccept ? 1 : 0.5,
                             }}
-                            style={{ backgroundColor: '#F97316', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
                           >
-                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                           </TouchableOpacity>
-                        </>
+                        );
+                      })()}
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                            await refreshOrdersForChef(chef!.id);
+                          } catch (err: any) {
+                            Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                          }
+                        }}
+                            style={{ backgroundColor: '#F97316', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                      >
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                      </TouchableOpacity>
+                    </>
                       )}
                       {order.status === 'pending' && (
-                        <TouchableOpacity
-                          onPress={async () => {
-                            try {
-                              await handleOrderStatus(order.id, 'ready');
-                              Alert.alert('Success', 'Order marked as ready!');
-                            } catch (err: any) {
-                              Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                            }
-                          }}
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await handleOrderStatus(order.id, 'ready');
+                            Alert.alert('Success', 'Order marked as ready!');
+                          } catch (err: any) {
+                            Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                          }
+                        }}
                           style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-                        >
+                      >
                           <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Mark Ready</Text>
-                        </TouchableOpacity>
+                      </TouchableOpacity>
                       )}
                     </View>
-                  </View>
+                    </View>
                 ))}
               </>
             ) : (
               <View style={{ padding: 32, alignItems: 'center', minWidth: isMobile ? 720 : '100%' }}>
                 <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {orderStatusFilter} orders</Text>
               </View>
-            )}
-          </View>
+          )}
+        </View>
         </ScrollView>
       </View>
     </ScrollView>
@@ -1834,12 +1834,12 @@ export default function ChefDashboard() {
             <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
               {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
             </Text>
-            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-              {[1, 2, 3, 4, 5].map((star) => {
-                const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
-                if (star <= Math.floor(rounded)) {
+          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+            {[1, 2, 3, 4, 5].map((star) => {
+              const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
+              if (star <= Math.floor(rounded)) {
                   return <Text key={star} style={{ fontSize: 28, color: PRIMARY_COLOR }}>★</Text>;
-                } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
+              } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
                   // Half star - show half-filled using overlay technique
                   return (
                     <View key={star} style={{ position: 'relative', width: 28, height: 28, justifyContent: 'center', alignItems: 'center' }}>
@@ -1849,15 +1849,15 @@ export default function ChefDashboard() {
                       </View>
                     </View>
                   );
-                } else {
+              } else {
                   return <Text key={star} style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>;
-                }
-              })}
-            </View>
+              }
+            })}
+          </View>
           </View>
           <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4 }}>
-            Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
-          </Text>
+              Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
+            </Text>
         </View>
       </View>
 
@@ -1932,9 +1932,9 @@ export default function ChefDashboard() {
                             {review.rating.toFixed(1)}
                           </Text>
                           <View style={{ flexDirection: 'row' }}>
-                            {[1, 2, 3, 4, 5].map((star) => (
+                          {[1, 2, 3, 4, 5].map((star) => (
                               <Text key={star} style={{ fontSize: 16, color: star <= review.rating ? PRIMARY_COLOR : '#D1D5DB' }}>★</Text>
-                            ))}
+                          ))}
                           </View>
                         </View>
                       </View>
@@ -1990,16 +1990,16 @@ export default function ChefDashboard() {
           {/* Tab content without WelcomeHeader and TabBar */}
           {activeTab === 'dashboard' && (
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
-              {msg && (
-                <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
-                  <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
-                </View>
-              )}
-              {err && (
-                <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-                  <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
-                </View>
-              )}
+      {msg && (
+        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
+          <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
+        </View>
+      )}
+      {err && (
+        <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
+          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+        </View>
+      )}
               <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
                 {/* Weekly Earnings Card */}
                 <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
@@ -2101,7 +2101,7 @@ export default function ChefDashboard() {
                           <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
                             <Text style={styles.tableHeaderCellText}>Actions</Text>
                           </View>
-                        </View>
+        </View>
 
                         {/* Table Rows */}
                         {filteredOrders.slice(0, 10).map(order => (
@@ -2432,7 +2432,7 @@ export default function ChefDashboard() {
             </View>
           )}
         </View>
-      </View>
+        </View>
 
       {/* Message Modal */}
       <Modal
@@ -2514,13 +2514,13 @@ export default function ChefDashboard() {
 
               {/* Message Input */}
               <View style={messageModalStyles.messageInputContainer}>
-                <TextInput
+          <TextInput
                   style={messageModalStyles.messageInput}
                   placeholder="Type your message..."
-                  placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={TEXT_MUTED}
                   value={messageText}
                   onChangeText={setMessageText}
-                  multiline
+            multiline
                   numberOfLines={4}
                   textAlignVertical="top"
                 />
@@ -2535,7 +2535,7 @@ export default function ChefDashboard() {
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
-                  <TouchableOpacity
+        <TouchableOpacity
                     style={[messageModalStyles.sendButton, (!messageText.trim() || sendingMessage) && messageModalStyles.sendButtonDisabled]}
                     onPress={handleSendMessage}
                     disabled={!messageText.trim() || sendingMessage}
@@ -2545,12 +2545,12 @@ export default function ChefDashboard() {
                     ) : (
                       <Text style={messageModalStyles.sendButtonIcon}>➤</Text>
                     )}
-                  </TouchableOpacity>
+        </TouchableOpacity>
                 </View>
-              </View>
-            </ScrollView>
-          </View>
+      </View>
+    </ScrollView>
         </View>
+      </View>
       </Modal>
     </Screen>
   );

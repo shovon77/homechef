@@ -436,13 +436,11 @@ export default function NavBar() {
 
     setSavingLocation(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ location: currentLocation.trim() || null })
-        .eq("id", user.id);
-
-      if (error) {
-        throw new Error(error.message || "Failed to update location");
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, currentLocation.trim() || null);
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to update location");
       }
 
       setLocation(currentLocation);
@@ -486,13 +484,11 @@ export default function NavBar() {
 
     setSavingLocation(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ location: selectedLocation.trim() })
-        .eq("id", user.id);
-
-      if (error) {
-        throw new Error(error.message || "Failed to update location");
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, selectedLocation.trim());
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to update location");
       }
 
       // Update all location states after successful save
@@ -623,13 +619,11 @@ export default function NavBar() {
     
     setSavingLocation(true);
     try {
-      const { error } = await supabase
-        .from("profiles")
-        .update({ location: fullAddress })
-        .eq("id", user.id);
-
-      if (error) {
-        throw new Error(error.message || "Failed to update location");
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, fullAddress);
+      
+      if (!result.ok) {
+        throw new Error(result.error || "Failed to update location");
       }
 
       // Update all location-related state
@@ -688,13 +682,11 @@ export default function NavBar() {
           // Automatically save to user profile
           if (user) {
             try {
-              const { error: saveError } = await supabase
-                .from("profiles")
-                .update({ location: address })
-                .eq("id", user.id);
+              const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+              const result = await updateLocationWithCoordinates(user.id, address);
               
-              if (saveError) {
-                console.error("Error auto-saving location:", saveError);
+              if (!result.ok) {
+                console.error("Error auto-saving location:", result.error);
                 Alert.alert("Error", "Failed to save location. Please try again.");
               } else {
                 setLocation(address);
@@ -719,12 +711,17 @@ export default function NavBar() {
         console.error("Geocoding error:", geocodeError);
         const fallbackAddress = `${latitude}, ${longitude}`;
         setCurrentLocation(fallbackAddress);
-        // Automatically save fallback address to user profile
+        // Automatically save fallback address to user profile with coordinates
         if (user) {
           try {
+            // Since we already have lat/lon from geolocation, store them directly
             const { error: saveError } = await supabase
               .from("profiles")
-              .update({ location: fallbackAddress })
+              .update({ 
+                location: fallbackAddress,
+                latitude: latitude,
+                longitude: longitude
+              })
               .eq("id", user.id);
             
             if (saveError) {
@@ -810,8 +807,8 @@ export default function NavBar() {
               isActive={isDashboardActive} 
             />
           )}
-            {/* Location button */}
-            {loggedIn && (
+            {/* Location button - only show for regular users, not admin/chef */}
+            {loggedIn && !isAdmin && !isChef && (
               <TouchableOpacity 
                 onPress={() => setShowLocationModal(true)}
                 style={styles.locationNavButton}
@@ -841,9 +838,7 @@ export default function NavBar() {
             <>
           {isMobile ? (
             <>
-              {!(loggedIn && location) && (
-                <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
-              )}
+              {/* FAQ button removed from navbar - will be in menu when location not set */}
               {loggedIn && (
                 <TouchableOpacity 
                   onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -1002,7 +997,10 @@ export default function NavBar() {
               </Link>
           )}
 
-          <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
+          {/* FAQ button - only show in navbar if user is not logged in or is admin/chef, otherwise it's in menu */}
+          {(!loggedIn || isAdmin || isChef) && (
+            <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
+          )}
           {loggedIn && (
             <TouchableOpacity 
               onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -1075,7 +1073,24 @@ export default function NavBar() {
                 <Text style={styles.mobileMenuText}>Profile</Text>
               </TouchableOpacity>
               
-              {loggedIn && location && (
+              {/* Location option for admin/chef in menu */}
+              {(isAdmin || isChef) && (
+                <TouchableOpacity
+                  onPress={() => {
+                    setIsMenuOpen(false);
+                    setShowLocationModal(true);
+                  }}
+                  style={styles.mobileMenuItem}
+                >
+                  <Image source={require('../assets/locationnewicon.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>
+                    {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
+                  </Text>
+                </TouchableOpacity>
+              )}
+              
+              {/* FAQ button - show in menu when logged in (for regular users without location) or when location is set */}
+              {loggedIn && (!isAdmin && !isChef) && (
                 <Link href="/faq" asChild>
                   <TouchableOpacity 
                     style={styles.mobileMenuItem}
@@ -1522,19 +1537,22 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
     borderRadius: 8,
-    marginRight: 4,
+    marginRight: 8, // Increased spacing to prevent overlap with notification icon
+    marginLeft: -12, // Move more to the left to give more space
   },
   locationNavIcon: {
     width: 16,
     height: 16,
     tintColor: '#FE734C',
+    flexShrink: 0, // Prevent icon from shrinking
   },
   locationNavText: {
     fontSize: 14,
     fontWeight: '500',
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
-    maxWidth: 60,
+    maxWidth: 120, // Increased from 60 to allow longer city names
+    flexShrink: 1, // Allow text to shrink if needed but prioritize showing more
   },
   primaryButton: {
     minWidth: 84,

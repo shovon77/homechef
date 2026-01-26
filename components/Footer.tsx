@@ -11,9 +11,9 @@ export default function Footer() {
   const isMobile = width < 768
 
   const handleContact = () => {
-    const email = 'support@homechef.com'
-    const subject = 'Contact HomeChef'
-    const body = 'Hello HomeChef team,'
+    const email = 'thereforyou.yhc@gmail.com'
+    const subject = 'Contact YourHomeChef'
+    const body = 'Hello YourHomeChef team,'
     
     if (Platform.OS === 'web') {
       window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
