@@ -1020,7 +1020,7 @@ export default function NavBar() {
             style={styles.notificationsButton}
           >
             <Image 
-              source={require('../homechef/assets/alarm.png')} 
+              source={require('../assets/alarm.png')} 
               style={styles.notificationsIconImage as any}
               resizeMode="contain"
             />
