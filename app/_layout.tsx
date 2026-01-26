@@ -78,23 +78,23 @@ export default function RootLayout() {
 
     async function handleAuthStateChange() {
       try {
-        // Check initial session
-        const { data: sessionData } = await supabase.auth.getSession();
-        if (sessionData?.session?.user && mounted) {
-          const profileResult = await ensureProfile();
-          if (!profileResult.ok) {
-            console.warn('ensureProfile on initial load:', profileResult.error);
+        // Check initial session (non-blocking)
+        supabase.auth.getSession().then(({ data: sessionData }) => {
+          if (sessionData?.session?.user && mounted) {
+            // Ensure profile exists (non-blocking - don't wait for welcome notification)
+            ensureProfile().catch((err) => {
+              console.warn('ensureProfile on initial load error:', err);
+            });
           }
-        }
+        });
 
         // Subscribe to auth state changes
         const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
           if (mounted && session?.user) {
-            // Ensure profile exists and welcome notification is created
-            const profileResult = await ensureProfile();
-            if (!profileResult.ok) {
-              console.warn('ensureProfile on auth state change:', profileResult.error);
-            }
+            // Ensure profile exists (non-blocking - don't wait for welcome notification)
+            ensureProfile().catch((err) => {
+              console.warn('ensureProfile on auth state change error:', err);
+            });
           }
         });
 
