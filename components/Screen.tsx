@@ -48,8 +48,10 @@ export default function Screen({
         borderTopWidth: 0,
         ...Platform.select({
           web: {
-            borderBottom: 'none',
-            border: 'none',
+            borderBottomWidth: '0px',
+            borderTopWidth: '0px',
+            borderLeftWidth: '0px',
+            borderRightWidth: '0px',
           },
         }),
       }
