@@ -39,7 +39,7 @@ export default function ChefLayout() {
 
   if (loading) {
     return (
-      <View style={{ flex: 1, backgroundColor: theme.colors.surface, alignItems: 'center', justifyContent: 'center' }}>
+      <View style={{ flex: 1, backgroundColor: '#F2F0EF', alignItems: 'center', justifyContent: 'center' }}>
         <ActivityIndicator size="large" color={theme.colors.primary} />
       </View>
     );

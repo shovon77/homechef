@@ -97,7 +97,7 @@ export default function PayoutSettings({ onStatusChange }: Props) {
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#0E7A57" />
+        <ActivityIndicator size="large" color="#FE734C" />
         <Text style={styles.loadingText}>Loading payout status…</Text>
       </View>
     );
@@ -264,8 +264,8 @@ const styles = StyleSheet.create({
   cardSuccess: {
     borderRadius: 12,
     borderWidth: 1,
-    borderColor: '#BBF7D0',
-    backgroundColor: '#DCFCE7',
+    borderColor: '#FED7CC',
+    backgroundColor: '#FFF4F1',
     padding: 16,
     marginBottom: 16,
   },
@@ -304,7 +304,7 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   primaryBtn: {
-    backgroundColor: '#0E7A57',
+    backgroundColor: '#FE734C',
     paddingHorizontal: 16,
     paddingVertical: 10,
     borderRadius: 10,

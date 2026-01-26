@@ -14,6 +14,36 @@ type Dish = { id: number; name: string; image?: string | null; price?: number | 
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 
+// Helper function to format cuisine type
+const formatCuisine = (cuisine: any): string => {
+  if (!cuisine) return 'Chef';
+  
+  // If it's already a string (comma-separated), return it
+  if (typeof cuisine === 'string') {
+    // Check if it's a JSON string
+    if (cuisine.trim().startsWith('[') || cuisine.trim().startsWith('"')) {
+      try {
+        const parsed = JSON.parse(cuisine);
+        if (Array.isArray(parsed)) {
+          return parsed.join(', ');
+        }
+        return String(parsed);
+      } catch {
+        // If parsing fails, treat as regular string
+        return cuisine;
+      }
+    }
+    return cuisine;
+  }
+  
+  // If it's an array, join it
+  if (Array.isArray(cuisine)) {
+    return cuisine.join(', ');
+  }
+  
+  return 'Chef';
+};
+
 // Primary color from design: #2C4E4B
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
@@ -498,7 +528,7 @@ export default function HomePage() {
                         style={[styles.featuredChefAvatar, isMobile && styles.featuredChefAvatarMobile]}
                       />
                       <Text style={styles.featuredChefName}>{chef.name}</Text>
-                      <Text style={styles.featuredChefCuisine}>{chef.cuisine || 'Chef'}</Text>
+                      <Text style={styles.featuredChefCuisine}>{formatCuisine(chef.cuisine)}</Text>
                       <View style={styles.featuredChefLocationRatingRow}>
                         {chef.location && (
                           <View style={styles.featuredChefLocationContainer}>

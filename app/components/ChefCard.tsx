@@ -4,6 +4,36 @@ import { Link } from "expo-router";
 import { theme } from "../../lib/theme";
 import { toNumber, safeToFixed } from "../../lib/number";
 
+// Helper function to format cuisine type
+const formatCuisine = (cuisine: any): string => {
+  if (!cuisine) return 'Chef';
+  
+  // If it's already a string (comma-separated), return it
+  if (typeof cuisine === 'string') {
+    // Check if it's a JSON string
+    if (cuisine.trim().startsWith('[') || cuisine.trim().startsWith('"')) {
+      try {
+        const parsed = JSON.parse(cuisine);
+        if (Array.isArray(parsed)) {
+          return parsed.join(', ');
+        }
+        return String(parsed);
+      } catch {
+        // If parsing fails, treat as regular string
+        return cuisine;
+      }
+    }
+    return cuisine;
+  }
+  
+  // If it's an array, join it
+  if (Array.isArray(cuisine)) {
+    return cuisine.join(', ');
+  }
+  
+  return 'Chef';
+};
+
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
 
@@ -40,7 +70,7 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
           <Image source={{ uri: avatar }} style={styles.avatar} />
           <View style={styles.info}>
             <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]} numberOfLines={1}>{chef.name}</Text>
-            <Text style={styles.cuisine} numberOfLines={1}>{chef.cuisine || 'Chef'}</Text>
+            <Text style={styles.cuisine} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
           {chef.location && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
               <Image 

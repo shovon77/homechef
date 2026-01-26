@@ -120,6 +120,7 @@ export default function NavBar() {
   // Hide Order button on tracking page EXCEPT when viewing history (rejected/cancelled) orders
   const isOnOrderTrackingPage = pathname.startsWith('/orders/track') && params.type !== 'history';
   const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
+  const isChefDashboard = pathname.startsWith('/chef');
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
   const isCartPage = pathname.startsWith('/cart');
   const isCheckoutPage = pathname.startsWith('/checkout');
@@ -159,6 +160,73 @@ export default function NavBar() {
       <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: '#FE734C', transform: [{ rotate: '-45deg' }] }} />
     </View>
   ), [])
+
+  // Remove border and white background on chef dashboard for web using CSS injection
+  // Use a more targeted approach that won't interfere with icons
+  useEffect(() => {
+    if (Platform.OS === 'web' && isChefDashboard && typeof document !== 'undefined') {
+      const styleId = 'chef-dashboard-navbar-no-border';
+      let styleElement = document.getElementById(styleId);
+      
+      if (!styleElement) {
+        styleElement = document.createElement('style');
+        styleElement.id = styleId;
+        document.head.appendChild(styleElement);
+      }
+      
+      // Target both the navbar header and its wrapper to remove white borders
+      // Match the homepage border width (1px) but make it transparent/matching background
+      styleElement.textContent = `
+        /* Target the navbar header container itself - set border to match homepage width but transparent */
+        [data-testid="chef-dashboard-navbar"] {
+          border-bottom: 1px solid ${BG_LIGHT} !important;
+          border-bottom-width: 1px !important;
+          border-bottom-color: ${BG_LIGHT} !important;
+          background-color: ${BG_LIGHT} !important;
+        }
+        /* Target the Screen component wrapper around the navbar */
+        [data-testid="chef-dashboard-navbar-wrapper"] {
+          border-bottom: 1px solid ${BG_LIGHT} !important;
+          border-bottom-width: 1px !important;
+          border-bottom-color: ${BG_LIGHT} !important;
+          background-color: ${BG_LIGHT} !important;
+        }
+        /* Target any child View elements with white backgrounds that might create the border */
+        [data-testid="chef-dashboard-navbar-wrapper"] > *,
+        [data-testid="chef-dashboard-navbar"] > * {
+          border-bottom: 1px solid ${BG_LIGHT} !important;
+        }
+        /* Target React Native Web's border classes on the wrapper - match homepage width */
+        [data-testid="chef-dashboard-navbar-wrapper"][class*="r-borderBottomColor-"],
+        [data-testid="chef-dashboard-navbar-wrapper"][class*="r-borderBottomWidth-"],
+        [data-testid="chef-dashboard-navbar"][class*="r-borderBottomColor-"],
+        [data-testid="chef-dashboard-navbar"][class*="r-borderBottomWidth-"] {
+          border-bottom: 1px solid ${BG_LIGHT} !important;
+          border-bottom-width: 1px !important;
+          border-bottom-color: ${BG_LIGHT} !important;
+        }
+        /* Target any white background elements that might be creating the visual border */
+        [data-testid="chef-dashboard-navbar-wrapper"] [class*="r-backgroundColor-"][style*="rgb(255, 255, 255)"],
+        [data-testid="chef-dashboard-navbar-wrapper"] [class*="r-backgroundColor-"][style*="#ffffff"],
+        [data-testid="chef-dashboard-navbar-wrapper"] [class*="r-backgroundColor-"][style*="#FFFFFF"] {
+          background-color: ${BG_LIGHT} !important;
+        }
+      `;
+      
+      return () => {
+        const el = document.getElementById(styleId);
+        if (el) {
+          el.remove();
+        }
+      };
+    } else if (Platform.OS === 'web' && !isChefDashboard && typeof document !== 'undefined') {
+      // Clean up when leaving chef dashboard
+      const styleElement = document.getElementById('chef-dashboard-navbar-no-border');
+      if (styleElement) {
+        styleElement.remove();
+      }
+    }
+  }, [isChefDashboard]);
 
   // Check for active orders - runs when user changes and subscribes to real-time updates
   useEffect(() => {
@@ -599,7 +667,7 @@ export default function NavBar() {
   }
 
   return (
-    <View style={styles.header}>
+    <View style={StyleSheet.flatten([styles.header, isChefDashboard && styles.headerNoBorder])} data-testid={isChefDashboard ? 'chef-dashboard-navbar' : undefined}>
       <View style={StyleSheet.flatten([styles.container, isMobile && styles.containerMobile])}>
         {/* Left Section: Logo */}
         <Link href="/" asChild>
@@ -718,8 +786,8 @@ export default function NavBar() {
                   if (isAdmin) {
                         router.push('/profile?tab=settings');
                   } else if (isChef) {
-                        // Navigate to the Profile tab in the Chef Dashboard
-                        router.push('/chef?tab=profile');
+                        // Navigate to the separate Chef Profile page
+                        router.push('/chef/profile');
                   } else {
                     router.push('/profile?tab=settings');
                   }
@@ -855,7 +923,7 @@ export default function NavBar() {
                   if (isAdmin) {
                     router.push('/profile?tab=settings');
                   } else if (isChef) {
-                    router.push('/chef?tab=profile');
+                    router.push('/chef/profile');
                   } else {
                     router.push('/profile?tab=settings');
                   }
@@ -1109,6 +1177,30 @@ const styles = StyleSheet.create({
     }),
     borderBottomWidth: 1,
     borderBottomColor: '#FFFFFF',
+    ...Platform.select({
+      web: {
+        boxShadow: 'none',
+      },
+      default: {
+        elevation: 0,
+        shadowOpacity: 0,
+      },
+    }),
+  },
+  headerNoBorder: {
+    borderBottomWidth: 1,
+    borderBottomColor: BG_LIGHT,
+    borderWidth: 0,
+    borderTopWidth: 0,
+    borderLeftWidth: 0,
+    borderRightWidth: 0,
+    ...Platform.select({
+      web: {
+        borderBottom: `1px solid ${BG_LIGHT}`,
+        borderStyle: 'solid',
+        outline: 'none',
+      },
+    }),
   },
   container: {
     width: '100%',

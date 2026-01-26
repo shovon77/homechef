@@ -1,5 +1,6 @@
 import React from 'react';
 import { View, ScrollView, ViewProps, ViewStyle, StyleSheet, Platform } from 'react-native';
+import { usePathname } from 'expo-router';
 import NavBar from './NavBar';
 import Footer from './Footer';
 
@@ -25,6 +26,10 @@ export default function Screen({
   noFooter = false,
   fixedFooterHeight = 0,
 }: ScreenProps) {
+  const pathname = usePathname?.() || '';
+  const isChefDashboard = pathname.startsWith('/chef');
+  const BG_LIGHT = '#F2F0EF';
+  
   const baseStyle = StyleSheet.flatten([{ flex: 1, backgroundColor: '#ffffff' }, style]);
 
   const content = StyleSheet.flatten([
@@ -33,10 +38,34 @@ export default function Screen({
     contentStyle,
   ]);
 
+  const headerWrapperStyle = isChefDashboard
+    ? { 
+        zIndex: 100, 
+        backgroundColor: BG_LIGHT, 
+        borderBottomWidth: 0, 
+        borderRightWidth: 0, 
+        borderLeftWidth: 0, 
+        borderTopWidth: 0,
+        ...Platform.select({
+          web: {
+            borderBottom: 'none',
+            border: 'none',
+          },
+        }),
+      }
+    : { 
+        zIndex: 100, 
+        backgroundColor: 'transparent', 
+        borderBottomWidth: 0, 
+        borderRightWidth: 0, 
+        borderLeftWidth: 0, 
+        borderTopWidth: 0 
+      };
+
   return (
     <View style={baseStyle}>
       {!noHeader && (
-        <View style={{ zIndex: 100 }}>
+        <View style={headerWrapperStyle} data-testid={isChefDashboard ? 'chef-dashboard-navbar-wrapper' : undefined}>
           <NavBar />
         </View>
       )}

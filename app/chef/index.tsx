@@ -13,8 +13,6 @@ import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityInd
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
-import FilePicker from '../../components/FilePicker';
-import LocationPicker from '../../components/LocationPicker';
 import { theme } from '../../lib/theme';
 import { Screen } from '../../components/Screen';
 import { formatLocal } from '../../lib/datetime';
@@ -23,9 +21,8 @@ import { callFn } from '../../lib/fn';
 import PayoutSettings from '../../components/chef/PayoutSettings';
 import { formatCad, cents } from '../../lib/money';
 import { useRole } from '../../hooks/useRole';
-import { getProfile } from '../../lib/db';
 import type { Profile, OrderStatus } from '../../lib/types';
-import { formatLocal as formatLocalOrder } from '../../lib/datetime';
+import FilePicker from '../../components/FilePicker';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#FE734C';
@@ -51,13 +48,215 @@ export default function ChefDashboard() {
   const [chef, setChef] = useState<ChefRow | null>(null);
   const [dishes, setDishes] = useState<DishRow[]>([]);
   const [orders, setOrders] = useState<OrderRow[]>([]);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts' | 'profile'>('dashboard');
+  
+  // Initialize activeTab from localStorage or default
+  const getInitialTab = (): 'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts' => {
+    try {
+      if (typeof window !== 'undefined') {
+        const saved = window.localStorage.getItem('chef_dashboard_active_tab');
+        if (saved && ['dashboard', 'menu', 'orders', 'reviews', 'payouts'].includes(saved)) {
+          return saved as any;
+        }
+      }
+    } catch {}
+    // Default to dashboard
+    return 'dashboard';
+  };
+  
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts'>(getInitialTab());
+  const tabBarScrollRef = useRef<ScrollView>(null);
+  const tabPositions = useRef<{ [key: string]: { x: number; width: number } }>({});
+  const [tabLayoutReady, setTabLayoutReady] = useState(false);
+  const autoScrollTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const currentScrollX = useRef<number>(0);
+  const userInitiatedTabChange = useRef<boolean>(false);
+  const hasScrolledOnLoad = useRef<boolean>(false);
 
+  // Update tab from URL param if present (URL param takes precedence over localStorage)
   useEffect(() => {
-    if (tab && typeof tab === 'string' && ['dashboard', 'menu', 'orders', 'reviews', 'payouts', 'profile'].includes(tab)) {
+    if (tab && typeof tab === 'string' && ['dashboard', 'menu', 'orders', 'reviews', 'payouts'].includes(tab)) {
       setActiveTab(tab as any);
     }
   }, [tab]);
+
+  // Save activeTab to localStorage whenever it changes
+  useEffect(() => {
+    try {
+      if (typeof window !== 'undefined') {
+        window.localStorage.setItem('chef_dashboard_active_tab', activeTab);
+      }
+    } catch {}
+  }, [activeTab]);
+
+  // Reset tabLayoutReady when activeTab changes to wait for new tab's layout
+  useEffect(() => {
+    setTabLayoutReady(false);
+    hasScrolledOnLoad.current = false; // Reset so it can scroll on refresh
+    // Clear any existing timeout when tab changes
+    if (autoScrollTimeoutRef.current) {
+      clearTimeout(autoScrollTimeoutRef.current);
+      autoScrollTimeoutRef.current = null;
+    }
+    // Reset user-initiated flag after a short delay
+    setTimeout(() => {
+      userInitiatedTabChange.current = false;
+    }, 100);
+  }, [activeTab]);
+
+  // Scroll to active tab on initial page load/refresh
+  useEffect(() => {
+    if (tabLayoutReady && tabBarScrollRef.current && tabPositions.current[activeTab] && !hasScrolledOnLoad.current) {
+      const tabInfo = tabPositions.current[activeTab];
+      if (tabInfo && tabInfo.x !== undefined && tabInfo.width > 0) {
+        // Check if tab is already in view
+        const tabLeft = tabInfo.x;
+        const tabRight = tabInfo.x + tabInfo.width;
+        const viewportLeft = currentScrollX.current;
+        const viewportRight = currentScrollX.current + width;
+        const margin = 20;
+        const isTabVisible = tabLeft >= (viewportLeft - margin) && tabRight <= (viewportRight + margin);
+        
+        if (!isTabVisible) {
+          // Scroll immediately on page load (no delay)
+          const tabCenter = tabInfo.x + (tabInfo.width / 2);
+          const scrollPosition = tabCenter - (width / 2);
+          const maxScroll = Math.max(0, scrollPosition);
+          tabBarScrollRef.current.scrollTo({
+            x: maxScroll,
+            animated: true,
+          });
+        }
+        hasScrolledOnLoad.current = true;
+      }
+    }
+  }, [tabLayoutReady, activeTab, width]);
+
+  // Auto-scroll to active tab when it changes (with 3 second delay)
+  // Only scroll if the tab change was NOT user-initiated (e.g., from URL param or programmatic change)
+  useEffect(() => {
+    // Clear any existing timeout
+    if (autoScrollTimeoutRef.current) {
+      clearTimeout(autoScrollTimeoutRef.current);
+    }
+
+    // Don't auto-scroll if user manually clicked the tab
+    if (userInitiatedTabChange.current) {
+      return;
+    }
+
+    if (tabLayoutReady && tabBarScrollRef.current && tabPositions.current[activeTab]) {
+      const tabInfo = tabPositions.current[activeTab];
+      // Only scroll if we have valid position data
+      if (tabInfo && tabInfo.x !== undefined && tabInfo.width > 0) {
+        // Set a 3 second delay before auto-scrolling
+        autoScrollTimeoutRef.current = setTimeout(() => {
+          // Re-check that the position still exists and is valid
+          if (tabBarScrollRef.current && tabPositions.current[activeTab]) {
+            const currentTabInfo = tabPositions.current[activeTab];
+            if (currentTabInfo && currentTabInfo.x !== undefined && currentTabInfo.width > 0) {
+              // Check if tab is already visible using current scroll position
+              const tabLeft = currentTabInfo.x;
+              const tabRight = currentTabInfo.x + currentTabInfo.width;
+              const viewportLeft = currentScrollX.current;
+              const viewportRight = currentScrollX.current + width;
+              
+              // Check if tab is already visible (with some margin for edge cases)
+              const margin = 20;
+              const isTabVisible = tabLeft >= (viewportLeft - margin) && tabRight <= (viewportRight + margin);
+              
+              if (!isTabVisible) {
+                // Calculate scroll position to center the tab
+                const tabCenter = currentTabInfo.x + (currentTabInfo.width / 2);
+                const scrollPosition = tabCenter - (width / 2);
+                // Ensure we don't scroll to negative position
+                const maxScroll = Math.max(0, scrollPosition);
+                tabBarScrollRef.current.scrollTo({
+                  x: maxScroll,
+                  animated: true,
+                });
+              }
+            }
+          }
+        }, 3000);
+      }
+    }
+
+    // Cleanup timeout on unmount or when dependencies change
+    return () => {
+      if (autoScrollTimeoutRef.current) {
+        clearTimeout(autoScrollTimeoutRef.current);
+      }
+    };
+  }, [activeTab, width, tabLayoutReady]);
+
+  // Memoize the scroll handler to prevent recreation - must be called before any JSX
+  const handleTabBarScroll = useCallback((event: any) => {
+    // Update current scroll position
+    const scrollX = event.nativeEvent.contentOffset.x;
+    currentScrollX.current = scrollX;
+    
+    // Check if active tab is out of view and scroll it back into view (with 3 second delay)
+    if (tabPositions.current[activeTab] && tabBarScrollRef.current) {
+      const tabInfo = tabPositions.current[activeTab];
+      const viewportWidth = width;
+      const tabLeft = tabInfo.x;
+      const tabRight = tabInfo.x + tabInfo.width;
+      const viewportLeft = scrollX;
+      const viewportRight = scrollX + viewportWidth;
+      
+      // Check if tab is completely out of view (with some margin)
+      const margin = 10;
+      const isTabOutOfView = tabRight < (viewportLeft - margin) || tabLeft > (viewportRight + margin);
+      const isTabFullyInView = tabLeft >= (viewportLeft + margin) && tabRight <= (viewportRight - margin);
+      
+      // If tab is out of view, schedule auto-scroll after 3 seconds
+      if (isTabOutOfView) {
+        // Clear any existing timeout first to reset the 3-second timer
+        if (autoScrollTimeoutRef.current) {
+          clearTimeout(autoScrollTimeoutRef.current);
+        }
+        
+        // Set a 3 second delay before auto-scrolling
+        autoScrollTimeoutRef.current = setTimeout(() => {
+          // Re-check conditions before scrolling
+          if (tabBarScrollRef.current && tabPositions.current[activeTab]) {
+            const currentTabInfo = tabPositions.current[activeTab];
+            if (currentTabInfo && currentTabInfo.x !== undefined && currentTabInfo.width > 0) {
+              // Check current scroll position
+              const currentScroll = currentScrollX.current;
+              const currentTabLeft = currentTabInfo.x;
+              const currentTabRight = currentTabInfo.x + currentTabInfo.width;
+              const currentViewportLeft = currentScroll;
+              const currentViewportRight = currentScroll + viewportWidth;
+              
+              // Only scroll if tab is still out of view
+              const stillOutOfView = currentTabRight < (currentViewportLeft - margin) || currentTabLeft > (currentViewportRight + margin);
+              
+              if (stillOutOfView) {
+                // Calculate scroll position to center the tab
+                const tabCenter = currentTabInfo.x + (currentTabInfo.width / 2);
+                const scrollPosition = tabCenter - (viewportWidth / 2);
+                tabBarScrollRef.current.scrollTo({
+                  x: Math.max(0, scrollPosition),
+                  animated: true,
+                });
+              }
+            }
+          }
+          // Clear the timeout ref after execution
+          autoScrollTimeoutRef.current = null;
+        }, 3000);
+      } else if (isTabFullyInView) {
+        // Tab is fully in view, cancel any pending auto-scroll
+        if (autoScrollTimeoutRef.current) {
+          clearTimeout(autoScrollTimeoutRef.current);
+          autoScrollTimeoutRef.current = null;
+        }
+      }
+      // If tab is partially visible, don't cancel the timeout - let it complete if it was already set
+    }
+  }, [activeTab, width]);
+
   const [orderStatusFilter, setOrderStatusFilter] = useState<'requested' | 'pending' | 'ready' | 'paid' | 'completed' | 'cancelled' | 'rejected'>('requested');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -66,29 +265,6 @@ export default function ChefDashboard() {
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState('');
   const { user, profile, refreshRole } = useRole();
-  const [firstName, setFirstName] = useState('');
-  const [lastName, setLastName] = useState('');
-  const [email, setEmail] = useState('');
-  const [phone, setPhone] = useState('');
-  const [photoUrl, setPhotoUrl] = useState<string | null>(null);
-  const [chefLogoUrl, setChefLogoUrl] = useState<string | null>(null);
-  const [uploadingChefLogo, setUploadingChefLogo] = useState(false);
-  const [activeNavTab, setActiveNavTab] = useState<'orders' | 'settings'>('orders');
-  const [activeOrderTab, setActiveOrderTab] = useState<'all' | 'upcoming' | 'completed' | 'declined'>('all');
-  const [userOrders, setUserOrders] = useState<Array<{
-    id: number;
-    status: string;
-    total_cents: number;
-    created_at: string;
-    pickup_at: string | null;
-    chef_id: number | null;
-    chef_name?: string | null;
-    chef_location?: string | null;
-    dish_names?: string[];
-    total_quantity?: number;
-  }>>([]);
-  const [ordersLoading, setOrdersLoading] = useState(false);
-  const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
@@ -154,20 +330,6 @@ export default function ChefDashboard() {
         setBio(me.bio || '');
         setPhoto(me.photo || undefined);
         setLocation(me.location || '');
-        setChefLogoUrl(me.photo || null);
-        
-        // Load user profile for profile tab
-        if (auth.user) {
-          const prof = await getProfile(auth.user.id);
-          if (prof) {
-            const nameParts = (prof.name || "").trim().split(" ");
-            setFirstName(nameParts[0] || "");
-            setLastName(nameParts.slice(1).join(" ") || "");
-            setEmail(prof.email || "");
-            setPhone((prof as any).phone || "");
-            setPhotoUrl(prof.photo_url || null);
-          }
-        }
 
         // Load dishes
         const d = await supabase.from('dishes').select('*').eq('chef_id', me.id).order('id', { ascending: true });
@@ -197,12 +359,6 @@ export default function ChefDashboard() {
     }
   }, [activeTab, chef]);
 
-  // Load user orders when profile tab is active
-  useEffect(() => {
-    if (activeTab === 'profile' && activeNavTab === 'orders' && user) {
-      loadUserOrders();
-    }
-  }, [activeTab, activeNavTab, user]);
 
   async function saveProfile() {
     if (!chef) return;
@@ -227,265 +383,6 @@ export default function ChefDashboard() {
     }
   }
 
-  async function loadUserOrders() {
-    if (!user) return;
-    setOrdersLoading(true);
-    try {
-      const { data, error } = await supabase
-        .from('orders')
-        .select('id,status,total_cents,created_at,pickup_at,chef_id')
-        .eq('user_id', user.id)
-        .order('created_at', { ascending: false });
-
-      if (error) throw error;
-
-      const rows = data || [];
-      const chefIds = [...new Set(rows.map(r => r.chef_id).filter((id): id is number => typeof id === 'number'))];
-      const orderIds = rows.map(r => r.id);
-      
-      let chefMap = new Map<number, { name: string; location: string | null }>();
-      let orderItemsMap = new Map<number, Array<{ dish_name: string; quantity: number }>>();
-
-      // Fetch chef names and locations
-      if (chefIds.length > 0) {
-        const { data: chefsData, error: chefsError } = await supabase
-          .from('chefs')
-          .select('id,name,location')
-          .in('id', chefIds);
-        if (!chefsError && chefsData) {
-          chefMap = new Map(chefsData.map((c: any) => [c.id, { name: c.name || `Chef #${c.id}`, location: c.location || null }]));
-        }
-      }
-
-      // Fetch order items with dish names
-      if (orderIds.length > 0) {
-        const { data: itemsData, error: itemsError } = await supabase
-          .from('order_items')
-          .select('order_id,dish_id,quantity')
-          .in('order_id', orderIds);
-        
-        if (!itemsError && itemsData) {
-          const dishIds = [...new Set(itemsData.map((it: any) => it.dish_id).filter((id): id is number => typeof id === 'number'))];
-          
-          if (dishIds.length > 0) {
-            const { data: dishesData, error: dishesError } = await supabase
-              .from('dishes')
-              .select('id,name')
-              .in('id', dishIds);
-            
-            if (!dishesError && dishesData) {
-              const dishMap = new Map(dishesData.map((d: any) => [d.id, d.name]));
-              
-              itemsData.forEach((item: any) => {
-                if (!orderItemsMap.has(item.order_id)) {
-                  orderItemsMap.set(item.order_id, []);
-                }
-                const dishName = dishMap.get(item.dish_id) || 'Unknown Dish';
-                orderItemsMap.get(item.order_id)!.push({
-                  dish_name: dishName,
-                  quantity: item.quantity || 1,
-                });
-              });
-            }
-          }
-        }
-      }
-
-      const enriched = rows.map(row => {
-        const items = orderItemsMap.get(row.id) || [];
-        const chefInfo = row.chef_id ? chefMap.get(row.chef_id) : null;
-        
-        return {
-          id: row.id,
-          status: row.status,
-          total_cents: row.total_cents ?? 0,
-          created_at: row.created_at,
-          pickup_at: row.pickup_at ?? null,
-          chef_id: row.chef_id ?? null,
-          chef_name: chefInfo?.name ?? null,
-          chef_location: chefInfo?.location ?? null,
-          dish_names: items.map(i => i.dish_name),
-          total_quantity: items.reduce((sum, i) => sum + i.quantity, 0),
-        };
-      });
-
-      setUserOrders(enriched);
-    } catch (e: any) {
-      console.error('Error loading orders:', e);
-    } finally {
-      setOrdersLoading(false);
-    }
-  }
-
-  const filteredUserOrders = useMemo(() => {
-    if (activeOrderTab === 'all') {
-      return userOrders;
-    } else if (activeOrderTab === 'upcoming') {
-      return userOrders.filter(order => ['requested', 'pending', 'ready', 'paid'].includes(order.status));
-    } else if (activeOrderTab === 'completed') {
-      return userOrders.filter(order => order.status === 'completed');
-    } else if (activeOrderTab === 'declined') {
-      return userOrders.filter(order => ['cancelled', 'rejected'].includes(order.status));
-    }
-    return userOrders;
-  }, [userOrders, activeOrderTab]);
-
-  function getStatusInfo(status: OrderStatus | string) {
-    switch (status) {
-      case 'requested':
-        return { label: 'Requested', icon: '⏳', color: '#3E6A55' };
-      case 'pending':
-        return { label: 'Preparing', icon: '👨‍🍳', color: '#D97706' };
-      case 'ready':
-        return { label: 'Ready for Pickup', icon: '🛍️', color: '#2D6966' };
-      case 'paid':
-        return { label: 'Awaiting Pickup', icon: '🚚', color: '#3E6A55' };
-      case 'completed':
-        return { label: 'Completed', icon: '✓', color: '#3E6A55' };
-      case 'rejected':
-        return { label: 'Rejected', icon: '✕', color: '#EF4444' };
-      case 'cancelled':
-        return { label: 'Cancelled', icon: '✕', color: '#EF4444' };
-      default:
-        return { label: String(status), icon: '•', color: '#667085' };
-    }
-  }
-
-  async function handleSaveProfile() {
-    if (!user) return;
-    if (!firstName.trim()) {
-      Alert.alert("Validation", "First name cannot be empty");
-      return;
-    }
-
-    setSaving(true);
-    try {
-      const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
-      
-      const updateData: { name: string; phone?: string | null; location?: string | null; photo_url?: string | null } = {
-        name: fullName,
-        phone: phone.trim() || null,
-        location: location.trim() || null,
-      };
-      
-      if (photoUrl !== null && photoUrl !== profile?.photo_url) {
-        updateData.photo_url = photoUrl;
-      }
-
-      const { data, error } = await supabase
-        .from("profiles")
-        .update(updateData)
-        .eq("id", user.id)
-        .select();
-
-      if (error) {
-        throw new Error(error.message || `Update failed: ${error.code || 'Unknown error'}`);
-      }
-
-      // Also update chefs table if chef exists (try user_id first, then email as fallback)
-      let chefUpdated = false;
-      
-      // First try to update by user_id
-      const { data: chefData, error: chefError } = await supabase
-        .from("chefs")
-        .update({ name: fullName })
-        .eq("user_id", user.id)
-        .select();
-
-      if (chefError) {
-        console.error("Failed to update chefs table by user_id:", chefError);
-      } else if (chefData && chefData.length > 0) {
-        console.log("Chef table updated successfully by user_id:", chefData);
-        chefUpdated = true;
-      } else {
-        // Fallback: try to update by email if user_id didn't match
-        if (profile?.email) {
-          const { data: chefDataByEmail, error: chefErrorByEmail } = await supabase
-            .from("chefs")
-            .update({ name: fullName })
-            .eq("email", profile.email)
-            .select();
-
-          if (chefErrorByEmail) {
-            console.error("Failed to update chefs table by email:", chefErrorByEmail);
-          } else if (chefDataByEmail && chefDataByEmail.length > 0) {
-            console.log("Chef table updated successfully by email:", chefDataByEmail);
-            chefUpdated = true;
-          } else {
-            console.warn("No chef record found for user_id:", user.id, "or email:", profile.email);
-          }
-        } else {
-          console.warn("No chef record found for user_id:", user.id, "and no email available for fallback");
-        }
-      }
-
-      if (!chefUpdated) {
-        console.warn("Chef table was not updated. The name change may not be reflected on all pages.");
-      }
-
-      Alert.alert("Success", "Profile updated successfully");
-      // Reload profile data
-      if (user) {
-        const prof = await getProfile(user.id);
-        if (prof) {
-          const nameParts = (prof.name || "").trim().split(" ");
-          setFirstName(nameParts[0] || "");
-          setLastName(nameParts.slice(1).join(" ") || "");
-          setEmail(prof.email || "");
-          setPhone((prof as any).phone || "");
-          setPhotoUrl(prof.photo_url || null);
-          setLocation(prof.location || "");
-        }
-      }
-    } catch (e: any) {
-      console.error("Profile update exception:", e);
-      const errorMsg = e?.message || e?.details || "Failed to update profile";
-      Alert.alert("Error", errorMsg);
-    } finally {
-      setSaving(false);
-    }
-  }
-
-  async function handleAvatarPickProfile(file: File) {
-    if (!user) return;
-    setUploadingAvatar(true);
-    try {
-      const { publicUrl } = await uploadToBucket('public-assets', file, `users/${user.id}/avatar`);
-      setPhotoUrl(publicUrl);
-      const { error } = await supabase
-        .from('profiles')
-        .update({ photo_url: publicUrl })
-        .eq('id', user.id);
-      if (error) throw error;
-      Alert.alert("Success", "Avatar uploaded and saved successfully!");
-    } catch (e: any) {
-      console.error("Avatar upload error:", e);
-      Alert.alert("Error", e?.message || "Failed to upload avatar");
-    } finally {
-      setUploadingAvatar(false);
-    }
-  }
-
-  async function handleChefLogoPick(file: File) {
-    if (!chef) return;
-    setUploadingChefLogo(true);
-    try {
-      const { publicUrl } = await uploadToBucket('public-assets', file, `chefs/${chef.id}/logo`);
-      setChefLogoUrl(publicUrl);
-      const { error } = await supabase
-        .from('chefs')
-        .update({ photo: publicUrl })
-        .eq('id', chef.id);
-      if (error) throw error;
-      setChef({ ...chef, photo: publicUrl });
-      Alert.alert("Success", "Chef logo uploaded and saved successfully!");
-    } catch (e: any) {
-      console.error("Chef logo upload error:", e);
-      Alert.alert("Error", e?.message || "Failed to upload chef logo");
-    } finally {
-      setUploadingChefLogo(false);
-    }
-  }
 
   async function handleLogout() {
     Alert.alert(
@@ -1041,6 +938,40 @@ export default function ChefDashboard() {
     };
   }, [orders, earningsRange]);
 
+  // Calculate weekly and monthly earnings
+  const weeklyEarnings = useMemo(() => {
+    const now = new Date();
+    const startOfWeek = new Date(now);
+    startOfWeek.setHours(0, 0, 0, 0);
+    const day = startOfWeek.getDay(); // 0 (Sun) - 6 (Sat)
+    const diffToMonday = day === 0 ? 6 : day - 1;
+    startOfWeek.setDate(startOfWeek.getDate() - diffToMonday);
+    const endOfWeek = new Date(startOfWeek);
+    endOfWeek.setDate(startOfWeek.getDate() + 7);
+
+    return orders
+      .filter(order => {
+        if (!order.stripe_transfer_id) return false;
+        const orderDate = new Date(order.created_at);
+        return orderDate >= startOfWeek && orderDate < endOfWeek;
+      })
+      .reduce((sum, order) => sum + Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)), 0);
+  }, [orders]);
+
+  const monthlyEarnings = useMemo(() => {
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+
+    return orders
+      .filter(order => {
+        if (!order.stripe_transfer_id) return false;
+        const orderDate = new Date(order.created_at);
+        return orderDate >= startOfMonth && orderDate < endOfMonth;
+      })
+      .reduce((sum, order) => sum + Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)), 0);
+  }, [orders]);
+
   const filteredOrders = useMemo(() => {
     return orders.filter(o => o.status === orderStatusFilter);
   }, [orders, orderStatusFilter]);
@@ -1254,20 +1185,22 @@ export default function ChefDashboard() {
 
       const userIds = [...new Set((reviewsData || []).map((r: any) => r.user_id).filter((id): id is string => Boolean(id)))];
       const { data: profilesData } = userIds.length > 0
-        ? await supabase.from('profiles').select('id, email').in('id', userIds)
+        ? await supabase.from('profiles').select('id, email, name').in('id', userIds)
         : { data: [], error: null };
       const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
+      const nameMap = new Map((profilesData || []).map((p: any) => [p.id, p.name || null]));
 
       const reviewsWithUsers = (reviewsData || []).map((r: any) => {
         const email = r.user_id ? (emailMap.get(r.user_id) || '') : '';
-        const nameFromEmail = email ? email.split('@')[0] : '';
+        const name = r.user_id ? (nameMap.get(r.user_id) || null) : null;
+        // Use actual name from profile, or Anonymous if no name
         return {
           id: r.id,
           rating: r.rating,
           comment: r.comment,
           created_at: r.created_at,
           user_email: email || undefined,
-          user_name: nameFromEmail || 'Anonymous',
+          user_name: name || 'Anonymous',
         };
       });
 
@@ -1318,8 +1251,8 @@ export default function ChefDashboard() {
 
   if (loading) {
     return (
-      <Screen>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG_LIGHT }}>
+      <Screen style={{ backgroundColor: BG_PAGE }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG_PAGE }}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
           <Text style={{ color: TEXT_MUTED, marginTop: 16 }}>Loading dashboard...</Text>
         </View>
@@ -1347,7 +1280,7 @@ export default function ChefDashboard() {
     { key: 'dashboard' as const, label: 'Overview', iconSource: require('../../assets/controls.png') },
     { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
     { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
-    { key: 'reviews' as const, label: 'Reviews', iconSource: require('../../assets/edit.png') },
+    { key: 'reviews' as const, label: 'My reviews', iconSource: require('../../assets/edit.png') },
     { key: 'payouts' as const, label: 'Payment', iconSource: require('../../assets/credit-card.png') },
   ];
 
@@ -1355,11 +1288,19 @@ export default function ChefDashboard() {
     { key: 'profile' as const, label: 'Profile', iconSource: require('../../assets/settings.png'), action: 'profile' as const },
     { key: 'logout' as const, label: 'Logout', iconSource: require('../../assets/logout.png'), action: 'logout' as const },
   ];
+  
+  function handleProfileNavigation() {
+    router.push('/chef/profile');
+  }
+  
+  async function handleLogout() {
+    await supabase.auth.signOut();
+    router.replace('/auth');
+  }
 
   const Sidebar = (
     <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
-      <ScrollView contentContainerStyle={styles.sidebarInner} horizontal={isMobile} showsHorizontalScrollIndicator={false}>
-        {!isMobile && (
+      {!isMobile && (
         <View style={styles.sidebarHeader}>
           <View style={styles.sidebarIconWrap}>
             {chef?.photo ? (
@@ -1379,77 +1320,87 @@ export default function ChefDashboard() {
             ) : null}
           </View>
         </View>
-        )}
-
-        <View style={[styles.sidebarSection, isMobile && styles.sidebarSectionMobile]}>
-          {navItems.map(item => (
-            <Pressable
-              key={item.key}
-              onPress={() => setActiveTab(item.key)}
-              style={({ pressed }) => [
-                styles.navItem,
-                isMobile && styles.navItemMobile,
-                activeTab === item.key && styles.navItemActive,
-                pressed && styles.navItemPressed,
-              ]}
-            >
-              <View style={styles.navIconWrap}>
-                <Image 
-                  source={item.iconSource} 
-                  style={[styles.navIcon, { tintColor: activeTab === item.key ? '#FFFFFF' : '#FE734C' }]} 
-                  resizeMode="contain" 
-                />
-              </View>
-              <Text
-                numberOfLines={1}
-                ellipsizeMode="tail"
-                style={[styles.navLabel, activeTab === item.key && styles.navLabelActive]}
-              >
-                {item.label}
-              </Text>
-            </Pressable>
-          ))}
-        </View>
-        
-        {!isMobile && (
+      )}
+      
+      {!isMobile && (
         <View style={styles.sidebarSectionFooter}>
           {footerNavItems.map(item => {
-            const isActive = item.action === 'profile' && activeTab === 'profile';
             const handlePress = item.action === 'logout'
-              ? async () => {
-                  await supabase.auth.signOut();
-                  router.replace('/auth');
-                }
-              : () => setActiveTab('profile');
+              ? handleLogout
+              : handleProfileNavigation;
             return (
-              <Pressable
+              <TouchableOpacity
                 key={item.key}
                 onPress={handlePress}
-                style={({ pressed }) => [
-                  styles.navItem,
-                  isActive && styles.navItemActive,
-                  pressed && styles.navItemPressed,
-                ]}
+                style={styles.footerNavItem}
               >
-                <View style={styles.navIconWrap}>
                 <Image 
                   source={item.iconSource} 
-                  style={[styles.navIcon, { tintColor: isActive ? '#FFFFFF' : '#FE734C' }]} 
+                  style={[styles.footerNavIcon, { tintColor: '#FE734C' }]} 
                   resizeMode="contain" 
                 />
-              </View>
-                <Text
-                  numberOfLines={1}
-                  ellipsizeMode="tail"
-                  style={[styles.navLabel, isActive && styles.navLabelActive]}
-                >
+                <Text style={styles.footerNavLabel}>
                   {item.label}
                 </Text>
-              </Pressable>
+              </TouchableOpacity>
             );
           })}
         </View>
-        )}
+      )}
+    </View>
+  );
+
+  const WelcomeHeader = (
+    <View style={styles.welcomeHeader}>
+      <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
+      <Text style={styles.welcomeSubtitle}>Here's a summary of your business today.</Text>
+    </View>
+  );
+
+  // TabBar component - render directly (not memoized) so it always has access to current activeTab
+  // The ScrollView will stay mounted because it's always in the same position with the same ref
+  const TabBar = (
+    <View style={styles.tabBarWrapper} key="tab-bar-stable">
+      <ScrollView 
+        ref={tabBarScrollRef}
+        horizontal 
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={styles.tabBarContent}
+        onScroll={handleTabBarScroll}
+        scrollEventThrottle={16}
+      >
+        {navItems.map(item => (
+          <TouchableOpacity
+            key={item.key}
+            onPress={() => {
+              userInitiatedTabChange.current = true;
+              setActiveTab(item.key);
+            }}
+            style={[styles.tab, activeTab === item.key && styles.tabActive]}
+            onLayout={(event) => {
+              const { x, width: tabWidth } = event.nativeEvent.layout;
+              // Only record position if we have valid dimensions
+              if (tabWidth > 0 && x >= 0) {
+                tabPositions.current[item.key] = { x, width: tabWidth };
+                // When the active tab's layout is measured, trigger scroll
+                if (item.key === activeTab) {
+                  setTimeout(() => setTabLayoutReady(true), 150);
+                }
+              }
+            }}
+          >
+            <View style={styles.tabContent}>
+              <Image 
+                source={item.iconSource} 
+                style={[styles.tabIcon, { tintColor: activeTab === item.key ? '#FFFFFF' : '#33393A' }]} 
+                resizeMode="contain" 
+              />
+              <Text style={[styles.tabText, activeTab === item.key && styles.tabTextActive]}>
+                {item.label}
+              </Text>
+            </View>
+          </TouchableOpacity>
+        ))}
       </ScrollView>
     </View>
   );
@@ -1466,11 +1417,6 @@ export default function ChefDashboard() {
           <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
         </View>
       )}
-
-      <View>
-        <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Welcome, {chef.name.split(' ')[0]}!</Text>
-        <Text style={{ color: TEXT_MUTED, fontSize: 16, marginTop: 4, fontFamily: theme.typography.fontFamily.body }}>Here's a summary of your business today.</Text>
-      </View>
 
       <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
         {/* Weekly Earnings Card */}
@@ -1679,7 +1625,7 @@ export default function ChefDashboard() {
   );
 
   const MenuTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 16, gap: 32, paddingBottom: 120 }}>
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120 }}>
       {msg && (
         <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
           <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
@@ -1690,9 +1636,6 @@ export default function ChefDashboard() {
           <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
         </View>
       )}
-
-      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Menu Management</Text>
-
       <NewDishForm onCreate={createDish} saving={saving} />
 
       <View style={{ gap: 24 }}>
@@ -1707,7 +1650,6 @@ export default function ChefDashboard() {
 
   const OrdersTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120 }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order History</Text>
       <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, minWidth: '100%' }}>
         {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
           <TouchableOpacity
@@ -1830,32 +1772,37 @@ export default function ChefDashboard() {
 
   const ReviewsTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 30, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>My Reviews</Text>
-
       {/* Rating Summary Card */}
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 16 }}>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {[1, 2, 3, 4, 5].map((star) => {
-              const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
-              if (star <= Math.floor(rounded)) {
-                return <Text key={star} style={{ fontSize: 32, color: '#FBBF24' }}>★</Text>;
-              } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
-                // Half star - using a visual approximation
-                return <Text key={star} style={{ fontSize: 32, color: '#FBBF24', opacity: 0.6 }}>★</Text>;
-              } else {
-                return <Text key={star} style={{ fontSize: 32, color: '#D1D5DB' }}>★</Text>;
-              }
-            })}
-          </View>
-          <View>
+        <View>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
             <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
               {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
             </Text>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-              Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
-            </Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+              {[1, 2, 3, 4, 5].map((star) => {
+                const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
+                if (star <= Math.floor(rounded)) {
+                  return <Text key={star} style={{ fontSize: 28, color: PRIMARY_COLOR }}>★</Text>;
+                } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
+                  // Half star - show half-filled using overlay technique
+                  return (
+                    <View key={star} style={{ position: 'relative', width: 28, height: 28, justifyContent: 'center', alignItems: 'center' }}>
+                      <Text style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>
+                      <View style={{ position: 'absolute', left: 0, top: 0, width: 14, height: 28, overflow: 'hidden' }}>
+                        <Text style={{ fontSize: 28, color: PRIMARY_COLOR, lineHeight: 28 }}>★</Text>
+                      </View>
+                    </View>
+                  );
+                } else {
+                  return <Text key={star} style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>;
+                }
+              })}
+            </View>
           </View>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4 }}>
+            Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
+          </Text>
         </View>
       </View>
 
@@ -1925,10 +1872,15 @@ export default function ChefDashboard() {
                     <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
                       <View>
                         <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700' }}>{review.user_name || 'Anonymous'}</Text>
-                        <View style={{ flexDirection: 'row', marginTop: 4 }}>
-                          {[1, 2, 3, 4, 5].map((star) => (
-                            <Text key={star} style={{ fontSize: 16, color: star <= review.rating ? '#FBBF24' : '#D1D5DB' }}>★</Text>
-                          ))}
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
+                          <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700' }}>
+                            {review.rating.toFixed(1)}
+                          </Text>
+                          <View style={{ flexDirection: 'row' }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Text key={star} style={{ fontSize: 16, color: star <= review.rating ? PRIMARY_COLOR : '#D1D5DB' }}>★</Text>
+                            ))}
+                          </View>
                         </View>
                       </View>
                       <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{timeAgo}</Text>
@@ -1970,298 +1922,300 @@ export default function ChefDashboard() {
     </View>
   );
 
-  const initials = [firstName, lastName].filter(Boolean)
-    .map((n) => n[0])
-    .join("")
-    .toUpperCase()
-    .slice(0, 2) || email[0]?.toUpperCase() || "?";
-
-  const ProfileTab = (
-    <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
-      <View style={[profileStyles.container, isMobile && profileStyles.containerMobile]}>
-        {/* Left Sidebar */}
-        <View style={[profileStyles.sidebar, isMobile && profileStyles.sidebarMobile]}>
-          <View style={[profileStyles.sidebarContent, isMobile && profileStyles.sidebarContentMobile]}>
-            {/* Profile Header */}
-            {!isMobile && (
-            <View style={profileStyles.profileHeader}>
-              {photoUrl ? (
-                <Image
-                  source={{ uri: photoUrl }}
-                  style={profileStyles.avatar}
-                />
-              ) : (
-                <View style={[profileStyles.avatar, profileStyles.avatarPlaceholder]}>
-                  <Text style={profileStyles.avatarInitials}>{initials}</Text>
-        </View>
-      )}
-              <View style={profileStyles.profileInfo}>
-                <Text style={profileStyles.profileName}>{[firstName, lastName].filter(Boolean).join(" ") || "User"}</Text>
-                <Text style={profileStyles.profileEmail}>{email || "No email"}</Text>
-              </View>
-        </View>
-      )}
-
-            {/* Navigation Menu - Horizontal Scroll on Mobile */}
-            <ScrollView 
-              horizontal={isMobile} 
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={[isMobile && profileStyles.navMenuMobileContent]}
-              style={[profileStyles.navMenu, isMobile && profileStyles.navMenuMobile]}
-            >
-              <TouchableOpacity 
-                style={[profileStyles.navItem, activeNavTab === "orders" && profileStyles.navItemActive]}
-                onPress={() => setActiveNavTab("orders")}
-              >
-                <Text style={[profileStyles.navText, activeNavTab === "orders" && profileStyles.navTextActive]}>Your Orders</Text>
-              </TouchableOpacity>
-              <TouchableOpacity 
-                style={[profileStyles.navItem, activeNavTab === "settings" && profileStyles.navItemActive]}
-                onPress={() => setActiveNavTab("settings")}
-              >
-                <Text style={[profileStyles.navText, activeNavTab === "settings" && profileStyles.navTextActive]}>Account</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          </View>
-
-          {/* Log Out Button */}
-          {!isMobile && (
-          <TouchableOpacity style={profileStyles.logoutButton} onPress={handleLogout}>
-            <Text style={profileStyles.logoutIcon}>→</Text>
-            <Text style={profileStyles.logoutText}>Log Out</Text>
-          </TouchableOpacity>
-          )}
-        </View>
-
-        {/* Main Content Area */}
-        <View style={profileStyles.mainContent}>
-          {activeNavTab === "orders" ? (
-            <>
-              {/* Tabs */}
-              <View style={profileStyles.tabs}>
-                <TouchableOpacity
-                  style={[profileStyles.tab, activeOrderTab === "all" && profileStyles.tabActive]}
-                  onPress={() => setActiveOrderTab("all")}
-                >
-                  <Text style={[profileStyles.tabText, activeOrderTab === "all" && profileStyles.tabTextActive]}>
-                    All
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[profileStyles.tab, activeOrderTab === "upcoming" && profileStyles.tabActive]}
-                  onPress={() => setActiveOrderTab("upcoming")}
-                >
-                  <Text style={[profileStyles.tabText, activeOrderTab === "upcoming" && profileStyles.tabTextActive]}>
-                    Upcoming
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[profileStyles.tab, activeOrderTab === "completed" && profileStyles.tabActive]}
-                  onPress={() => setActiveOrderTab("completed")}
-                >
-                  <Text style={[profileStyles.tabText, activeOrderTab === "completed" && profileStyles.tabTextActive]}>
-                    Completed
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[profileStyles.tab, activeOrderTab === "declined" && profileStyles.tabActive]}
-                  onPress={() => setActiveOrderTab("declined")}
-                >
-                  <Text style={[profileStyles.tabText, activeOrderTab === "declined" && profileStyles.tabTextActive]}>
-                    Declined
-                  </Text>
-                </TouchableOpacity>
-              </View>
-
-              {/* Orders List */}
-              <View style={profileStyles.ordersList}>
-                {ordersLoading ? (
-                  <View style={profileStyles.loadingContainer}>
-                    <ActivityIndicator size="large" color={theme.colors.primary} />
-                  </View>
-                ) : filteredUserOrders.length === 0 ? (
-                  <View style={profileStyles.emptyContainer}>
-                    <Text style={profileStyles.emptyText}>No orders yet</Text>
-                    <Text style={profileStyles.emptySubtext}>Pickup homemade meals near you</Text>
-                  </View>
-                ) : (
-                  <View style={profileStyles.ordersListContent}>
-                    {filteredUserOrders.map((order) => {
-                      const statusInfo = getStatusInfo(order.status);
-                      return (
-                        <View key={order.id} style={profileStyles.orderCard}>
-                          <View style={profileStyles.orderContent}>
-                            <View style={profileStyles.orderInfo}>
-                              <Text style={profileStyles.orderId}>Order #HC{String(order.id).padStart(5, '0')}</Text>
-                              {order.dish_names && order.dish_names.length > 0 && (
-                                <Text style={profileStyles.orderDishInfo}>
-                                  {order.dish_names[0]}{order.dish_names.length > 1 ? ` +${order.dish_names.length - 1} more` : ''}
-                                  {order.total_quantity ? ` × ${order.total_quantity}` : ''}
-                                </Text>
-                              )}
-                              {order.chef_location && (
-                                <Text style={profileStyles.orderLocation}>Pickup location: {order.chef_location}</Text>
-                              )}
-                              {order.pickup_at && (
-                                <Text style={profileStyles.orderDishName}>Pickup: {formatLocalOrder(order.pickup_at)}</Text>
-                              )}
-                              <Text style={profileStyles.orderChef}>Placed: {formatLocalOrder(order.created_at)}</Text>
-                              <View style={profileStyles.orderStatus}>
-                                <Text style={profileStyles.statusIcon}>{statusInfo.icon}</Text>
-                                <Text style={[profileStyles.statusText, { color: statusInfo.color }]}>
-                                  {statusInfo.label}
-                                </Text>
-                              </View>
-                            </View>
-                            <View style={{ alignItems: 'flex-end', gap: 12 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-                                <Link href={order.status === 'completed' ? `/orders/thank-you?id=${order.id}` : `/orders/track?id=${order.id}`} asChild>
-                                  <TouchableOpacity style={profileStyles.orderButtonPrimary}>
-                                    <Text style={profileStyles.orderButtonTextPrimary}>View details</Text>
-                                  </TouchableOpacity>
-                                </Link>
-                                <Text style={profileStyles.orderTotal}>{formatCad(order.total_cents / 100)}</Text>
-                              </View>
-                            </View>
-                          </View>
-                        </View>
-                      );
-                    })}
-                  </View>
-                )}
-              </View>
-            </>
-          ) : (
-            <View style={profileStyles.settingsContent}>
-              <View style={profileStyles.header}>
-                <TouchableOpacity
-                  style={[profileStyles.saveButton, saving && profileStyles.saveButtonDisabled]}
-                  onPress={handleSaveProfile}
-                  disabled={saving}
-                >
-                  {saving ? (
-                    <ActivityIndicator size="small" color="#FFFFFF" />
-                  ) : (
-                    <Text style={profileStyles.saveButtonText}>Save Changes</Text>
-                  )}
-                </TouchableOpacity>
-              </View>
-
-              <View style={profileStyles.settingsCard}>
-                {/* Chef Logo Field */}
-                <View style={profileStyles.settingsSection}>
-                  <View style={profileStyles.chefLogoRow}>
-                    <Text style={profileStyles.settingsSectionTitle}>Chef logo</Text>
-                    <View style={profileStyles.chefLogoContainer}>
-                      {chefLogoUrl ? (
-                        <Image
-                          source={{ uri: chefLogoUrl }}
-                          style={profileStyles.settingsAvatar}
-                        />
-                      ) : (
-                        <View style={[profileStyles.settingsAvatar, profileStyles.avatarPlaceholder]}>
-                          <Text style={profileStyles.avatarInitials}>🍽️</Text>
-                        </View>
-                      )}
-                      <FilePicker 
-                        label={uploadingChefLogo ? "Uploading..." : "Upload logo"} 
-                        onFile={handleChefLogoPick} 
-                        accept="image/*"
-                        disabled={uploadingChefLogo}
-                      />
-                    </View>
-                  </View>
-                </View>
-
-                <View style={profileStyles.nameRow}>
-                  <View style={profileStyles.nameField}>
-                    <Text style={profileStyles.settingsSectionTitle}>First name</Text>
-          <TextInput
-                      value={firstName}
-                      onChangeText={setFirstName}
-                      placeholder="Enter your first name"
-                      placeholderTextColor="#94a3b8"
-                      style={profileStyles.settingsInput}
-                    />
-                  </View>
-                  <View style={profileStyles.nameField}>
-                    <Text style={profileStyles.settingsSectionTitle}>Last name</Text>
-                    <TextInput
-                      value={lastName}
-                      onChangeText={setLastName}
-                      placeholder="Enter your last name"
-                      placeholderTextColor="#94a3b8"
-                      style={profileStyles.settingsInput}
-                    />
-                  </View>
-        </View>
-
-                <View style={profileStyles.settingsSection}>
-                  <Text style={profileStyles.settingsSectionTitle}>Email</Text>
-          <TextInput
-                    value={email}
-                    editable={false}
-                    style={[profileStyles.settingsInput, profileStyles.settingsInputReadOnly]}
-                    placeholderTextColor="#94a3b8"
-          />
-        </View>
-
-                <View style={profileStyles.settingsSection}>
-                  <Text style={profileStyles.settingsSectionTitle}>Phone</Text>
-                  <TextInput
-                    value={phone}
-                    onChangeText={setPhone}
-                    placeholder="Enter your phone number"
-                    placeholderTextColor="#94a3b8"
-                    keyboardType="phone-pad"
-                    style={profileStyles.settingsInput}
-                  />
-                </View>
-
-                <View style={profileStyles.settingsSection}>
-                  <Text style={profileStyles.settingsSectionTitle}>Location</Text>
-          <LocationPicker
-            value={location}
-            onChange={setLocation}
-            placeholder="Search for your location..."
-                    style={profileStyles.locationPicker}
-          />
-                  <Text style={profileStyles.settingsHint}>Only available to customers after order confirmation</Text>
-        </View>
-
-                <View style={profileStyles.actionButtons}>
-        <TouchableOpacity
-                    style={profileStyles.logoutButtonProfile}
-                    onPress={handleLogout}
-                  >
-                    <Text style={profileStyles.logoutButtonText}>Logout</Text>
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={profileStyles.deleteButton}
-                    onPress={handleDeactivateChefAccount}
-                  >
-                    <Text style={profileStyles.deleteButtonText}>Deactivate</Text>
-        </TouchableOpacity>
-      </View>
-              </View>
-            </View>
-          )}
-        </View>
-      </View>
-    </View>
-  );
-
   return (
     <Screen style={{ backgroundColor: BG_PAGE }}>
       <View style={[styles.page, isMobile && styles.pageMobile]}>
         {Sidebar}
         <View style={styles.content}>
-          {activeTab === 'dashboard' && DashboardTab}
-          {activeTab === 'menu' && MenuTab}
-          {activeTab === 'orders' && OrdersTab}
-          {activeTab === 'reviews' && ReviewsTab}
-          {activeTab === 'payouts' && PayoutsTab}
-          {activeTab === 'profile' && ProfileTab}
+          {/* Render TabBar once at the top level to prevent reloading */}
+          <View style={{ backgroundColor: BG_PAGE, paddingTop: 32, paddingHorizontal: 32, paddingBottom: 0 }}>
+            {WelcomeHeader}
+            {TabBar}
+          </View>
+          {/* Tab content without WelcomeHeader and TabBar */}
+          {activeTab === 'dashboard' && (
+            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
+              {msg && (
+                <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
+                  <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
+                </View>
+              )}
+              {err && (
+                <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+                </View>
+              )}
+              <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
+                {/* Weekly Earnings Card */}
+                <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                    <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Weekly Earnings</Text>
+                    <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
+                      <TouchableOpacity
+                        onPress={() => setEarningsRange('week')}
+                        style={{
+                          paddingVertical: 4,
+                          paddingHorizontal: 12,
+                          borderRadius: 6,
+                          backgroundColor: earningsRange === 'week' ? PRIMARY_COLOR : 'transparent',
+                        }}
+                      >
+                        <Text style={{ color: earningsRange === 'week' ? '#FFFFFF' : TEXT_DARK, fontWeight: '700', fontSize: 12 }}>Week</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => setEarningsRange('month')}
+                        style={{
+                          paddingVertical: 4,
+                          paddingHorizontal: 12,
+                          borderRadius: 6,
+                          backgroundColor: earningsRange === 'month' ? PRIMARY_COLOR : 'transparent',
+                        }}
+                      >
+                        <Text style={{ color: earningsRange === 'month' ? '#FFFFFF' : TEXT_DARK, fontWeight: '700', fontSize: 12 }}>Month</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                  <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                    {formatCad(earningsRange === 'week' ? weeklyEarnings : monthlyEarnings)}
+                  </Text>
+                </View>
+                {/* Active Orders Card */}
+                <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Active Orders</Text>
+                  <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                    {orders.filter(o => ['requested', 'pending', 'ready', 'paid'].includes(o.status)).length}
+                  </Text>
+                </View>
+                {/* Total Dishes Card */}
+                <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Total Dishes</Text>
+                  <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                    {dishes.length}
+                  </Text>
+                </View>
+              </View>
+            </ScrollView>
+          )}
+          {activeTab === 'menu' && (
+            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120, paddingTop: 0 }}>
+              {msg && (
+                <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
+                  <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
+                </View>
+              )}
+              {err && (
+                <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
+                  <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+                </View>
+              )}
+              <NewDishForm onCreate={createDish} saving={saving} />
+              <View style={{ gap: 24 }}>
+                {dishes.length === 0 ? (
+                  <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
+                ) : (
+                  dishes.map(d => (
+                    <DishEditor key={d.id} dish={d} onSave={updateDish} onDelete={deleteDish} />
+                  ))
+                )}
+              </View>
+            </ScrollView>
+          )}
+          {activeTab === 'orders' && (
+            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120, paddingTop: 0 }}>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, minWidth: '100%' }}>
+                {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
+                  <TouchableOpacity
+                    key={status}
+                    onPress={() => setOrderStatusFilter(status)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 16,
+                      borderRadius: 6,
+                      backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
+                      marginRight: 4,
+                    }}
+                  >
+                    <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_DARK, fontWeight: '700', fontSize: 14, textTransform: 'capitalize' }}>
+                      {status}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              {filteredOrders.map(order => (
+                <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 4 }}>
+                        Order #{order.id}
+                      </Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14, marginBottom: 4 }}>
+                        {order.user_email || 'Unknown user'}
+                      </Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                        {formatLocal(order.created_at)}
+                      </Text>
+                    </View>
+                    <View style={{ alignItems: 'flex-end' }}>
+                      <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 4 }}>
+                        {formatCad(order.total_cents)}
+                      </Text>
+                      <View style={{
+                        paddingVertical: 4,
+                        paddingHorizontal: 12,
+                        borderRadius: 6,
+                        backgroundColor: order.status === 'completed' ? '#10B981' : order.status === 'cancelled' || order.status === 'rejected' ? '#EF4444' : '#F59E0B',
+                      }}>
+                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12, textTransform: 'capitalize' }}>
+                          {order.status}
+                        </Text>
+                      </View>
+                    </View>
+                  </View>
+                  {order.order_items && order.order_items.length > 0 && (
+                    <View style={{ borderTopWidth: 1, borderTopColor: BORDER_LIGHT, paddingTop: 16, marginTop: 16 }}>
+                      {order.order_items.map((item, idx) => (
+                        <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
+                          <Text style={{ color: TEXT_DARK, fontSize: 14 }}>
+                            {item.dish_name || `Dish #${item.dish_id}`} x {item.quantity}
+                          </Text>
+                          <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700' }}>
+                            {formatCad(item.unit_price_cents * item.quantity)}
+                          </Text>
+                        </View>
+                      ))}
+                    </View>
+                  )}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
+                    {order.status === 'requested' && (
+                      <>
+                        <TouchableOpacity
+                          onPress={() => updateOrderStatus(order.id, 'pending')}
+                          style={{ flex: 1, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Accept</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          onPress={() => updateOrderStatus(order.id, 'rejected')}
+                          style={{ flex: 1, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Reject</Text>
+                        </TouchableOpacity>
+                      </>
+                    )}
+                    {order.status === 'pending' && (
+                      <TouchableOpacity
+                        onPress={() => updateOrderStatus(order.id, 'ready')}
+                        style={{ flex: 1, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Mark Ready</Text>
+                      </TouchableOpacity>
+                    )}
+                    {order.status === 'ready' && (
+                      <TouchableOpacity
+                        onPress={() => updateOrderStatus(order.id, 'paid')}
+                        style={{ flex: 1, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Mark Paid</Text>
+                      </TouchableOpacity>
+                    )}
+                  </View>
+                </View>
+              ))}
+              {filteredOrders.length === 0 && (
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', padding: 32 }}>No {orderStatusFilter} orders</Text>
+              )}
+            </ScrollView>
+          )}
+          {activeTab === 'reviews' && (
+            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
+              {/* Rating Summary Card */}
+              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                <View>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                    <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                      {reviewStats.avg.toFixed(1)}
+                    </Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                      {[1, 2, 3, 4, 5].map((star) => {
+                        const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
+                        if (star <= Math.floor(rounded)) {
+                          return <Text key={star} style={{ fontSize: 28, color: PRIMARY_COLOR }}>★</Text>;
+                        } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
+                          // Half star - show half-filled using overlay technique
+                          return (
+                            <View key={star} style={{ position: 'relative', width: 28, height: 28, justifyContent: 'center', alignItems: 'center' }}>
+                              <Text style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>
+                              <View style={{ position: 'absolute', left: 0, top: 0, width: 14, height: 28, overflow: 'hidden' }}>
+                                <Text style={{ fontSize: 28, color: PRIMARY_COLOR, lineHeight: 28 }}>★</Text>
+                              </View>
+                            </View>
+                          );
+                        } else {
+                          return <Text key={star} style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>;
+                        }
+                      })}
+                    </View>
+                  </View>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4 }}>
+                    Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
+                  </Text>
+                </View>
+              </View>
+              {/* Reviews List */}
+              {filteredAndSortedReviews.length > 0 ? (
+                <View style={{ gap: 16 }}>
+                  {filteredAndSortedReviews.map(review => (
+                    <View key={review.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
+                        <View style={{ flex: 1 }}>
+                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700', marginBottom: 4 }}>
+                            {review.user_name || 'Anonymous'}
+                          </Text>
+                          <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>
+                            {formatLocal(review.created_at)}
+                          </Text>
+                        </View>
+                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700' }}>
+                            {review.rating.toFixed(1)}
+                          </Text>
+                          <View style={{ flexDirection: 'row' }}>
+                            {[1, 2, 3, 4, 5].map((star) => (
+                              <Text key={star} style={{ fontSize: 20, color: star <= review.rating ? PRIMARY_COLOR : '#D1D5DB' }}>★</Text>
+                            ))}
+                          </View>
+                        </View>
+                      </View>
+                      {review.comment && (
+                        <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>
+                          {review.comment}
+                        </Text>
+                      )}
+                    </View>
+                  ))}
+                </View>
+              ) : (
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', padding: 32 }}>
+                  {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
+                </Text>
+              )}
+            </ScrollView>
+          )}
+          {activeTab === 'payouts' && (
+            <View style={{ flex: 1, backgroundColor: BG_PAGE }}>
+              <PayoutSettings
+                onStatusChange={async (nextStatus) => {
+                  setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
+                  if (typeof nextStatus?.charges_enabled === 'boolean') {
+                    setChargesEnabled(nextStatus.charges_enabled);
+                  }
+                  if (nextStatus?.accountId) {
+                    setStripeAccountId(nextStatus.accountId);
+                  }
+                }}
+              />
+            </View>
+          )}
         </View>
       </View>
 
@@ -2400,8 +2354,6 @@ const styles = StyleSheet.create({
     borderRightWidth: 1,
     borderRightColor: BORDER_LIGHT,
     backgroundColor: BG_LIGHT,
-  },
-  sidebarInner: {
     paddingVertical: 16,
     paddingHorizontal: 16,
   },
@@ -2440,51 +2392,91 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 2,
   },
-  sidebarSection: {
-    marginBottom: 24,
+  welcomeHeader: {
+    marginBottom: theme.spacing.md,
+  },
+  welcomeTitle: {
+    color: TEXT_DARK,
+    fontSize: 28,
+    fontWeight: '900',
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  welcomeSubtitle: {
+    color: TEXT_MUTED,
+    fontSize: 16,
+    marginTop: 4,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  tabBarWrapper: {
+    marginBottom: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+    backgroundColor: '#F2F0EF',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    borderRadius: 8,
+  },
+  tabBarContent: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    paddingHorizontal: 4,
+  },
+  tab: {
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    position: 'relative',
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+  },
+  tabActive: {
+    backgroundColor: '#FE734C',
+  },
+  tabContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  tabIcon: {
+    width: 20,
+    height: 20,
+  },
+  tabText: {
+    color: '#33393A',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: '600',
+    letterSpacing: theme.typography.letterSpacing.wide,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  tabTextActive: {
+    color: '#FFFFFF',
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
   },
   sidebarSectionFooter: {
     borderTopWidth: 1,
     borderTopColor: BORDER_LIGHT,
     paddingTop: 16,
+    marginTop: 'auto',
   },
-  navItem: {
+  footerNavItem: {
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 12,
     paddingHorizontal: 12,
-    borderRadius: 12,
+    borderRadius: 8,
     marginBottom: 8,
-    backgroundColor: 'transparent',
-    minHeight: 44,
+    gap: 10,
   },
-  navItemActive: {
-    backgroundColor: PRIMARY_COLOR,
+  footerNavIcon: {
+    width: 20,
+    height: 20,
   },
-  navItemPressed: {
-    opacity: 0.85,
-  },
-  navIconWrap: {
-    width: 22,
-    height: 22,
-    marginRight: 10,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  navIcon: {
-    width: 24,
-    height: 24,
-  },
-  navLabel: {
-    flexShrink: 1,
-    fontSize: 16,
-    color: TEXT_MUTED,
+  footerNavLabel: {
+    fontSize: theme.typography.fontSize.sm,
+    color: '#33393A',
     fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
-  },
-  navLabelActive: {
-    color: '#FFFFFF',
-    fontWeight: '800',
   },
   content: {
     flex: 1,
@@ -2500,14 +2492,8 @@ const styles = StyleSheet.create({
     borderRightWidth: 0,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
-  },
-  sidebarSectionMobile: {
-    flexDirection: 'row',
-    marginBottom: 0,
-  },
-  navItemMobile: {
-    marginRight: 8,
-    marginBottom: 0,
+    paddingVertical: 12,
+    paddingHorizontal: 12,
   },
 });
 
@@ -2967,435 +2953,3 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
   );
 }
 
-const profileStyles = StyleSheet.create({
-  container: {
-    flex: 1,
-    flexDirection: Platform.select({
-      web: "row",
-      default: "column",
-    }),
-    backgroundColor: '#F2F0EF',
-    padding: Platform.select({
-      web: theme.spacing['3xl'],
-      default: theme.spacing.md,
-    }),
-    gap: theme.spacing['2xl'],
-    maxWidth: 1280,
-    alignSelf: "center",
-    width: "100%",
-  },
-  sidebar: {
-    width: Platform.select({
-      web: 256,
-      default: "100%",
-    }),
-    minHeight: Platform.select({
-      web: 700,
-      default: "auto",
-    }),
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.md,
-    flexDirection: "column",
-    justifyContent: "space-between",
-  },
-  sidebarContent: {
-    flex: 1,
-    gap: theme.spacing.md,
-  },
-  profileHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  avatar: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: theme.colors.primary,
-  },
-  avatarPlaceholder: {
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontSize: 16,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  profileInfo: {
-    flex: 1,
-    gap: theme.spacing.xs / 2,
-  },
-  profileName: {
-    color: '#101828',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.medium,
-    lineHeight: theme.typography.fontSize.base * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  profileEmail: {
-    color: '#3E6A55',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.normal,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  navMenu: {
-    gap: theme.spacing.xs,
-    marginTop: theme.spacing.md,
-  },
-  navItem: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.lg,
-  },
-  navItemActive: {
-    backgroundColor: theme.colors.primary,
-  },
-  navText: {
-    color: '#101828',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  navTextActive: {
-    color: '#FFFFFF',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  logoutButton: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
-    borderRadius: theme.radius.lg,
-    marginTop: theme.spacing['2xl'],
-  },
-  logoutIcon: {
-    fontSize: 20,
-    color: '#EF4444',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  logoutText: {
-    color: '#EF4444',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  mainContent: {
-    flex: 1,
-    backgroundColor: '#F2F0EF',
-  },
-  header: {
-    padding: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    flexDirection: 'row',
-    justifyContent: 'flex-end',
-    alignItems: 'center',
-  },
-  tabs: {
-    flexDirection: "row",
-    borderBottomWidth: 1,
-    borderBottomColor: '#EAECF0',
-    paddingHorizontal: theme.spacing.md,
-    gap: theme.spacing['2xl'],
-  },
-  tab: {
-    paddingBottom: 13,
-    paddingTop: theme.spacing.md,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
-  },
-  tabActive: {
-    borderBottomColor: theme.colors.primary,
-  },
-  tabText: {
-    color: '#667085',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
-    letterSpacing: 0.015,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  tabTextActive: {
-    color: '#101828',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  ordersList: {
-    flex: 1,
-  },
-  ordersListContent: {
-    gap: theme.spacing.md,
-  },
-  loadingContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing['4xl'],
-  },
-  emptyContainer: {
-    flex: 1,
-    alignItems: "center",
-    justifyContent: "center",
-    paddingVertical: theme.spacing['4xl'],
-  },
-  emptyText: {
-    color: '#667085',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    marginBottom: theme.spacing.xs,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  emptySubtext: {
-    color: '#667085',
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderCard: {
-    flexDirection: Platform.select({
-      web: "row",
-      default: "column",
-    }),
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    gap: theme.spacing.md,
-    alignItems: "stretch",
-  },
-  orderContent: {
-    flex: 2,
-    flexDirection: "column",
-    justifyContent: "space-between",
-    gap: theme.spacing.md,
-  },
-  orderInfo: {
-    gap: theme.spacing.xs,
-  },
-  orderId: {
-    color: theme.colors.primary,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.normal,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderDishInfo: {
-    color: '#101828',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderLocation: {
-    color: '#667085',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.normal,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderDishName: {
-    color: '#101828',
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold,
-    lineHeight: theme.typography.fontSize.lg * 1.2,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderChef: {
-    color: '#667085',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.normal,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderStatus: {
-    flexDirection: "row",
-    alignItems: "center",
-    gap: theme.spacing.sm,
-    marginTop: theme.spacing.sm,
-  },
-  statusIcon: {
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  statusText: {
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderButtonPrimary: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.md,
-    borderRadius: theme.radius.lg,
-  },
-  orderButtonTextPrimary: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  orderTotal: {
-    color: '#101828',
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold,
-    lineHeight: theme.typography.fontSize.lg * 1.2,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  settingsContent: {
-    flex: 1,
-    backgroundColor: '#FFFFFF',
-  },
-  settingsCard: {
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.radius.xl,
-    padding: theme.spacing.xl,
-    gap: theme.spacing['2xl'],
-  },
-  settingsSection: {
-    gap: theme.spacing.md,
-  },
-  settingsSectionTitle: {
-    color: '#101828',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  avatarSection: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-  },
-  chefLogoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.lg,
-  },
-  chefLogoContainer: {
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: theme.spacing.sm,
-  },
-  settingsAvatar: {
-    width: 80,
-    height: 80,
-    borderRadius: 40,
-    backgroundColor: 'transparent',
-  },
-  settingsInput: {
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    borderRadius: theme.radius.lg,
-    padding: theme.spacing.md,
-    fontSize: theme.typography.fontSize.base,
-    color: '#101828',
-    backgroundColor: '#FFFFFF',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  settingsInputReadOnly: {
-    backgroundColor: '#F9FAFB',
-    color: '#667085',
-  },
-  locationPicker: {
-    marginTop: 0,
-  },
-  settingsHint: {
-    color: '#667085',
-    fontSize: theme.typography.fontSize.sm,
-    marginTop: theme.spacing.xs / 2,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  nameRow: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-  },
-  nameField: {
-    flex: 1,
-  },
-  saveButton: {
-    backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.sm,
-    paddingHorizontal: theme.spacing.lg,
-    borderRadius: theme.radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  saveButtonDisabled: {
-    opacity: 0.6,
-  },
-  saveButtonText: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  actionButtons: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    marginTop: theme.spacing.xl,
-  },
-  logoutButtonProfile: {
-    flex: 1,
-    backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-    borderRadius: theme.radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  logoutButtonText: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  deleteButton: {
-    flex: 1,
-    backgroundColor: theme.colors.primary,
-    paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.xl,
-    borderRadius: theme.radius.lg,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  deleteButtonText: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  containerMobile: {
-    flexDirection: 'column',
-    padding: theme.spacing.md,
-    gap: theme.spacing.md,
-  },
-  sidebarMobile: {
-    width: '100%',
-    minHeight: 'auto',
-    flexDirection: 'row',
-    alignItems: 'center',
-    padding: 0,
-    borderRadius: 0,
-    backgroundColor: 'transparent',
-  },
-  sidebarContentMobile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-  },
-  navMenuMobile: {
-    marginTop: 0,
-    width: '100%',
-  },
-  navMenuMobileContent: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.sm,
-  },
-});

@@ -74,20 +74,21 @@ export default function IntroPage() {
     };
   }, [user]);
 
-  // Native Icon Fallbacks
-  const MenuIcon = () => (
-    <View style={{ width: 24, height: 24, justifyContent: 'space-around', paddingVertical: 4 }}>
-      <View style={{ height: 2, backgroundColor: PRIMARY_COLOR, borderRadius: 1 }} />
-      <View style={{ height: 2, backgroundColor: PRIMARY_COLOR, borderRadius: 1 }} />
-      <View style={{ height: 2, backgroundColor: PRIMARY_COLOR, borderRadius: 1 }} />
-    </View>
-  );
-  const CloseIcon = () => (
+  // Native Icon Fallbacks - memoized to prevent re-renders and blinking (matching NavBar)
+  const MenuIcon = React.useMemo(() => (
+    <Image 
+      source={require('../assets/menu.png')} 
+      style={{ width: 24, height: 24, tintColor: PRIMARY_COLOR }} 
+      resizeMode="contain" 
+    />
+  ), []);
+  
+  const CloseIcon = React.useMemo(() => (
     <View style={{ width: 24, height: 24, alignItems: 'center', justifyContent: 'center' }}>
       <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: PRIMARY_COLOR, transform: [{ rotate: '45deg' }] }} />
       <View style={{ position: 'absolute', width: 20, height: 2, backgroundColor: PRIMARY_COLOR, transform: [{ rotate: '-45deg' }] }} />
     </View>
-  );
+  ), []);
 
   return (
     <Screen noHeader noFooter style={{ backgroundColor: BG_LIGHT }}>
@@ -128,7 +129,7 @@ export default function IntroPage() {
               onPress={() => setIsMenuOpen(!isMenuOpen)}
               style={styles.iconButton}
             >
-              {isMenuOpen ? <CloseIcon /> : <MenuIcon />}
+              {isMenuOpen ? CloseIcon : MenuIcon}
             </TouchableOpacity>
           </View>
         </View>
@@ -352,12 +353,15 @@ const styles = StyleSheet.create({
       default: 8,
     }),
     paddingLeft: 0,
+    minHeight: 56, // Ensure consistent height for vertical centering
   },
   logoContainer: {
     marginLeft: -80,
     paddingLeft: 0,
     paddingTop: 0,
     marginTop: 0,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   logoImage: {
     width: Platform.select({
@@ -380,6 +384,7 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: theme.spacing.sm,
   },
   iconButton: {
@@ -389,6 +394,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     backgroundColor: '#F3F4F6',
     borderRadius: 18,
+    display: 'flex',
   },
   faqButtonText: {
     fontSize: 14,
@@ -399,6 +405,7 @@ const styles = StyleSheet.create({
   orderButton: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 8,

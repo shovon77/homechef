@@ -47,6 +47,36 @@ function useDebounce<T>(value: T, delay: number): T {
   return debouncedValue;
 }
 
+// Helper function to format cuisine type
+const formatCuisine = (cuisine: any): string => {
+  if (!cuisine) return 'Chef';
+  
+  // If it's already a string (comma-separated), return it
+  if (typeof cuisine === 'string') {
+    // Check if it's a JSON string
+    if (cuisine.trim().startsWith('[') || cuisine.trim().startsWith('"')) {
+      try {
+        const parsed = JSON.parse(cuisine);
+        if (Array.isArray(parsed)) {
+          return parsed.join(', ');
+        }
+        return String(parsed);
+      } catch {
+        // If parsing fails, treat as regular string
+        return cuisine;
+      }
+    }
+    return cuisine;
+  }
+  
+  // If it's an array, join it
+  if (Array.isArray(cuisine)) {
+    return cuisine.join(', ');
+  }
+  
+  return 'Chef';
+};
+
 type Dish = {
   id: number;
   name: string;
@@ -516,7 +546,9 @@ export default function BrowsePage() {
           if (error) throw error;
           
           if (data) {
-            const uniqueCuisines = Array.from(new Set(data.map(c => c.cuisine).filter(Boolean))).sort();
+            // Format each cuisine before creating unique set
+            const formattedCuisines = data.map(c => formatCuisine(c.cuisine)).filter(Boolean);
+            const uniqueCuisines = Array.from(new Set(formattedCuisines)).sort();
             // Manual pagination for cuisines since we do distinct client-side
             const pagedCuisines = uniqueCuisines.slice(from, to + 1);
             setCuisines(pagedCuisines);
