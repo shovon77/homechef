@@ -9,6 +9,7 @@ import { supabase } from '../../lib/supabase';
 import { theme } from '../../lib/theme';
 import { cents } from '../../lib/money';
 import { uploadToBucket } from '../../lib/upload';
+import { createNotification } from '../../lib/notifications';
 
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
@@ -321,6 +322,33 @@ export default function OrderSuccessPage() {
       setMessageText('');
       setShowMessageModal(false);
       Alert.alert('Success', 'Message sent successfully!');
+
+      // Create notification for the chef about the new message
+      if (chefUserId) {
+        try {
+          // Get customer's name from profiles table
+          const { data: customerProfile } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          const customerName = customerProfile?.name || 'Customer';
+          
+          // Create notification for chef
+          await createNotification(
+            chefUserId,
+            'order_message',
+            'New Message in Order',
+            `${customerName} sent a new message for Order #${orderId}.`,
+            orderId,
+            'order'
+          );
+        } catch (notifError) {
+          // Don't block the message sending if notification creation fails
+          console.error('Error creating notification for chef:', notifError);
+        }
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to send message');
     } finally {

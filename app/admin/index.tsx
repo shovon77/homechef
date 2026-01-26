@@ -14,6 +14,7 @@ import { callFn } from '../../lib/fn';
 import { formatEst } from '../../lib/datetime';
 import { cents } from '../../lib/money';
 import { theme } from '../../lib/theme';
+import { createNotification } from '../../lib/notifications';
 
 const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
@@ -717,7 +718,18 @@ export default function AdminPage() {
 
   async function handleApproveChefApplication(chefId: number, applicationId?: string) {
     try {
+      let chefUserId: string | null = null;
+      
       if (applicationId) {
+        // Get application data to find user_id
+        const { data: application } = await supabase
+          .from('chef_applications')
+          .select('user_id')
+          .eq('id', applicationId)
+          .single();
+        
+        chefUserId = application?.user_id || null;
+        
         const result = await approveChefApplication(applicationId);
         if (result.ok) {
           // Activate the chef (approveChefApplication already sets status to 'active' in chefs table)
@@ -725,11 +737,34 @@ export default function AdminPage() {
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'approved' } : null);
           Alert.alert('Success', 'Chef application approved and activated');
+          
+          // Create notification for chef
+          if (chefUserId) {
+            try {
+              await createNotification(
+                chefUserId,
+                'chef_application_approved',
+                'Chef Application Approved',
+                'Congratulations! Your chef application has been approved. You can now start listing your dishes.'
+              );
+            } catch (notifError) {
+              console.error('Error creating notification for chef:', notifError);
+            }
+          }
         } else {
           Alert.alert('Error', result.error || 'Failed to approve application');
           return;
         }
       } else {
+        // No application record, get chef's user_id from chefs table
+        const { data: chefData } = await supabase
+          .from('chefs')
+          .select('user_id')
+          .eq('id', chefId)
+          .single();
+        
+        chefUserId = chefData?.user_id || null;
+        
         // No application record, just activate the chef
         const result = await toggleChefActive(chefId, true);
         if (result.ok) {
@@ -737,6 +772,20 @@ export default function AdminPage() {
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'approved' } : null);
           Alert.alert('Success', 'Chef approved and activated');
+          
+          // Create notification for chef
+          if (chefUserId) {
+            try {
+              await createNotification(
+                chefUserId,
+                'chef_application_approved',
+                'Chef Application Approved',
+                'Congratulations! Your chef application has been approved. You can now start listing your dishes.'
+              );
+            } catch (notifError) {
+              console.error('Error creating notification for chef:', notifError);
+            }
+          }
         } else {
           Alert.alert('Error', result.error || 'Failed to approve chef');
           return;
@@ -751,18 +800,52 @@ export default function AdminPage() {
 
   async function handleRejectChefApplication(chefId: number, applicationId?: string) {
     try {
+      let chefUserId: string | null = null;
+      
       if (applicationId) {
+        // Get application data to find user_id
+        const { data: application } = await supabase
+          .from('chef_applications')
+          .select('user_id')
+          .eq('id', applicationId)
+          .single();
+        
+        chefUserId = application?.user_id || null;
+        
         const result = await rejectChefApplication(applicationId);
         if (result.ok) {
           setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'rejected' } : null);
           Alert.alert('Success', 'Chef application rejected');
+          
+          // Create notification for chef
+          if (chefUserId) {
+            try {
+              await createNotification(
+                chefUserId,
+                'chef_application_rejected',
+                'Chef Application Status',
+                'Your chef application has been reviewed. Please contact support for more information.'
+              );
+            } catch (notifError) {
+              console.error('Error creating notification for chef:', notifError);
+            }
+          }
         } else {
           Alert.alert('Error', result.error || 'Failed to reject application');
           return;
         }
       } else {
+        // No application record, get chef's user_id from chefs table
+        const { data: chefData } = await supabase
+          .from('chefs')
+          .select('user_id')
+          .eq('id', chefId)
+          .single();
+        
+        chefUserId = chefData?.user_id || null;
+        
         // No application record, update chef status to rejected
         const { error } = await supabase
           .from('chefs')
@@ -777,6 +860,20 @@ export default function AdminPage() {
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'rejected' } : null);
           Alert.alert('Success', 'Chef application rejected');
+          
+          // Create notification for chef
+          if (chefUserId) {
+            try {
+              await createNotification(
+                chefUserId,
+                'chef_application_rejected',
+                'Chef Application Status',
+                'Your chef application has been reviewed. Please contact support for more information.'
+              );
+            } catch (notifError) {
+              console.error('Error creating notification for chef:', notifError);
+            }
+          }
         }
       }
       // Reload all data to ensure consistency
@@ -1312,6 +1409,24 @@ export default function AdminPage() {
   const chefPageScrollRef = React.useRef<ScrollView>(null);
 
   async function handleUpdateIssueStatus(issueId: number, newStatus: string, silent: boolean = false) {
+    // Get issue data before updating to fetch related information
+    // First try to get from local state (issues array), otherwise fetch from DB
+    let issueData: any = issues.find(i => i.id === issueId);
+    
+    if (!issueData || !issueData.orders) {
+      // Fetch from database if not in local state
+      const { data: fetchedIssue } = await supabase
+        .from('order_issues')
+        .select(`
+          *,
+          orders!order_issues_order_id_fkey (id, user_id),
+          chefs!order_issues_chef_id_fkey (id, name)
+        `)
+        .eq('id', issueId)
+        .single();
+      issueData = fetchedIssue;
+    }
+
     const { error } = await supabase
       .from('order_issues')
       .update({ 
@@ -1334,6 +1449,30 @@ export default function AdminPage() {
       ));
       if (!silent) {
         Alert.alert('Success', 'Issue status updated');
+      }
+
+      // Create notification for the user about the issue update
+      if (issueData && issueData.orders) {
+        try {
+          const orderId = issueData.orders.id;
+          const userId = issueData.orders.user_id;
+          const chefName = issueData.chefs?.name || 'Chef';
+          const issueNumber = issueId;
+          const statusLabel = issueStatusStyles(newStatus).label;
+
+          // Create notification for user
+          await createNotification(
+            userId,
+            'order_issue_updated',
+            'Order Issue Updated',
+            `Issue #${issueNumber} for Order #${orderId} with ${chefName} has been updated to: ${statusLabel}.`,
+            orderId,
+            'order'
+          );
+        } catch (notifError) {
+          // Don't block the status update if notification creation fails
+          console.error('Error creating notification for user:', notifError);
+        }
       }
     }
   }

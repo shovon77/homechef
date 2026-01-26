@@ -11,6 +11,7 @@ import { theme } from '../../lib/theme';
 import LocationPicker from '../../components/LocationPicker';
 import FilePicker from '../../components/FilePicker';
 import { uploadToBucket } from '../../lib/upload';
+import { createNotification } from '../../lib/notifications';
 
 // Storage key for chef onboarding form data
 const CHEF_FORM_STORAGE_KEY = 'chef_onboarding_form_data';
@@ -663,7 +664,73 @@ export default function ChefSignup() {
         }
       }
 
-      // 8) Clear saved form data and navigate to chef dashboard
+      // 8) Create chef_applications record if it doesn't exist
+      const { data: existingApp } = await supabase
+        .from('chef_applications')
+        .select('id')
+        .eq('user_id', session.user.id)
+        .maybeSingle();
+      
+      let applicationId: string | null = null;
+      
+      if (!existingApp) {
+        // Create chef application record
+        const { data: newApp, error: appError } = await supabase
+          .from('chef_applications')
+          .insert({
+            user_id: session.user.id,
+            name: chefName,
+            email: email || null,
+            phone: phone || null,
+            location: chefLocation,
+            short_bio: chefBio,
+            cuisine_specialty: chefCuisine,
+            status: 'submitted',
+          })
+          .select('id')
+          .single();
+        
+        if (!appError && newApp) {
+          applicationId = newApp.id;
+        } else {
+          console.warn('Failed to create chef_applications record:', appError);
+        }
+      } else {
+        applicationId = existingApp.id;
+      }
+
+      // 9) Create notifications for all admin users about the new chef application
+      try {
+        // Get all admin users
+        const { data: adminUsers, error: adminError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('is_admin', true);
+        
+        if (!adminError && adminUsers && adminUsers.length > 0) {
+          // Create notification for each admin user
+          const notificationPromises = adminUsers.map(adminUser =>
+            createNotification(
+              adminUser.id,
+              'chef_request',
+              'New Chef Request',
+              `A new chef application from ${chefName} is waiting for review.`,
+              undefined,
+              'chef_application'
+            )
+          );
+          
+          // Don't wait for all notifications to complete - fire and forget
+          Promise.all(notificationPromises).catch(err => {
+            console.error('Error creating notifications for admins:', err);
+          });
+        }
+      } catch (notifError) {
+        // Don't block the submission if notification creation fails
+        console.error('Error creating notifications for admins:', notifError);
+      }
+
+      // 10) Clear saved form data and navigate to chef dashboard
       await storage.removeItem(CHEF_FORM_STORAGE_KEY);
       router.replace('/chef');
     } catch (e: any) {

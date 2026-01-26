@@ -18,6 +18,7 @@ import { cents } from '../../lib/money';
 import { updateOrderStatus } from '../../lib/orders';
 import { theme } from '../../lib/theme';
 import { uploadToBucket } from '../../lib/upload';
+import { createNotification } from '../../lib/notifications';
 
 const BG = '#f6f8f8';
 const CARD_BG = '#FFFFFF';
@@ -350,6 +351,34 @@ export default function TrackOrderPage() {
       setMessages(prev => [...prev, data as MessageRow]);
       setMessageText('');
       setShowMessageModal(false);
+
+      // Create notification for the chef about the new message
+      if (chefUserId) {
+        try {
+          // Get customer's name from profiles table
+          const { data: customerProfile } = await supabase
+            .from('profiles')
+            .select('name')
+            .eq('id', user.id)
+            .maybeSingle();
+          
+          const customerName = customerProfile?.name || 'Customer';
+          const orderNumber = order.id;
+          
+          // Create notification for chef
+          await createNotification(
+            chefUserId,
+            'order_message',
+            'New Message in Order',
+            `${customerName} sent a new message for Order #${orderNumber}.`,
+            order.id,
+            'order'
+          );
+        } catch (notifError) {
+          // Don't block the message sending if notification creation fails
+          console.error('Error creating notification for chef:', notifError);
+        }
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to send message');
     } finally {
@@ -685,6 +714,48 @@ export default function TrackOrderPage() {
       setIssueType('');
       setAdditionalDetails('');
       setIssueImages([]);
+
+      // Create notifications for all admin users about the new issue
+      try {
+        // Get customer's name from profiles table
+        const { data: customerProfile } = await supabase
+          .from('profiles')
+          .select('name')
+          .eq('id', user.id)
+          .maybeSingle();
+        
+        const customerName = customerProfile?.name || 'Customer';
+        const chefName = chef.name || 'Chef';
+        const orderNumber = order.id;
+        
+        // Get all admin users
+        const { data: adminUsers, error: adminError } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('is_admin', true);
+        
+        if (!adminError && adminUsers && adminUsers.length > 0) {
+          // Create notification for each admin user
+          const notificationPromises = adminUsers.map(adminUser =>
+            createNotification(
+              adminUser.id,
+              'issue_reported',
+              'Issue Reported',
+              `${customerName} reported an issue for Order #${orderNumber} with ${chefName}.`,
+              issueData.id,
+              'issue'
+            )
+          );
+          
+          // Don't wait for all notifications to complete - fire and forget
+          Promise.all(notificationPromises).catch(err => {
+            console.error('Error creating notifications for admins:', err);
+          });
+        }
+      } catch (notifError) {
+        // Don't block the issue submission if notification creation fails
+        console.error('Error creating notifications for admins:', notifError);
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to submit issue report');
     } finally {

@@ -23,6 +23,7 @@ import { formatCad, cents } from '../../lib/money';
 import { useRole } from '../../hooks/useRole';
 import type { Profile, OrderStatus } from '../../lib/types';
 import FilePicker from '../../components/FilePicker';
+import { createNotification } from '../../lib/notifications';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#FE734C';
@@ -1114,6 +1115,25 @@ export default function ChefDashboard() {
       // Add message to local state
       setOrderMessages(prev => [...prev, data]);
       setMessageText('');
+
+      // Create notification for the customer about the new message
+      try {
+        const chefName = chef.name || 'Chef';
+        const orderNumber = selectedOrderId;
+        
+        // Create notification for customer
+        await createNotification(
+          order.user_id,
+          'order_message',
+          'New Message in Order',
+          `${chefName} sent a new message for Order #${orderNumber}.`,
+          selectedOrderId,
+          'order'
+        );
+      } catch (notifError) {
+        // Don't block the message sending if notification creation fails
+        console.error('Error creating notification for customer:', notifError);
+      }
     } catch (err: any) {
       Alert.alert('Error', err?.message || 'Failed to send message');
     } finally {
@@ -1519,107 +1539,142 @@ export default function ChefDashboard() {
             </TouchableOpacity>
           ))}
         </ScrollView>
-        <View style={{ gap: 16 }}>
-          {filteredOrders.length > 0 ? (
-            filteredOrders.slice(0, 10).map(order => (
-              <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
-                  <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.total_cents || 0) / 100)}</Text>
+        <ScrollView 
+          horizontal 
+          showsHorizontalScrollIndicator={!isMobile} 
+          contentContainerStyle={isMobile ? { minWidth: 720 } : { minWidth: '100%' }}
+          style={{ marginHorizontal: isMobile ? -16 : 0 }}
+        >
+          <View style={[styles.tableContainer, isMobile && { minWidth: 720 }]}>
+            {filteredOrders.length > 0 ? (
+              <>
+                {/* Table Header */}
+                <View style={[styles.tableHeader, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
+                  <View style={[styles.tableHeaderCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
+                    <Text style={styles.tableHeaderCellText}>Order ID</Text>
+                  </View>
+                  <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                    <Text style={styles.tableHeaderCellText}>Customer</Text>
+                  </View>
+                  <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                    <Text style={styles.tableHeaderCellText}>Amount</Text>
+                  </View>
+                  <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                    <Text style={styles.tableHeaderCellText}>Status</Text>
+                  </View>
+                  <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                    <Text style={styles.tableHeaderCellText}>Pickup Time</Text>
+                  </View>
+                  <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                    <Text style={styles.tableHeaderCellText}>Actions</Text>
+                  </View>
                 </View>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Placed: {formatLocal(order.created_at)}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                  Items: {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || item.dishes?.name || 'Item'}`).join(', ') || 'No items'}
-                </Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {order.status === 'requested' ? (
-                    <>
-                      {(() => {
-                        const transferSent = Boolean(order.stripe_transfer_id);
-                        const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
-                        return (
-                          <TouchableOpacity
-                            disabled={!canAccept}
-                            onPress={async () => {
-                              if (!canAccept) {
-                                if (!chargesEnabled || !stripeAccountId) {
-                                  Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
-                                } else if (transferSent) {
-                                  Alert.alert('Order already accepted', 'This order has already been accepted.');
-                                }
-                                return;
-                              }
-                              try {
-                                await callFn('accept-order', { orderId: order.id });
-                                Alert.alert('Success', 'Order accepted! Payment has been captured.');
-                                await refreshOrdersForChef(chef!.id);
-                              } catch (err: any) {
-                                Alert.alert('Accept failed', err?.message || 'Unable to accept order');
-                              }
-                            }}
-                            style={{
-                              backgroundColor: PRIMARY_COLOR,
-                              paddingVertical: 8,
-                              paddingHorizontal: 16,
-                              borderRadius: 8,
-                              opacity: canAccept ? 1 : 0.5,
-                            }}
-                          >
-                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
-                          </TouchableOpacity>
-                        );
-                      })()}
-                      <TouchableOpacity
-                        onPress={async () => {
-                          try {
-                            await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
-                            await refreshOrdersForChef(chef!.id);
-                          } catch (err: any) {
-                            Alert.alert('Reject failed', err?.message || 'Unable to reject order');
-                          }
-                        }}
-                        style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : order.status === 'pending' ? (
-                    <View style={{ gap: 8 }}>
-                      <TouchableOpacity
-                        onPress={async () => {
-                          try {
-                            await handleOrderStatus(order.id, 'ready');
-                            Alert.alert('Success', 'Order marked as ready!');
-                          } catch (err: any) {
-                            Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                          }
-                        }}
-                        style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
-                      </TouchableOpacity>
+
+                {/* Table Rows */}
+                {filteredOrders.slice(0, 10).map(order => (
+                  <View key={order.id} style={[styles.tableRow, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
+                    <View style={[styles.tableCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
+                      <Text style={styles.tableCellText}>#{order.id}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                      <Text style={styles.tableCellText} numberOfLines={1}>{order.user_email || 'Unknown'}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                      <Text style={styles.tableCellText}>{formatCad((order.total_cents || 0) / 100)}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                      <Text style={[styles.tableCellText, { textTransform: 'capitalize' }]}>{order.status}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                      <Text style={styles.tableCellText}>{formatLocal(order.pickup_at)}</Text>
+                    </View>
+                    <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }, { flexDirection: 'row', gap: 8, flexWrap: 'wrap' }]}>
+                      {/* Message button for all orders */}
                       <TouchableOpacity
                         onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: isMobile ? 12 : 16, borderRadius: 8, alignSelf: 'flex-start', minWidth: isMobile ? 100 : 'auto' }}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
                       >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                       </TouchableOpacity>
-                      <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                      {/* Status-specific actions */}
+                      {order.status === 'requested' && (
+                        <>
+                          {(() => {
+                            const transferSent = Boolean(order.stripe_transfer_id);
+                            const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                            return (
+                              <TouchableOpacity
+                                disabled={!canAccept}
+                                onPress={async () => {
+                                  if (!canAccept) {
+                                    if (!chargesEnabled || !stripeAccountId) {
+                                      Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                                    } else if (transferSent) {
+                                      Alert.alert('Order already accepted', 'This order has already been accepted.');
+                                    }
+                                    return;
+                                  }
+                                  try {
+                                    await callFn('accept-order', { orderId: order.id });
+                                    Alert.alert('Success', 'Order accepted! Payment has been captured.');
+                                    await refreshOrdersForChef(chef!.id);
+                                  } catch (err: any) {
+                                    Alert.alert('Accept failed', err?.message || 'Unable to accept order');
+                                  }
+                                }}
+                                style={{
+                                  backgroundColor: PRIMARY_COLOR,
+                                  paddingVertical: 6,
+                                  paddingHorizontal: 12,
+                                  borderRadius: 6,
+                                  opacity: canAccept ? 1 : 0.5,
+                                }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                              </TouchableOpacity>
+                            );
+                          })()}
+                          <TouchableOpacity
+                            onPress={async () => {
+                              try {
+                                await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                await refreshOrdersForChef(chef!.id);
+                              } catch (err: any) {
+                                Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                              }
+                            }}
+                            style={{ backgroundColor: '#F97316', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                          >
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                          </TouchableOpacity>
+                        </>
+                      )}
+                      {order.status === 'pending' && (
+                        <TouchableOpacity
+                          onPress={async () => {
+                            try {
+                              await handleOrderStatus(order.id, 'ready');
+                              Alert.alert('Success', 'Order marked as ready!');
+                            } catch (err: any) {
+                              Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                            }
+                          }}
+                          style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                        >
+                          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Mark Ready</Text>
+                        </TouchableOpacity>
+                      )}
                     </View>
-                  ) : order.status === 'ready' ? (
-                    <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                      <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
-                    </View>
-                  ) : null}
-                </View>
+                  </View>
+                ))}
+              </>
+            ) : (
+              <View style={{ padding: 32, alignItems: 'center', minWidth: isMobile ? 720 : '100%' }}>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {orderStatusFilter} orders</Text>
               </View>
-            ))
-          ) : (
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, padding: 16, textAlign: 'center' }}>No {orderStatusFilter} orders</Text>
-          )}
-        </View>
+            )}
+          </View>
+        </ScrollView>
       </View>
     </ScrollView>
   );
@@ -1993,6 +2048,166 @@ export default function ChefDashboard() {
                     {dishes.length}
                   </Text>
                 </View>
+              </View>
+
+              {/* Order Management Table */}
+              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order Management</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16, minWidth: '100%' }}>
+                  {(['requested', 'pending', 'ready', 'completed'] as const).map(status => (
+                    <TouchableOpacity
+                      key={status}
+                      onPress={() => setOrderStatusFilter(status)}
+                      style={{
+                        paddingVertical: 8,
+                        paddingHorizontal: 16,
+                        borderRadius: 6,
+                        backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
+                        minWidth: 100,
+                      }}
+                    >
+                      <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                        {status.charAt(0).toUpperCase() + status.slice(1)} Orders
+                      </Text>
+                    </TouchableOpacity>
+                  ))}
+                </ScrollView>
+                <ScrollView 
+                  horizontal 
+                  showsHorizontalScrollIndicator={!isMobile} 
+                  contentContainerStyle={isMobile ? { minWidth: 720 } : { minWidth: '100%' }}
+                  style={{ marginHorizontal: isMobile ? -16 : 0 }}
+                >
+                  <View style={[styles.tableContainer, isMobile && { minWidth: 720 }]}>
+                    {filteredOrders.length > 0 ? (
+                      <>
+                        {/* Table Header */}
+                        <View style={[styles.tableHeader, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
+                          <View style={[styles.tableHeaderCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
+                            <Text style={styles.tableHeaderCellText}>Order ID</Text>
+                          </View>
+                          <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                            <Text style={styles.tableHeaderCellText}>Customer</Text>
+                          </View>
+                          <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                            <Text style={styles.tableHeaderCellText}>Amount</Text>
+                          </View>
+                          <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                            <Text style={styles.tableHeaderCellText}>Status</Text>
+                          </View>
+                          <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                            <Text style={styles.tableHeaderCellText}>Pickup Time</Text>
+                          </View>
+                          <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                            <Text style={styles.tableHeaderCellText}>Actions</Text>
+                          </View>
+                        </View>
+
+                        {/* Table Rows */}
+                        {filteredOrders.slice(0, 10).map(order => (
+                          <View key={order.id} style={[styles.tableRow, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
+                            <View style={[styles.tableCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
+                              <Text style={styles.tableCellText}>#{order.id}</Text>
+                            </View>
+                            <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                              <Text style={styles.tableCellText} numberOfLines={1}>{order.user_email || 'Unknown'}</Text>
+                            </View>
+                            <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                              <Text style={styles.tableCellText}>{formatCad((order.total_cents || 0) / 100)}</Text>
+                            </View>
+                            <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
+                              <Text style={[styles.tableCellText, { textTransform: 'capitalize' }]}>{order.status}</Text>
+                            </View>
+                            <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
+                              <Text style={styles.tableCellText}>{formatLocal(order.pickup_at)}</Text>
+                            </View>
+                            <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }, { flexDirection: 'row', gap: 8, flexWrap: 'wrap' }]}>
+                              {/* Message button for all orders */}
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                              </TouchableOpacity>
+                              {/* Status-specific actions */}
+                              {order.status === 'requested' && (
+                                <>
+                                  {(() => {
+                                    const transferSent = Boolean(order.stripe_transfer_id);
+                                    const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                                    return (
+                                      <TouchableOpacity
+                                        disabled={!canAccept}
+                                        onPress={async () => {
+                                          if (!canAccept) {
+                                            if (!chargesEnabled || !stripeAccountId) {
+                                              Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                                            } else if (transferSent) {
+                                              Alert.alert('Order already accepted', 'This order has already been accepted.');
+                                            }
+                                            return;
+                                          }
+                                          try {
+                                            await callFn('accept-order', { orderId: order.id });
+                                            Alert.alert('Success', 'Order accepted! Payment has been captured.');
+                                            await refreshOrdersForChef(chef!.id);
+                                          } catch (err: any) {
+                                            Alert.alert('Accept failed', err?.message || 'Unable to accept order');
+                                          }
+                                        }}
+                                        style={{
+                                          backgroundColor: PRIMARY_COLOR,
+                                          paddingVertical: 6,
+                                          paddingHorizontal: 12,
+                                          borderRadius: 6,
+                                          opacity: canAccept ? 1 : 0.5,
+                                        }}
+                                      >
+                                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                                      </TouchableOpacity>
+                                    );
+                                  })()}
+                                  <TouchableOpacity
+                                    onPress={async () => {
+                                      try {
+                                        await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                        await refreshOrdersForChef(chef!.id);
+                                      } catch (err: any) {
+                                        Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                                      }
+                                    }}
+                                    style={{ backgroundColor: '#F97316', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                  >
+                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                                  </TouchableOpacity>
+                                </>
+                              )}
+                              {order.status === 'pending' && (
+                                <TouchableOpacity
+                                  onPress={async () => {
+                                    try {
+                                      await handleOrderStatus(order.id, 'ready');
+                                      Alert.alert('Success', 'Order marked as ready!');
+                                    } catch (err: any) {
+                                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                                    }
+                                  }}
+                                  style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                >
+                                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Mark Ready</Text>
+                                </TouchableOpacity>
+                              )}
+                            </View>
+                          </View>
+                        ))}
+                      </>
+                    ) : (
+                      <View style={{ padding: 32, alignItems: 'center', minWidth: isMobile ? 720 : '100%' }}>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {orderStatusFilter} orders</Text>
+                      </View>
+                    )}
+                  </View>
+                </ScrollView>
               </View>
             </ScrollView>
           )}
@@ -2494,6 +2709,56 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER_LIGHT,
     paddingVertical: 12,
     paddingHorizontal: 12,
+  },
+  tableContainer: {
+    position: 'relative',
+    backgroundColor: BG_LIGHT,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    overflow: 'hidden',
+  },
+  tableHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: 12,
+    paddingLeft: 12,
+    paddingRight: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+    backgroundColor: '#F8FAFC',
+  },
+  tableHeaderCell: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: 4,
+  },
+  tableHeaderCellText: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  tableRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: BG_LIGHT,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+    paddingVertical: 12,
+    paddingLeft: 12,
+    paddingRight: 6,
+  },
+  tableCell: {
+    paddingVertical: 8,
+    paddingHorizontal: 4,
+    justifyContent: 'center',
+    overflow: 'hidden',
+  },
+  tableCellText: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
 });
 

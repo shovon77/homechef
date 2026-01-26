@@ -1,7 +1,7 @@
 // components/NavBar.tsx
 'use client'
 import React, { useEffect, useState, useMemo } from 'react'
-import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput } from 'react-native'
+import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput, Pressable, TouchableWithoutFeedback } from 'react-native'
 import { Link, useRouter, usePathname, useLocalSearchParams } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
@@ -131,6 +131,23 @@ export default function NavBar() {
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
+  const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
+  const [notifications, setNotifications] = useState<Array<{
+    id: string;
+    type: string;
+    title: string;
+    message: string;
+    read: boolean;
+    created_at: string;
+    related_id?: number;
+    related_type?: string;
+  }>>([])
+  const [notificationsLoading, setNotificationsLoading] = useState(false)
+
+  // Calculate unread count - memoized for performance
+  const unreadCount = useMemo(() => {
+    return notifications.filter(n => !n.read).length;
+  }, [notifications]);
   const [locationView, setLocationView] = useState<'default' | 'manual_form'>('default')
   const [location, setLocation] = useState("")
   const [currentLocation, setCurrentLocation] = useState("")
@@ -318,6 +335,83 @@ export default function NavBar() {
       setPostalCode("");
     }
   }, [showLocationModal, user]);
+
+  // Load notifications
+  useEffect(() => {
+    if (user?.id) {
+      loadNotifications();
+      
+      // Subscribe to real-time notification updates
+      const channel = supabase
+        .channel(`notifications-${user.id}`)
+        .on(
+          'postgres_changes',
+          {
+            event: '*',
+            schema: 'public',
+            table: 'notifications',
+            filter: `user_id=eq.${user.id}`,
+          },
+          () => {
+            loadNotifications();
+          }
+        )
+        .subscribe();
+
+      return () => {
+        supabase.removeChannel(channel);
+      };
+    } else {
+      setNotifications([]);
+    }
+  }, [user?.id, isAdmin, isChef]);
+
+  // Refresh notifications when dropdown opens
+  useEffect(() => {
+    if (isNotificationsOpen && user?.id) {
+      loadNotifications();
+    }
+  }, [isNotificationsOpen]);
+
+  async function loadNotifications() {
+    if (!user?.id) return;
+    
+    setNotificationsLoading(true);
+    try {
+      // Define allowed notification types based on user role
+      const allowedTypes: string[] = [
+        'welcome',
+        'order_placed',
+        'order_ready',
+        'order_issue_updated',
+        'order_message'
+      ];
+
+      if (isAdmin) {
+        allowedTypes.push('issue_reported', 'chef_request', 'new_user_signup');
+      }
+
+      if (isChef) {
+        allowedTypes.push('chef_application_submitted', 'chef_application_approved', 'chef_application_rejected', 'new_order_request');
+      }
+
+      const { data, error } = await supabase
+        .from('notifications')
+        .select('*')
+        .eq('user_id', user.id)
+        .in('type', allowedTypes)
+        .order('created_at', { ascending: false })
+        .limit(50);
+
+      if (error) throw error;
+      setNotifications(data || []);
+    } catch (err) {
+      console.error('Error loading notifications:', err);
+      setNotifications([]);
+    } finally {
+      setNotificationsLoading(false);
+    }
+  }
 
   function loadLocation() {
     if (!user || !profile) return;
@@ -765,6 +859,23 @@ export default function NavBar() {
               </Link>
               )}
               <TouchableOpacity 
+                onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
+                style={styles.notificationsButton}
+              >
+                <Image 
+                  source={require('../homechef/assets/alarm.png')} 
+                  style={styles.notificationsIconImage as any}
+                  resizeMode="contain"
+                />
+                {unreadCount > 0 && (
+                  <View style={styles.notificationBadge}>
+                    <Text style={styles.notificationBadgeText}>
+                      {unreadCount > 9 ? '9+' : unreadCount}
+                    </Text>
+                  </View>
+                )}
+              </TouchableOpacity>
+              <TouchableOpacity 
                 onPress={() => setIsMenuOpen(!isMenuOpen)}
                 style={[styles.iconButton, { backgroundColor: 'transparent' }]}
                 activeOpacity={0.7}
@@ -904,6 +1015,23 @@ export default function NavBar() {
             </TouchableOpacity>
           </Link>
           )}
+          <TouchableOpacity 
+            onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
+            style={styles.notificationsButton}
+          >
+            <Image 
+              source={require('../homechef/assets/alarm.png')} 
+              style={styles.notificationsIconImage as any}
+              resizeMode="contain"
+            />
+            {notifications.filter(n => !n.read).length > 0 && (
+              <View style={styles.notificationBadge}>
+                <Text style={styles.notificationBadgeText}>
+                  {notifications.filter(n => !n.read).length > 9 ? '9+' : notifications.filter(n => !n.read).length}
+                </Text>
+              </View>
+            )}
+          </TouchableOpacity>
             </>
           )}
             </>
@@ -914,7 +1042,14 @@ export default function NavBar() {
 
       {/* Mobile Menu Overlay */}
       {isMobile && isMenuOpen && (
-        <View style={styles.mobileMenu}>
+        <Pressable 
+          style={styles.mobileMenuOverlay}
+          onPress={() => setIsMenuOpen(false)}
+        >
+          <Pressable 
+            style={styles.mobileMenu}
+            onPress={(e) => e.stopPropagation()}
+          >
           {loggedIn ? (
             <>
               <TouchableOpacity
@@ -1044,7 +1179,99 @@ export default function NavBar() {
               </TouchableOpacity>
             </Link>
           )}
-        </View>
+          </Pressable>
+        </Pressable>
+      )}
+
+      {/* Notifications Dropdown */}
+      {isNotificationsOpen && (
+        <Pressable 
+          style={styles.notificationsOverlay}
+          onPress={() => setIsNotificationsOpen(false)}
+        >
+          <Pressable 
+            style={styles.notificationsDropdown}
+            onPress={(e) => e.stopPropagation()}
+          >
+            <View style={styles.notificationsHeader}>
+              <Text style={styles.notificationsTitle}>Notifications</Text>
+              <TouchableOpacity
+                onPress={() => {
+                  setIsNotificationsOpen(false);
+                  router.push('/notifications');
+                }}
+                style={styles.allNotificationsButton}
+              >
+                <Text style={styles.allNotificationsButtonText}>All notifications</Text>
+              </TouchableOpacity>
+            </View>
+            {notificationsLoading ? (
+              <View style={styles.notificationsContent}>
+                <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+              </View>
+            ) : notifications.length === 0 ? (
+              <View style={styles.notificationsContent}>
+                <Text style={styles.noNotificationsText}>No notifications yet!</Text>
+              </View>
+            ) : (
+              <ScrollView 
+                style={styles.notificationsList}
+                contentContainerStyle={styles.notificationsListContent}
+              >
+                {notifications.map((notification) => (
+                  <TouchableOpacity
+                    key={notification.id}
+                    style={[
+                      styles.notificationItem,
+                      !notification.read && styles.notificationItemUnread
+                    ]}
+                    onPress={async () => {
+                      // Mark as read if unread
+                      if (!notification.read) {
+                        try {
+                          const { error } = await supabase
+                            .from('notifications')
+                            .update({ read: true })
+                            .eq('id', notification.id);
+                          
+                          if (!error) {
+                            // Update local state immediately for instant UI feedback
+                            setNotifications(prev => 
+                              prev.map(n => n.id === notification.id ? { ...n, read: true } : n)
+                            );
+                          }
+                        } catch (err) {
+                          console.error('Error marking notification as read:', err);
+                        }
+                      }
+                      // Handle navigation based on notification type
+                      if (notification.related_id && notification.related_type === 'order') {
+                        router.push(`/orders/track?id=${notification.related_id}`);
+                        setIsNotificationsOpen(false);
+                      }
+                    }}
+                  >
+                    <View style={styles.notificationItemContent}>
+                      <Text style={styles.notificationItemTitle}>{notification.title}</Text>
+                      <Text style={styles.notificationItemMessage}>{notification.message}</Text>
+                      <Text style={styles.notificationItemTime}>
+                        {new Date(notification.created_at).toLocaleDateString('en-US', {
+                          timeZone: 'America/New_York',
+                          month: 'long',
+                          day: 'numeric',
+                          year: 'numeric'
+                        })}
+                      </Text>
+                    </View>
+                    {!notification.read && (
+                      <View style={styles.notificationUnreadDot} />
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+            )}
+          </Pressable>
+        </Pressable>
       )}
 
       {/* Location Modal */}
@@ -1190,14 +1417,17 @@ const styles = StyleSheet.create({
   headerNoBorder: {
     borderBottomWidth: 1,
     borderBottomColor: BG_LIGHT,
-    borderWidth: 0,
     borderTopWidth: 0,
     borderLeftWidth: 0,
     borderRightWidth: 0,
     ...Platform.select({
       web: {
-        borderBottom: `1px solid ${BG_LIGHT}`,
-        borderStyle: 'solid',
+        borderBottomWidth: '1px',
+        borderBottomColor: BG_LIGHT,
+        borderBottomStyle: 'solid',
+        borderTopWidth: '0px',
+        borderLeftWidth: '0px',
+        borderRightWidth: '0px',
         outline: 'none',
       },
     }),
@@ -1235,6 +1465,7 @@ const styles = StyleSheet.create({
         transform: [{ translateX: '-50%' }, { translateY: '-50%' }] as any,
         overflow: 'visible', // Ensure underline isn't clipped
         marginLeft: 0,
+        maxWidth: 'calc(100% - 300px)', // Prevent overlap with right section
       },
       default: {
         flex: 1,
@@ -1245,7 +1476,7 @@ const styles = StyleSheet.create({
     }),
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 16,
+    gap: 8,
   },
   navLink: {
     paddingVertical: 8,
@@ -1262,15 +1493,16 @@ const styles = StyleSheet.create({
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 2,
   },
   locationNavButton: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     paddingVertical: 6,
-    paddingHorizontal: 8,
+    paddingHorizontal: 4,
     borderRadius: 8,
+    marginRight: 4,
   },
   locationNavIcon: {
     width: 16,
@@ -1282,7 +1514,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
-    maxWidth: 70,
+    maxWidth: 60,
   },
   primaryButton: {
     minWidth: 84,
@@ -1336,6 +1568,41 @@ const styles = StyleSheet.create({
     height: 20,
     tintColor: '#FE734C',
   },
+  notificationsButton: {
+    position: 'relative',
+    width: 40,
+    height: 40,
+    borderRadius: 8,
+    backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  notificationsIconImage: {
+    width: 20,
+    height: 20,
+    tintColor: '#FE734C',
+  },
+  notificationBadge: {
+    position: 'absolute',
+    top: -2,
+    right: -2,
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    borderWidth: 2,
+    borderColor: BG_LIGHT,
+  },
+  notificationBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    lineHeight: 12,
+    fontFamily: theme.typography.fontFamily.body,
+  },
   cartBadge: {
     position: 'absolute',
     top: -2,
@@ -1383,11 +1650,11 @@ const styles = StyleSheet.create({
     transform: [{ translateX: '-50%' }],
     justifyContent: 'center',
     alignItems: 'center',
-    gap: 2,
+    gap: 4,
     marginLeft: 0,
   },
   rightSectionMobile: {
-    gap: 8,
+    gap: 2,
   },
   iconButton: {
     width: 36,
@@ -1417,23 +1684,48 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
+  mobileMenuOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 999,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+      },
+      default: {
+        position: 'absolute',
+      },
+    }),
+  },
   mobileMenu: {
     position: 'absolute',
     top: NAVBAR_HEIGHT,
-    right: 0,
+    right: 8,
     width: 'auto',
     minWidth: 160,
+    maxWidth: 'calc(100% - 16px)',
     backgroundColor: '#FFFFFF',
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
     borderLeftWidth: 1,
     borderLeftColor: BORDER_LIGHT,
+    borderTopLeftRadius: 8,
+    borderTopRightRadius: 8,
+    borderBottomLeftRadius: 8,
+    borderBottomRightRadius: 8,
     paddingVertical: 8,
     paddingHorizontal: 12,
     ...Platform.select({
       ios: { shadowColor: '#000', shadowOffset: { width: -2, height: 2 }, shadowOpacity: 0.1, shadowRadius: 4 },
       android: { elevation: 4 },
       web: { boxShadow: '-4px 4px 6px -1px rgba(0, 0, 0, 0.1)' },
+      default: {
+        maxWidth: '90%',
+      },
     }),
   },
   mobileMenuItem: {
@@ -1461,6 +1753,142 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
       },
     }),
+  },
+  notificationsOverlay: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 998,
+    backgroundColor: 'transparent',
+    ...Platform.select({
+      web: {
+        position: 'fixed',
+      },
+      default: {
+        position: 'absolute',
+      },
+    }),
+  },
+  notificationsDropdown: {
+    position: 'absolute',
+    top: NAVBAR_HEIGHT + 8,
+    right: 8,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    paddingVertical: 8,
+    paddingHorizontal: 0,
+    ...Platform.select({
+      web: {
+        width: 320,
+        maxWidth: 'calc(100% - 16px)',
+        boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)',
+      },
+      ios: {
+        width: 320,
+        maxWidth: '90%',
+        shadowColor: '#000',
+        shadowOffset: { width: 0, height: 2 },
+        shadowOpacity: 0.1,
+        shadowRadius: 4,
+      },
+      android: {
+        width: 320,
+        maxWidth: '90%',
+        elevation: 4,
+      },
+      default: {
+        width: '90%',
+        maxWidth: 320,
+      },
+    }),
+  },
+  notificationsHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: BORDER_LIGHT,
+  },
+  notificationsTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  notificationsContent: {
+    paddingHorizontal: 16,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  noNotificationsText: {
+    fontSize: 14,
+    color: '#667085',
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+  },
+  notificationsList: {
+    maxHeight: 400,
+  },
+  notificationsListContent: {
+    paddingVertical: 4,
+  },
+  notificationItem: {
+    flexDirection: 'row',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: '#F3F4F6',
+    backgroundColor: '#FFFFFF',
+  },
+  notificationItemUnread: {
+    backgroundColor: '#FFF9F7',
+  },
+  notificationItemContent: {
+    flex: 1,
+  },
+  notificationItemTitle: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+    marginBottom: 4,
+  },
+  notificationItemMessage: {
+    fontSize: 13,
+    color: '#667085',
+    fontFamily: theme.typography.fontFamily.body,
+    marginBottom: 4,
+    lineHeight: 18,
+  },
+  notificationItemTime: {
+    fontSize: 11,
+    color: '#9CA3AF',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  notificationUnreadDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: PRIMARY_COLOR,
+    alignSelf: 'center',
+    marginLeft: 8,
+  },
+  allNotificationsButton: {
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+  },
+  allNotificationsButtonText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: PRIMARY_COLOR,
+    fontFamily: theme.typography.fontFamily.body,
   },
   mobileLocationBar: {
     flexDirection: 'row',

@@ -66,6 +66,10 @@ export async function ensureProfile(client?: SupabaseClient): Promise<{ ok: bool
       return { ok: false, error: `profiles insert: ${upsertError.message}` };
     }
 
+    // Note: Notifications for admin users are created via database trigger
+    // (see migrations/add_new_user_signup_notification_trigger.sql)
+    // This ensures RLS policies are bypassed and notifications are created server-side
+
     return { ok: true, profile: upserted };
   } catch (e: any) {
     return { ok: false, error: String(e?.message || e) };
