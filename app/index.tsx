@@ -330,6 +330,19 @@ function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distan
           <Text style={styles.featuredChefName}>{chef.name}</Text>
           <Text style={styles.featuredChefCuisine}>{formatCuisine(chef.cuisine)}</Text>
           <View style={styles.featuredChefLocationRatingRow}>
+            {/* Distance display - only show if distance is calculated, at the front */}
+            {distance !== null && (
+              <View style={styles.featuredChefDistanceContainer}>
+                <Image 
+                  source={require('../assets/map.png')} 
+                  style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
+                  resizeMode="contain" 
+                />
+                <Text style={styles.featuredChefDistance}>
+                  {distance > 20 ? '>20 km' : `${distance.toFixed(1)} km`}
+                </Text>
+              </View>
+            )}
             {chef.location && (
               <View style={styles.featuredChefLocationContainer}>
                 <Image 
@@ -347,19 +360,6 @@ function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distan
               <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
             </View>
           </View>
-          {/* Distance display - only show if distance is calculated */}
-          {distance !== null && (
-            <View style={styles.featuredChefDistanceRow}>
-              <Image 
-                source={require('../assets/map.png')} 
-                style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
-                resizeMode="contain" 
-              />
-              <Text style={styles.featuredChefDistance}>
-                {distance > 20 ? '>20 km' : `${distance.toFixed(1)} km`}
-              </Text>
-            </View>
-          )}
         </TouchableOpacity>
       </Link>
     </View>
@@ -1531,12 +1531,10 @@ const styles = StyleSheet.create({
     alignItems: "center",
     gap: theme.spacing.xs / 2,
   },
-  featuredChefDistanceRow: {
+  featuredChefDistanceContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'center',
     gap: 4,
-    marginTop: theme.spacing.xs / 2,
   },
   featuredChefDistance: {
     fontFamily: theme.typography.fontFamily.body,

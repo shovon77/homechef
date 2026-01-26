@@ -73,21 +73,21 @@ export default function WelcomeModal({ visible, onClose }: WelcomeModalProps) {
             </Text>
           </ScrollView>
           
-          <View style={styles.modalFooter}>
+          <View style={[styles.modalFooter, isMobile && styles.modalFooterMobile]}>
             <TouchableOpacity
               onPress={onClose}
-              style={styles.gotItButton}
+              style={[styles.gotItButton, isMobile && styles.gotItButtonMobile]}
             >
-              <Text style={styles.gotItButtonText}>Got it</Text>
+              <Text style={styles.gotItButtonText} numberOfLines={1}>Got it</Text>
             </TouchableOpacity>
             <TouchableOpacity
               onPress={() => {
                 onClose();
                 router.push('/terms');
               }}
-              style={styles.viewTermsButton}
+              style={[styles.viewTermsButton, isMobile && styles.viewTermsButtonMobile]}
             >
-              <Text style={styles.viewTermsButtonText}>View full terms</Text>
+              <Text style={styles.viewTermsButtonText} numberOfLines={1}>View full terms</Text>
             </TouchableOpacity>
           </View>
         </View>
@@ -201,6 +201,10 @@ const styles = StyleSheet.create({
     borderTopWidth: 1,
     borderTopColor: BORDER_LIGHT,
   },
+  modalFooterMobile: {
+    padding: 16,
+    gap: 10,
+  },
   gotItButton: {
     flex: 1,
     backgroundColor: PRIMARY_COLOR,
@@ -209,6 +213,12 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+  },
+  gotItButtonMobile: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    minHeight: 40,
   },
   gotItButtonText: {
     color: '#FFFFFF',
@@ -226,11 +236,18 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     alignItems: 'center',
     justifyContent: 'center',
+    minHeight: 44,
+  },
+  viewTermsButtonMobile: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    minHeight: 40,
   },
   viewTermsButtonText: {
     color: PRIMARY_COLOR,
     fontSize: 16,
     fontWeight: '700',
     fontFamily: theme.typography.fontFamily.body,
+    flexShrink: 0,
   },
 });
