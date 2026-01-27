@@ -85,6 +85,7 @@ export default function Screen({
           </View>
           {!noFooter && (
             <View style={{ 
+              marginTop: -96,
               marginLeft: contentStyle?.paddingLeft ? -contentStyle.paddingLeft : 
                 (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
                 (contentPadding != null && contentPadding > 0 ? -contentPadding : 

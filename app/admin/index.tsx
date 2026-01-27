@@ -92,6 +92,10 @@ export default function AdminPage() {
   const [originalSearchPlaceholders, setOriginalSearchPlaceholders] = useState<string[]>(['', '', '', '', '']);
   const [savingPlaceholders, setSavingPlaceholders] = useState(false);
   const [issueActions, setIssueActions] = useState<{ [issueId: number]: string }>({});
+  const [pendingIssuesCount, setPendingIssuesCount] = useState(0);
+  const [pendingChefApplicationsCount, setPendingChefApplicationsCount] = useState(0);
+  const [dailyActiveUsers, setDailyActiveUsers] = useState(0);
+  const [monthlyActiveUsers, setMonthlyActiveUsers] = useState(0);
   
   // Persist issueActions to localStorage whenever it changes
   useEffect(() => {
@@ -548,6 +552,53 @@ export default function AdminPage() {
       setUsers(usersWithStats || []);
       setApplications((applicationRows as any[]) || []);
       setIssues(issuesWithImages);
+      
+      // Fetch actionable counts
+      // Count issues pending review (status is 'pending' or 'In review')
+      const { count: pendingIssues } = await supabase
+        .from('order_issues')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['pending', 'In review']);
+      
+      setPendingIssuesCount(pendingIssues || 0);
+      
+      // Count pending chef applications (status is 'submitted' or 'pending')
+      // Also check chefs table for pending status
+      const { count: pendingApplications } = await supabase
+        .from('chef_applications')
+        .select('*', { count: 'exact', head: true })
+        .in('status', ['submitted', 'pending']);
+      
+      // Also count chefs with pending status that don't have applications
+      const { count: pendingChefs } = await supabase
+        .from('chefs')
+        .select('*', { count: 'exact', head: true })
+        .eq('status', 'pending');
+      
+      setPendingChefApplicationsCount((pendingApplications || 0) + (pendingChefs || 0));
+      
+      // Fetch engagement metrics - unique active users based on login time
+      // Use RPC function to access auth.users.last_sign_in_at
+      try {
+        const { data: loginStats, error: rpcError } = await supabase
+          .rpc('get_user_login_stats');
+        
+        if (rpcError) {
+          console.warn('Failed to fetch login stats:', rpcError);
+          setDailyActiveUsers(0);
+          setMonthlyActiveUsers(0);
+        } else if (loginStats && loginStats.length > 0) {
+          setDailyActiveUsers(loginStats[0].daily_active_users || 0);
+          setMonthlyActiveUsers(loginStats[0].monthly_active_users || 0);
+        } else {
+          setDailyActiveUsers(0);
+          setMonthlyActiveUsers(0);
+        }
+      } catch (error) {
+        console.warn('Failed to fetch engagement metrics:', error);
+        setDailyActiveUsers(0);
+        setMonthlyActiveUsers(0);
+      }
       
       // Restore persisted issue actions from localStorage, filtering for existing issues
       if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -1588,6 +1639,11 @@ export default function AdminPage() {
     let monthlyCents = 0;
     let totalCents = 0;
     let orderCount = 0;
+    let grossSalesCents = 0;
+    let taxesCents = 0;
+    let totalPlatformFeesCents = 0;
+    let totalStripeFeesCents = 0;
+    const uniqueCustomerIds = new Set<string>();
 
     (orders || []).forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
@@ -1595,9 +1651,34 @@ export default function AdminPage() {
       totalCents += order.total_cents ?? 0;
       orderCount += 1;
       
+      // Gross sales: sum of all order totals (before fees)
+      grossSalesCents += order.total_cents ?? 0;
+      
+      // Track unique customers
+      if (order.user_id) {
+        uniqueCustomerIds.add(order.user_id);
+      }
+      
+      // Calculate taxes (13% of subtotal, which is total_cents - platform_fee_cents)
+      const platformFee = order.platform_fee_cents ?? 0;
+      const subtotalCents = (order.total_cents ?? 0) - platformFee;
+      const orderTaxes = Math.round(subtotalCents * 0.13);
+      taxesCents += orderTaxes;
+      
+      // Platform fees: sum of all platform fees
+      totalPlatformFeesCents += platformFee;
+      
+      // Refunds will be calculated separately from order_issues table
+      
+      // Stripe fees: typically 2.9% + $0.30 per transaction
+      // For simplicity, calculate as 2.9% of total_cents + $0.30 per order
+      if (order.stripe_payment_intent_id) {
+        const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
+        totalStripeFeesCents += stripeFee;
+      }
+      
       // Only count platform fees for orders where payment has been captured
       // Platform fees are collected when payment is captured (indicated by stripe_transfer_id)
-      const platformFee = order.platform_fee_cents ?? 0;
       const hasTransfer = Boolean((order as any).stripe_transfer_id);
       
       // Count fees only if payment was captured (transfer exists) and fee is positive
@@ -1613,6 +1694,25 @@ export default function AdminPage() {
 
     const totalUsers = Array.isArray(users) ? users.length : 0;
     const totalChefs = Array.isArray(chefs) ? chefs.length : 0;
+    const activeChefs = Array.isArray(chefs) ? chefs.filter(c => c.status === 'active').length : 0;
+    const activeCustomers = uniqueCustomerIds.size;
+    const averageOrderValue = orderCount > 0 ? grossSalesCents / orderCount : 0;
+    
+    // Calculate refunds from issues with refunded status
+    let totalRefundsCents = 0;
+    if (issues && Array.isArray(issues)) {
+      issues.forEach((issue: any) => {
+        if (issue.status === 'refunded' && issue.orders?.total_cents) {
+          totalRefundsCents += issue.orders.total_cents;
+        }
+      });
+    }
+    
+    // Calculate snapshot metrics
+    const revenueCents = grossSalesCents;
+    const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
+    const expensesCents = 0; // No expenses tracked currently
+    const netProfitCents = revenueCents - expensesCents - totalStripeFeesCents - totalRefundsCents;
 
     return {
       weeklyCents,
@@ -1621,8 +1721,20 @@ export default function AdminPage() {
       orderCount,
       totalUsers,
       totalChefs,
+      grossSalesCents,
+      taxesCents,
+      activeChefs,
+      activeCustomers,
+      averageOrderValue,
+      revenueCents,
+      commissionsCents,
+      platformFeesCents: totalPlatformFeesCents,
+      expensesCents,
+      stripeFeesCents: totalStripeFeesCents,
+      refundsCents: totalRefundsCents,
+      netProfitCents,
     };
-  }, [orders, users, chefs]);
+  }, [orders, users, chefs, issues]);
 
   const formatCad = (value: number) => (value / 100).toLocaleString('en-CA', {
     style: 'currency',
@@ -1782,24 +1894,60 @@ export default function AdminPage() {
 
   const OverviewTab = (
     <ScrollView contentContainerStyle={styles.tabScroll}>
-      <Text style={styles.sectionTitle}>Overview</Text>
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Platform earnings</Text>
-          <Text style={styles.chartSubtitle}>Rolling totals, last 7 vs 30 days</Text>
+          <Text style={styles.chartTitle}>Snapshot</Text>
         </View>
-        <View style={styles.earningsChartRow}>
+        <View style={styles.actionablesList}>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Revenue</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.revenueCents)}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Commissions</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.commissionsCents)}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Platform fees</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.platformFeesCents)}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Expenses</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.expensesCents)}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Stripe fees</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.stripeFeesCents)}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Refunds</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.refundsCents)}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Net profit</Text>
+            <Text style={styles.actionableValue}>{formatCad(overviewStats.netProfitCents)}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Marketplace</Text>
+        </View>
+        <View style={styles.metricsList}>
           {[
-            { label: 'This week', value: overviewStats.weeklyCents },
-            { label: 'This month', value: overviewStats.monthlyCents },
-          ].map(({ label, value }) => {
-            const max = Math.max(overviewStats.weeklyCents, overviewStats.monthlyCents, 1);
-            const height = Math.round((value / (max || 1)) * 140);
+            // New metrics
+            { label: 'Gross sales', value: overviewStats.grossSalesCents / 100, formatted: formatCad(overviewStats.grossSalesCents) },
+            { label: 'Total orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString() },
+            { label: 'Taxes', value: overviewStats.taxesCents / 100, formatted: formatCad(overviewStats.taxesCents) },
+            { label: 'Active chefs', value: overviewStats.activeChefs, formatted: overviewStats.activeChefs.toLocaleString() },
+            { label: 'Active customers', value: overviewStats.activeCustomers, formatted: overviewStats.activeCustomers.toLocaleString() },
+            { label: 'Average order value', value: overviewStats.averageOrderValue / 100, formatted: formatCad(Math.round(overviewStats.averageOrderValue)) },
+          ].map((metric) => {
             return (
-              <View key={label} style={styles.earningsBarWrapper}>
-                <View style={[styles.earningsBar, { height: Math.max(height, 8) }]} />
-                <Text style={styles.earningsValue}>{formatCad(value)}</Text>
-                <Text style={styles.earningsLabel}>{label}</Text>
+              <View key={metric.label} style={styles.metricRow}>
+                <Text style={styles.metricLabel}>{metric.label}</Text>
+                <Text style={styles.metricValue}>{metric.formatted}</Text>
               </View>
             );
           })}
@@ -1808,34 +1956,33 @@ export default function AdminPage() {
 
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
-          <Text style={styles.chartTitle}>Marketplace snapshot</Text>
-          <Text style={styles.chartSubtitle}>Live counts across the platform</Text>
+          <Text style={styles.chartTitle}>Engagement</Text>
         </View>
-        <View style={styles.metricsList}>
-          {[
-            { label: 'Users', value: overviewStats.totalUsers, formatted: overviewStats.totalUsers.toLocaleString() },
-            { label: 'Chefs', value: overviewStats.totalChefs, formatted: overviewStats.totalChefs.toLocaleString() },
-            { label: 'Orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString() },
-            { label: 'Order volume (CAD)', value: overviewStats.totalCents / 100, formatted: formatCad(overviewStats.totalCents) },
-          ].map((metric) => {
-            const maxValue = Math.max(
-              overviewStats.totalUsers,
-              overviewStats.totalChefs,
-              overviewStats.orderCount,
-              overviewStats.totalCents / 100,
-              1,
-            );
-            const widthPercent = `${Math.min(100, (metric.value / (maxValue || 1)) * 100)}%`;
-            return (
-              <View key={metric.label} style={styles.metricRow}>
-                <Text style={styles.metricLabel}>{metric.label}</Text>
-                <View style={styles.metricBarTrack}>
-                  <View style={[styles.metricBarFill, { width: widthPercent }]} />
-                </View>
-                <Text style={styles.metricValue}>{metric.formatted}</Text>
-              </View>
-            );
-          })}
+        <View style={styles.actionablesList}>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Daily active users</Text>
+            <Text style={styles.actionableValue}>{dailyActiveUsers}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Monthly active users</Text>
+            <Text style={styles.actionableValue}>{monthlyActiveUsers}</Text>
+          </View>
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Actionables</Text>
+        </View>
+        <View style={styles.actionablesList}>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Issues pending review</Text>
+            <Text style={styles.actionableValue}>{pendingIssuesCount}</Text>
+          </View>
+          <View style={styles.actionableRow}>
+            <Text style={styles.actionableLabel}>Pending chef applications</Text>
+            <Text style={styles.actionableValue}>{pendingChefApplicationsCount}</Text>
+          </View>
         </View>
       </View>
 
@@ -4637,6 +4784,28 @@ const styles = StyleSheet.create({
     color: palette.muted,
     fontSize: 13,
     marginTop: 2,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  actionablesList: {
+    gap: 0,
+  },
+  actionableRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  actionableLabel: {
+    fontSize: 14,
+    color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  actionableValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: palette.text,
     fontFamily: theme.typography.fontFamily.body,
   },
   earningsChartRow: {

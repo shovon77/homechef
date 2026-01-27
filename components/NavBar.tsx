@@ -60,6 +60,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       position: 'relative',
       backgroundColor: isActive ? activeColor : 'transparent',
       cursor: 'pointer',
+      marginRight: isActive ? '8px' : '0px', // Add margin when active to prevent touching location icon
     };
     const textStyle = {
       fontWeight: isActive ? '700' : '600',
@@ -91,7 +92,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
         style={StyleSheet.flatten([
           styles.navLink,
           isMobile && { paddingHorizontal: 8, paddingVertical: 8 },
-          isActive && { backgroundColor: activeColor, borderRadius: 8 }
+          isActive && { backgroundColor: activeColor, borderRadius: 8, marginRight: 8 } // Add margin when active to prevent touching location icon
         ])}
       >
         <Text style={StyleSheet.flatten([

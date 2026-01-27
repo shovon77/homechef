@@ -296,9 +296,23 @@ function CircularDishCard({ dish }: { dish: Dish }) {
           <Text style={styles.circularDishChefName} numberOfLines={1}>
             {chefName}
           </Text>
-          <Text style={styles.circularDishSubtitle} numberOfLines={1}>
-            {formatCad(dish.price)}{rating?.count > 0 ? ` • ★ ${safeToFixed(rating?.avg)}` : ''}
-          </Text>
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
+            <Text style={styles.circularDishSubtitle} numberOfLines={1}>
+              {formatCad(dish.price)}
+            </Text>
+            {rating?.count > 0 && (
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
+                <Image 
+                  source={require('../assets/star.png')} 
+                  style={{ width: 14, height: 14, tintColor: '#FE734C' }} 
+                  resizeMode="contain" 
+                />
+                <Text style={{ fontSize: 12, color: '#666', fontFamily: theme.typography.fontFamily.body }}>
+                  {safeToFixed(rating?.avg)}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
       </TouchableOpacity>
     </Link>
@@ -413,7 +427,11 @@ function HomeDishCard({ dish }: { dish: Dish }) {
           <View style={styles.dishFooter}>
             <Text style={styles.dishPrice}>{formatCad(dish.price)}</Text>
             <View style={styles.dishRating}>
-              <Text style={styles.starIcon}>★</Text>
+              <Image 
+                source={require('../assets/star.png')} 
+                style={{ width: 14, height: 14, tintColor: '#FE734C' }} 
+                resizeMode="contain" 
+              />
               <Text style={styles.ratingText}>{safeToFixed(rating?.avg)}</Text>
             </View>
           </View>
