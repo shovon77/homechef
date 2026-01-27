@@ -1537,7 +1537,7 @@ const styles = StyleSheet.create({
     paddingVertical: 6,
     paddingHorizontal: 4,
     borderRadius: 8,
-    marginRight: 8, // Increased spacing to prevent overlap with notification icon
+    marginRight: 16, // Increased spacing to prevent overlap with notification icon (supports up to 15 chars)
     marginLeft: -12, // Move more to the left to give more space
   },
   locationNavIcon: {
@@ -1551,7 +1551,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
-    maxWidth: 120, // Increased from 60 to allow longer city names
+    maxWidth: 150, // Increased to support up to 15 characters comfortably
     flexShrink: 1, // Allow text to shrink if needed but prioritize showing more
   },
   primaryButton: {

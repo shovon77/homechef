@@ -85,7 +85,11 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
           )}
             {ratingVal > 0 && (
           <View style={styles.rating}>
-            <Text style={[styles.starIcon, ratingColor ? { color: ratingColor } : undefined]}>★</Text>
+            <Image 
+              source={require('../../assets/star.png')} 
+              style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+              resizeMode="contain" 
+            />
                 <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
               </View>
             )}
@@ -147,6 +151,11 @@ const styles = StyleSheet.create({
   starIcon: {
     fontSize: theme.typography.fontSize.lg,
     color: ACCENT_COLOR,
+  },
+  starIconImage: {
+    width: 18,
+    height: 18,
+    tintColor: ACCENT_COLOR,
   },
   ratingText: {
     color: '#555555',

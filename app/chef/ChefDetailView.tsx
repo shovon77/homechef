@@ -300,7 +300,11 @@ export default function ChefDetailView() {
                 <View style={styles.statCard}>
                   <View style={styles.statValueRow}>
                     <Text style={styles.statValue}>{avgRating.toFixed(1)}</Text>
-                    <Text style={styles.starIcon}>★</Text>
+                    <Image 
+                      source={require('../../assets/star.png')} 
+                      style={styles.starIconImage} 
+                      resizeMode="contain" 
+                    />
                   </View>
                   <Text style={styles.statLabel}>Rating</Text>
                 </View>
@@ -455,12 +459,14 @@ export default function ChefDetailView() {
                         <View style={styles.starsRow}>
                           {[1, 2, 3, 4, 5].map(star => (
                             <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
-                              <Text style={[
-                                styles.starButton,
-                                { color: star <= reviewRating ? STAR_COLOR : TEXT_MUTED }
-                              ]}>
-                                ★
-                              </Text>
+                              <Image 
+                                source={require('../../assets/star.png')} 
+                                style={[
+                                  styles.starButtonImage,
+                                  { tintColor: star <= reviewRating ? STAR_COLOR : TEXT_MUTED }
+                                ]} 
+                                resizeMode="contain" 
+                              />
                             </TouchableOpacity>
                           ))}
                         </View>
@@ -503,7 +509,11 @@ export default function ChefDetailView() {
                         <View key={r.id} style={styles.reviewCard}>
                           <View style={styles.reviewHeader}>
                             <View style={styles.reviewRating}>
-                              <Text style={styles.reviewStar}>★</Text>
+                              <Image 
+                                source={require('../../assets/star.png')} 
+                                style={styles.reviewStarImage} 
+                                resizeMode="contain" 
+                              />
                               <Text style={styles.reviewRatingValue}>{r.rating.toFixed(1)}</Text>
                             </View>
                             {r.user_name ? (
@@ -658,6 +668,11 @@ const styles = StyleSheet.create({
   starIcon: {
     fontSize: 20,
     color: STAR_COLOR,
+  },
+  starIconImage: {
+    width: 20,
+    height: 20,
+    tintColor: STAR_COLOR,
   },
   statLabel: {
     color: TEXT_MUTED,
@@ -936,6 +951,10 @@ const styles = StyleSheet.create({
   starButton: {
     fontSize: 24,
   },
+  starButtonImage: {
+    width: 24,
+    height: 24,
+  },
   commentInputContainer: {
     gap: theme.spacing.sm,
   },
@@ -997,6 +1016,11 @@ const styles = StyleSheet.create({
   reviewStar: {
     fontSize: theme.typography.fontSize.sm,
     color: STAR_COLOR,
+  },
+  reviewStarImage: {
+    width: 14,
+    height: 14,
+    tintColor: STAR_COLOR,
   },
   reviewRatingValue: {
     color: TEXT_MUTED,

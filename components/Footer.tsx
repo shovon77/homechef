@@ -52,7 +52,7 @@ export default function Footer() {
             <Text style={styles.link}>Contact</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/terms')}>
-            <Text style={styles.link}>Terms of Service</Text>
+            <Text style={styles.link}>Legal</Text>
           </TouchableOpacity>
         </View>
         <Text style={styles.legal}>© 2025 YourHomeChef. All rights reserved.</Text>

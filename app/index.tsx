@@ -335,7 +335,7 @@ function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distan
               <View style={styles.featuredChefDistanceContainer}>
                 <Image 
                   source={require('../assets/map.png')} 
-                  style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
+                  style={styles.featuredChefIcon} 
                   resizeMode="contain" 
                 />
                 <Text style={styles.featuredChefDistance}>
@@ -347,7 +347,7 @@ function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distan
               <View style={styles.featuredChefLocationContainer}>
                 <Image 
                   source={require('../assets/locationnewicon.png')} 
-                  style={{ width: 18, height: 18, tintColor: '#FE734C' }} 
+                  style={styles.featuredChefIcon} 
                   resizeMode="contain" 
                 />
                 <Text style={styles.featuredChefLocation} numberOfLines={1}>
@@ -356,8 +356,12 @@ function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distan
               </View>
             )}
             <View style={styles.featuredChefRating}>
-              <Text style={styles.starIcon}>★</Text>
-              <Text style={styles.ratingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
+              <Image 
+                source={require('../assets/star.png')} 
+                style={styles.featuredChefIcon} 
+                resizeMode="contain" 
+              />
+              <Text style={styles.featuredChefRatingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
             </View>
           </View>
         </TouchableOpacity>
@@ -671,10 +675,10 @@ export default function HomePage() {
     (async () => {
       setLoading(true);
       
-      // Try to fetch dynamic banner
+      // Try to fetch dynamic banner from app_settings (with fallback to default)
       supabase.from('app_settings').select('value').eq('key', 'banner_url').single()
-        .then(({ data }) => {
-          if (mounted && data?.value) {
+        .then(({ data, error }) => {
+          if (!error && mounted && data?.value) {
             let url = data.value;
             if (url.includes('googleusercontent.com')) {
                if (url.match(/=s\d+$/)) {
@@ -685,28 +689,40 @@ export default function HomePage() {
             }
             setBannerUrl(url);
           }
+          // If error or no data, keep using default bannerUrl from useState
+        })
+        .catch(() => {
+          // Silently fail - use default banner
         });
 
-      // Fetch search placeholders
+      // Try to fetch search placeholders from app_settings (with fallback to default)
       supabase.from('app_settings').select('value').eq('key', 'search_placeholders').single()
-        .then(({ data }) => {
-          if (mounted && data?.value) {
+        .then(({ data, error }) => {
+          if (!error && mounted && data?.value) {
             try {
               const parsed = JSON.parse(data.value);
               if (Array.isArray(parsed) && parsed.length === 5 && parsed.every((p: any) => typeof p === 'string' && p.trim())) {
                 setPLACEHOLDERS(parsed);
               }
             } catch (e) {
-              console.warn('Failed to parse search placeholders:', e);
+              // Silently fail - use default placeholders
             }
           }
+          // If error or no data, keep using default PLACEHOLDERS from useState
+        })
+        .catch(() => {
+          // Silently fail - use default placeholders
         });
 
       const [{ data: c }, { data: d }] = await Promise.all([
         // Show only featured and active chefs on homepage
         supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").order("rating", { ascending: false }).limit(5),
-        // Show only dishes from active chefs
-        supabase.from("dishes").select("id,name,image,price,chef_id,chef, chefs!inner(status)").eq("chefs.status", "active").order("id", { ascending: false }).limit(8),
+        // Show all dishes from featured and active chefs, sorted by price (least expensive first)
+        supabase.from("dishes")
+          .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status)")
+          .eq("chefs.featured", true)
+          .eq("chefs.status", "active")
+          .order("price", { ascending: true }),
       ]);
       if (!mounted) return;
       setChefs((c || []) as Chef[]);
@@ -1516,6 +1532,11 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     marginTop: theme.spacing.xs,
   },
+  featuredChefIcon: {
+    width: 18,
+    height: 18,
+    tintColor: '#FE734C',
+  },
   featuredChefLocationContainer: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1530,6 +1551,11 @@ const styles = StyleSheet.create({
     flexDirection: "row",
     alignItems: "center",
     gap: theme.spacing.xs / 2,
+  },
+  featuredChefRatingText: {
+    fontFamily: theme.typography.fontFamily.body,
+    color: '#777777',
+    fontSize: theme.typography.fontSize.xs,
   },
   featuredChefDistanceContainer: {
     flexDirection: 'row',

@@ -192,7 +192,6 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
-    fontStyle: 'italic',
   },
   modalFooter: {
     flexDirection: 'row',
