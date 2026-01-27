@@ -49,7 +49,7 @@ export default function AdminPage() {
   // Ensure fixed elements are not rendered on mobile
   const shouldShowFixedElements = !isMobile;
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'issues', 'app-settings'];
+  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'finance', 'issues', 'app-settings'];
   const initialTabIdx = tabKeys.indexOf(tab || 'overview');
   const safeInitial = initialTabIdx >= 0 ? initialTabIdx : 0;
   const { isAdmin, loading: adminLoading, user, profile } = useRole();
@@ -96,7 +96,12 @@ export default function AdminPage() {
   const [pendingChefApplicationsCount, setPendingChefApplicationsCount] = useState(0);
   const [dailyActiveUsers, setDailyActiveUsers] = useState(0);
   const [monthlyActiveUsers, setMonthlyActiveUsers] = useState(0);
-  
+  const [snapshotDateFilter, setSnapshotDateFilter] = useState<'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime'>('alltime');
+  const [financeDateFilter, setFinanceDateFilter] = useState<'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime'>('alltime');
+  const [showSnapshotDropdown, setShowSnapshotDropdown] = useState(false);
+  const [showFinanceDropdown, setShowFinanceDropdown] = useState(false);
+  const [financeOrderSearch, setFinanceOrderSearch] = useState('');
+
   // Persist issueActions to localStorage whenever it changes
   useEffect(() => {
     if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -554,11 +559,11 @@ export default function AdminPage() {
       setIssues(issuesWithImages);
       
       // Fetch actionable counts
-      // Count issues pending review (status is 'pending' or 'In review')
+      // Count issues pending review (status is 'pending' or 'reviewing')
       const { count: pendingIssues } = await supabase
         .from('order_issues')
         .select('*', { count: 'exact', head: true })
-        .in('status', ['pending', 'In review']);
+        .in('status', ['pending', 'reviewing']);
       
       setPendingIssuesCount(pendingIssues || 0);
       
@@ -1634,6 +1639,66 @@ export default function AdminPage() {
     weekAgo.setDate(now.getDate() - 7);
     const monthAgo = new Date(now);
     monthAgo.setDate(now.getDate() - 30);
+    
+    // Date filter setup (same as snapshotStats)
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const fifteenDaysAgo = new Date(now);
+    fifteenDaysAgo.setDate(now.getDate() - 15);
+    fifteenDaysAgo.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const threeMonthsAgo = new Date(now);
+    threeMonthsAgo.setMonth(now.getMonth() - 3);
+    threeMonthsAgo.setHours(0, 0, 0, 0);
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    // Filter orders based on snapshot date filter
+    let filteredOrders = orders || [];
+    if (snapshotDateFilter === 'today') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= todayStart;
+      });
+    } else if (snapshotDateFilter === 'last7days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= sevenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last15days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= fifteenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last30days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= thirtyDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last3months') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= threeMonthsAgo;
+      });
+    } else if (snapshotDateFilter === 'last6months') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= sixMonthsAgo;
+      });
+    }
+    // 'alltime' uses all orders, no filtering needed
 
     let weeklyCents = 0;
     let monthlyCents = 0;
@@ -1645,7 +1710,7 @@ export default function AdminPage() {
     let totalStripeFeesCents = 0;
     const uniqueCustomerIds = new Set<string>();
 
-    (orders || []).forEach((order) => {
+    filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
       const createdAt = order.created_at ? new Date(order.created_at) : null;
       totalCents += order.total_cents ?? 0;
@@ -1659,9 +1724,15 @@ export default function AdminPage() {
         uniqueCustomerIds.add(order.user_id);
       }
       
-      // Calculate taxes (13% of subtotal, which is total_cents - platform_fee_cents)
+      // Calculate taxes (13% of subtotal)
+      // Use subtotal_cents directly if available, otherwise calculate from total_cents
+      // total_cents = subtotal + platform_fee + tax, where tax = subtotal * 0.13
+      // So: total_cents = subtotal + platform_fee + (subtotal * 0.13)
+      //     total_cents = subtotal * 1.13 + platform_fee
+      //     subtotal = (total_cents - platform_fee) / 1.13
       const platformFee = order.platform_fee_cents ?? 0;
-      const subtotalCents = (order.total_cents ?? 0) - platformFee;
+      const subtotalCents = (order as any).subtotal_cents ?? 
+        Math.round(((order.total_cents ?? 0) - platformFee) / 1.13);
       const orderTaxes = Math.round(subtotalCents * 0.13);
       taxesCents += orderTaxes;
       
@@ -1694,14 +1765,64 @@ export default function AdminPage() {
 
     const totalUsers = Array.isArray(users) ? users.length : 0;
     const totalChefs = Array.isArray(chefs) ? chefs.length : 0;
-    const activeChefs = Array.isArray(chefs) ? chefs.filter(c => c.status === 'active').length : 0;
+    
+    // Active chefs: count unique chefs who have orders in the filtered date range
+    const uniqueChefIds = new Set<string>();
+    filteredOrders.forEach((order) => {
+      if (order.chef_id) {
+        uniqueChefIds.add(String(order.chef_id));
+      }
+    });
+    const activeChefs = uniqueChefIds.size;
+    
+    // Active customers: count unique customers who have orders in the filtered date range
     const activeCustomers = uniqueCustomerIds.size;
     const averageOrderValue = orderCount > 0 ? grossSalesCents / orderCount : 0;
     
-    // Calculate refunds from issues with refunded status
+    // Filter issues based on date filter for refunds
+    let filteredIssues = issues || [];
+    if (snapshotDateFilter === 'today') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= todayStart;
+      });
+    } else if (snapshotDateFilter === 'last7days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= sevenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last15days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= fifteenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last30days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= thirtyDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last3months') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= threeMonthsAgo;
+      });
+    } else if (snapshotDateFilter === 'last6months') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= sixMonthsAgo;
+      });
+    }
+    
+    // Calculate refunds from filtered issues with refunded status
     let totalRefundsCents = 0;
-    if (issues && Array.isArray(issues)) {
-      issues.forEach((issue: any) => {
+    if (filteredIssues && Array.isArray(filteredIssues)) {
+      filteredIssues.forEach((issue: any) => {
         if (issue.status === 'refunded' && issue.orders?.total_cents) {
           totalRefundsCents += issue.orders.total_cents;
         }
@@ -1711,8 +1832,8 @@ export default function AdminPage() {
     // Calculate snapshot metrics
     const revenueCents = grossSalesCents;
     const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
-    const expensesCents = 0; // No expenses tracked currently
-    const netProfitCents = revenueCents - expensesCents - totalStripeFeesCents - totalRefundsCents;
+    const expensesCents = totalRefundsCents + totalStripeFeesCents; // Expenses = refunds + stripe fees
+    const netProfitCents = revenueCents - expensesCents; // Net profit = revenue - expenses
 
     return {
       weeklyCents,
@@ -1734,13 +1855,337 @@ export default function AdminPage() {
       refundsCents: totalRefundsCents,
       netProfitCents,
     };
-  }, [orders, users, chefs, issues]);
+  }, [orders, users, chefs, issues, snapshotDateFilter]);
+
+  // Snapshot stats with date filtering
+  const snapshotStats = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const fifteenDaysAgo = new Date(now);
+    fifteenDaysAgo.setDate(now.getDate() - 15);
+    fifteenDaysAgo.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const threeMonthsAgo = new Date(now);
+    threeMonthsAgo.setMonth(now.getMonth() - 3);
+    threeMonthsAgo.setHours(0, 0, 0, 0);
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    // Filter orders based on date filter
+    let filteredOrders = orders || [];
+    if (snapshotDateFilter === 'today') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= todayStart;
+      });
+    } else if (snapshotDateFilter === 'last7days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= sevenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last15days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= fifteenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last30days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= thirtyDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last3months') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= threeMonthsAgo;
+      });
+    } else if (snapshotDateFilter === 'last6months') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= sixMonthsAgo;
+      });
+    }
+    // 'alltime' uses all orders, no filtering needed
+
+    // Filter issues based on date filter for refunds
+    let filteredIssues = issues || [];
+    if (snapshotDateFilter === 'today') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= todayStart;
+      });
+    } else if (snapshotDateFilter === 'last7days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= sevenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last15days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= fifteenDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last30days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= thirtyDaysAgo;
+      });
+    } else if (snapshotDateFilter === 'last3months') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= threeMonthsAgo;
+      });
+    } else if (snapshotDateFilter === 'last6months') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= sixMonthsAgo;
+      });
+    }
+
+    let grossSalesCents = 0;
+    let taxesCents = 0;
+    let totalPlatformFeesCents = 0;
+    let totalStripeFeesCents = 0;
+
+    filteredOrders.forEach((order) => {
+      if (!order || typeof order.total_cents !== 'number') return;
+      
+      // Gross sales: sum of all order totals (before fees)
+      grossSalesCents += order.total_cents ?? 0;
+      
+      // Calculate taxes (13% of subtotal)
+      const platformFee = order.platform_fee_cents ?? 0;
+      const subtotalCents = (order as any).subtotal_cents ?? 
+        Math.round(((order.total_cents ?? 0) - platformFee) / 1.13);
+      const orderTaxes = Math.round(subtotalCents * 0.13);
+      taxesCents += orderTaxes;
+      
+      // Platform fees: sum of all platform fees
+      totalPlatformFeesCents += platformFee;
+      
+      // Stripe fees: typically 2.9% + $0.30 per transaction
+      if (order.stripe_payment_intent_id) {
+        const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
+        totalStripeFeesCents += stripeFee;
+      }
+    });
+    
+    // Calculate refunds from filtered issues with refunded status
+    let totalRefundsCents = 0;
+    filteredIssues.forEach((issue: any) => {
+      if (issue.status === 'refunded' && issue.orders?.total_cents) {
+        totalRefundsCents += issue.orders.total_cents;
+      }
+    });
+    
+    // Calculate snapshot metrics
+    const revenueCents = grossSalesCents;
+    const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
+    const expensesCents = totalRefundsCents + totalStripeFeesCents; // Expenses = refunds + stripe fees
+    const netProfitCents = revenueCents - expensesCents; // Net profit = revenue - expenses
+
+    return {
+      revenueCents,
+      commissionsCents,
+      platformFeesCents: totalPlatformFeesCents,
+      expensesCents,
+      stripeFeesCents: totalStripeFeesCents,
+      refundsCents: totalRefundsCents,
+      netProfitCents,
+    };
+  }, [orders, issues, snapshotDateFilter]);
+
+  // Finance stats with date filtering
+  const financeStats = useMemo(() => {
+    const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setHours(0, 0, 0, 0);
+    const sevenDaysAgo = new Date(now);
+    sevenDaysAgo.setDate(now.getDate() - 7);
+    sevenDaysAgo.setHours(0, 0, 0, 0);
+    const fifteenDaysAgo = new Date(now);
+    fifteenDaysAgo.setDate(now.getDate() - 15);
+    fifteenDaysAgo.setHours(0, 0, 0, 0);
+    const thirtyDaysAgo = new Date(now);
+    thirtyDaysAgo.setDate(now.getDate() - 30);
+    thirtyDaysAgo.setHours(0, 0, 0, 0);
+    const threeMonthsAgo = new Date(now);
+    threeMonthsAgo.setMonth(now.getMonth() - 3);
+    threeMonthsAgo.setHours(0, 0, 0, 0);
+    const sixMonthsAgo = new Date(now);
+    sixMonthsAgo.setMonth(now.getMonth() - 6);
+    sixMonthsAgo.setHours(0, 0, 0, 0);
+
+    // Filter orders based on date filter
+    let filteredOrders = orders || [];
+    if (financeDateFilter === 'today') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= todayStart;
+      });
+    } else if (financeDateFilter === 'last7days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= sevenDaysAgo;
+      });
+    } else if (financeDateFilter === 'last15days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= fifteenDaysAgo;
+      });
+    } else if (financeDateFilter === 'last30days') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= thirtyDaysAgo;
+      });
+    } else if (financeDateFilter === 'last3months') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= threeMonthsAgo;
+      });
+    } else if (financeDateFilter === 'last6months') {
+      filteredOrders = filteredOrders.filter(order => {
+        if (!order.created_at) return false;
+        const createdAt = new Date(order.created_at);
+        return createdAt >= sixMonthsAgo;
+      });
+    }
+    // 'alltime' uses all orders, no filtering needed
+
+    // Filter issues based on date filter for refunds
+    let filteredIssues = issues || [];
+    if (financeDateFilter === 'today') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= todayStart;
+      });
+    } else if (financeDateFilter === 'last7days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= sevenDaysAgo;
+      });
+    } else if (financeDateFilter === 'last15days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= fifteenDaysAgo;
+      });
+    } else if (financeDateFilter === 'last30days') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= thirtyDaysAgo;
+      });
+    } else if (financeDateFilter === 'last3months') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= threeMonthsAgo;
+      });
+    } else if (financeDateFilter === 'last6months') {
+      filteredIssues = filteredIssues.filter(issue => {
+        if (!issue.created_at) return false;
+        const createdAt = new Date(issue.created_at);
+        return createdAt >= sixMonthsAgo;
+      });
+    }
+
+    let grossSalesCents = 0;
+    let totalPlatformFeesCents = 0;
+    let totalStripeFeesCents = 0;
+
+    filteredOrders.forEach((order) => {
+      if (!order || typeof order.total_cents !== 'number') return;
+      
+      // Gross sales: sum of all order totals (before fees)
+      grossSalesCents += order.total_cents ?? 0;
+      
+      // Platform fees: sum of all platform fees
+      const platformFee = order.platform_fee_cents ?? 0;
+      totalPlatformFeesCents += platformFee;
+      
+      // Stripe fees: typically 2.9% + $0.30 per transaction
+      if (order.stripe_payment_intent_id) {
+        const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
+        totalStripeFeesCents += stripeFee;
+      }
+    });
+    
+    // Calculate refunds from filtered issues with refunded status
+    let totalRefundsCents = 0;
+    filteredIssues.forEach((issue: any) => {
+      if (issue.status === 'refunded' && issue.orders?.total_cents) {
+        totalRefundsCents += issue.orders.total_cents;
+      }
+    });
+    
+    // Calculate finance metrics
+    const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
+    const expensesCents = totalRefundsCents + totalStripeFeesCents; // Expenses = refunds + stripe fees
+    const revenueCents = grossSalesCents;
+    const netProfitCents = revenueCents - expensesCents; // Net profit = revenue - expenses
+
+    return {
+      commissionsCents,
+      platformFeesCents: totalPlatformFeesCents,
+      stripeFeesCents: totalStripeFeesCents,
+      refundsCents: totalRefundsCents,
+      netProfitCents,
+    };
+  }, [orders, issues, financeDateFilter]);
 
   const formatCad = (value: number) => (value / 100).toLocaleString('en-CA', {
     style: 'currency',
     currency: 'CAD',
     minimumFractionDigits: 0,
   });
+
+  const getDateFilterLabel = (filter: typeof snapshotDateFilter) => {
+    const labels: Record<typeof filter, string> = {
+      'today': 'Today',
+      'last7days': 'Last 7 days',
+      'last15days': 'Last 15 days',
+      'last30days': 'Last 30 days',
+      'last3months': 'Last 3 months',
+      'last6months': 'Last 6 months',
+      'alltime': 'All time',
+    };
+    return labels[filter];
+  };
+
+  const dateFilterOptions: Array<{ value: typeof snapshotDateFilter; label: string }> = [
+    { value: 'today', label: 'Today' },
+    { value: 'last7days', label: 'Last 7 days' },
+    { value: 'last15days', label: 'Last 15 days' },
+    { value: 'last30days', label: 'Last 30 days' },
+    { value: 'last3months', label: 'Last 3 months' },
+    { value: 'last6months', label: 'Last 6 months' },
+    { value: 'alltime', label: 'All time' },
+  ];
 
   const ChefRequestsTab = (
     <ScrollView contentContainerStyle={styles.tabScroll}>
@@ -1897,35 +2342,130 @@ export default function AdminPage() {
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>Snapshot</Text>
+          <View style={styles.dateFilterContainer}>
+            <View style={styles.dateFilterDropdownWrapper}>
+              <TouchableOpacity
+                style={styles.dateFilterDropdownButton}
+                onPress={() => {
+                  setShowFinanceDropdown(false);
+                  setShowSnapshotDropdown(!showSnapshotDropdown);
+                }}
+              >
+                <Text style={styles.dateFilterDropdownButtonText}>{getDateFilterLabel(snapshotDateFilter)}</Text>
+              </TouchableOpacity>
+              {showSnapshotDropdown && (
+                <>
+                  {isMobile ? (
+                    <Modal
+                      visible={showSnapshotDropdown}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setShowSnapshotDropdown(false)}
+                    >
+                      <TouchableOpacity
+                        style={styles.dateFilterModalOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowSnapshotDropdown(false)}
+                      >
+                        <TouchableOpacity
+                          activeOpacity={1}
+                          onPress={(e) => e.stopPropagation()}
+                        >
+                          <ScrollView
+                            style={styles.dateFilterDropdownMenuMobile}
+                            contentContainerStyle={{ paddingVertical: 4 }}
+                            showsVerticalScrollIndicator={true}
+                          >
+                            {dateFilterOptions.map((option, index) => (
+                              <TouchableOpacity
+                                key={option.value}
+                                style={[
+                                  styles.dateFilterDropdownOption,
+                                  snapshotDateFilter === option.value && styles.dateFilterDropdownOptionActive,
+                                  index === dateFilterOptions.length - 1 && styles.dateFilterDropdownOptionLast
+                                ]}
+                                onPress={() => {
+                                  setSnapshotDateFilter(option.value);
+                                  setShowSnapshotDropdown(false);
+                                }}
+                              >
+                                <Text style={[
+                                  styles.dateFilterDropdownOptionText,
+                                  snapshotDateFilter === option.value && styles.dateFilterDropdownOptionTextActive
+                                ]}>
+                                  {option.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    </Modal>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={styles.dateFilterDropdownOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowSnapshotDropdown(false)}
+                      />
+                      <View style={styles.dateFilterDropdownMenu}>
+                        {dateFilterOptions.map((option, index) => (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[
+                              styles.dateFilterDropdownOption,
+                              snapshotDateFilter === option.value && styles.dateFilterDropdownOptionActive,
+                              index === dateFilterOptions.length - 1 && styles.dateFilterDropdownOptionLast
+                            ]}
+                            onPress={() => {
+                              setSnapshotDateFilter(option.value);
+                              setShowSnapshotDropdown(false);
+                            }}
+                          >
+                            <Text style={[
+                              styles.dateFilterDropdownOptionText,
+                              snapshotDateFilter === option.value && styles.dateFilterDropdownOptionTextActive
+                            ]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
         </View>
-        <View style={styles.actionablesList}>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Revenue</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.revenueCents)}</Text>
+        <View style={styles.metricsList}>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Revenue</Text>
+            <Text style={[styles.metricValue, { color: '#FE734C' }]}>{formatCad(snapshotStats.revenueCents)} CAD</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Commissions</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.commissionsCents)}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Commissions</Text>
+            <Text style={styles.metricValue}>{formatCad(snapshotStats.commissionsCents)} CAD</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Platform fees</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.platformFeesCents)}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Platform fees</Text>
+            <Text style={styles.metricValue}>{formatCad(snapshotStats.platformFeesCents)} CAD</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Expenses</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.expensesCents)}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Expenses</Text>
+            <Text style={[styles.metricValue, { color: '#B91C1C' }]}>{formatCad(snapshotStats.expensesCents)} CAD</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Stripe fees</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.stripeFeesCents)}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Stripe fees</Text>
+            <Text style={styles.metricValue}>{formatCad(snapshotStats.stripeFeesCents)} CAD</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Refunds</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.refundsCents)}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Refunds</Text>
+            <Text style={styles.metricValue}>{formatCad(snapshotStats.refundsCents)} CAD</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Net profit</Text>
-            <Text style={styles.actionableValue}>{formatCad(overviewStats.netProfitCents)}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Net profit</Text>
+            <Text style={[styles.metricValue, { color: '#1E794F' }]}>{formatCad(snapshotStats.netProfitCents)} CAD</Text>
           </View>
         </View>
       </View>
@@ -1937,17 +2477,17 @@ export default function AdminPage() {
         <View style={styles.metricsList}>
           {[
             // New metrics
-            { label: 'Gross sales', value: overviewStats.grossSalesCents / 100, formatted: formatCad(overviewStats.grossSalesCents) },
-            { label: 'Total orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString() },
-            { label: 'Taxes', value: overviewStats.taxesCents / 100, formatted: formatCad(overviewStats.taxesCents) },
-            { label: 'Active chefs', value: overviewStats.activeChefs, formatted: overviewStats.activeChefs.toLocaleString() },
-            { label: 'Active customers', value: overviewStats.activeCustomers, formatted: overviewStats.activeCustomers.toLocaleString() },
-            { label: 'Average order value', value: overviewStats.averageOrderValue / 100, formatted: formatCad(Math.round(overviewStats.averageOrderValue)) },
+            { label: 'Gross sales', value: overviewStats.grossSalesCents / 100, formatted: formatCad(overviewStats.grossSalesCents), isCurrency: true },
+            { label: 'Total orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString(), isCurrency: false },
+            { label: 'Taxes', value: overviewStats.taxesCents / 100, formatted: formatCad(overviewStats.taxesCents), isCurrency: true },
+            { label: 'Active chefs', value: overviewStats.activeChefs, formatted: overviewStats.activeChefs.toLocaleString(), isCurrency: false },
+            { label: 'Active customers', value: overviewStats.activeCustomers, formatted: overviewStats.activeCustomers.toLocaleString(), isCurrency: false },
+            { label: 'Average order value', value: overviewStats.averageOrderValue / 100, formatted: formatCad(Math.round(overviewStats.averageOrderValue)), isCurrency: true },
           ].map((metric) => {
             return (
               <View key={metric.label} style={styles.metricRow}>
                 <Text style={styles.metricLabel}>{metric.label}</Text>
-                <Text style={styles.metricValue}>{metric.formatted}</Text>
+                <Text style={styles.metricValue}>{metric.formatted}{metric.isCurrency ? ' CAD' : ''}</Text>
               </View>
             );
           })}
@@ -1958,14 +2498,14 @@ export default function AdminPage() {
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>Engagement</Text>
         </View>
-        <View style={styles.actionablesList}>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Daily active users</Text>
-            <Text style={styles.actionableValue}>{dailyActiveUsers}</Text>
+        <View style={styles.metricsList}>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Daily active users</Text>
+            <Text style={styles.metricValue}>{dailyActiveUsers.toLocaleString()}</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Monthly active users</Text>
-            <Text style={styles.actionableValue}>{monthlyActiveUsers}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Monthly active users</Text>
+            <Text style={styles.metricValue}>{monthlyActiveUsers.toLocaleString()}</Text>
           </View>
         </View>
       </View>
@@ -1974,14 +2514,14 @@ export default function AdminPage() {
         <View style={styles.chartHeader}>
           <Text style={styles.chartTitle}>Actionables</Text>
         </View>
-        <View style={styles.actionablesList}>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Issues pending review</Text>
-            <Text style={styles.actionableValue}>{pendingIssuesCount}</Text>
+        <View style={styles.metricsList}>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Issues pending review</Text>
+            <Text style={styles.metricValue}>{pendingIssuesCount.toLocaleString()}</Text>
           </View>
-          <View style={styles.actionableRow}>
-            <Text style={styles.actionableLabel}>Pending chef applications</Text>
-            <Text style={styles.actionableValue}>{pendingChefApplicationsCount}</Text>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Pending chef applications</Text>
+            <Text style={styles.metricValue}>{pendingChefApplicationsCount.toLocaleString()}</Text>
           </View>
         </View>
       </View>
@@ -2756,6 +3296,242 @@ export default function AdminPage() {
             </TouchableOpacity>
           )}
         </View>
+      </View>
+    </ScrollView>
+  );
+
+  // Calculate financial details for a specific order
+  const getOrderFinancialDetails = useMemo(() => {
+    if (!financeOrderSearch || !orders || orders.length === 0) {
+      return null;
+    }
+
+    const orderId = parseInt(financeOrderSearch.trim());
+    if (isNaN(orderId)) {
+      return null;
+    }
+
+    const order = orders.find(o => o.id === orderId);
+    if (!order) {
+      return null;
+    }
+
+    // Calculate financial metrics for this order
+    // Gross revenue = subtotal (dish prices only, before fees and tax)
+    const platformFeeCents = order.platform_fee_cents ?? 0;
+    const subtotalCents = (order as any).subtotal_cents ?? 
+      Math.round(((order.total_cents ?? 0) - platformFeeCents) / 1.13);
+    const grossRevenueCents = subtotalCents;
+    
+    // Platform commission = 10% of subtotal (what platform keeps from chef)
+    const platformCommissionCents = (order as any).platform_commission_cents ?? 
+      Math.round(subtotalCents * 0.10); // 10% commission
+    // Commissions = platform commission (what platform keeps)
+    const commissionsCents = platformCommissionCents;
+    
+    // Stripe fees: 2.9% + $0.30 per transaction (on total customer paid)
+    let stripeFeesCents = 0;
+    const totalCustomerPaid = order.total_cents ?? 0;
+    if (order.stripe_payment_intent_id || (order as any).stripe_payment_intent_id) {
+      stripeFeesCents = Math.round(totalCustomerPaid * 0.029) + 30;
+    }
+
+    // Check for refunds on this order
+    let refundsCents = 0;
+    if (issues && Array.isArray(issues)) {
+      const orderIssue = issues.find((issue: any) => 
+        issue.order_id === order.id && issue.status === 'refunded'
+      );
+      if (orderIssue && orderIssue.orders?.total_cents) {
+        refundsCents = orderIssue.orders.total_cents;
+      }
+    }
+
+    // Net profit = gross revenue + platform fees + commissions - stripe fees - refunds
+    const netProfitCents = grossRevenueCents + platformFeeCents + commissionsCents - stripeFeesCents - refundsCents;
+
+    return {
+      orderId: order.id,
+      grossRevenueCents,
+      platformFeeCents,
+      commissionsCents,
+      stripeFeesCents,
+      refundsCents,
+      netProfitCents,
+    };
+  }, [financeOrderSearch, orders, issues]);
+
+  const FinanceTab = (
+    <ScrollView contentContainerStyle={styles.tabScroll}>
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <View style={[styles.dateFilterContainer, styles.dateFilterContainerFullWidth]}>
+            <View style={[styles.dateFilterDropdownWrapper, styles.dateFilterDropdownWrapperFullWidth]}>
+              <TouchableOpacity
+                style={[styles.dateFilterDropdownButton, styles.dateFilterDropdownButtonFullWidth]}
+                onPress={() => {
+                  setShowSnapshotDropdown(false);
+                  setShowFinanceDropdown(!showFinanceDropdown);
+                }}
+              >
+                <Text style={styles.dateFilterDropdownButtonText}>{getDateFilterLabel(financeDateFilter)}</Text>
+              </TouchableOpacity>
+              {showFinanceDropdown && (
+                <>
+                  {isMobile ? (
+                    <Modal
+                      visible={showFinanceDropdown}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setShowFinanceDropdown(false)}
+                    >
+                      <TouchableOpacity
+                        style={styles.dateFilterModalOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowFinanceDropdown(false)}
+                      >
+                        <TouchableOpacity
+                          activeOpacity={1}
+                          onPress={(e) => e.stopPropagation()}
+                        >
+                          <ScrollView
+                            style={styles.dateFilterDropdownMenuMobile}
+                            contentContainerStyle={{ paddingVertical: 4 }}
+                            showsVerticalScrollIndicator={true}
+                          >
+                            {dateFilterOptions.map((option, index) => (
+                              <TouchableOpacity
+                                key={option.value}
+                                style={[
+                                  styles.dateFilterDropdownOption,
+                                  financeDateFilter === option.value && styles.dateFilterDropdownOptionActive,
+                                  index === dateFilterOptions.length - 1 && styles.dateFilterDropdownOptionLast
+                                ]}
+                                onPress={() => {
+                                  setFinanceDateFilter(option.value);
+                                  setShowFinanceDropdown(false);
+                                }}
+                              >
+                                <Text style={[
+                                  styles.dateFilterDropdownOptionText,
+                                  financeDateFilter === option.value && styles.dateFilterDropdownOptionTextActive
+                                ]}>
+                                  {option.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    </Modal>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={styles.dateFilterDropdownOverlay}
+                        activeOpacity={1}
+                        onPress={() => setShowFinanceDropdown(false)}
+                      />
+                      <View style={styles.dateFilterDropdownMenu}>
+                        {dateFilterOptions.map((option, index) => (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={[
+                              styles.dateFilterDropdownOption,
+                              financeDateFilter === option.value && styles.dateFilterDropdownOptionActive,
+                              index === dateFilterOptions.length - 1 && styles.dateFilterDropdownOptionLast
+                            ]}
+                            onPress={() => {
+                              setFinanceDateFilter(option.value);
+                              setShowFinanceDropdown(false);
+                            }}
+                          >
+                            <Text style={[
+                              styles.dateFilterDropdownOptionText,
+                              financeDateFilter === option.value && styles.dateFilterDropdownOptionTextActive
+                            ]}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
+            </View>
+          </View>
+        </View>
+        <View style={styles.metricsList}>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Commissions</Text>
+            <Text style={styles.metricValue}>{formatCad(financeStats.commissionsCents)} CAD</Text>
+          </View>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Platform fees</Text>
+            <Text style={styles.metricValue}>{formatCad(financeStats.platformFeesCents)} CAD</Text>
+          </View>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Stripe fees</Text>
+            <Text style={styles.metricValue}>{formatCad(financeStats.stripeFeesCents)} CAD</Text>
+          </View>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Refunds</Text>
+            <Text style={styles.metricValue}>{formatCad(financeStats.refundsCents)} CAD</Text>
+          </View>
+          <View style={styles.metricRow}>
+            <Text style={styles.metricLabel}>Net profit</Text>
+            <Text style={[styles.metricValue, { color: '#1E794F' }]}>{formatCad(financeStats.netProfitCents)} CAD</Text>
+          </View>
+        </View>
+      </View>
+
+      {/* Order Financial Details Table */}
+      <View style={styles.chartCard}>
+        <View style={styles.searchWrapper}>
+          <TextInput
+            value={financeOrderSearch}
+            onChangeText={setFinanceOrderSearch}
+            placeholder="Search by order number..."
+            placeholderTextColor="#94a3b8"
+            style={styles.searchInput}
+            keyboardType="numeric"
+          />
+        </View>
+        {getOrderFinancialDetails ? (
+          <View style={styles.metricsList}>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Gross revenue</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.grossRevenueCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Platform fees</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.platformFeeCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Commissions</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.commissionsCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Stripe fees</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.stripeFeesCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Refunds</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.refundsCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Net profit</Text>
+              <Text style={[styles.metricValue, { color: '#1E794F' }]}>{formatCad(getOrderFinancialDetails.netProfitCents)} CAD</Text>
+            </View>
+            <View style={[styles.metricRow, { marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: palette.border }]}>
+              <Text style={[styles.metricLabel, { fontSize: 12, fontWeight: '400', color: palette.muted }]}>Order #{getOrderFinancialDetails.orderId}</Text>
+            </View>
+          </View>
+        ) : financeOrderSearch ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyText}>Order not found. Please enter a valid order number.</Text>
+          </View>
+        ) : null}
       </View>
     </ScrollView>
   );
@@ -3573,6 +4349,7 @@ export default function AdminPage() {
             { key: 'orders', title: 'Orders', content: OrdersTab },
             { key: 'chefs', title: 'Chefs', content: ChefsTab },
             { key: 'users', title: 'Users', content: UsersTab },
+            { key: 'finance', title: 'Finance', content: FinanceTab },
             { key: 'issues', title: 'Issues', content: IssuesTab },
             { key: 'app-settings', title: 'App settings', content: AppSettingsTab },
           ]}
@@ -3815,7 +4592,9 @@ const styles = StyleSheet.create({
   },
   screenContent: {
     paddingHorizontal: 20,
-    paddingVertical: 28,
+    paddingTop: 28,
+    paddingBottom: 0,
+    marginBottom: 100,
   },
   wrapper: {
     width: '100%',
@@ -3933,6 +4712,11 @@ const styles = StyleSheet.create({
   tabScroll: {
     paddingHorizontal: 4,
     paddingVertical: 16,
+    ...Platform.select({
+      web: {
+        overflow: 'visible',
+      },
+    }),
   },
   sectionTitle: {
     color: palette.text,
@@ -3969,6 +4753,39 @@ const styles = StyleSheet.create({
   emptyText: {
     color: palette.muted,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderFinancialTable: {
+    marginTop: 8,
+  },
+  orderFinancialRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'flex-start',
+    paddingVertical: 12,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+  },
+  orderFinancialCell: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  orderFinancialLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderFinancialValue: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
+    marginBottom: 4,
+  },
+  orderFinancialOrderId: {
+    fontSize: 12,
+    color: palette.muted,
     fontFamily: theme.typography.fontFamily.body,
   },
   card: {
@@ -4770,15 +5587,224 @@ const styles = StyleSheet.create({
     shadowRadius: 14,
     shadowOffset: { width: 0, height: 6 },
     elevation: 1,
+    ...Platform.select({
+      web: {
+        overflow: 'visible',
+      },
+      default: {
+        overflow: 'visible',
+      },
+    }),
   },
   chartHeader: {
     marginBottom: 16,
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+    ...Platform.select({
+      web: {
+        overflow: 'visible',
+        position: 'relative' as any,
+        zIndex: 1,
+      },
+      default: {
+        overflow: 'visible',
+      },
+    }),
   },
   chartTitle: {
     color: palette.text,
     fontSize: 20,
     fontWeight: '700',
     fontFamily: theme.typography.fontFamily.display,
+  },
+  dateFilterContainer: {
+    flexDirection: 'row',
+    gap: 8,
+    ...Platform.select({
+      web: {
+        overflow: 'visible',
+        position: 'relative' as any,
+        zIndex: 1,
+      },
+    }),
+  },
+  dateFilterButton: {
+    paddingHorizontal: 12,
+    paddingVertical: 6,
+    borderRadius: 6,
+    backgroundColor: palette.neutralBg,
+    borderWidth: 1,
+    borderColor: palette.border,
+  },
+  dateFilterButtonActive: {
+    backgroundColor: palette.primary,
+    borderColor: palette.primary,
+  },
+  dateFilterButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  dateFilterButtonTextActive: {
+    color: '#FFFFFF',
+  },
+  dateFilterDropdownWrapper: {
+    position: 'relative',
+    zIndex: 99998,
+    ...Platform.select({
+      web: {
+        zIndex: 99998,
+        position: 'relative' as any,
+      },
+      ios: {
+        zIndex: 99998,
+      },
+      android: {
+        elevation: 999,
+        zIndex: 99998,
+      },
+    }),
+  },
+  dateFilterDropdownButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 6,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: palette.primary,
+    minWidth: 150,
+  },
+  dateFilterContainerFullWidth: {
+    width: '100%',
+  },
+  dateFilterDropdownWrapperFullWidth: {
+    width: '100%',
+    flex: 1,
+  },
+  dateFilterDropdownButtonFullWidth: {
+    width: '100%',
+    minWidth: 'auto',
+  },
+  dateFilterDropdownButtonText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: palette.primary,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  dateFilterDropdownMenu: {
+    position: 'absolute',
+    top: '100%',
+    left: 0,
+    right: 0,
+    marginTop: 4,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: palette.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.15,
+    shadowRadius: 8,
+    elevation: 1000,
+    zIndex: 99999,
+    maxHeight: 200,
+    overflow: 'hidden',
+    ...Platform.select({
+      web: {
+        zIndex: 99999,
+        position: 'absolute' as any,
+        backgroundColor: '#FFFFFF',
+      },
+      ios: {
+        zIndex: 99999,
+        backgroundColor: '#FFFFFF',
+      },
+      android: {
+        elevation: 1000,
+        zIndex: 99999,
+        backgroundColor: '#FFFFFF',
+      },
+    }),
+  },
+  dateFilterDropdownOption: {
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    borderBottomWidth: 1,
+    borderBottomColor: palette.border,
+    backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      web: {
+        backgroundColor: '#FFFFFF',
+      },
+      default: {
+        backgroundColor: '#FFFFFF',
+      },
+    }),
+  },
+  dateFilterDropdownOptionActive: {
+    backgroundColor: palette.primary,
+    ...Platform.select({
+      web: {
+        backgroundColor: palette.primary,
+      },
+      default: {
+        backgroundColor: palette.primary,
+      },
+    }),
+  },
+  dateFilterDropdownOptionLast: {
+    borderBottomWidth: 0,
+  },
+  dateFilterModalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.3)',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  dateFilterDropdownMenuMobile: {
+    backgroundColor: '#FFFFFF',
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: palette.border,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 12,
+    elevation: 10,
+    width: 180,
+    maxHeight: 350,
+  },
+  dateFilterDropdownOverlay: {
+    position: 'fixed',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    zIndex: 99998,
+    ...Platform.select({
+      web: {
+        position: 'fixed' as any,
+      },
+      default: {
+        position: 'absolute',
+      },
+    }),
+  },
+  dateFilterDropdownOptionText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  dateFilterDropdownOptionTextActive: {
+    color: '#FFFFFF',
   },
   chartSubtitle: {
     color: palette.muted,
@@ -4840,6 +5866,12 @@ const styles = StyleSheet.create({
   },
   metricsList: {
     paddingHorizontal: 4,
+    ...Platform.select({
+      web: {
+        position: 'relative' as any,
+        zIndex: 1,
+      },
+    }),
   },
   metricRow: {
     flexDirection: 'row',
@@ -4869,6 +5901,7 @@ const styles = StyleSheet.create({
     minWidth: 90,
     textAlign: 'right',
     color: palette.text,
+    fontSize: 14,
     fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
   },
