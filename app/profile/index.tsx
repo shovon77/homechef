@@ -568,7 +568,7 @@ export default function ProfilePage() {
     .slice(0, 2) || email[0]?.toUpperCase() || "?";
 
   return (
-    <Screen scroll contentPadding={16} style={{ backgroundColor: '#F2F0EF' }}>
+    <Screen scroll contentPadding={16} contentStyle={{ paddingBottom: 0, marginBottom: 100 }} style={{ backgroundColor: '#F2F0EF' }}>
       {/* Logout Confirmation Modal */}
       <Modal
         visible={showLogoutModal}

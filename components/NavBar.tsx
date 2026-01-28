@@ -1102,19 +1102,19 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>About us</Text>
                 </TouchableOpacity>
               </Link>
 
-              {/* FAQ button - show in menu when logged in (for regular users without location) or when location is set */}
-              {loggedIn && (!isAdmin && !isChef) && (
+              {/* FAQ button - show in menu when logged in (for regular users and chefs) */}
+              {loggedIn && (!isAdmin) && (
                 <Link href="/faq" asChild>
                   <TouchableOpacity 
                     style={styles.mobileMenuItem}
                     onPress={() => setIsMenuOpen(false)}
                   >
-                    <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                    <Image source={require('../assets/list.png')} style={styles.menuIcon as any} resizeMode="contain" />
                     <Text style={styles.mobileMenuText}>FAQ</Text>
                   </TouchableOpacity>
                 </Link>
@@ -1126,7 +1126,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/folder.png')} style={styles.menuIcon as any} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>Legal</Text>
                 </TouchableOpacity>
               </Link>
@@ -1213,7 +1213,7 @@ export default function NavBar() {
                 }}
                 style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
               >
-                <Image source={require('../assets/logout.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                <Image source={require('../assets/exit.png')} style={styles.menuIcon as any} resizeMode="contain" />
                 <Text style={styles.mobileMenuText}>Logout</Text>
               </TouchableOpacity>
             </>
@@ -1225,7 +1225,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>About us</Text>
                 </TouchableOpacity>
               </Link>
@@ -1236,7 +1236,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/list.png')} style={styles.menuIcon as any} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>FAQ</Text>
                 </TouchableOpacity>
               </Link>
@@ -1247,7 +1247,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/folder.png')} style={styles.menuIcon as any} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>Legal</Text>
                 </TouchableOpacity>
               </Link>

@@ -238,7 +238,7 @@ export default function CheckoutPage() {
   }
 
   return (
-    <Screen scroll style={{ backgroundColor: BACKGROUND }} contentPadding={0}>
+    <Screen scroll style={{ backgroundColor: BACKGROUND }} contentPadding={0} contentStyle={{ paddingBottom: 0, marginBottom: 100 }}>
       <View style={{ maxWidth: 960, width: '100%', alignSelf: 'center', padding: 24, gap: 24 }}>
         {/* Cart Items */}
         <View style={styles.cartItemsList}>

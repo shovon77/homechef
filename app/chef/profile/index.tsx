@@ -589,7 +589,7 @@ export default function ChefProfilePage() {
     .slice(0, 2) || email[0]?.toUpperCase() || "?";
 
   return (
-    <Screen style={{ backgroundColor: '#F2F0EF' }}>
+    <Screen style={{ backgroundColor: '#F2F0EF' }} contentStyle={{ paddingBottom: 0, marginBottom: 100 }}>
       <View style={[profileStyles.container, isMobile && profileStyles.containerMobile]}>
         {/* Left Sidebar */}
         <View style={[profileStyles.sidebar, isMobile && profileStyles.sidebarMobile]}>

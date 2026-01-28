@@ -37,7 +37,7 @@ const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string };
+type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -259,6 +259,7 @@ export default function ChefDashboard() {
   }, [activeTab, width]);
 
   const [orderStatusFilter, setOrderStatusFilter] = useState<'requested' | 'pending' | 'ready' | 'paid' | 'completed' | 'cancelled' | 'rejected'>('requested');
+  const [dashboardOrderStatusFilter, setDashboardOrderStatusFilter] = useState<'requested' | 'pending' | 'ready' | 'completed' | 'cancelled' | 'rejected'>('requested');
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [name, setName] = useState('');
@@ -277,12 +278,15 @@ export default function ChefDashboard() {
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [selectedOrderUserId, setSelectedOrderUserId] = useState<string | null>(null);
+  const [selectedOrderStatus, setSelectedOrderStatus] = useState<string | null>(null);
   const [orderMessages, setOrderMessages] = useState<MessageWithUser[]>([]);
   const [messageText, setMessageText] = useState('');
   const [sendingMessage, setSendingMessage] = useState(false);
   const [isRecording, setIsRecording] = useState(false);
   const [selectedOrderUserEmail, setSelectedOrderUserEmail] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const [financialDateFilter, setFinancialDateFilter] = useState<'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime'>('alltime');
+  const [showFinancialDropdown, setShowFinancialDropdown] = useState(false);
   
   type MessageWithUser = {
     id: number;
@@ -742,7 +746,7 @@ export default function ChefDashboard() {
       // Include: payment_status='succeeded' OR (payment_status IS NULL AND has stripe_payment_intent_id)
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
+        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
         .eq('chef_id', chefId)
         .in('status', ['requested', 'pending', 'ready', 'completed', 'cancelled', 'rejected'])
         .order('created_at', { ascending: false });
@@ -820,10 +824,11 @@ export default function ChefDashboard() {
       const dishMap = new Map((dishesData || []).map((d: any) => [d.id, d.name]));
 
       const { data: profilesData, error: profilesError } = userIds.length > 0
-        ? await supabase.from('profiles').select('id,email,charges_enabled').in('id', userIds)
+        ? await supabase.from('profiles').select('id,email,name,charges_enabled').in('id', userIds)
         : { data: [], error: null };
       if (profilesError) console.warn('profiles fetch error', profilesError);
       const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
+      const nameMap = new Map((profilesData || []).map((p: any) => [p.id, p.name || p.email || 'Customer']));
 
       const itemsByOrderId = new Map<number, OrderRow['order_items']>();
       (itemsData || []).forEach((item: any) => {
@@ -844,9 +849,11 @@ export default function ChefDashboard() {
         user_id: order.user_id,
         status: order.status,
         total_cents: order.total_cents ?? 0,
+        subtotal_cents: order.subtotal_cents ?? null,
         created_at: order.created_at,
         pickup_at: order.pickup_at ?? null,
         user_email: emailMap.get(order.user_id) ?? undefined,
+        user_name: nameMap.get(order.user_id) ?? undefined,
         platform_fee_cents: order.platform_fee_cents ?? 0,
         order_items: itemsByOrderId.get(order.id) ?? [],
         stripe_transfer_id: order.stripe_transfer_id ?? undefined,
@@ -973,9 +980,113 @@ export default function ChefDashboard() {
       .reduce((sum, order) => sum + Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)), 0);
   }, [orders]);
 
+  // Calculate financial metrics for the first widget
+  const financialMetrics = useMemo(() => {
+    const now = new Date();
+    let startDate: Date | null = null;
+    
+    if (financialDateFilter === 'today') {
+      startDate = new Date(now);
+      startDate.setHours(0, 0, 0, 0);
+    } else if (financialDateFilter === 'last7days') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 7);
+    } else if (financialDateFilter === 'last15days') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 15);
+    } else if (financialDateFilter === 'last30days') {
+      startDate = new Date(now);
+      startDate.setDate(now.getDate() - 30);
+    } else if (financialDateFilter === 'last3months') {
+      startDate = new Date(now);
+      startDate.setMonth(now.getMonth() - 3);
+    } else if (financialDateFilter === 'last6months') {
+      startDate = new Date(now);
+      startDate.setMonth(now.getMonth() - 6);
+    }
+    
+    const completedOrders = orders.filter(order => {
+      if (!order.stripe_transfer_id) return false;
+      if (startDate) {
+        const orderDate = new Date(order.created_at);
+        return orderDate >= startDate;
+      }
+      return true;
+    });
+    
+    const grossSales = completedOrders.reduce((sum, order) => sum + (order.subtotal_cents ?? order.total_cents ?? 0), 0);
+    const platformCommission = completedOrders.reduce((sum, order) => {
+      const subtotal = order.subtotal_cents ?? order.total_cents ?? 0;
+      return sum + Math.round(subtotal * 0.10); // 10% commission
+    }, 0);
+    const netEarnings = grossSales - platformCommission;
+    
+    return {
+      grossSales,
+      platformCommission,
+      netEarnings,
+    };
+  }, [orders, financialDateFilter]);
+
+  const getDateFilterLabel = (filter: typeof financialDateFilter) => {
+    const labels: Record<typeof filter, string> = {
+      'today': 'Today',
+      'last7days': 'Last 7 days',
+      'last15days': 'Last 15 days',
+      'last30days': 'Last 30 days',
+      'last3months': 'Last 3 months',
+      'last6months': 'Last 6 months',
+      'alltime': 'All time',
+    };
+    return labels[filter];
+  };
+
+  const dateFilterOptions: Array<{ value: typeof financialDateFilter; label: string }> = [
+    { value: 'today', label: 'Today' },
+    { value: 'last7days', label: 'Last 7 days' },
+    { value: 'last15days', label: 'Last 15 days' },
+    { value: 'last30days', label: 'Last 30 days' },
+    { value: 'last3months', label: 'Last 3 months' },
+    { value: 'last6months', label: 'Last 6 months' },
+    { value: 'alltime', label: 'All time' },
+  ];
+
   const filteredOrders = useMemo(() => {
+    if (orderStatusFilter === 'cancelled' || orderStatusFilter === 'rejected') {
+      return orders.filter(o => ['cancelled', 'rejected'].includes(o.status));
+    }
     return orders.filter(o => o.status === orderStatusFilter);
   }, [orders, orderStatusFilter]);
+
+  const filteredDashboardOrders = useMemo(() => {
+    if (dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected') {
+      return orders.filter(o => ['cancelled', 'rejected'].includes(o.status));
+    }
+    return orders.filter(o => o.status === dashboardOrderStatusFilter);
+  }, [orders, dashboardOrderStatusFilter]);
+
+  const topSellingDishes = useMemo(() => {
+    // Get all completed orders
+    const completedOrders = orders.filter(o => o.status === 'completed');
+    
+    // Aggregate dish sales
+    const dishSales = new Map<string, { name: string; totalQuantity: number; totalPriceCents: number }>();
+    
+    completedOrders.forEach(order => {
+      order.order_items?.forEach(item => {
+        const dishName = item.dish_name || 'Unknown Dish';
+        const existing = dishSales.get(dishName) || { name: dishName, totalQuantity: 0, totalPriceCents: 0 };
+        existing.totalQuantity += item.quantity;
+        existing.totalPriceCents += item.quantity * item.unit_price_cents;
+        dishSales.set(dishName, existing);
+      });
+    });
+    
+    // Convert to array and sort by quantity (descending)
+    return Array.from(dishSales.values())
+      .sort((a, b) => b.totalQuantity - a.totalQuantity)
+      .slice(0, 10); // Top 10
+  }, [orders]);
 
   // Open message modal for an order
   const handleOpenMessageModal = async (orderId: number, userEmail: string) => {
@@ -990,12 +1101,22 @@ export default function ChefDashboard() {
       const { data: { user } } = await supabase.auth.getUser();
       console.log('Fetching messages for order:', orderId, 'Chef ID:', chef?.id, 'User ID:', user?.id);
       
-      // Fetch order details to get customer's user_id
+      // Fetch order details to get customer's user_id and status
+      // First check if order is in the orders array (more up-to-date)
+      const orderFromArray = orders.find(o => o.id === orderId);
       let customerUserId: string | null = null;
-      if (chef?.id) {
+      let orderStatus: string | null = null;
+      
+      if (orderFromArray) {
+        customerUserId = orderFromArray.user_id;
+        orderStatus = orderFromArray.status;
+        setSelectedOrderUserId(customerUserId);
+        setSelectedOrderStatus(orderStatus);
+      } else if (chef?.id) {
+        // Fallback to database query if not in array
         const { data: orderData, error: orderError } = await supabase
           .from('orders')
-          .select('id,chef_id,user_id')
+          .select('id,chef_id,user_id,status')
           .eq('id', orderId)
           .eq('chef_id', chef.id)
           .maybeSingle();
@@ -1005,7 +1126,9 @@ export default function ChefDashboard() {
           // Don't block - RLS will handle security, just log for debugging
         } else {
           customerUserId = orderData.user_id;
+          orderStatus = orderData.status;
           setSelectedOrderUserId(customerUserId);
+          setSelectedOrderStatus(orderStatus);
         }
       }
       
@@ -1075,6 +1198,12 @@ export default function ChefDashboard() {
   // Send message function
   const handleSendMessage = async () => {
     if (!messageText.trim() || !selectedOrderId || !chef || sendingMessage) return;
+
+    // Prevent sending messages for completed, cancelled, or rejected orders
+    if (selectedOrderStatus === 'completed' || selectedOrderStatus === 'cancelled' || selectedOrderStatus === 'rejected') {
+      Alert.alert('Cannot send message', 'Messages cannot be sent for sold or declined orders. You can only view the message history.');
+      return;
+    }
 
     setSendingMessage(true);
     try {
@@ -1298,15 +1427,15 @@ export default function ChefDashboard() {
 
   const navItems = [
     { key: 'dashboard' as const, label: 'Overview', iconSource: require('../../assets/controls.png') },
-    { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
     { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
+    { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
     { key: 'reviews' as const, label: 'My reviews', iconSource: require('../../assets/edit.png') },
     { key: 'payouts' as const, label: 'Payment', iconSource: require('../../assets/credit-card.png') },
   ];
 
   const footerNavItems = [
     { key: 'profile' as const, label: 'Profile', iconSource: require('../../assets/settings.png'), action: 'profile' as const },
-    { key: 'logout' as const, label: 'Logout', iconSource: require('../../assets/logout.png'), action: 'logout' as const },
+    { key: 'logout' as const, label: 'Logout', iconSource: require('../../assets/exit.png'), action: 'logout' as const },
   ];
   
   function handleProfileNavigation() {
@@ -1373,7 +1502,7 @@ export default function ChefDashboard() {
   const WelcomeHeader = (
     <View style={styles.welcomeHeader}>
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
-      <Text style={styles.welcomeSubtitle}>Here's a summary of your business today.</Text>
+      <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
     </View>
   );
 
@@ -1439,165 +1568,294 @@ export default function ChefDashboard() {
       )}
 
       <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-        {/* Weekly Earnings Card */}
+        {/* Financial Metrics Card */}
         <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Weekly Earnings</Text>
-            <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 24 }}>
+            <View style={{ position: 'relative' }}>
               <TouchableOpacity
-                onPress={() => setEarningsRange('week')}
                 style={{
-                  paddingVertical: 4,
+                  backgroundColor: '#FFFFFF',
+                  borderWidth: 1,
+                  borderColor: PRIMARY_COLOR,
+                  borderRadius: 8,
+                  paddingVertical: 8,
                   paddingHorizontal: 12,
-                  borderRadius: 6,
-                  backgroundColor: earningsRange === 'week' ? BG_LIGHT : 'transparent',
+                  minWidth: 120,
+                  alignItems: 'center',
+                  justifyContent: 'center',
                 }}
+                onPress={() => setShowFinancialDropdown(!showFinancialDropdown)}
               >
-                <Text style={{ color: earningsRange === 'week' ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700' }}>This Week</Text>
+                <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>
+                  {getDateFilterLabel(financialDateFilter)}
+                </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                onPress={() => setEarningsRange('month')}
-                style={{
-                  paddingVertical: 4,
-                  paddingHorizontal: 12,
-                  borderRadius: 6,
-                  backgroundColor: earningsRange === 'month' ? BG_LIGHT : 'transparent',
-                }}
-              >
-                <Text style={{ color: earningsRange === 'month' ? TEXT_DARK : TEXT_MUTED, fontSize: 12, fontWeight: '700' }}>This Month</Text>
-              </TouchableOpacity>
+              {showFinancialDropdown && (
+                <>
+                  {isMobile ? (
+                    <Modal
+                      visible={showFinancialDropdown}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setShowFinancialDropdown(false)}
+                    >
+                      <TouchableOpacity
+                        style={{
+                          flex: 1,
+                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                          justifyContent: 'center',
+                          alignItems: 'center',
+                        }}
+                        activeOpacity={1}
+                        onPress={() => setShowFinancialDropdown(false)}
+                      >
+                        <TouchableOpacity
+                          activeOpacity={1}
+                          onPress={(e) => e.stopPropagation()}
+                        >
+                          <ScrollView
+                            style={{
+                              backgroundColor: '#FFFFFF',
+                              borderRadius: 8,
+                              maxHeight: 400,
+                              minWidth: 200,
+                              shadowColor: '#000',
+                              shadowOffset: { width: 0, height: 2 },
+                              shadowOpacity: 0.25,
+                              shadowRadius: 8,
+                              elevation: 5,
+                            }}
+                            contentContainerStyle={{ paddingVertical: 4 }}
+                            showsVerticalScrollIndicator={true}
+                          >
+                            {dateFilterOptions.map((option, index) => (
+                              <TouchableOpacity
+                                key={option.value}
+                                style={{
+                                  paddingVertical: 12,
+                                  paddingHorizontal: 16,
+                                  borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
+                                  borderBottomColor: BORDER_LIGHT,
+                                  backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
+                                }}
+                                onPress={() => {
+                                  setFinancialDateFilter(option.value);
+                                  setShowFinancialDropdown(false);
+                                }}
+                              >
+                                <Text style={{
+                                  color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
+                                  fontSize: 14,
+                                  fontWeight: financialDateFilter === option.value ? '700' : '400',
+                                  fontFamily: theme.typography.fontFamily.body,
+                                }}>
+                                  {option.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </ScrollView>
+                        </TouchableOpacity>
+                      </TouchableOpacity>
+                    </Modal>
+                  ) : (
+                    <>
+                      <TouchableOpacity
+                        style={{
+                          position: 'absolute',
+                          top: 0,
+                          left: 0,
+                          right: 0,
+                          bottom: 0,
+                          zIndex: 99998,
+                          ...Platform.select({
+                            web: {
+                              position: 'fixed' as any,
+                            },
+                          }),
+                        }}
+                        activeOpacity={1}
+                        onPress={() => setShowFinancialDropdown(false)}
+                      />
+                      <View style={{
+                        position: 'absolute',
+                        top: '100%',
+                        right: 0,
+                        marginTop: 4,
+                        backgroundColor: '#FFFFFF',
+                        borderRadius: 8,
+                        borderWidth: 1,
+                        borderColor: BORDER_LIGHT,
+                        shadowColor: '#000',
+                        shadowOffset: { width: 0, height: 2 },
+                        shadowOpacity: 0.25,
+                        shadowRadius: 8,
+                        elevation: 5,
+                        zIndex: 99999,
+                        minWidth: 180,
+                        overflow: 'hidden',
+                      }}>
+                        {dateFilterOptions.map((option, index) => (
+                          <TouchableOpacity
+                            key={option.value}
+                            style={{
+                              paddingVertical: 12,
+                              paddingHorizontal: 16,
+                              borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
+                              borderBottomColor: BORDER_LIGHT,
+                              backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
+                            }}
+                            onPress={() => {
+                              setFinancialDateFilter(option.value);
+                              setShowFinancialDropdown(false);
+                            }}
+                          >
+                            <Text style={{
+                              color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
+                              fontSize: 14,
+                              fontWeight: financialDateFilter === option.value ? '700' : '400',
+                              fontFamily: theme.typography.fontFamily.body,
+                            }}>
+                              {option.label}
+                            </Text>
+                          </TouchableOpacity>
+                        ))}
+                      </View>
+                    </>
+                  )}
+                </>
+              )}
             </View>
           </View>
-          <View style={{ height: 220, flexDirection: 'row', alignItems: 'flex-end', justifyContent: 'space-between', gap: 12 }}>
-            {earningsSeries.labels.map((label, idx) => {
-              const value = earningsSeries.values[idx] || 0;
-              const ratio = earningsSeries.maxValue > 0 ? value / earningsSeries.maxValue : 0;
-              const barHeight = Math.max(8, ratio * 160);
-              return (
-                <View key={label} style={{ flex: 1, alignItems: 'center', gap: 8 }}>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600' }}>
-                    {value > 0 ? formatCad(value / 100) : formatCad(0)}
-                  </Text>
-                  <View style={{
-                    width: '100%',
-                    height: barHeight,
-                    backgroundColor: value > 0 ? PRIMARY_COLOR : PRIMARY_COLOR + '30',
-                    borderRadius: 6,
-                  }} />
-                  <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{label}</Text>
-                </View>
-              );
-            })}
+          <View>
+            {/* Gross Sales */}
+            <View style={{ marginBottom: 32 }}>
+              <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Gross sales</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {formatCad(financialMetrics.grossSales / 100)} CAD
+              </Text>
+            </View>
+            
+            {/* Platform Commission */}
+            <View style={{ marginBottom: 16 }}>
+              <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Platform commission</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {formatCad(financialMetrics.platformCommission / 100)} CAD
+              </Text>
+            </View>
+            
+            {/* Net Earnings */}
+            <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
+              <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Your net earnings</Text>
+              <Text style={{ color: PRIMARY_COLOR, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {formatCad(financialMetrics.netEarnings / 100)} CAD
+              </Text>
+            </View>
           </View>
-          <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', marginTop: 16 }}>
-            {formatCad(earningsSeries.total / 100)}
-          </Text>
         </View>
 
-        {/* Top Dishes Card */}
+        {/* Order Status Card */}
         <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Top Performing Dishes</Text>
-          <View style={{ gap: 16 }}>
-            {topDishes.length > 0 ? (
-              topDishes.map(({ dish, count }, idx) => (
-                <View key={dish.id} style={{ gap: 8 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{dish.name}</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{count} sold</Text>
-                  </View>
-                  <View style={{ height: 8, backgroundColor: BG_GRAY, borderRadius: 4, overflow: 'hidden' }}>
-                    <View style={{ height: '100%', width: `${Math.max(40, (count / (topDishes[0]?.count || 1)) * 100)}%`, backgroundColor: PRIMARY_COLOR }} />
-                  </View>
-                </View>
-              ))
-            ) : (
-              <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes sold yet</Text>
-            )}
+          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Requested</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {orders.filter(o => o.status === 'requested').length}
+              </Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Pending</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {orders.filter(o => o.status === 'pending').length}
+              </Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Ready</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {orders.filter(o => o.status === 'ready').length}
+              </Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Sold</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {orders.filter(o => o.status === 'completed').length}
+              </Text>
+            </View>
+            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Declined</Text>
+              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                {orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length}
+              </Text>
+            </View>
           </View>
         </View>
       </View>
 
       {/* Order Management */}
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order Management</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16, minWidth: '100%' }}>
-          {(['requested', 'pending', 'ready', 'completed'] as const).map(status => (
-            <TouchableOpacity
-              key={status}
-              onPress={() => setOrderStatusFilter(status)}
-              style={{
-                paddingVertical: 8,
-                paddingHorizontal: 16,
-                borderRadius: 6,
-                backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
-                minWidth: 100,
-              }}
-            >
-              <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                {status.charAt(0).toUpperCase() + status.slice(1)} Orders
-              </Text>
-            </TouchableOpacity>
-          ))}
-        </ScrollView>
-        <ScrollView 
-          horizontal 
-          showsHorizontalScrollIndicator={!isMobile} 
-          contentContainerStyle={isMobile ? { minWidth: 720 } : { minWidth: '100%' }}
-          style={{ marginHorizontal: isMobile ? -16 : 0 }}
-        >
-          <View style={[styles.tableContainer, isMobile && { minWidth: 720 }]}>
-          {filteredOrders.length > 0 ? (
-              <>
-                {/* Table Header */}
-                <View style={[styles.tableHeader, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
-                    <Text style={styles.tableHeaderCellText}>Order ID</Text>
-                </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                    <Text style={styles.tableHeaderCellText}>Customer</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                    <Text style={styles.tableHeaderCellText}>Amount</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                    <Text style={styles.tableHeaderCellText}>Status</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                    <Text style={styles.tableHeaderCellText}>Pickup Time</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                    <Text style={styles.tableHeaderCellText}>Actions</Text>
-                  </View>
-                </View>
-
-                {/* Table Rows */}
-                {filteredOrders.slice(0, 10).map(order => (
-                  <View key={order.id} style={[styles.tableRow, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
-                    <View style={[styles.tableCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
-                      <Text style={styles.tableCellText}>#{order.id}</Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                      <Text style={styles.tableCellText} numberOfLines={1}>{order.user_email || 'Unknown'}</Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                      <Text style={styles.tableCellText}>{formatCad((order.total_cents || 0) / 100)}</Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                      <Text style={[styles.tableCellText, { textTransform: 'capitalize' }]}>{order.status}</Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                      <Text style={styles.tableCellText}>{formatLocal(order.pickup_at)}</Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }, { flexDirection: 'row', gap: 8, flexWrap: 'wrap' }]}>
-                      {/* Message button for all orders */}
-                      <TouchableOpacity
-                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-                      >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
+        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, minWidth: '100%', marginBottom: 16 }}>
+          {(['requested', 'pending', 'ready', 'completed'] as const).map(status => {
+            const statusLabel = status === 'completed' ? 'Sold' : status.charAt(0).toUpperCase() + status.slice(1);
+            const count = orders.filter(o => o.status === status).length;
+            const isActive = dashboardOrderStatusFilter === status;
+            return (
+              <TouchableOpacity
+                key={status}
+                onPress={() => setDashboardOrderStatusFilter(status)}
+                style={{
+                  paddingVertical: 6,
+                  paddingHorizontal: 6,
+                  borderRadius: 6,
+                  backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
+                  minWidth: 50,
+                }}
+              >
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                          {statusLabel}{count > 0 ? ` (${count})` : ''}
+                        </Text>
                       </TouchableOpacity>
-                      {/* Status-specific actions */}
-                      {order.status === 'requested' && (
+                    );
+                  })}
+                  {(() => {
+                    const declinedCount = orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length;
+                    const isActive = dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected';
+                    return (
+                      <TouchableOpacity
+                        key="declined"
+                        onPress={() => setDashboardOrderStatusFilter('cancelled')}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 6,
+                          borderRadius: 6,
+                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
+                          minWidth: 50,
+                        }}
+                      >
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                          Declined{declinedCount > 0 ? ` (${declinedCount})` : ''}
+                        </Text>
+              </TouchableOpacity>
+            );
+          })()}
+        </ScrollView>
+        {/* Orders in Card Style */}
+        <View style={{ gap: 12 }}>
+          {filteredDashboardOrders.length > 0 ? (
+            filteredDashboardOrders.map(order => (
+              <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
+                  <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
+                </View>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                  {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+                </Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Placed: {formatLocal(order.created_at)}</Text>
+                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                  {order.status === 'requested' ? (
                     <>
                       {(() => {
                         const transferSent = Boolean(order.stripe_transfer_id);
@@ -1624,13 +1882,13 @@ export default function ChefDashboard() {
                             }}
                             style={{
                               backgroundColor: PRIMARY_COLOR,
-                                  paddingVertical: 6,
-                                  paddingHorizontal: 12,
-                                  borderRadius: 6,
+                              paddingVertical: 8,
+                              paddingHorizontal: 16,
+                              borderRadius: 8,
                               opacity: canAccept ? 1 : 0.5,
                             }}
                           >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                           </TouchableOpacity>
                         );
                       })()}
@@ -1643,13 +1901,13 @@ export default function ChefDashboard() {
                             Alert.alert('Reject failed', err?.message || 'Unable to reject order');
                           }
                         }}
-                            style={{ backgroundColor: '#F97316', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                        style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
                       </TouchableOpacity>
                     </>
-                      )}
-                      {order.status === 'pending' && (
+                  ) : order.status === 'pending' ? (
+                    <View style={{ gap: 8 }}>
                       <TouchableOpacity
                         onPress={async () => {
                           try {
@@ -1659,22 +1917,94 @@ export default function ChefDashboard() {
                             Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
                           }
                         }}
-                          style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                        style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Mark Ready</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
                       </TouchableOpacity>
-                      )}
+                      <TouchableOpacity
+                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                      </TouchableOpacity>
+                      <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
                     </View>
+                  ) : order.status === 'ready' ? (
+                    <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+                      <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
                     </View>
-                ))}
-              </>
-            ) : (
-              <View style={{ padding: 32, alignItems: 'center', minWidth: isMobile ? 720 : '100%' }}>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {orderStatusFilter} orders</Text>
+                  ) : null}
+                  {order.status !== 'pending' && (
+                    <TouchableOpacity
+                      onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                      style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                    >
+                      <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                    </TouchableOpacity>
+                  )}
+                </View>
               </View>
+            ))
+          ) : (
+            <View style={{ padding: 32, alignItems: 'center' }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
+            </View>
           )}
         </View>
-        </ScrollView>
+      </View>
+
+      {/* Top-selling dishes */}
+      <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
+        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 12, fontFamily: theme.typography.fontFamily.display }}>Top-selling dishes</Text>
+        <TouchableOpacity
+          onPress={() => setActiveTab('menu')}
+          style={{
+            backgroundColor: PRIMARY_COLOR,
+            paddingVertical: 8,
+            paddingHorizontal: 16,
+            borderRadius: 8,
+            alignSelf: 'flex-start',
+            marginBottom: 16,
+          }}
+        >
+          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
+        </TouchableOpacity>
+        {topSellingDishes.length > 0 ? (
+          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+            <View style={{ borderWidth: 1, borderColor: BORDER_LIGHT, borderRadius: 8, overflow: 'hidden', minWidth: 500 }}>
+              {/* Table Header */}
+              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingLeft: 12, paddingRight: 6, borderBottomWidth: 1, borderBottomColor: BORDER_LIGHT, backgroundColor: '#F8FAFC' }}>
+                <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Dish name</Text>
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>Quantity</Text>
+                </View>
+                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body, textAlign: 'right' }}>Price</Text>
+                </View>
+              </View>
+              {/* Table Rows */}
+              {topSellingDishes.map((dish, index) => (
+                <View key={index} style={{ flexDirection: 'row', backgroundColor: index % 2 === 0 ? BG_LIGHT : '#FAFAFA', borderBottomWidth: index < topSellingDishes.length - 1 ? 1 : 0, borderBottomColor: BORDER_LIGHT }}>
+                  <View style={{ flex: 2, paddingVertical: 12, paddingHorizontal: 16, borderRightWidth: 1, borderRightColor: BORDER_LIGHT }}>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }}>{dish.name}</Text>
+                  </View>
+                  <View style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 16, borderRightWidth: 1, borderRightColor: BORDER_LIGHT }}>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>{dish.totalQuantity}</Text>
+                  </View>
+                  <View style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 16 }}>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body, textAlign: 'right' }}>{formatCad(dish.totalPriceCents / 100)} CAD</Text>
+                  </View>
+                </View>
+              ))}
+            </View>
+          </ScrollView>
+        ) : (
+          <View style={{ padding: 32, alignItems: 'center' }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Your top dishes will appear once you get orders</Text>
+          </View>
+        )}
       </View>
     </ScrollView>
   );
@@ -1728,7 +2058,7 @@ export default function ChefDashboard() {
         <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
             <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
-            <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.total_cents || 0) / 100)}</Text>
+            <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
           </View>
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
@@ -2001,213 +2331,391 @@ export default function ChefDashboard() {
         </View>
       )}
               <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-                {/* Weekly Earnings Card */}
+                {/* Financial Metrics Card */}
                 <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Weekly Earnings</Text>
-                    <View style={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4 }}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 24 }}>
+                    <View style={{ position: 'relative' }}>
                       <TouchableOpacity
-                        onPress={() => setEarningsRange('week')}
                         style={{
-                          paddingVertical: 4,
+                          backgroundColor: '#FFFFFF',
+                          borderWidth: 1,
+                          borderColor: PRIMARY_COLOR,
+                          borderRadius: 8,
+                          paddingVertical: 8,
                           paddingHorizontal: 12,
-                          borderRadius: 6,
-                          backgroundColor: earningsRange === 'week' ? PRIMARY_COLOR : 'transparent',
+                          minWidth: 120,
+                          alignItems: 'center',
+                          justifyContent: 'center',
                         }}
+                        onPress={() => setShowFinancialDropdown(!showFinancialDropdown)}
                       >
-                        <Text style={{ color: earningsRange === 'week' ? '#FFFFFF' : TEXT_DARK, fontWeight: '700', fontSize: 12 }}>Week</Text>
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>
+                          {getDateFilterLabel(financialDateFilter)}
+                        </Text>
                       </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => setEarningsRange('month')}
-                        style={{
-                          paddingVertical: 4,
-                          paddingHorizontal: 12,
-                          borderRadius: 6,
-                          backgroundColor: earningsRange === 'month' ? PRIMARY_COLOR : 'transparent',
-                        }}
-                      >
-                        <Text style={{ color: earningsRange === 'month' ? '#FFFFFF' : TEXT_DARK, fontWeight: '700', fontSize: 12 }}>Month</Text>
-                      </TouchableOpacity>
+                      {showFinancialDropdown && (
+                        <>
+                          {isMobile ? (
+                            <Modal
+                              visible={showFinancialDropdown}
+                              transparent
+                              animationType="fade"
+                              onRequestClose={() => setShowFinancialDropdown(false)}
+                            >
+                              <TouchableOpacity
+                                style={{
+                                  flex: 1,
+                                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
+                                  justifyContent: 'center',
+                                  alignItems: 'center',
+                                }}
+                                activeOpacity={1}
+                                onPress={() => setShowFinancialDropdown(false)}
+                              >
+                                <TouchableOpacity
+                                  activeOpacity={1}
+                                  onPress={(e) => e.stopPropagation()}
+                                >
+                                  <ScrollView
+                                    style={{
+                                      backgroundColor: '#FFFFFF',
+                                      borderRadius: 8,
+                                      maxHeight: 400,
+                                      minWidth: 200,
+                                      shadowColor: '#000',
+                                      shadowOffset: { width: 0, height: 2 },
+                                      shadowOpacity: 0.25,
+                                      shadowRadius: 8,
+                                      elevation: 5,
+                                    }}
+                                    contentContainerStyle={{ paddingVertical: 4 }}
+                                    showsVerticalScrollIndicator={true}
+                                  >
+                                    {dateFilterOptions.map((option, index) => (
+                                      <TouchableOpacity
+                                        key={option.value}
+                                        style={{
+                                          paddingVertical: 12,
+                                          paddingHorizontal: 16,
+                                          borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
+                                          borderBottomColor: BORDER_LIGHT,
+                                          backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
+                                        }}
+                                        onPress={() => {
+                                          setFinancialDateFilter(option.value);
+                                          setShowFinancialDropdown(false);
+                                        }}
+                                      >
+                                        <Text style={{
+                                          color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
+                                          fontSize: 14,
+                                          fontWeight: financialDateFilter === option.value ? '700' : '400',
+                                          fontFamily: theme.typography.fontFamily.body,
+                                        }}>
+                                          {option.label}
+                                        </Text>
+                                      </TouchableOpacity>
+                                    ))}
+                                  </ScrollView>
+                                </TouchableOpacity>
+                              </TouchableOpacity>
+                            </Modal>
+                          ) : (
+                            <>
+                              <TouchableOpacity
+                                style={{
+                                  position: 'absolute',
+                                  top: 0,
+                                  left: 0,
+                                  right: 0,
+                                  bottom: 0,
+                                  zIndex: 99998,
+                                  ...Platform.select({
+                                    web: {
+                                      position: 'fixed' as any,
+                                    },
+                                  }),
+                                }}
+                                activeOpacity={1}
+                                onPress={() => setShowFinancialDropdown(false)}
+                              />
+                              <View style={{
+                                position: 'absolute',
+                                top: '100%',
+                                right: 0,
+                                marginTop: 4,
+                                backgroundColor: '#FFFFFF',
+                                borderRadius: 8,
+                                borderWidth: 1,
+                                borderColor: BORDER_LIGHT,
+                                shadowColor: '#000',
+                                shadowOffset: { width: 0, height: 2 },
+                                shadowOpacity: 0.25,
+                                shadowRadius: 8,
+                                elevation: 5,
+                                zIndex: 99999,
+                                minWidth: 180,
+                                overflow: 'hidden',
+                              }}>
+                                {dateFilterOptions.map((option, index) => (
+                                  <TouchableOpacity
+                                    key={option.value}
+                                    style={{
+                                      paddingVertical: 12,
+                                      paddingHorizontal: 16,
+                                      borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
+                                      borderBottomColor: BORDER_LIGHT,
+                                      backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
+                                    }}
+                                    onPress={() => {
+                                      setFinancialDateFilter(option.value);
+                                      setShowFinancialDropdown(false);
+                                    }}
+                                  >
+                                    <Text style={{
+                                      color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
+                                      fontSize: 14,
+                                      fontWeight: financialDateFilter === option.value ? '700' : '400',
+                                      fontFamily: theme.typography.fontFamily.body,
+                                    }}>
+                                      {option.label}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            </>
+                          )}
+                        </>
+                      )}
                     </View>
                   </View>
-                  <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                    {formatCad(earningsRange === 'week' ? weeklyEarnings : monthlyEarnings)}
-                  </Text>
-                </View>
-                {/* Active Orders Card */}
-                <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Active Orders</Text>
-                  <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                    {orders.filter(o => ['requested', 'pending', 'ready', 'paid'].includes(o.status)).length}
-                  </Text>
-                </View>
-                {/* Total Dishes Card */}
-                <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Total Dishes</Text>
-                  <Text style={{ color: TEXT_DARK, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                    {dishes.length}
-                  </Text>
+                  <View>
+                    {/* Gross Sales */}
+                    <View style={{ marginBottom: 32 }}>
+                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Gross sales</Text>
+                      <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                        {formatCad(financialMetrics.grossSales / 100)} CAD
+                      </Text>
+                    </View>
+                    
+                    {/* Platform Commission */}
+                    <View style={{ marginBottom: 16 }}>
+                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Platform commission</Text>
+                      <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                        {formatCad(financialMetrics.platformCommission / 100)} CAD
+                      </Text>
+                    </View>
+                    
+                    {/* Net Earnings */}
+                    <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
+                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Your net earnings</Text>
+                      <Text style={{ color: PRIMARY_COLOR, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                        {formatCad(financialMetrics.netEarnings / 100)} CAD
+                      </Text>
+                    </View>
+                  </View>
                 </View>
               </View>
 
               {/* Order Management Table */}
               <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order Management</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, marginBottom: 16, minWidth: '100%' }}>
-                  {(['requested', 'pending', 'ready', 'completed'] as const).map(status => (
-                    <TouchableOpacity
-                      key={status}
-                      onPress={() => setOrderStatusFilter(status)}
-                      style={{
-                        paddingVertical: 8,
-                        paddingHorizontal: 16,
-                        borderRadius: 6,
-                        backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
-                        minWidth: 100,
-                      }}
-                    >
-                      <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                        {status.charAt(0).toUpperCase() + status.slice(1)} Orders
-                      </Text>
-                    </TouchableOpacity>
-                  ))}
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 8, minWidth: '100%', marginBottom: 16 }}>
+                  {(['requested', 'pending', 'ready', 'completed'] as const).map(status => {
+                    const statusLabel = status === 'completed' ? 'Sold' : status.charAt(0).toUpperCase() + status.slice(1);
+                    const count = orders.filter(o => o.status === status).length;
+                    const isActive = dashboardOrderStatusFilter === status;
+                    return (
+                      <TouchableOpacity
+                        key={status}
+                        onPress={() => setDashboardOrderStatusFilter(status)}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 6,
+                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
+                          minWidth: 80,
+                        }}
+                      >
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                          {statusLabel}{count > 0 ? ` (${count})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {(() => {
+                    const declinedCount = orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length;
+                    const isActive = dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected';
+                    return (
+                      <TouchableOpacity
+                        key="declined"
+                        onPress={() => setDashboardOrderStatusFilter('cancelled')}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 12,
+                          borderRadius: 6,
+                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
+                          minWidth: 80,
+                        }}
+                      >
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                          Declined{declinedCount > 0 ? ` (${declinedCount})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
                 </ScrollView>
-                <ScrollView 
-                  horizontal 
-                  showsHorizontalScrollIndicator={!isMobile} 
-                  contentContainerStyle={isMobile ? { minWidth: 720 } : { minWidth: '100%' }}
-                  style={{ marginHorizontal: isMobile ? -16 : 0 }}
-                >
-                  <View style={[styles.tableContainer, isMobile && { minWidth: 720 }]}>
-                    {filteredOrders.length > 0 ? (
-                      <>
-                        {/* Table Header */}
-                        <View style={[styles.tableHeader, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
-                          <View style={[styles.tableHeaderCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
-                            <Text style={styles.tableHeaderCellText}>Order ID</Text>
-                          </View>
-                          <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                            <Text style={styles.tableHeaderCellText}>Customer</Text>
-                          </View>
-                          <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                            <Text style={styles.tableHeaderCellText}>Amount</Text>
-                          </View>
-                          <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                            <Text style={styles.tableHeaderCellText}>Status</Text>
-                          </View>
-                          <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                            <Text style={styles.tableHeaderCellText}>Pickup Time</Text>
-                          </View>
-                          <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                            <Text style={styles.tableHeaderCellText}>Actions</Text>
-                          </View>
-        </View>
-
-                        {/* Table Rows */}
-                        {filteredOrders.slice(0, 10).map(order => (
-                          <View key={order.id} style={[styles.tableRow, isMobile ? { minWidth: 720 } : { minWidth: 1000 }]}>
-                            <View style={[styles.tableCell, isMobile ? { width: 80, minWidth: 80 } : { flex: 0.8 }]}>
-                              <Text style={styles.tableCellText}>#{order.id}</Text>
-                            </View>
-                            <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                              <Text style={styles.tableCellText} numberOfLines={1}>{order.user_email || 'Unknown'}</Text>
-                            </View>
-                            <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
-                              <Text style={styles.tableCellText}>{formatCad((order.total_cents || 0) / 100)}</Text>
-                            </View>
-                            <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                              <Text style={[styles.tableCellText, { textTransform: 'capitalize' }]}>{order.status}</Text>
-                            </View>
-                            <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                              <Text style={styles.tableCellText}>{formatLocal(order.pickup_at)}</Text>
-                            </View>
-                            <View style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }, { flexDirection: 'row', gap: 8, flexWrap: 'wrap' }]}>
-                              {/* Message button for all orders */}
-                              <TouchableOpacity
-                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                              </TouchableOpacity>
-                              {/* Status-specific actions */}
-                              {order.status === 'requested' && (
-                                <>
-                                  {(() => {
-                                    const transferSent = Boolean(order.stripe_transfer_id);
-                                    const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
-                                    return (
-                                      <TouchableOpacity
-                                        disabled={!canAccept}
-                                        onPress={async () => {
-                                          if (!canAccept) {
-                                            if (!chargesEnabled || !stripeAccountId) {
-                                              Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
-                                            } else if (transferSent) {
-                                              Alert.alert('Order already accepted', 'This order has already been accepted.');
-                                            }
-                                            return;
-                                          }
-                                          try {
-                                            await callFn('accept-order', { orderId: order.id });
-                                            Alert.alert('Success', 'Order accepted! Payment has been captured.');
-                                            await refreshOrdersForChef(chef!.id);
-                                          } catch (err: any) {
-                                            Alert.alert('Accept failed', err?.message || 'Unable to accept order');
-                                          }
-                                        }}
-                                        style={{
-                                          backgroundColor: PRIMARY_COLOR,
-                                          paddingVertical: 6,
-                                          paddingHorizontal: 12,
-                                          borderRadius: 6,
-                                          opacity: canAccept ? 1 : 0.5,
-                                        }}
-                                      >
-                                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
-                                      </TouchableOpacity>
-                                    );
-                                  })()}
+                {/* Orders in Card Style */}
+                <View style={{ gap: 12 }}>
+                  {filteredDashboardOrders.length > 0 ? (
+                    filteredDashboardOrders.map(order => (
+                      <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
+                        </View>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                          {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+                        </Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Placed: {formatLocal(order.created_at)}</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {order.status === 'requested' ? (
+                            <>
+                              {(() => {
+                                const transferSent = Boolean(order.stripe_transfer_id);
+                                const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                                return (
                                   <TouchableOpacity
+                                    disabled={!canAccept}
                                     onPress={async () => {
+                                      if (!canAccept) {
+                                        if (!chargesEnabled || !stripeAccountId) {
+                                          Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                                        } else if (transferSent) {
+                                          Alert.alert('Order already accepted', 'This order has already been accepted.');
+                                        }
+                                        return;
+                                      }
                                       try {
-                                        await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                        await callFn('accept-order', { orderId: order.id });
+                                        Alert.alert('Success', 'Order accepted! Payment has been captured.');
                                         await refreshOrdersForChef(chef!.id);
                                       } catch (err: any) {
-                                        Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                                        Alert.alert('Accept failed', err?.message || 'Unable to accept order');
                                       }
                                     }}
-                                    style={{ backgroundColor: '#F97316', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
+                                    style={{
+                                      backgroundColor: PRIMARY_COLOR,
+                                      paddingVertical: 8,
+                                      paddingHorizontal: 16,
+                                      borderRadius: 8,
+                                      opacity: canAccept ? 1 : 0.5,
+                                    }}
                                   >
-                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                                   </TouchableOpacity>
-                                </>
-                              )}
-                              {order.status === 'pending' && (
-                                <TouchableOpacity
-                                  onPress={async () => {
-                                    try {
-                                      await handleOrderStatus(order.id, 'ready');
-                                      Alert.alert('Success', 'Order marked as ready!');
-                                    } catch (err: any) {
-                                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                                    }
-                                  }}
-                                  style={{ backgroundColor: PRIMARY_COLOR, paddingVertical: 6, paddingHorizontal: 12, borderRadius: 6 }}
-                                >
-                                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Mark Ready</Text>
-                                </TouchableOpacity>
-                              )}
+                                );
+                              })()}
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                    await refreshOrdersForChef(chef!.id);
+                                  } catch (err: any) {
+                                    Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                                  }
+                                }}
+                                style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                              </TouchableOpacity>
+                            </>
+                          ) : order.status === 'pending' ? (
+                            <View style={{ gap: 8 }}>
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await handleOrderStatus(order.id, 'ready');
+                                    Alert.alert('Success', 'Order marked as ready!');
+                                  } catch (err: any) {
+                                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                                  }
+                                }}
+                                style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                              </TouchableOpacity>
+                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
                             </View>
-                          </View>
-                        ))}
-                      </>
-                    ) : (
-                      <View style={{ padding: 32, alignItems: 'center', minWidth: isMobile ? 720 : '100%' }}>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {orderStatusFilter} orders</Text>
+                          ) : order.status === 'ready' ? (
+                            <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                            </View>
+                          ) : null}
+                          {order.status !== 'pending' && (
+                            <TouchableOpacity
+                              onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                            >
+                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
                       </View>
-                    )}
+                    ))
+                  ) : (
+                    <View style={{ padding: 32, alignItems: 'center' }}>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+
+              {/* Top-selling dishes */}
+              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 12, fontFamily: theme.typography.fontFamily.display }}>Top-selling dishes</Text>
+                <TouchableOpacity
+                  onPress={() => setActiveTab('menu')}
+                  style={{
+                    backgroundColor: PRIMARY_COLOR,
+                    paddingVertical: 8,
+                    paddingHorizontal: 16,
+                    borderRadius: 8,
+                    alignSelf: 'flex-start',
+                    marginBottom: 16,
+                  }}
+                >
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
+                </TouchableOpacity>
+        {topSellingDishes.length > 0 ? (
+          <View style={{ gap: 8 }}>
+            {topSellingDishes.map((dish, index) => (
+              <View key={index} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
+                <View style={{ flex: 1, paddingRight: 8 }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }} numberOfLines={1}>{dish.name}</Text>
+                </View>
+                <View style={{ width: 60, alignItems: 'center' }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }}>{dish.totalQuantity}</Text>
+                </View>
+                <View style={{ width: 80, alignItems: 'flex-end' }}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }}>{formatCad(dish.totalPriceCents / 100)}</Text>
+                </View>
+              </View>
+            ))}
+          </View>
+                ) : (
+                  <View style={{ padding: 32, alignItems: 'center' }}>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No sales data available</Text>
                   </View>
-                </ScrollView>
+                )}
               </View>
             </ScrollView>
           )}
@@ -2237,108 +2745,167 @@ export default function ChefDashboard() {
           )}
           {activeTab === 'orders' && (
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120, paddingTop: 0 }}>
-              <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', backgroundColor: BG_GRAY, borderRadius: 8, padding: 4, minWidth: '100%' }}>
-                {(['requested', 'pending', 'ready', 'paid', 'completed', 'cancelled', 'rejected'] as const).map(status => (
-                  <TouchableOpacity
-                    key={status}
-                    onPress={() => setOrderStatusFilter(status)}
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 16,
-                      borderRadius: 6,
-                      backgroundColor: orderStatusFilter === status ? PRIMARY_COLOR : 'transparent',
-                      marginRight: 4,
-                    }}
-                  >
-                    <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_DARK, fontWeight: '700', fontSize: 14, textTransform: 'capitalize' }}>
-                      {status}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </ScrollView>
-              {filteredOrders.map(order => (
-                <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 16 }}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 4 }}>
-                        Order #{order.id}
-                      </Text>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14, marginBottom: 4 }}>
-                        {order.user_email || 'Unknown user'}
-                      </Text>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                        {formatLocal(order.created_at)}
-                      </Text>
-                    </View>
-                    <View style={{ alignItems: 'flex-end' }}>
-                      <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 4 }}>
-                        {formatCad(order.total_cents)}
-                      </Text>
-                      <View style={{
-                        paddingVertical: 4,
-                        paddingHorizontal: 12,
-                        borderRadius: 6,
-                        backgroundColor: order.status === 'completed' ? '#10B981' : order.status === 'cancelled' || order.status === 'rejected' ? '#EF4444' : '#F59E0B',
-                      }}>
-                        <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 12, textTransform: 'capitalize' }}>
-                          {order.status}
+              {/* Order Management */}
+              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
+                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 6, minWidth: '100%', marginBottom: 16 }}>
+                  {(['requested', 'pending', 'ready', 'completed'] as const).map(status => {
+                    const statusLabel = status === 'completed' ? 'Sold' : status.charAt(0).toUpperCase() + status.slice(1);
+                    const count = orders.filter(o => o.status === status).length;
+                    const isActive = dashboardOrderStatusFilter === status;
+                    return (
+                      <TouchableOpacity
+                        key={status}
+                        onPress={() => setDashboardOrderStatusFilter(status)}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 6,
+                          borderRadius: 6,
+                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
+                          minWidth: 50,
+                        }}
+                      >
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                          {statusLabel}{count > 0 ? ` (${count})` : ''}
                         </Text>
-                      </View>
-                    </View>
-                  </View>
-                  {order.order_items && order.order_items.length > 0 && (
-                    <View style={{ borderTopWidth: 1, borderTopColor: BORDER_LIGHT, paddingTop: 16, marginTop: 16 }}>
-                      {order.order_items.map((item, idx) => (
-                        <View key={idx} style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 8 }}>
-                          <Text style={{ color: TEXT_DARK, fontSize: 14 }}>
-                            {item.dish_name || `Dish #${item.dish_id}`} x {item.quantity}
-                          </Text>
-                          <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700' }}>
-                            {formatCad(item.unit_price_cents * item.quantity)}
-                          </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                  {(() => {
+                    const declinedCount = orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length;
+                    const isActive = dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected';
+                    return (
+                      <TouchableOpacity
+                        key="declined"
+                        onPress={() => setDashboardOrderStatusFilter('cancelled')}
+                        style={{
+                          paddingVertical: 6,
+                          paddingHorizontal: 6,
+                          borderRadius: 6,
+                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
+                          minWidth: 50,
+                        }}
+                      >
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                          Declined{declinedCount > 0 ? ` (${declinedCount})` : ''}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })()}
+                </ScrollView>
+                {/* Orders in Card Style */}
+                <View style={{ gap: 12 }}>
+                  {filteredDashboardOrders.length > 0 ? (
+                    filteredDashboardOrders.map(order => (
+                      <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                         </View>
-                      ))}
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                          {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+                        </Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Placed: {formatLocal(order.created_at)}</Text>
+                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                          {order.status === 'requested' ? (
+                            <>
+                              {(() => {
+                                const transferSent = Boolean(order.stripe_transfer_id);
+                                const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
+                                return (
+                                  <TouchableOpacity
+                                    disabled={!canAccept}
+                                    onPress={async () => {
+                                      if (!canAccept) {
+                                        if (!chargesEnabled || !stripeAccountId) {
+                                          Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
+                                        } else if (transferSent) {
+                                          Alert.alert('Order already accepted', 'This order has already been accepted.');
+                                        }
+                                        return;
+                                      }
+                                      try {
+                                        await callFn('accept-order', { orderId: order.id });
+                                        Alert.alert('Success', 'Order accepted! Payment has been captured.');
+                                        await refreshOrdersForChef(chef!.id);
+                                      } catch (err: any) {
+                                        Alert.alert('Accept failed', err?.message || 'Unable to accept order');
+                                      }
+                                    }}
+                                    style={{
+                                      backgroundColor: PRIMARY_COLOR,
+                                      paddingVertical: 8,
+                                      paddingHorizontal: 16,
+                                      borderRadius: 8,
+                                      opacity: canAccept ? 1 : 0.5,
+                                    }}
+                                  >
+                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                                  </TouchableOpacity>
+                                );
+                              })()}
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                    await refreshOrdersForChef(chef!.id);
+                                  } catch (err: any) {
+                                    Alert.alert('Reject failed', err?.message || 'Unable to reject order');
+                                  }
+                                }}
+                                style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                              </TouchableOpacity>
+                            </>
+                          ) : order.status === 'pending' ? (
+                            <View style={{ gap: 8 }}>
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await handleOrderStatus(order.id, 'ready');
+                                    Alert.alert('Success', 'Order marked as ready!');
+                                  } catch (err: any) {
+                                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                                  }
+                                }}
+                                style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                              </TouchableOpacity>
+                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                            </View>
+                          ) : order.status === 'ready' ? (
+                            <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
+                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                            </View>
+                          ) : null}
+                          {order.status !== 'pending' && (
+                            <TouchableOpacity
+                              onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                            >
+                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                            </TouchableOpacity>
+                          )}
+                        </View>
+                      </View>
+                    ))
+                  ) : (
+                    <View style={{ padding: 32, alignItems: 'center' }}>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
                     </View>
                   )}
-                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 16 }}>
-                    {order.status === 'requested' && (
-                      <>
-                        <TouchableOpacity
-                          onPress={() => updateOrderStatus(order.id, 'pending')}
-                          style={{ flex: 1, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-                        >
-                          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Accept</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => updateOrderStatus(order.id, 'rejected')}
-                          style={{ flex: 1, backgroundColor: '#EF4444', paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-                        >
-                          <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Reject</Text>
-                        </TouchableOpacity>
-                      </>
-                    )}
-                    {order.status === 'pending' && (
-                      <TouchableOpacity
-                        onPress={() => updateOrderStatus(order.id, 'ready')}
-                        style={{ flex: 1, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Mark Ready</Text>
-                      </TouchableOpacity>
-                    )}
-                    {order.status === 'ready' && (
-                      <TouchableOpacity
-                        onPress={() => updateOrderStatus(order.id, 'paid')}
-                        style={{ flex: 1, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, borderRadius: 8, alignItems: 'center' }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontWeight: '700' }}>Mark Paid</Text>
-                      </TouchableOpacity>
-                    )}
-                  </View>
                 </View>
-              ))}
-              {filteredOrders.length === 0 && (
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', padding: 32 }}>No {orderStatusFilter} orders</Text>
-              )}
+              </View>
             </ScrollView>
           )}
           {activeTab === 'reviews' && (
@@ -2442,6 +3009,7 @@ export default function ChefDashboard() {
         onRequestClose={() => {
           setShowMessageModal(false);
           setMessageText('');
+          setSelectedOrderStatus(null);
           handleStopVoiceInput();
         }}
       >
@@ -2456,6 +3024,7 @@ export default function ChefDashboard() {
                 onPress={() => {
                   setShowMessageModal(false);
                   setMessageText('');
+                  setSelectedOrderStatus(null);
                   handleStopVoiceInput();
                 }}
                 style={messageModalStyles.modalCloseButton}
@@ -2508,46 +3077,52 @@ export default function ChefDashboard() {
                 </View>
               ) : (
                 <View style={messageModalStyles.emptyMessagesContainer}>
-                  <Text style={messageModalStyles.emptyMessagesText}>No messages yet. Start the conversation!</Text>
+                  <Text style={messageModalStyles.emptyMessagesText}>
+                    {selectedOrderStatus === 'completed' || selectedOrderStatus === 'cancelled' || selectedOrderStatus === 'rejected' 
+                      ? 'No messages.' 
+                      : 'No messages yet. Start the conversation!'}
+                  </Text>
                 </View>
               )}
 
               {/* Message Input */}
-              <View style={messageModalStyles.messageInputContainer}>
-          <TextInput
-                  style={messageModalStyles.messageInput}
-                  placeholder="Type your message..."
-            placeholderTextColor={TEXT_MUTED}
-                  value={messageText}
-                  onChangeText={setMessageText}
-            multiline
-                  numberOfLines={4}
-                  textAlignVertical="top"
-                />
-                <View style={messageModalStyles.messageInputActions}>
-                  <TouchableOpacity
-                    style={[messageModalStyles.micButton, isRecording && messageModalStyles.micButtonActive]}
-                    onPress={isRecording ? handleStopVoiceInput : handleStartVoiceInput}
-                  >
-                    <Image 
-                      source={require('../../assets/microphone.png')} 
-                      style={messageModalStyles.micIconImage}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-        <TouchableOpacity
-                    style={[messageModalStyles.sendButton, (!messageText.trim() || sendingMessage) && messageModalStyles.sendButtonDisabled]}
-                    onPress={handleSendMessage}
-                    disabled={!messageText.trim() || sendingMessage}
-                  >
-                    {sendingMessage ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={messageModalStyles.sendButtonIcon}>➤</Text>
-                    )}
-        </TouchableOpacity>
+              {selectedOrderStatus !== 'completed' && selectedOrderStatus !== 'cancelled' && selectedOrderStatus !== 'rejected' && (
+                <View style={messageModalStyles.messageInputContainer}>
+                  <TextInput
+                    style={messageModalStyles.messageInput}
+                    placeholder="Type your message..."
+                    placeholderTextColor={TEXT_MUTED}
+                    value={messageText}
+                    onChangeText={setMessageText}
+                    multiline
+                    numberOfLines={4}
+                    textAlignVertical="top"
+                  />
+                  <View style={messageModalStyles.messageInputActions}>
+                    <TouchableOpacity
+                      style={[messageModalStyles.micButton, isRecording && messageModalStyles.micButtonActive]}
+                      onPress={isRecording ? handleStopVoiceInput : handleStartVoiceInput}
+                    >
+                      <Image 
+                        source={require('../../assets/microphone.png')} 
+                        style={messageModalStyles.micIconImage}
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                    <TouchableOpacity
+                      style={[messageModalStyles.sendButton, (!messageText.trim() || sendingMessage) && messageModalStyles.sendButtonDisabled]}
+                      onPress={handleSendMessage}
+                      disabled={!messageText.trim() || sendingMessage}
+                    >
+                      {sendingMessage ? (
+                        <ActivityIndicator size="small" color="#FFFFFF" />
+                      ) : (
+                        <Text style={messageModalStyles.sendButtonIcon}>➤</Text>
+                      )}
+                    </TouchableOpacity>
+                  </View>
                 </View>
-      </View>
+              )}
     </ScrollView>
         </View>
       </View>
