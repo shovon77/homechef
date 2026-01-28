@@ -357,7 +357,7 @@ export default function ChefProfilePage() {
         .eq("id", user.id);
 
       if (profileError) throw profileError;
-      
+
       // Also update chef's location in chefs table if location changed
       if (locationValue !== profile?.location) {
         const chefLocationUpdate: {
@@ -376,7 +376,7 @@ export default function ChefProfilePage() {
         }
         
         await supabase
-          .from("chefs")
+        .from("chefs")
           .update(chefLocationUpdate)
           .eq("user_id", user.id);
       }
@@ -397,7 +397,7 @@ export default function ChefProfilePage() {
       };
       
       const { error: chefError } = await supabase
-        .from("chefs")
+            .from("chefs")
         .update(chefUpdateData)
         .eq("user_id", user.id);
 
@@ -484,8 +484,8 @@ export default function ChefProfilePage() {
   async function handleDeactivateChefAccount() {
     if (!user) {
       Alert.alert("Error", "User information is missing. Please try again.");
-      return;
-    }
+        return;
+      }
 
     const confirmed = Platform.OS === 'web' 
       ? window.confirm("Are you sure you want to deactivate your chef account? Your chef profile will be deactivated and you will become a regular user. You won't be able to access chef features or receive orders. Your data will be preserved.")
@@ -565,8 +565,8 @@ export default function ChefProfilePage() {
     return (
       <Screen>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
-        </View>
+        <ActivityIndicator size="large" color={theme.colors.primary} />
+      </View>
       </Screen>
     );
   }
@@ -575,8 +575,8 @@ export default function ChefProfilePage() {
     return (
       <Screen>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-          <Text style={{ color: theme.colors.text, fontSize: 18 }}>Chef access required</Text>
-        </View>
+        <Text style={{ color: theme.colors.text, fontSize: 18 }}>Chef access required</Text>
+      </View>
       </Screen>
     );
   }
@@ -597,12 +597,12 @@ export default function ChefProfilePage() {
             {/* Profile Header */}
             {!isMobile && (
               <View style={profileStyles.profileHeader}>
-                {photoUrl ? (
-                  <Image
-                    source={{ uri: photoUrl }}
+            {photoUrl ? (
+              <Image
+                source={{ uri: photoUrl }}
                     style={profileStyles.avatar}
-                  />
-                ) : (
+              />
+            ) : (
                   <View style={[profileStyles.avatar, profileStyles.avatarPlaceholder]}>
                     <Text style={profileStyles.avatarInitials}>{initials}</Text>
                   </View>
@@ -634,7 +634,7 @@ export default function ChefProfilePage() {
                 <Text style={[profileStyles.navText, activeNavTab === "orders" && profileStyles.navTextActive]}>Your Orders</Text>
               </TouchableOpacity>
             </ScrollView>
-          </View>
+              </View>
 
           {/* Log Out Button */}
           {!isMobile && (
@@ -651,7 +651,7 @@ export default function ChefProfilePage() {
             <>
               {/* Tabs */}
               <View style={profileStyles.tabs}>
-                <TouchableOpacity
+            <TouchableOpacity
                   style={[profileStyles.tab, activeOrderTab === "all" && profileStyles.tabActive]}
                   onPress={() => setActiveOrderTab("all")}
                 >
@@ -681,16 +681,16 @@ export default function ChefProfilePage() {
                 >
                   <Text style={[profileStyles.tabText, activeOrderTab === "declined" && profileStyles.tabTextActive]}>
                     Declined
-                  </Text>
-                </TouchableOpacity>
-              </View>
+              </Text>
+            </TouchableOpacity>
+          </View>
 
               {/* Orders List */}
               <View style={profileStyles.ordersList}>
                 {ordersLoading ? (
                   <View style={profileStyles.loadingContainer}>
                     <ActivityIndicator size="large" color={theme.colors.primary} />
-                  </View>
+            </View>
                 ) : filteredUserOrders.length === 0 ? (
                   <View style={profileStyles.emptyContainer}>
                     <Text style={profileStyles.emptyText}>No orders yet</Text>
@@ -757,7 +757,7 @@ export default function ChefProfilePage() {
                     <Text style={profileStyles.saveButtonText}>Save Changes</Text>
                   )}
                 </TouchableOpacity>
-              </View>
+          </View>
 
               <View style={profileStyles.settingsCard}>
                 {/* Chef Logo Field */}
@@ -788,9 +788,9 @@ export default function ChefProfilePage() {
                 {/* Onboarding Fields Section */}
                 <View style={profileStyles.settingsSection}>
                   {/* Brand Name */}
-                  <View>
+          <View>
                     <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>Brand name</Text>
-                    <TextInput
+            <TextInput
                       value={brandName}
                       onChangeText={setBrandName}
                       placeholder="Enter your brand name"
@@ -1016,7 +1016,7 @@ export default function ChefProfilePage() {
           <TouchableOpacity
             activeOpacity={1}
             onPress={(e) => e.stopPropagation()}
-            style={{
+              style={{
               backgroundColor: '#FFFFFF',
               borderRadius: 12,
               padding: 20,
@@ -1130,7 +1130,7 @@ export default function ChefProfilePage() {
                     }}>{day.slice(0, 3)}</Text>
                   </TouchableOpacity>
                 ))}
-              </View>
+          </View>
             </ScrollView>
 
             <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8 }}>Time windows</Text>
@@ -1145,7 +1145,7 @@ export default function ChefProfilePage() {
                       setSelectedTimeWindows([...selectedTimeWindows, tw]);
                     }
                   }}
-                  style={{
+              style={{
                     flexDirection: 'row',
                     alignItems: 'center',
                     paddingVertical: 10,
@@ -1183,7 +1183,7 @@ export default function ChefProfilePage() {
                   backgroundColor: '#F9FAFB',
                   borderRadius: 8,
                   alignItems: 'center',
-                  borderWidth: 1,
+                borderWidth: 1,
                   borderColor: '#E5E7EB',
                 }}
               >
@@ -1195,10 +1195,10 @@ export default function ChefProfilePage() {
                   flex: 1,
                   paddingVertical: 12,
                   backgroundColor: theme.colors.primary,
-                  borderRadius: 8,
+                borderRadius: 8,
                   alignItems: 'center',
-                }}
-              >
+              }}
+            >
                 <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}>Add</Text>
               </TouchableOpacity>
             </View>
@@ -1216,7 +1216,7 @@ export default function ChefProfilePage() {
           setTermsType(null);
         }}
       >
-        <TouchableOpacity
+          <TouchableOpacity
           style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
           activeOpacity={1}
           onPress={() => {
@@ -1241,14 +1241,14 @@ export default function ChefProfilePage() {
                 {termsType === 'agreement' && 'Chef Participation Agreement'}
                 {termsType === 'fee' && 'Fee Schedule'}
                 {termsType === 'payout' && 'Payouts & Payments'}
-              </Text>
+            </Text>
               <TouchableOpacity onPress={() => {
                 setShowTermsModal(false);
                 setTermsType(null);
               }}>
                 <Text style={{ fontSize: 24, color: '#667085' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
+          </TouchableOpacity>
+        </View>
             <ScrollView style={{ maxHeight: Platform.OS === 'web' ? 500 : 400 }}>
               <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22 }}>
                 {termsType === 'agreement' && `
@@ -1531,7 +1531,7 @@ Your dashboard shows
 No subscriptions. No commitments. You control your menu.
                 `}
               </Text>
-            </ScrollView>
+    </ScrollView>
             <View style={{ marginTop: 16, flexDirection: 'row', justifyContent: 'flex-end' }}>
               <TouchableOpacity
                 onPress={() => {

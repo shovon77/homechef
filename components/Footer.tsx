@@ -43,7 +43,7 @@ export default function Footer() {
         </View>
         <View style={styles.links}>
           <TouchableOpacity onPress={() => router.push('/about')}>
-            <Text style={styles.link}>About Us</Text>
+            <Text style={styles.link}>About us</Text>
           </TouchableOpacity>
           <TouchableOpacity onPress={() => router.push('/faq')}>
             <Text style={styles.link}>FAQ</Text>

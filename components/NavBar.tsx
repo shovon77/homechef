@@ -129,6 +129,8 @@ export default function NavBar() {
   const isChefSignupPage = pathname.startsWith('/auth/chef');
   const isHomePage = pathname === '/' || pathname === '/index';
   const isFaqPage = pathname.startsWith('/faq');
+  const isAboutPage = pathname.startsWith('/about');
+  const isTermsPage = pathname.startsWith('/terms');
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
@@ -810,7 +812,7 @@ export default function NavBar() {
           )}
             {/* Location button - only show for regular users, not admin/chef */}
             {loggedIn && !isAdmin && !isChef && (
-              <TouchableOpacity 
+            <TouchableOpacity 
                 onPress={() => setShowLocationModal(true)}
                 style={styles.locationNavButton}
               >
@@ -822,7 +824,7 @@ export default function NavBar() {
                 <Text style={styles.locationNavText} numberOfLines={1}>
                   {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
                 </Text>
-              </TouchableOpacity>
+            </TouchableOpacity>
           )}
         </View>
         )}
@@ -889,7 +891,7 @@ export default function NavBar() {
             </>
           ) : (
             <>
-              {loggedIn ? (
+          {loggedIn ? (
             <>
               <TouchableOpacity
                 onPress={() => {
@@ -918,7 +920,7 @@ export default function NavBar() {
                       if (subscription) {
                         subscription.unsubscribe();
                       }
-                      router.push('/auth');
+                  router.push('/auth');
                     }
                   };
 
@@ -987,7 +989,7 @@ export default function NavBar() {
                 }}
                     style={styles.secondaryButton}
               >
-                <Text style={styles.secondaryButtonText}>Logout</Text>
+                  <Text style={styles.secondaryButtonText}>Logout</Text>
               </TouchableOpacity>
             </>
           ) : (
@@ -998,10 +1000,14 @@ export default function NavBar() {
               </Link>
           )}
 
+          {/* About us button - show for all users */}
+          <NavButton href="/about" label="About us" isActive={isAboutPage} />
           {/* FAQ button - only show in navbar if user is not logged in or is admin/chef, otherwise it's in menu */}
           {(!loggedIn || isAdmin || isChef) && (
             <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
           )}
+          {/* Legal button - show for all users */}
+          <NavButton href="/terms" label="Legal" isActive={isTermsPage} />
           {loggedIn && (
             <TouchableOpacity 
               onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
@@ -1090,6 +1096,17 @@ export default function NavBar() {
                 </TouchableOpacity>
               )}
               
+              {/* About us button - show for all logged-in users */}
+              <Link href="/about" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>About us</Text>
+                </TouchableOpacity>
+              </Link>
+
               {/* FAQ button - show in menu when logged in (for regular users without location) or when location is set */}
               {loggedIn && (!isAdmin && !isChef) && (
                 <Link href="/faq" asChild>
@@ -1102,6 +1119,17 @@ export default function NavBar() {
                   </TouchableOpacity>
                 </Link>
               )}
+
+              {/* Legal button - show for all logged-in users */}
+              <Link href="/terms" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>Legal</Text>
+                </TouchableOpacity>
+              </Link>
 
               <TouchableOpacity
                 onPress={async () => { 
@@ -1190,16 +1218,51 @@ export default function NavBar() {
               </TouchableOpacity>
             </>
           ) : (
-            <Link href="/auth" asChild>
-              <TouchableOpacity 
-                style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
-                onPress={() => setIsMenuOpen(false)}
-              >
-                {/* Assuming user icon for login or could import another one */}
-                 <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                <Text style={styles.mobileMenuText}>Login / Sign-up</Text>
-              </TouchableOpacity>
-            </Link>
+            <>
+              {/* About us button - show for non-logged-in users */}
+              <Link href="/about" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>About us</Text>
+                </TouchableOpacity>
+              </Link>
+
+              {/* FAQ button - show for non-logged-in users */}
+              <Link href="/faq" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>FAQ</Text>
+                </TouchableOpacity>
+              </Link>
+
+              {/* Legal button - show for non-logged-in users */}
+              <Link href="/terms" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/sitemap.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>Legal</Text>
+                </TouchableOpacity>
+              </Link>
+              
+              <Link href="/auth" asChild>
+                <TouchableOpacity 
+                  style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  {/* Assuming user icon for login or could import another one */}
+                   <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>Login / Sign-up</Text>
+                </TouchableOpacity>
+              </Link>
+            </>
           )}
           </Pressable>
         </Pressable>
@@ -1779,11 +1842,12 @@ const styles = StyleSheet.create({
     width: 20,
     height: 20,
     tintColor: '#FE734C',
+    resizeMode: 'contain',
   },
   mobileMenuText: {
     fontSize: 14,
     fontWeight: '400',
-    color: '#000000',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: 20,
     textAlignVertical: 'center',

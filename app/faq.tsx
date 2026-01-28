@@ -1,9 +1,81 @@
-import React from "react";
-import { View, Text, StyleSheet, Platform } from "react-native";
+import React, { useState } from "react";
+import { View, Text, StyleSheet, Platform, TouchableOpacity } from "react-native";
+import { Ionicons } from "@expo/vector-icons";
 import { Screen } from "../components/Screen";
 import { theme } from "../lib/theme";
 
+const faqData = [
+  {
+    question: "1. Who prepares the food?",
+    answer: "All meals are prepared by independent home chefs in their personal kitchens. The Platform does not cook, inspect, store, or handle food.",
+  },
+  {
+    question: "2. Are the chefs certified?",
+    answer: "Chefs are independent individuals who may or may not hold food safety certifications. The Platform does not routinely inspect or verify kitchens, equipment, or training. Customers should review chef listings and make informed choices before ordering.",
+  },
+  {
+    question: "3. Are the meals safe to eat?",
+    answer: "Meals are prepared in private homes. Home-prepared food carries inherent risks, including potential allergens or foodborne illness. Customers should consider their personal health needs and use independent judgment when ordering.",
+  },
+  {
+    question: "4. How do I know if a meal contains allergens?",
+    answer: "Each chef provides ingredient and allergen information for their dishes. Customers must review these details carefully. If unsure, contact the chef before ordering.",
+  },
+  {
+    question: "5. Can I get a refund if I get sick or the food is bad?",
+    answer: "Refunds are discretionary and handled case by case. Issues must be reported within 24 hours of pickup. Supporting details (photos, descriptions, symptoms) help us review the request. Refunds do not imply Platform responsibility or liability.",
+  },
+  {
+    question: "6. Are meals delivered?",
+    answer: "No. Meals are pickup-only at designated locations and time windows. Customers are responsible for arriving on time and handling food safely after pickup.",
+  },
+  {
+    question: "7. What should I do after I pick up my meal?",
+    answer: "Customers are responsible for safe food handling, including:",
+    hasList: true,
+    listItems: [
+      "Inspecting packaging for damage",
+      "Storing food at appropriate temperatures",
+      "Consuming food within a reasonable time",
+      "Following safe reheating and storage practices",
+    ],
+  },
+  {
+    question: "8. What happens if I have a complaint about a chef?",
+    answer: "Contact the Platform through the app or support channel and provide:",
+    hasList: true,
+    listItems: [
+      "Order reference number",
+      "Photos (if applicable)",
+      "A brief description of the issue",
+    ],
+    additionalText: "The Platform may temporarily suspend or remove a chef while reviewing the concern.",
+  },
+  {
+    question: "9. Can I rely on the Platform for food safety?",
+    answer: "No. YourHomeChef is a neutral marketplace. The Platform does not supervise food preparation, inspect kitchens, or guarantee food safety. All responsibility for preparation and safety rests with the chef.",
+  },
+  {
+    question: "10. How do you handle emergencies or recalls?",
+    answer: "Customers may report issues through the Platform. We may notify the chef and pause listings if necessary. For health-related concerns, customers should also contact their local Public Health authority directly.",
+  },
+  {
+    question: "11. Why do I have to accept these risks?",
+    answer: "All prepared food carries some level of risk. By ordering, you acknowledge these disclosures and accept responsibility for proper handling and consumption.",
+  },
+  {
+    question: "12. Can I contact the chef directly?",
+    answer: "Yes. The Platform provides secure messaging tools for questions about ingredients, allergies, or pickup details. All payments and orders must still be completed through the Platform.",
+  },
+];
+
 export default function FAQPage() {
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+
+  const handleToggle = (index: number) => {
+    setExpandedIndex(expandedIndex === index ? null : index);
+  };
+
   return (
     <Screen 
       contentStyle={styles.content}
@@ -12,94 +84,37 @@ export default function FAQPage() {
       <View style={styles.container}>
         <Text style={styles.title}>Food Safety FAQ</Text>
 
-        <View style={styles.section}>
-          <Text style={styles.heading}>1. Who prepares the food?</Text>
-          <Text style={styles.paragraph}>
-            All meals are prepared by independent home chefs in their own personal kitchens. The Platform does not cook, inspect, or handle food.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>2. Are the chefs certified?</Text>
-          <Text style={styles.paragraph}>
-            Chefs on the Platform are independent individuals who may or may not hold food safety certifications. The Platform does not inspect, verify, or validate their kitchens, equipment, or training. Customers should evaluate each chef and meal before ordering.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>3. Are the meals safe to eat?</Text>
-          <Text style={styles.paragraph}>
-            All meals are prepared in private homes. Home-prepared food carries inherent risks, including potential allergens or foodborne illness. Customers should consider their own health needs and exercise independent judgment when ordering.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>4. How do I know if a meal contains allergens?</Text>
-          <Text style={styles.paragraph}>
-            Each chef provides an ingredient list and allergen information. Customers must read the details carefully before ordering. If you have doubts, contact the chef directly before ordering.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>5. Can I get a refund if I get sick or the food is bad?</Text>
-          <Text style={styles.paragraph}>
-            Refunds are handled case by case. Please report issues within 24 hours of pickup. Submitting photos, descriptions, and symptoms helps us evaluate your claim. Refunds do not imply the Platform is liable.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>6. Are meals delivered?</Text>
-          <Text style={styles.paragraph}>
-            Initially, meals are pickup-only at designated locations and times. You are responsible for picking up your meal on time and handling it safely afterward.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>7. What should I do after I pick up my meal?</Text>
-          <View style={styles.list}>
-            <Text style={styles.listItem}>• Check packaging for damage</Text>
-            <Text style={styles.listItem}>• Store food at appropriate temperatures</Text>
-            <Text style={styles.listItem}>• Consume within the recommended time</Text>
-            <Text style={styles.listItem}>• Follow safe reheating or storage instructions</Text>
+        {faqData.map((faq, index) => (
+          <View key={index} style={styles.accordionItem}>
+            <TouchableOpacity
+              style={styles.questionButton}
+              onPress={() => handleToggle(index)}
+              activeOpacity={0.7}
+            >
+              <Text style={styles.questionText}>{faq.question}</Text>
+              <Ionicons
+                name={expandedIndex === index ? "chevron-up" : "chevron-down"}
+                size={24}
+                color="#FE734C"
+              />
+            </TouchableOpacity>
+            {expandedIndex === index && (
+              <View style={styles.answerContainer}>
+                <Text style={styles.paragraph}>{faq.answer}</Text>
+                {faq.hasList && faq.listItems && (
+                  <View style={styles.list}>
+                    {faq.listItems.map((item, itemIndex) => (
+                      <Text key={itemIndex} style={styles.listItem}>• {item}</Text>
+                    ))}
+                  </View>
+                )}
+                {faq.additionalText && (
+                  <Text style={styles.paragraph}>{faq.additionalText}</Text>
+                )}
+              </View>
+            )}
           </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>8. What happens if I have a complaint about a chef?</Text>
-          <View style={styles.list}>
-            <Text style={styles.listItem}>• Contact the Platform immediately via the support line or app</Text>
-            <Text style={styles.listItem}>• Provide order reference, photos, and description</Text>
-            <Text style={styles.listItem}>• The Platform may suspend or remove the chef pending investigation</Text>
-          </View>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>9. Can I rely on the Platform for food safety?</Text>
-          <Text style={styles.paragraph}>
-            No. The Platform does not inspect kitchens, supervise food preparation, or verify safety practices. YourHomeChef is a neutral listing marketplace. Food safety and preparation practices are the sole responsibility of each chef.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>10. How do you handle emergencies or recalls?</Text>
-          <Text style={styles.paragraph}>
-            Customers may report issues directly through the Platform. The Platform may notify the chef and, when necessary, temporarily pause listings for that chef. Any health-related concerns should also be reported by customers directly to their local Public Health authority.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>11. Why do I have to accept these risks?</Text>
-          <Text style={styles.paragraph}>
-            Prepared food always carries some risk. By ordering, you acknowledge that you have read the disclosures and agree to assume responsibility for proper handling and consumption.
-          </Text>
-        </View>
-
-        <View style={styles.section}>
-          <Text style={styles.heading}>12. Can I contact the chef directly?</Text>
-          <Text style={styles.paragraph}>
-            Yes. The Platform provides contact methods for questions about ingredients, allergies, or pickup instructions. For safety, all orders must still go through the Platform payment system.
-          </Text>
-        </View>
+        ))}
       </View>
     </Screen>
   );
@@ -107,7 +122,8 @@ export default function FAQPage() {
 
 const styles = StyleSheet.create({
   content: {
-    paddingBottom: theme.spacing['4xl'],
+    paddingBottom: 0,
+    marginBottom: 100,
   },
   container: {
     maxWidth: 800,
@@ -120,7 +136,7 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing['2xl'],
   },
   title: {
-    color: '#33393a',
+    color: '#FE734C',
     fontSize: 36,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
@@ -128,20 +144,34 @@ const styles = StyleSheet.create({
     letterSpacing: -0.02,
     marginBottom: theme.spacing['2xl'],
   },
-  section: {
-    marginBottom: theme.spacing['2xl'],
+  accordionItem: {
+    marginBottom: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
   },
-  heading: {
-    color: '#33393a',
+  questionButton: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.sm,
+    width: '100%',
+  },
+  questionText: {
+    color: '#FE734C',
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: 24 * 1.4,
-    marginBottom: theme.spacing.md,
-    marginTop: theme.spacing.lg,
+    flex: 1,
+    paddingRight: theme.spacing.md,
+  },
+  answerContainer: {
+    paddingHorizontal: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
   },
   paragraph: {
-    color: '#33393a',
+    color: '#33393A',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,
@@ -152,7 +182,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.md,
   },
   listItem: {
-    color: '#33393a',
+    color: '#33393A',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.base * 1.6,

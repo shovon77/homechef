@@ -2430,12 +2430,12 @@ export default function AdminPage() {
                             </Text>
                           </TouchableOpacity>
                         ))}
-                      </View>
+        </View>
                     </>
                   )}
                 </>
               )}
-            </View>
+              </View>
           </View>
         </View>
         <View style={styles.metricsList}>
@@ -2502,13 +2502,13 @@ export default function AdminPage() {
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Daily active users</Text>
             <Text style={styles.metricValue}>{dailyActiveUsers.toLocaleString()}</Text>
-          </View>
+            </View>
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Monthly active users</Text>
             <Text style={styles.metricValue}>{monthlyActiveUsers.toLocaleString()}</Text>
           </View>
         </View>
-      </View>
+          </View>
 
       <View style={styles.chartCard}>
         <View style={styles.chartHeader}>
@@ -2518,7 +2518,7 @@ export default function AdminPage() {
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Issues pending review</Text>
             <Text style={styles.metricValue}>{pendingIssuesCount.toLocaleString()}</Text>
-          </View>
+      </View>
           <View style={styles.metricRow}>
             <Text style={styles.metricLabel}>Pending chef applications</Text>
             <Text style={styles.metricValue}>{pendingChefApplicationsCount.toLocaleString()}</Text>
@@ -3454,8 +3454,8 @@ export default function AdminPage() {
                           </TouchableOpacity>
                         ))}
                       </View>
-                    </>
-                  )}
+        </>
+      )}
                 </>
               )}
             </View>
