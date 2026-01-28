@@ -91,7 +91,7 @@ export default function FAQPage() {
               onPress={() => handleToggle(index)}
               activeOpacity={0.7}
             >
-              <Text style={styles.questionText}>{faq.question}</Text>
+              <Text style={[styles.questionText, { color: expandedIndex === index ? '#FE734C' : '#33393A' }]}>{faq.question}</Text>
               <Ionicons
                 name={expandedIndex === index ? "chevron-up" : "chevron-down"}
                 size={24}
@@ -158,7 +158,6 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   questionText: {
-    color: '#FE734C',
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,

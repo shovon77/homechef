@@ -276,6 +276,9 @@ export default function ChefDashboard() {
   const [reviewSearch, setReviewSearch] = useState('');
   const [reviewSort, setReviewSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
   const [showMessageModal, setShowMessageModal] = useState(false);
+  const [showInfoModal, setShowInfoModal] = useState(false);
+  const [infoModalTitle, setInfoModalTitle] = useState('');
+  const [infoModalMessage, setInfoModalMessage] = useState('');
   const [selectedOrderId, setSelectedOrderId] = useState<number | null>(null);
   const [selectedOrderUserId, setSelectedOrderUserId] = useState<string | null>(null);
   const [selectedOrderStatus, setSelectedOrderStatus] = useState<string | null>(null);
@@ -287,6 +290,12 @@ export default function ChefDashboard() {
   const recognitionRef = useRef<any>(null);
   const [financialDateFilter, setFinancialDateFilter] = useState<'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime'>('alltime');
   const [showFinancialDropdown, setShowFinancialDropdown] = useState(false);
+
+  const showInfo = (title: string, message: string) => {
+    setInfoModalTitle(title);
+    setInfoModalMessage(message);
+    setShowInfoModal(true);
+  };
   
   type MessageWithUser = {
     id: number;
@@ -1729,7 +1738,18 @@ export default function ChefDashboard() {
           <View>
             {/* Gross Sales */}
             <View style={{ marginBottom: 32 }}>
-              <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Gross sales</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Gross sales</Text>
+                <TouchableOpacity
+                  onPress={() => showInfo('Gross Sales', 'Gross sales is calculated as the sum of subtotal amounts from all completed orders within the selected date range.\n\nFormula: Sum of (subtotal_cents) for all completed orders')}
+                  style={{ padding: 4 }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
+                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
               <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                 {formatCad(financialMetrics.grossSales / 100)} CAD
               </Text>
@@ -1737,7 +1757,18 @@ export default function ChefDashboard() {
             
             {/* Platform Commission */}
             <View style={{ marginBottom: 16 }}>
-              <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Platform commission</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
+                <TouchableOpacity
+                  onPress={() => showInfo('Platform Commission', 'Platform commission is calculated as 10% of each order\'s subtotal, then summed up for all completed orders within the selected date range.\n\nFormula: Sum of (subtotal × 10%) for all completed orders')}
+                  style={{ padding: 4 }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
+                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
               <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                 {formatCad(financialMetrics.platformCommission / 100)} CAD
               </Text>
@@ -1745,7 +1776,18 @@ export default function ChefDashboard() {
             
             {/* Net Earnings */}
             <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-              <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Your net earnings</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Your net earnings</Text>
+                <TouchableOpacity
+                  onPress={() => showInfo('Your Net Earnings', 'Your net earnings is calculated by subtracting the platform commission from gross sales.\n\nFormula: Gross sales - Platform commission')}
+                  style={{ padding: 4 }}
+                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                >
+                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
+                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
               <Text style={{ color: PRIMARY_COLOR, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                 {formatCad(financialMetrics.netEarnings / 100)} CAD
               </Text>
@@ -2492,7 +2534,18 @@ export default function ChefDashboard() {
                   <View>
                     {/* Gross Sales */}
                     <View style={{ marginBottom: 32 }}>
-                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Gross sales</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Gross sales</Text>
+                        <TouchableOpacity
+                          onPress={() => showInfo('Gross Sales', 'Gross sales is calculated as the sum of subtotal amounts from all completed orders within the selected date range.\n\nFormula: Sum of (subtotal_cents) for all completed orders')}
+                          style={{ padding: 4 }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
+                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
                       <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                         {formatCad(financialMetrics.grossSales / 100)} CAD
                       </Text>
@@ -2500,7 +2553,18 @@ export default function ChefDashboard() {
                     
                     {/* Platform Commission */}
                     <View style={{ marginBottom: 16 }}>
-                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Platform commission</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
+                        <TouchableOpacity
+                          onPress={() => showInfo('Platform Commission', 'Platform commission is calculated as 10% of each order\'s subtotal, then summed up for all completed orders within the selected date range.\n\nFormula: Sum of (subtotal × 10%) for all completed orders')}
+                          style={{ padding: 4 }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
+                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
                       <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                         {formatCad(financialMetrics.platformCommission / 100)} CAD
                       </Text>
@@ -2508,7 +2572,18 @@ export default function ChefDashboard() {
                     
                     {/* Net Earnings */}
                     <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-                      <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 8 }}>Your net earnings</Text>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
+                        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Your net earnings</Text>
+                        <TouchableOpacity
+                          onPress={() => showInfo('Your Net Earnings', 'Your net earnings is calculated by subtracting the platform commission from gross sales.\n\nFormula: Gross sales - Platform commission')}
+                          style={{ padding: 4 }}
+                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                        >
+                          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
+                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                          </View>
+                        </TouchableOpacity>
+                      </View>
                       <Text style={{ color: PRIMARY_COLOR, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                         {formatCad(financialMetrics.netEarnings / 100)} CAD
                       </Text>
@@ -3126,6 +3201,65 @@ export default function ChefDashboard() {
     </ScrollView>
         </View>
       </View>
+      </Modal>
+
+      {/* Info Modal */}
+      <Modal
+        visible={showInfoModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => setShowInfoModal(false)}
+      >
+        <TouchableOpacity
+          style={{
+            flex: 1,
+            backgroundColor: 'rgba(0, 0, 0, 0.5)',
+            justifyContent: 'center',
+            alignItems: 'center',
+            padding: 20,
+          }}
+          activeOpacity={1}
+          onPress={() => setShowInfoModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: BG_LIGHT,
+              borderRadius: 12,
+              padding: 24,
+              maxWidth: 500,
+              width: '100%',
+              shadowColor: '#000',
+              shadowOffset: { width: 0, height: 2 },
+              shadowOpacity: 0.25,
+              shadowRadius: 8,
+              elevation: 5,
+            }}
+          >
+            <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 12 }}>
+              {infoModalTitle}
+            </Text>
+            <Text style={{ color: TEXT_DARK, fontSize: 14, fontFamily: theme.typography.fontFamily.body, lineHeight: 20 }}>
+              {infoModalMessage}
+            </Text>
+            <TouchableOpacity
+              onPress={() => setShowInfoModal(false)}
+              style={{
+                marginTop: 20,
+                backgroundColor: PRIMARY_COLOR,
+                paddingVertical: 12,
+                paddingHorizontal: 24,
+                borderRadius: 8,
+                alignSelf: 'flex-end',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>
+                OK
+              </Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
       </Modal>
     </Screen>
   );
