@@ -1,6 +1,7 @@
 // This is a serverless function for creating Stripe checkout sessions
 // It uses server-only environment variables (STRIPE_SECRET_KEY)
 // Requires: npm install stripe
+/// <reference types="node" />
 export async function POST(request: Request): Promise<Response> {
   try {
     const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
@@ -14,9 +15,7 @@ export async function POST(request: Request): Promise<Response> {
 
     // Dynamic import of Stripe (requires: npm install stripe)
     const Stripe = (await import('stripe')).default;
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2025-12-15.clover',
-    });
+    const stripe = new Stripe(stripeSecretKey);
 
     const { items } = await request.json();
 

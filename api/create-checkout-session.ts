@@ -2,6 +2,7 @@
 // This can be deployed as a Vercel serverless function, Netlify function, or similar
 // Usage: POST to this endpoint with { items: [...] }
 
+/// <reference types="node" />
 import Stripe from 'stripe';
 
 export default async function handler(req: { method: string; body: any; headers: any }): Promise<{ statusCode: number; body: string }> {
@@ -22,9 +23,7 @@ export default async function handler(req: { method: string; body: any; headers:
       };
     }
 
-    const stripe = new Stripe(stripeSecretKey, {
-      apiVersion: '2025-12-15.clover',
-    });
+    const stripe = new Stripe(stripeSecretKey);
 
     const { items } = req.body;
 
