@@ -34,6 +34,20 @@ const formatCuisine = (cuisine: any): string => {
   return 'Chef';
 };
 
+// Show only city and state (e.g. "Toronto, ON"). Handles "York, Toronto, ON" or "Street, York, Toronto, ON, Canada"
+const formatLocationCityState = (location: string | null | undefined): string => {
+  if (!location?.trim()) return '';
+  const parts = location.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  // Last part is likely country (e.g. "Canada") when it's longer than 2 chars — then take the two before it (city, state)
+  if (parts.length >= 3 && parts[parts.length - 1].length > 2) {
+    return parts.slice(-3, -1).join(', ');
+  }
+  // Otherwise take last two parts (city, state) e.g. "York, Toronto, ON" -> "Toronto, ON"
+  return parts.slice(-2).join(', ');
+};
+
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
 
@@ -71,7 +85,10 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
           <View style={styles.info}>
             <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]} numberOfLines={1}>{chef.name}</Text>
             <Text style={styles.cuisine} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
-          {chef.location && (
+            {chef.bio && (
+              <Text style={styles.bio} numberOfLines={2}>{chef.bio}</Text>
+            )}
+          {chef.location && formatLocationCityState(chef.location) && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
               <Image 
                 source={require('../../assets/locationnewicon.png')} 
@@ -79,7 +96,7 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
                 resizeMode="contain" 
               />
               <Text style={[styles.location, { marginTop: 0 }]} numberOfLines={1}>
-                {chef.location?.split(',')[0]}
+                {formatLocationCityState(chef.location)}
               </Text>
             </View>
           )}
@@ -109,21 +126,27 @@ const styles = StyleSheet.create({
   },
   pressable: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
     width: "100%",
-    padding: theme.spacing.md,
-    gap: theme.spacing.md,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingLeft: 0,
+    paddingRight: theme.spacing.md,
+    gap: 0,
   },
   avatar: {
-    width: 100,
-    height: 100,
-    borderRadius: theme.radius.md,
+    width: 140,
+    alignSelf: 'stretch',
+    borderTopLeftRadius: theme.radius.xl,
+    borderBottomLeftRadius: theme.radius.xl,
     backgroundColor: theme.colors.surface,
   },
   info: {
     flex: 1,
     gap: 4,
     justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    paddingLeft: theme.spacing.md,
   },
   name: {
     color: '#333333',
@@ -132,12 +155,19 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold,
   },
   cuisine: {
-    color: '#555555',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
   },
+  bio: {
+    color: '#33393A',
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.xs,
+    lineHeight: 16,
+    marginTop: 2,
+  },
   location: {
-    color: '#777777',
+    color: '#33393A',
     fontSize: theme.typography.fontSize.xs,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 2,
@@ -145,7 +175,7 @@ const styles = StyleSheet.create({
   rating: {
     flexDirection: "row",
     alignItems: "center",
-    gap: theme.spacing.xs / 2,
+    gap: 8,
     marginTop: 4,
   },
   starIcon: {
@@ -158,7 +188,7 @@ const styles = StyleSheet.create({
     tintColor: ACCENT_COLOR,
   },
   ratingText: {
-    color: '#555555',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,

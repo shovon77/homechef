@@ -9,7 +9,9 @@ import ChefCard from '../components/ChefCard';
 import { theme, elev } from '../../lib/theme';
 import { useLocationModal } from '../../context/LocationModalContext';
 
-const PER_PAGE = 25; // 5x5 grid layout
+const PER_PAGE = 25; // chefs/cuisines
+const DISHES_GRID_COLUMNS = 2;
+const DISHES_FETCH_LIMIT = 9999; // fetch all dishes in one page (no pagination)
 const GRID_COLUMNS = 5;
 const PRIMARY_COLOR = '#FE734C';
 
@@ -198,6 +200,7 @@ export default function BrowsePage() {
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 800);
+  const [cuisineFilter, setCuisineFilter] = useState<string | null>(null);
 
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -239,7 +242,8 @@ export default function BrowsePage() {
     }
   }, [q]);
 
-  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / PER_PAGE)), [total]);
+  const perPage = PER_PAGE; // dishes tab shows all, no pagination
+  const totalPages = useMemo(() => Math.max(1, Math.ceil(total / perPage)), [total, perPage]);
 
   useEffect(() => {
     setPage(1);
@@ -248,7 +252,11 @@ export default function BrowsePage() {
     setDishes([]);
     setChefs([]);
     setCuisines([]);
+    if (tab !== 'dishes') setCuisineFilter(null);
   }, [tab, debouncedQuery, sortBy]);
+  useEffect(() => {
+    if (debouncedQuery.trim()) setCuisineFilter(null);
+  }, [debouncedQuery]);
 
   useEffect(() => {
     // Fetch search placeholders
@@ -278,14 +286,18 @@ export default function BrowsePage() {
       setLoading(true);
       setError(null);
       try {
-        const from = (page - 1) * PER_PAGE;
-        const to = from + PER_PAGE - 1;
+        const pageSize = tab === 'dishes' ? DISHES_FETCH_LIMIT : PER_PAGE;
+        const from = tab === 'dishes' ? 0 : (page - 1) * pageSize;
+        const to = tab === 'dishes' ? DISHES_FETCH_LIMIT - 1 : from + pageSize - 1;
 
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location)', { count: 'exact' })
+            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location, cuisine)', { count: 'exact' })
             .eq('chefs.status', 'active');
+          if (cuisineFilter?.trim()) {
+            request = request.ilike('chefs.cuisine', `%${cuisineFilter.trim()}%`);
+          }
 
           // Extract search parameters using AI or fallback
           let searchKeywords = '';
@@ -345,20 +357,16 @@ export default function BrowsePage() {
           } else if (effectiveSort === 'newest') {
             request = request.order('created_at', { ascending: false });
           } else if (effectiveSort === 'nearest') {
-            // For nearest sort, fetch more dishes to calculate distances
-            // We'll filter by distance client-side after geocoding
+            // For nearest sort, fetch all dishes for distance calculation
             request = request.order('created_at', { ascending: false });
-            // Fetch more dishes for distance calculation (up to 200)
-            request = request.range(0, 199);
+            request = request.range(0, DISHES_FETCH_LIMIT - 1);
           } else {
             // Fallback: always sort by created_at
             request = request.order('created_at', { ascending: false });
           }
 
-          // Only apply pagination if not using nearest sort (nearest handles pagination after filtering)
-          if (effectiveSort !== 'nearest') {
+          // Dishes tab: fetch all in one page (no pagination)
           request = request.range(from, to);
-          }
 
           if (maxPrice) {
              request = request.lte('price', maxPrice);
@@ -464,10 +472,7 @@ export default function BrowsePage() {
                 
                 console.log(`Filtered ${nearbyDishes.length} dishes within 50km out of ${dishesWithDistance.length} total`);
                 
-                // Apply pagination
-                const paginatedDishes = nearbyDishes.slice(from, to + 1);
-                
-                setDishes(paginatedDishes);
+                setDishes(nearbyDishes);
                 setTotal(nearbyDishes.length);
               } else {
                 console.error('Failed to geocode user location:', { userGeoError, userGeoData });
@@ -503,7 +508,7 @@ export default function BrowsePage() {
         } else if (tab === 'chefs') {
           let request = supabase
             .from('chefs')
-            .select('id,name,location,photo,rating,cuisine', { count: 'exact' })
+            .select('id,name,location,photo,rating,cuisine,bio', { count: 'exact' })
             .eq('status', 'active')
             .order('created_at', { ascending: false })
             .range(from, to);
@@ -545,9 +550,12 @@ export default function BrowsePage() {
           if (error) throw error;
           
           if (data) {
-            // Format each cuisine before creating unique set
+            // Format each cuisine, split by comma so "Bengali, Indian" → ["Bengali", "Indian"], then unique
             const formattedCuisines = data.map(c => formatCuisine(c.cuisine)).filter(Boolean);
-            const uniqueCuisines = Array.from(new Set(formattedCuisines)).sort();
+            const splitCuisines = formattedCuisines.flatMap(s =>
+              s.split(',').map(c => c.trim()).filter(Boolean)
+            );
+            const uniqueCuisines = Array.from(new Set(splitCuisines)).sort();
             // Manual pagination for cuisines since we do distinct client-side
             const pagedCuisines = uniqueCuisines.slice(from, to + 1);
             setCuisines(pagedCuisines);
@@ -571,7 +579,7 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, page, debouncedQuery, sortBy, profile?.location, authLoading]);
+  }, [tab, page, debouncedQuery, sortBy, cuisineFilter, profile?.location, authLoading]);
 
   const go = (next: number) => {
     setPage(Math.max(1, Math.min(totalPages, next)));
@@ -589,7 +597,7 @@ export default function BrowsePage() {
     return list;
   }, [page, totalPages]);
 
-  const showPagination = total > PER_PAGE;
+  const showPagination = tab !== 'dishes' && total > perPage;
 
   const renderPagination = () => (
     <View style={styles.pager}>
@@ -653,11 +661,8 @@ export default function BrowsePage() {
         >
           {[
             { label: 'None', value: 'none' },
-            { label: 'Newest', value: 'newest' },
             { label: 'Nearest', value: 'nearest' },
-            { label: 'Popularity', value: 'popular' },
             { label: 'Price low to high', value: 'price_asc' },
-            { label: 'Price high to low', value: 'price_desc' },
           ].map((opt) => (
             <Pressable
               key={opt.value}
@@ -687,26 +692,26 @@ export default function BrowsePage() {
         })}
       >
         <View style={{ alignItems: 'center', marginBottom: 20 }}>
-          <Text style={styles.title}>Explore meals near you</Text>
-          <Text style={styles.subtitle}>Find your next favorite homemade dish</Text>
+          <Text style={styles.title}>Find the taste of home</Text>
+          <Text style={styles.subtitle}>Pickup homemade meals near you</Text>
         </View>
 
         <View style={[styles.tabs, { overflow: 'visible' }]}>
           <Pressable
             onPress={() => setTab('dishes')}
-            style={[styles.tab, styles.tabSpacing, tab === 'dishes' && styles.tabActive]}
+            style={[styles.tab, styles.tabSpacing]}
           >
             <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
           </Pressable>
           <Pressable
             onPress={() => setTab('chefs')}
-            style={[styles.tab, styles.tabSpacing, tab === 'chefs' && styles.tabActive]}
+            style={[styles.tab, styles.tabSpacing]}
           >
             <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
           </Pressable>
           <Pressable
             onPress={() => setTab('cuisines')}
-            style={[styles.tab, styles.tabSpacing, tab === 'cuisines' && styles.tabActive]}
+            style={[styles.tab, styles.tabSpacing]}
           >
             <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
           </Pressable>
@@ -735,7 +740,7 @@ export default function BrowsePage() {
                   style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}
                 >
                   <Image
-                    source={require('../../assets/menu (1).png')}
+                    source={require('../../assets/controls (1).png')}
                     style={{ width: 20, height: 20, tintColor: '#FE734C' }}
                     resizeMode="contain"
                   />
@@ -751,11 +756,8 @@ export default function BrowsePage() {
                 >
                   {[
                     { label: 'None', value: 'none' },
-                    { label: 'Newest', value: 'newest' },
                     { label: 'Nearest', value: 'nearest' },
-                    { label: 'Popularity', value: 'popular' },
                     { label: 'Price low to high', value: 'price_asc' },
-                    { label: 'Price high to low', value: 'price_desc' },
                   ].map((opt) => (
                     <Pressable
                       key={opt.value}
@@ -810,11 +812,12 @@ export default function BrowsePage() {
         ) : tab === 'dishes' ? (
           <View style={styles.grid}>
             {dishes.map((dish) => (
-              <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
+              <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / DISHES_GRID_COLUMNS}%` }]}>
                 <DishCard 
                   dish={dish} 
+                  variant="explore"
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }} 
-                  chefNameColor="#555555"
+                  chefNameColor="#33393A"
                   ratingColor="#FE734C"
                   priceColor="#FE734C"
                 />
@@ -837,15 +840,17 @@ export default function BrowsePage() {
         ) : (
           <View style={styles.grid}>
             {cuisines.map((cuisine) => (
-              <View key={cuisine} style={[styles.cardWrapper, { width: `${100 / (isMobile ? 2 : isTablet ? 4 : 6)}%` }]}>
+              <View key={cuisine} style={styles.cuisineCardWrapper}>
                 <TouchableOpacity 
                   style={styles.cuisineCard}
                   onPress={() => {
-                    setQuery(cuisine);
+                    setCuisineFilter(cuisine);
+                    setQuery('');
                     setTab('dishes');
+                    setPage(1);
                   }}
                 >
-                  <Text style={styles.cuisineText}>{cuisine}</Text>
+                  <Text style={styles.cuisineText} numberOfLines={1}>{cuisine}</Text>
                 </TouchableOpacity>
               </View>
             ))}
@@ -925,24 +930,22 @@ const styles = StyleSheet.create({
     flexWrap: 'nowrap',
   },
   tab: {
-    paddingHorizontal: 18,
-    paddingVertical: 10,
-    borderRadius: 999,
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#FE734C',
+    paddingHorizontal: 12,
+    paddingVertical: 0,
     flexShrink: 0,
-  },
-  tabActive: {
-    backgroundColor: '#FE734C',
+    minHeight: 20,
+    justifyContent: 'center',
   },
   tabText: {
-    color: '#FE734C',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: '700',
+    fontWeight: '400',
+    fontSize: 20,
+    lineHeight: 20,
   },
   tabTextActive: {
-    color: 'white',
+    color: '#FE734C',
+    fontWeight: '400',
   },
   // Old search style removed/ignored
   search: {
@@ -952,7 +955,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 10,
     marginBottom: 20,
-    color: '#0f172a',
+    color: '#33393A',
   },
   loader: {
     paddingVertical: 40,
@@ -986,7 +989,7 @@ const styles = StyleSheet.create({
     marginHorizontal: 4,
   },
   pageBtnText: {
-    color: '#0f172a',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
   },
@@ -1008,7 +1011,7 @@ const styles = StyleSheet.create({
   pageNumberText: {
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '700',
-    color: '#0f172a',
+    color: '#33393A',
   },
   pageNumberTextActive: {
     color: 'white',
@@ -1024,7 +1027,7 @@ const styles = StyleSheet.create({
     zIndex: 10, // Ensure dropdown is above content
   },
   sortLabel: {
-    color: '#475569',
+    color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
     marginRight: 12,
@@ -1042,7 +1045,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   sortButtonText: {
-    color: '#0f172a',
+    color: '#33393A',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
@@ -1107,7 +1110,7 @@ const styles = StyleSheet.create({
     backgroundColor: '#fff5f2',
   },
   dropdownItemText: {
-    color: '#475569',
+    color: '#33393A',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '500',
@@ -1134,7 +1137,7 @@ const styles = StyleSheet.create({
     borderColor: '#10b981',
   },
   sortChipText: {
-    color: '#64748b',
+    color: '#33393A',
     fontSize: 13,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
@@ -1176,7 +1179,7 @@ const styles = StyleSheet.create({
   },
   floatingSearchInput: {
     flex: 1,
-    color: '#333333',
+    color: '#33393A',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -1193,7 +1196,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: theme.spacing.sm,
     right: theme.spacing.sm,
-    color: '#555555',
+    color: '#33393A',
     fontSize: Platform.select({
       web: theme.typography.fontSize.base,
       default: theme.typography.fontSize.sm,
@@ -1229,13 +1232,13 @@ const styles = StyleSheet.create({
   emptyStateTitle: {
     fontSize: 20,
     fontWeight: '700',
-    color: '#101828',
+    color: '#33393A',
     marginBottom: 8,
     textAlign: 'center',
   },
   emptyStateSubtitle: {
     fontSize: 16,
-    color: '#6B7280',
+    color: '#33393A',
     marginBottom: 24,
     textAlign: 'center',
   },
@@ -1288,26 +1291,26 @@ const styles = StyleSheet.create({
     resizeMode: 'contain',
     tintColor: '#FE734C',
   },
+  cuisineCardWrapper: {
+    padding: 4,
+    width: '50%',
+  },
   cuisineCard: {
     backgroundColor: '#FFFFFF',
-    borderRadius: 12,
-    padding: 20,
+    borderRadius: 8,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 100,
     borderWidth: 1,
     borderColor: '#e2e8f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.05,
-    shadowRadius: 2,
-    elevation: 2,
+    minHeight: 0,
   },
   cuisineText: {
-    fontSize: 16,
+    fontSize: 13,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: '700',
-    color: '#0f172a',
+    fontWeight: '400',
+    color: '#33393A',
     textAlign: 'center',
   },
 });
