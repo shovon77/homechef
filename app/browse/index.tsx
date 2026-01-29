@@ -663,6 +663,7 @@ export default function BrowsePage() {
             { label: 'None', value: 'none' },
             { label: 'Nearest', value: 'nearest' },
             { label: 'Price low to high', value: 'price_asc' },
+            { label: 'Price high to low', value: 'price_desc' },
           ].map((opt) => (
             <Pressable
               key={opt.value}
@@ -758,6 +759,7 @@ export default function BrowsePage() {
                     { label: 'None', value: 'none' },
                     { label: 'Nearest', value: 'nearest' },
                     { label: 'Price low to high', value: 'price_asc' },
+                    { label: 'Price high to low', value: 'price_desc' },
                   ].map((opt) => (
                     <Pressable
                       key={opt.value}
@@ -785,7 +787,7 @@ export default function BrowsePage() {
         {/* Old search bar removed */}
 
         {loading ? (
-          <View style={styles.loader}><ActivityIndicator /></View>
+          <View style={styles.loader}><ActivityIndicator size="large" color={PRIMARY_COLOR} /></View>
         ) : error ? (
           <Text style={styles.error}>{error}</Text>
         ) : list.length === 0 ? (

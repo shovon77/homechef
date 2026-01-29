@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -9,6 +9,7 @@ import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../
 import { useRole } from '../../hooks/useRole';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
 import Screen from '../../components/Screen';
+import DishCard from '../components/DishCard';
 import { theme, elev } from '../../lib/theme';
 
 // Colors from HTML design
@@ -20,6 +21,33 @@ const TEXT_MUTED_DARK = '#52525b'; // zinc-600
 const BORDER_LIGHT = '#e4e4e7'; // zinc-200
 const BORDER_DARK = '#3f3f46'; // zinc-700
 const STAR_COLOR = '#FE734C'; // Updated to match brand color
+const BRAND_BLACK = '#33393A';
+
+// Match explore ChefCard: city and state only (e.g. "Toronto, ON")
+function formatLocationCityState(location: string | null | undefined): string {
+  if (!location?.trim()) return '';
+  const parts = location.split(',').map(p => p.trim()).filter(Boolean);
+  if (parts.length === 0) return '';
+  if (parts.length === 1) return parts[0];
+  if (parts.length >= 3 && parts[parts.length - 1].length > 2) return parts.slice(-3, -1).join(', ');
+  return parts.slice(-2).join(', ');
+}
+
+function formatCuisine(cuisine: unknown): string {
+  if (!cuisine) return 'Chef';
+  if (typeof cuisine === 'string') {
+    if (cuisine.trim().startsWith('[') || cuisine.trim().startsWith('"')) {
+      try {
+        const parsed = JSON.parse(cuisine);
+        if (Array.isArray(parsed)) return parsed.join(', ');
+        return String(parsed);
+      } catch { return cuisine; }
+    }
+    return cuisine;
+  }
+  if (Array.isArray(cuisine)) return cuisine.join(', ');
+  return 'Chef';
+}
 
 export default function ChefDetailView() {
   const router = useRouter();
@@ -73,7 +101,10 @@ export default function ChefDetailView() {
   const [dishesPage, setDishesPage] = useState(1);
   const [dishesTotal, setDishesTotal] = useState(0);
   const [dishesLoading, setDishesLoading] = useState(false);
-  
+  const [chefImageError, setChefImageError] = useState(false);
+  const [newlyAddedDishes, setNewlyAddedDishes] = useState<Dish[]>([]);
+  const [bestSellerDishes, setBestSellerDishes] = useState<Dish[]>([]);
+
   // Review Form State
   const { user } = useRole();
   const { addToCart } = useCart();
@@ -106,6 +137,7 @@ export default function ChefDetailView() {
         }
 
           setChef(chefData);
+          setChefImageError(false);
       } catch (e: any) {
         if (mounted && !chef && !initialChef) setError(e.message || String(e));
       } finally {
@@ -121,7 +153,7 @@ export default function ChefDetailView() {
           .select('*', { count: 'exact' })
           .eq('chef_id', chefId)
           .order('id', { ascending: true })
-          .range(0, (isMobile ? 3 : 16) - 1);
+          .range(0, 499);
           
         if (mounted && data) {
           setDishes(data);
@@ -131,6 +163,56 @@ export default function ChefDetailView() {
         console.error("Error fetching dishes", e);
       } finally {
         if(mounted) setIsFetchingDishes(false);
+      }
+    };
+
+    const fetchNewlyAdded = async () => {
+      try {
+        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+        const { data } = await supabase
+          .from('dishes')
+          .select('*')
+          .eq('chef_id', chefId)
+          .gte('created_at', since)
+          .order('created_at', { ascending: false });
+        if (mounted && data) setNewlyAddedDishes(data);
+      } catch (e) {
+        console.error("Error fetching newly added dishes", e);
+      }
+    };
+
+    const fetchBestSellers = async () => {
+      try {
+        const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+        const { data: ordersData } = await supabase
+          .from('orders')
+          .select('id')
+          .eq('chef_id', chefId)
+          .in('status', ['completed', 'ready'])
+          .gte('created_at', since);
+        if (!mounted || !ordersData?.length) {
+          if (mounted) setBestSellerDishes([]);
+          return;
+        }
+        const orderIds = ordersData.map(o => o.id);
+        const { data: itemsData } = await supabase
+          .from('order_items')
+          .select('dish_id')
+          .in('order_id', orderIds)
+          .not('dish_id', 'is', null);
+        const dishIds = [...new Set((itemsData || []).map(i => i.dish_id).filter(Boolean))] as number[];
+        if (dishIds.length === 0) {
+          if (mounted) setBestSellerDishes([]);
+          return;
+        }
+        const { data: dishesData } = await supabase
+          .from('dishes')
+          .select('*')
+          .eq('chef_id', chefId)
+          .in('id', dishIds);
+        if (mounted && dishesData) setBestSellerDishes(dishesData);
+      } catch (e) {
+        console.error("Error fetching best-seller dishes", e);
       }
     };
 
@@ -150,42 +232,12 @@ export default function ChefDetailView() {
     fetchChef();
     fetchDishes();
     fetchReviews();
+    fetchNewlyAdded();
+    fetchBestSellers();
 
     return () => { mounted = false; };
   }, [chefId, isMobile]); // Re-fetch if chefId changes
 
-  // Pagination for dishes (subsequent pages)
-  useEffect(() => {
-    if (!chefId || dishesPage === 1) return; // Skip first page as it's handled above
-
-    let cancelled = false;
-    (async () => {
-      setDishesLoading(true);
-      try {
-        const perPage = isMobile ? 3 : 16;
-        const from = (dishesPage - 1) * perPage;
-        const to = from + perPage - 1;
-
-        const { data, error } = await supabase
-          .from('dishes')
-          .select('*')
-          .eq('chef_id', chefId)
-          .order('id', { ascending: true })
-          .range(from, to);
-
-        if (cancelled) return;
-        if (error) throw error;
-
-        // Note: This logic replaces dishes. If you want "Load More" style, append instead.
-        setDishes(data || []);
-      } catch (e: any) {
-        if (!cancelled) console.error('Error loading page:', e);
-      } finally {
-        if (!cancelled) setDishesLoading(false);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [chefId, dishesPage, isMobile]);
 
   const avatar = chef?.photo || chef?.avatar || '';
   const title = chef?.name || (chefId ? `Chef #${chefId}` : 'Chef');
@@ -194,6 +246,7 @@ export default function ChefDetailView() {
   const avgRating = Number(chef?.rating ?? 0);
   const reviewCount = Number(chef?.rating_count ?? reviews.length);
   const dishCount = dishes.length;
+
 
   function handleAddToCart(d: Dish) {
     const img = d.image || d.thumbnail || '';
@@ -252,7 +305,7 @@ export default function ChefDetailView() {
     return (
       <Screen>
         <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
-          <Text style={{ color:'tomato' }}>Error: {error}</Text>
+          <Text style={{ color: 'tomato', fontFamily: theme.typography.fontFamily.body }}>Error: {error}</Text>
         </View>
       </Screen>
     );
@@ -261,7 +314,7 @@ export default function ChefDetailView() {
     return (
       <Screen>
         <View style={{ flex:1, alignItems:'center', justifyContent:'center', padding:16 }}>
-          <Text style={{ color:TEXT_MUTED }}>Loading chef...</Text>
+          <Text style={{ color: BRAND_BLACK, fontFamily: theme.typography.fontFamily.body }}>Loading chef...</Text>
         </View>
       </Screen>
     );
@@ -274,58 +327,43 @@ export default function ChefDetailView() {
             {/* Left Sidebar - Sticky */}
             <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
             <View style={styles.sidebarCard}>
-              {/* Profile Card */}
-              <View style={styles.profileSection}>
-                <View style={styles.profileHeader}>
-                  <View style={styles.avatarContainer}>
-                    {avatar ? (
-                      <Image source={{ uri: avatar }} style={styles.avatar} />
-                    ) : (
-                      <View style={[styles.avatar, styles.avatarPlaceholder]}>
-                        <Text style={styles.avatarInitials}>
-                          {title.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                        </Text>
-                      </View>
-                    )}
-                  </View>
-                  <View style={styles.profileInfo}>
-                    <Text style={styles.profileName}>{title}</Text>
-                    {location ? <Text style={styles.profileLocation}>{location}</Text> : null}
-                  </View>
+              {/* First widget: same as explore ChefCard (image left, info right) */}
+              <View style={styles.chefCardLayout}>
+                <View style={styles.chefCardImageWrap}>
+                  {avatar && !chefImageError ? (
+                    <Image
+                      source={{ uri: avatar }}
+                      style={styles.chefCardAvatar}
+                      resizeMode="cover"
+                      onError={() => setChefImageError(true)}
+                    />
+                  ) : (
+                    <View style={[styles.chefCardAvatar, styles.chefCardAvatarPlaceholder]}>
+                      <Text style={styles.chefCardInitials}>
+                        {title.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                      </Text>
+                    </View>
+                  )}
+                </View>
+                <View style={styles.chefCardInfo}>
+                  <Text style={styles.chefCardName} numberOfLines={1}>{title}</Text>
+                  <Text style={styles.chefCardCuisine} numberOfLines={1}>{formatCuisine(chef?.cuisine)}</Text>
+                  {bio ? <Text style={styles.chefCardBio} numberOfLines={2}>{bio}</Text> : null}
+                  {location && formatLocationCityState(location) ? (
+                    <View style={styles.chefCardLocationRow}>
+                      <Image source={require('../../assets/locationnewicon.png')} style={styles.chefCardLocationIcon} resizeMode="contain" />
+                      <Text style={styles.chefCardLocation} numberOfLines={1}>{formatLocationCityState(location)}</Text>
+                    </View>
+                  ) : null}
+                  {avgRating > 0 ? (
+                    <View style={styles.chefCardRating}>
+                      <Image source={require('../../assets/star.png')} style={styles.chefCardStarIcon} resizeMode="contain" />
+                      <Text style={styles.chefCardRatingText}>{avgRating.toFixed(1)}</Text>
+                    </View>
+                  ) : null}
                 </View>
               </View>
-
-              {/* Stats */}
-              <View style={styles.statsContainer}>
-                <View style={styles.statCard}>
-                  <View style={styles.statValueRow}>
-                    <Text style={styles.statValue}>{avgRating.toFixed(1)}</Text>
-                    <Image 
-                      source={require('../../assets/star.png')} 
-                      style={styles.starIconImage} 
-                      resizeMode="contain" 
-                    />
-                  </View>
-                  <Text style={styles.statLabel}>Rating</Text>
-                </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{reviewCount}</Text>
-                  <Text style={styles.statLabel}>Reviews</Text>
-          </View>
-                <View style={styles.statCard}>
-                  <Text style={styles.statValue}>{dishCount}</Text>
-                  <Text style={styles.statLabel}>Dishes</Text>
-        </View>
-      </View>
-
-              {/* Bio Section */}
-              {bio ? (
-                <View style={styles.bioSection}>
-                  <Text style={styles.bioTitle}>About Me</Text>
-                  <Text style={styles.bioText}>{bio}</Text>
-                </View>
-              ) : null}
-    </View>
+            </View>
           </View>
 
           {/* Main Content Area */}
@@ -350,101 +388,64 @@ export default function ChefDetailView() {
                     </TouchableOpacity>
             </View>
 
-            {/* Filter/Sort Controls - only show for dishes tab */}
-            {activeTab === 'dishes' && (
-              <View style={styles.filterContainer}>
-                <View style={styles.filterRow}>
-                  <Text style={styles.filterLabel}>Sort by:</Text>
-                  <View style={styles.selectPlaceholder}>
-                    <Text style={styles.selectText}>Popularity</Text>
-                  </View>
-                  <Text style={styles.filterLabel}>Category:</Text>
-                  <View style={styles.selectPlaceholder}>
-                    <Text style={styles.selectText}>All Categories</Text>
-                  </View>
-                </View>
-              </View>
-            )}
-
             {/* Content based on active tab */}
             <View style={styles.contentScroll}>
               {activeTab === 'dishes' ? (
                 <>
-                  {isFetchingDishes ? (
+                  {isFetchingDishes && !newlyAddedDishes.length && !bestSellerDishes.length ? (
                     <View style={styles.loader}>
                       <ActivityIndicator size="large" color={PRIMARY_COLOR} />
                       <Text style={styles.loadingText}>Loading dishes...</Text>
                     </View>
-                  ) : dishes.length === 0 ? (
-                    <Text style={styles.emptyText}>No dishes yet.</Text>
                   ) : (
                     <>
-                      <View style={[styles.dishesGrid, isMobile && styles.dishesGridMobile]}>
-                        {dishes.map(d => {
-                          const img = d.image || d.thumbnail || '';
-                          return (
-                            <View key={d.id} style={[styles.dishCard, isMobile && styles.dishCardMobile]}>
-                              <Link href={`/dish/${d.id}`} asChild>
-                                <TouchableOpacity style={styles.dishImageContainer}>
-                                  {img ? (
-                                    <Image source={{ uri: img }} style={styles.dishImage} resizeMode="cover" />
-                                  ) : (
-                                    <View style={styles.dishImagePlaceholder}>
-                                      <Text style={styles.dishImagePlaceholderText}>No image</Text>
-                                    </View>
-                                  )}
-                                </TouchableOpacity>
-                              </Link>
-                              <View style={styles.dishInfo}>
-                              <View style={styles.dishHeader}>
-                                <Text style={styles.dishName} adjustsFontSizeToFit minimumFontScale={0.7} numberOfLines={1}>
-                                  {d.name || `Dish #${d.id}`}
-                                </Text>
-                                <Text style={styles.dishPrice}>
-                                  ${d.price != null ? Number(d.price).toFixed(2) : '0.00'}
-                                </Text>
+                      {/* Newly added meals - last 30 days */}
+                      <View style={styles.sectionBlock}>
+                        <Text style={styles.sectionTitle}>Newly added meals</Text>
+                        {newlyAddedDishes.length === 0 ? (
+                          <Text style={styles.sectionEmpty}>No new dishes in the last 30 days.</Text>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
+                            {newlyAddedDishes.map(d => (
+                              <View key={d.id} style={styles.dishCardHorizontal}>
+                                <DishCard dish={{ ...d, chef: title, chefs: { name: title } }} variant="explore" />
                               </View>
-                                {d.description ? (
-                                  <Text style={styles.dishDescription} numberOfLines={2}>
-                                    {d.description}
-                                  </Text>
-                                ) : null}
-                                <TouchableOpacity
-                                  style={styles.addToCartButton}
-                                  onPress={() => handleAddToCart(d)}
-                                >
-                                  <Text style={styles.addToCartButtonText}>Add to Cart</Text>
-                                </TouchableOpacity>
-                              </View>
-                            </View>
-                          );
-                        })}
+                            ))}
+                          </ScrollView>
+                        )}
                       </View>
-                      {(() => {
-                        const perPage = isMobile ? 3 : 16;
-                        const totalPages = Math.ceil(dishesTotal / perPage);
-                        return totalPages > 1 && (
-                          <View style={styles.pagination}>
-                            <Pressable
-                              style={[styles.pageButton, dishesPage === 1 && styles.pageButtonDisabled]}
-                              onPress={() => setDishesPage(p => Math.max(1, p - 1))}
-                              disabled={dishesPage === 1}
-                            >
-                              <Text style={[styles.pageButtonText, dishesPage === 1 && styles.pageButtonTextDisabled]}>Previous</Text>
-                            </Pressable>
-                            <Text style={styles.pageInfo}>
-                              Page {dishesPage} of {totalPages}
-                            </Text>
-                            <Pressable
-                              style={[styles.pageButton, dishesPage >= totalPages && styles.pageButtonDisabled]}
-                              onPress={() => setDishesPage(p => Math.min(totalPages, p + 1))}
-                              disabled={dishesPage >= totalPages}
-                            >
-                              <Text style={[styles.pageButtonText, dishesPage >= totalPages && styles.pageButtonTextDisabled]}>Next</Text>
-                            </Pressable>
-                          </View>
-                        );
-                      })()}
+
+                      {/* Best-sellers now - sold in last 90 days */}
+                      <View style={styles.sectionBlock}>
+                        <Text style={styles.sectionTitle}>Best-sellers now</Text>
+                        {bestSellerDishes.length === 0 ? (
+                          <Text style={styles.sectionEmpty}>No dishes sold in the last 90 days.</Text>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
+                            {bestSellerDishes.map(d => (
+                              <View key={d.id} style={styles.dishCardHorizontal}>
+                                <DishCard dish={{ ...d, chef: title, chefs: { name: title } }} variant="explore" />
+                              </View>
+                            ))}
+                          </ScrollView>
+                        )}
+                      </View>
+
+                      {/* All dishes */}
+                      <View style={styles.sectionBlock}>
+                        <Text style={styles.sectionTitle}>All dishes</Text>
+                        {dishes.length === 0 ? (
+                          <Text style={styles.sectionEmpty}>No dishes yet.</Text>
+                        ) : (
+                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
+                            {dishes.map(d => (
+                              <View key={d.id} style={styles.dishCardHorizontal}>
+                                <DishCard dish={{ ...d, chef: title, chefs: { name: title } }} variant="explore" />
+                              </View>
+                            ))}
+                          </ScrollView>
+                        )}
+                      </View>
                     </>
                   )}
                 </>
@@ -536,6 +537,13 @@ export default function ChefDetailView() {
               )}
             </View>
           </View>
+
+          {/* Disclaimer before footer */}
+          <View style={styles.disclaimerBlock}>
+            <Text style={styles.disclaimerText}>
+              Food is prepared by an independent home chef. Customers are responsible for safe handling after pickup.
+            </Text>
+          </View>
         </View>
       </View>
     </Screen>
@@ -582,61 +590,114 @@ const styles = StyleSheet.create({
   },
   sidebarCard: {
     flex: 1,
-    gap: theme.spacing['2xl'],
-    padding: theme.spacing['2xl'],
+    minHeight: 200,
+    gap: 0,
+    padding: 0,
+    overflow: 'hidden',
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
     borderRadius: theme.radius.xl,
     backgroundColor: '#FFFFFF',
     ...elev('sm'),
   },
-  profileSection: {
-    gap: theme.spacing.md,
-  },
-  profileHeader: {
+  chefCardLayout: {
     flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
-  },
-  avatarContainer: {
-    width: 64,
-    height: 64,
-    borderRadius: 32,
+    alignItems: 'stretch',
+    flex: 1,
+    width: '100%',
+    minHeight: 140,
+    backgroundColor: '#F4F4F4',
+    borderRadius: theme.radius.xl,
     overflow: 'hidden',
+  },
+  chefCardImageWrap: {
+    flex: 1,
+    alignSelf: 'stretch',
+    minHeight: 140,
+    position: 'relative',
+  },
+  chefCardAvatar: {
+    ...StyleSheet.absoluteFillObject,
+    borderTopLeftRadius: theme.radius.xl,
+    borderBottomLeftRadius: theme.radius.xl,
     backgroundColor: BACKGROUND_LIGHT,
   },
-  avatar: {
-    width: '100%',
-    height: '100%',
-  },
-  avatarPlaceholder: {
+  chefCardAvatarPlaceholder: {
+    position: 'absolute',
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    borderTopLeftRadius: theme.radius.xl,
+    borderBottomLeftRadius: theme.radius.xl,
     backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  avatarInitials: {
+  chefCardInitials: {
     color: '#FFFFFF',
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
-  profileInfo: {
+  chefCardInfo: {
     flex: 1,
-    gap: theme.spacing.xs / 2,
+    gap: 4,
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.md,
+    paddingLeft: theme.spacing.md,
+    paddingRight: 0,
   },
-  profileName: {
-    color: TEXT_DARK,
-    fontSize: 20,
+  chefCardName: {
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
-    lineHeight: 20 * 1.2,
   },
-  profileLocation: {
-    color: TEXT_MUTED,
+  chefCardCuisine: {
+    color: BRAND_BLACK,
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+  },
+  chefCardBio: {
+    color: BRAND_BLACK,
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.xs,
+    lineHeight: 16,
+    marginTop: 2,
+  },
+  chefCardLocationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginTop: 4,
+    gap: 4,
+  },
+  chefCardLocationIcon: {
+    width: 16,
+    height: 16,
+    tintColor: PRIMARY_COLOR,
+  },
+  chefCardLocation: {
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  chefCardRating: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  chefCardStarIcon: {
+    width: 16,
+    height: 16,
+    tintColor: STAR_COLOR,
+  },
+  chefCardRatingText: {
+    color: BRAND_BLACK,
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
-    lineHeight: theme.typography.fontSize.sm * 1.5,
   },
   statsContainer: {
     flexDirection: 'row',
@@ -659,7 +720,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs / 2,
   },
   statValue: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -675,7 +736,7 @@ const styles = StyleSheet.create({
     tintColor: STAR_COLOR,
   },
   statLabel: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
@@ -685,13 +746,13 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   bioTitle: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   bioText: {
-    color: TEXT_MUTED_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
@@ -711,23 +772,49 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER_LIGHT,
   },
   tab: {
-    paddingBottom: theme.spacing.md,
-    paddingTop: theme.spacing.xs,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    borderRadius: theme.radius.lg,
   },
-  tabActive: {
-    borderBottomColor: PRIMARY_COLOR,
-  },
+  tabActive: {},
   tabText: {
-    color: TEXT_MUTED,
-    fontSize: theme.typography.fontSize.sm,
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     letterSpacing: 0.015,
   },
   tabTextActive: {
-    color: TEXT_DARK,
+    color: PRIMARY_COLOR,
+  },
+  sectionBlock: {
+    marginBottom: theme.spacing['2xl'],
+  },
+  sectionTitle: {
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.lg,
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.bold,
+    marginBottom: theme.spacing.md,
+  },
+  sectionEmpty: {
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    fontStyle: 'italic',
+  },
+  horizontalScroll: {
+    marginHorizontal: -theme.spacing.md,
+  },
+  horizontalScrollContent: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+  },
+  dishCardHorizontal: {
+    width: 180,
+    flexShrink: 0,
   },
   filterContainer: {
     paddingVertical: theme.spacing['2xl'],
@@ -743,7 +830,7 @@ const styles = StyleSheet.create({
     }),
   },
   filterLabel: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -757,12 +844,22 @@ const styles = StyleSheet.create({
     minWidth: 150,
   },
   selectText: {
-    color: TEXT_MUTED_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
   },
+  selectPlaceholderActive: {
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: PRIMARY_COLOR + '14',
+  },
+  selectTextActive: {
+    color: BRAND_BLACK,
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.medium,
+  },
   contentScroll: {
     flex: 1,
+    paddingTop: theme.spacing['2xl'],
     paddingBottom: theme.spacing['4xl'],
   },
   dishesGrid: {
@@ -814,7 +911,7 @@ const styles = StyleSheet.create({
     backgroundColor: BACKGROUND_LIGHT,
   },
   dishImagePlaceholderText: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -845,7 +942,7 @@ const styles = StyleSheet.create({
   },
   dishName: {
     flex: 1,
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: Platform.select({
       web: 13,
       default: 11,
@@ -863,7 +960,7 @@ const styles = StyleSheet.create({
     }),
   },
   dishPrice: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: Platform.select({
       web: 13,
       default: 11,
@@ -878,7 +975,7 @@ const styles = StyleSheet.create({
     }),
   },
   dishDescription: {
-    color: TEXT_MUTED_DARK,
+    color: BRAND_BLACK,
     fontSize: Platform.select({
       web: theme.typography.fontSize.sm,
       default: 10,
@@ -931,7 +1028,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   reviewFormTitle: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -940,7 +1037,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   ratingLabel: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -959,7 +1056,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.sm,
   },
   commentLabel: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -968,7 +1065,7 @@ const styles = StyleSheet.create({
     borderColor: BORDER_LIGHT,
     borderRadius: theme.radius.lg,
     padding: theme.spacing.md,
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     minHeight: 80,
@@ -1023,30 +1120,30 @@ const styles = StyleSheet.create({
     tintColor: STAR_COLOR,
   },
   reviewRatingValue: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   reviewAuthor: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
   },
   reviewDate: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.xs,
     fontFamily: theme.typography.fontFamily.body,
     marginLeft: 'auto',
   },
   reviewComment: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: theme.typography.fontSize.sm * 1.5,
   },
   emptyText: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
@@ -1058,7 +1155,7 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
   },
   loadingText: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -1083,16 +1180,16 @@ const styles = StyleSheet.create({
     opacity: 0.5,
   },
   pageButtonText: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   pageButtonTextDisabled: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
   },
   pageInfo: {
-    color: TEXT_MUTED,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
@@ -1116,5 +1213,19 @@ const styles = StyleSheet.create({
   },
   dishCardMobile: {
     width: '100%',
+  },
+  disclaimerBlock: {
+    marginTop: theme.spacing['2xl'],
+    marginBottom: theme.spacing.xl,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
+    width: '100%',
+  },
+  disclaimerText: {
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
+    textAlign: 'center',
   },
 });

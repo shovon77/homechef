@@ -168,14 +168,14 @@ const styles = StyleSheet.create({
   },
   location: {
     color: '#33393A',
-    fontSize: theme.typography.fontSize.xs,
+    fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 2,
   },
   rating: {
     flexDirection: "row",
     alignItems: "center",
-    gap: 8,
+    gap: 4,
     marginTop: 4,
   },
   starIcon: {
@@ -191,6 +191,6 @@ const styles = StyleSheet.create({
     color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.normal,
   },
 });

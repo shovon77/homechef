@@ -843,7 +843,7 @@ export default function HomePage() {
     return (
       <Screen style={{ backgroundColor: '#F2F0EF' }}>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: '#F2F0EF' }}>
-          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+          <ActivityIndicator size="large" color={theme.colors.primary} />
         </View>
       </Screen>
     );
