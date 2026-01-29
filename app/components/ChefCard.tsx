@@ -50,6 +50,7 @@ const formatLocationCityState = (location: string | null | undefined): string =>
 
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
+const BRAND_BLACK = '#33393A';
 
 type Chef = {
   id: number | string;
@@ -149,7 +150,7 @@ const styles = StyleSheet.create({
     paddingLeft: theme.spacing.md,
   },
   name: {
-    color: '#333333',
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,

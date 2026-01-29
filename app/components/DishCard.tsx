@@ -8,18 +8,16 @@ import { useCart } from "../../context/CartContext";
 import { toNumber, safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
 
+const PRIMARY_COLOR = '#FE734C';
 const BRAND_BLACK = '#33393A';
 
 type DishCardProps = {
   dish: any;
   style?: StyleProp<ViewStyle>;
-  chefNameColor?: string;
-  ratingColor?: string;
-  priceColor?: string;
   variant?: 'default' | 'explore';
 };
 
-export default function DishCard({ dish, style, chefNameColor, ratingColor, priceColor, variant = 'default' }: DishCardProps) {
+export default function DishCard({ dish, style, variant = 'default' }: DishCardProps) {
   const [avg, setAvg] = useState(0);
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
   const [quantity, setQuantity] = useState(1);
@@ -45,7 +43,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
   const nameEl = <Text style={styles.name} numberOfLines={1}>{dish.name}</Text>;
   const chefDisplayName = dish.chefs?.name || dish.chef || null;
   const chefNameEl = chefDisplayName ? (
-    <Text style={[styles.chefName, chefNameColor ? { color: chefNameColor } : undefined]} numberOfLines={1}>
+    <Text style={styles.chefName} numberOfLines={1}>
       {chefDisplayName}
     </Text>
   ) : null;
@@ -53,7 +51,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
     <View style={styles.ratingRow}>
       <Image
         source={require('../../assets/star.png')}
-        style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
+        style={styles.starIconImage}
         resizeMode="contain"
       />
       <Text style={styles.ratingText}>{safeToFixed(avg)}</Text>
@@ -61,7 +59,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
   );
   const footerEl = (
     <View style={styles.footer}>
-      <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]}>
+      <Text style={styles.price}>
         {formatCad(dish.price)}
       </Text>
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
@@ -92,7 +90,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
 
   const footerExploreEl = (
     <View style={styles.footerExplore}>
-      <Text style={[styles.price, priceColor ? { color: priceColor } : undefined]} numberOfLines={1}>
+      <Text style={styles.price} numberOfLines={1}>
         {formatCad(dish.price)}
       </Text>
       <View style={styles.footerExploreRow}>
@@ -143,7 +141,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
           {(chefDisplayName || avg > 0) && (
             <View style={styles.chefRatingRowExplore}>
               {chefDisplayName ? (
-                <Text style={[styles.chefName, styles.chefNameExplore, styles.chefNameExploreFlex, chefNameColor ? { color: chefNameColor } : undefined]} numberOfLines={1}>
+                <Text style={[styles.chefName, styles.chefNameExplore, styles.chefNameExploreFlex]} numberOfLines={1}>
                   {chefDisplayName}
                 </Text>
               ) : null}
@@ -151,7 +149,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
                 <View style={[styles.ratingRow, styles.ratingRowExplore]}>
                   <Image
                     source={require('../../assets/star.png')}
-                    style={[styles.starIconImage, styles.starIconExplore, ratingColor ? { tintColor: ratingColor } : undefined]}
+                    style={[styles.starIconImage, styles.starIconExplore]}
                     resizeMode="contain"
                   />
                   <Text style={[styles.ratingText, styles.ratingTextExplore]}>{safeToFixed(avg)}</Text>
@@ -160,7 +158,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
             </View>
           )}
           <View style={styles.priceRowExplore}>
-            <Text style={[styles.price, styles.priceExplore, priceColor ? { color: priceColor } : { color: '#FE734C' }]} numberOfLines={1}>
+            <Text style={[styles.price, styles.priceExplore]} numberOfLines={1}>
               {formatCad(Number(dish.price) ?? 0)}
             </Text>
           </View>
@@ -183,7 +181,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
                 >
                   <Image
                     source={require('../../assets/add (1).png')}
-                    style={[styles.plusIconImage, { tintColor: '#FFFFFF' }]}
+                    style={styles.plusIconImage}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -196,7 +194,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
                   >
                     <Image
                       source={require('../../assets/minus.png')}
-                      style={[styles.quantityIconImage, { tintColor: '#FFFFFF' }]}
+                      style={styles.quantityIconImage}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -209,7 +207,7 @@ export default function DishCard({ dish, style, chefNameColor, ratingColor, pric
                   >
                     <Image
                       source={require('../../assets/add (1).png')}
-                      style={[styles.quantityIconImage, { tintColor: '#FFFFFF' }]}
+                      style={styles.quantityIconImage}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -293,14 +291,14 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     width: '100%',
     marginTop: 4,
-    minHeight: 18,
+    minHeight: 32,
   },
   quantityRowExplore: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'flex-end',
     gap: 4,
-    minHeight: 18,
+    minHeight: 32,
     flexShrink: 0,
     width: '100%',
   },
@@ -339,13 +337,13 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   name: {
-    color: '#FE734C',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.base,
   },
   description: {
-    color: '#555555',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     lineHeight: 18,
@@ -360,7 +358,7 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     textAlign: 'center',
     marginBottom: 2,
-    color: '#FE734C',
+    color: BRAND_BLACK,
     minHeight: 18,
   },
   chefNameExplore: {
@@ -388,24 +386,24 @@ const styles = StyleSheet.create({
   starIconImage: {
     width: 18,
     height: 18,
-    tintColor: '#FFA500',
+    tintColor: BRAND_BLACK,
   },
   starIconExplore: {
     width: 12,
     height: 12,
   },
   ratingText: {
-    color: '#555555',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
   },
   ratingTextExplore: {
     fontSize: 10,
-    color: '#33393A',
+    color: BRAND_BLACK,
   },
   price: {
-    color: theme.colors.primary,
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.extrabold,
     fontSize: theme.typography.fontSize.lg,
@@ -414,7 +412,7 @@ const styles = StyleSheet.create({
     fontSize: 13,
     lineHeight: 18,
     flexShrink: 0,
-    color: '#FE734C',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '600',
   },
@@ -455,33 +453,33 @@ const styles = StyleSheet.create({
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FE734C',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0,
     borderColor: 'transparent',
   },
   plusIconBtnExplore: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 0,
     borderColor: 'transparent',
   },
   plusIconImage: {
-    width: 10,
-    height: 10,
-    tintColor: '#FFFFFF',
+    width: 20,
+    height: 20,
+    tintColor: PRIMARY_COLOR,
   },
   quantityIconImage: {
-    width: 10,
-    height: 10,
-    tintColor: '#FFFFFF',
+    width: 20,
+    height: 20,
+    tintColor: PRIMARY_COLOR,
   },
   plusIconText: {
     fontSize: 18,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: PRIMARY_COLOR,
   },
   plusIconTextExplore: {
     fontSize: 14,
@@ -507,47 +505,48 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   quantityControlExplore: {
-    height: 18,
+    height: 32,
     gap: 2,
   },
   quantityBtn: {
     width: 32,
     height: 32,
     borderRadius: 16,
-    backgroundColor: '#FE734C',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     borderWidth: 0,
     borderColor: 'transparent',
   },
   quantityBtnExplore: {
-    width: 18,
-    height: 18,
-    borderRadius: 9,
+    width: 32,
+    height: 32,
+    borderRadius: 16,
     borderWidth: 0,
     borderColor: 'transparent',
   },
   quantityBtnText: {
-    fontSize: 16,
+    fontSize: 20,
     fontWeight: '600',
-    color: '#FFFFFF',
+    color: PRIMARY_COLOR,
   },
   quantityBtnTextExplore: {
     fontSize: 12,
   },
   quantityText: {
-    fontSize: 14,
+    fontSize: theme.typography.fontSize.lg,
     fontWeight: '600',
     paddingHorizontal: 4,
     minWidth: 20,
     textAlign: 'center',
-    color: '#333',
+    color: BRAND_BLACK,
   },
   quantityTextExplore: {
-    fontSize: 11,
-    minWidth: 14,
+    fontSize: 13,
+    lineHeight: 18,
+    minWidth: 20,
     paddingHorizontal: 2,
-    color: '#33393A',
+    color: BRAND_BLACK,
     flex: 1,
     textAlign: 'center',
   },

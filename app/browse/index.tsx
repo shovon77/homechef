@@ -692,96 +692,100 @@ export default function BrowsePage() {
           default: 80,
         })}
       >
-        <View style={{ alignItems: 'center', marginBottom: 20 }}>
+        <View style={{ alignItems: 'flex-start', marginBottom: 20 }}>
           <Text style={styles.title}>Find the taste of home</Text>
           <Text style={styles.subtitle}>Pickup homemade meals near you</Text>
         </View>
 
-        <View style={[styles.tabs, { overflow: 'visible' }]}>
-          <Pressable
-            onPress={() => setTab('dishes')}
-            style={[styles.tab, styles.tabSpacing]}
-          >
-            <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setTab('chefs')}
-            style={[styles.tab, styles.tabSpacing]}
-          >
-            <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
-          </Pressable>
-          <Pressable
-            onPress={() => setTab('cuisines')}
-            style={[styles.tab, styles.tabSpacing]}
-          >
-            <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
-          </Pressable>
-
-        {tab === 'dishes' && (
-            <View style={{ position: 'relative', marginLeft: 10, flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
-              <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                <TouchableOpacity 
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (!showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
-                      // Calculate position synchronously before showing dropdown for smooth animation
-                      // @ts-ignore - web-specific
-                      const button = sortButtonRef.current as any;
-                      if (button && typeof button.getBoundingClientRect === 'function') {
-                        const rect = button.getBoundingClientRect();
-                        setDropdownPosition({
-                          top: rect.bottom + 8,
-                          right: window.innerWidth - rect.right,
-                        });
-                        setDropdownReady(true);
-                      }
-                    }
-                    setShowSortMenu(!showSortMenu);
-                  }}
-                  style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}
-                >
-                  <Image
-                    source={require('../../assets/controls (1).png')}
-                    style={{ width: 20, height: 20, tintColor: '#FE734C' }}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
-              </View>
-              
-              {showSortMenu && Platform.OS !== 'web' && (
-                <View 
-                  ref={sortMenuRef} 
-                  style={styles.dropdownMenu}
-                  onStartShouldSetResponder={() => true}
-                  onResponderGrant={() => {}}
-                >
-                  {[
-                    { label: 'None', value: 'none' },
-                    { label: 'Nearest', value: 'nearest' },
-                    { label: 'Price low to high', value: 'price_asc' },
-                    { label: 'Price high to low', value: 'price_desc' },
-                  ].map((opt) => (
-                    <Pressable
-                      key={opt.value}
-                      style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
-                      onPress={(e) => {
-                        e.stopPropagation();
-                        setSortBy(opt.value);
-                        setShowSortMenu(false);
-                        const currentTab = tab || 'dishes';
-                        const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
-                        router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
-                      }}
-                    >
-                      <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
-                        {opt.label}
-                      </Text>
-                    </Pressable>
-                  ))}
-                </View>
-              )}
+        <View style={styles.tabsWrap}>
+          <View style={[styles.tabs, { overflow: 'visible' }]}>
+            <Pressable
+              onPress={() => setTab('dishes')}
+              style={[styles.tab, styles.tabSpacing]}
+            >
+              <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setTab('chefs')}
+              style={[styles.tab, styles.tabSpacing]}
+            >
+              <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
+            </Pressable>
+            <Pressable
+              onPress={() => setTab('cuisines')}
+              style={[styles.tab, styles.tabSpacing]}
+            >
+              <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
+            </Pressable>
           </View>
-        )}
+
+          {tab === 'dishes' && (
+            <View style={styles.tabsRight}>
+              <View style={{ position: 'relative', flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
+                <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <TouchableOpacity 
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (!showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
+                        // Calculate position synchronously before showing dropdown for smooth animation
+                        // @ts-ignore - web-specific
+                        const button = sortButtonRef.current as any;
+                        if (button && typeof button.getBoundingClientRect === 'function') {
+                          const rect = button.getBoundingClientRect();
+                          setDropdownPosition({
+                            top: rect.bottom + 8,
+                            right: window.innerWidth - rect.right,
+                          });
+                          setDropdownReady(true);
+                        }
+                      }
+                      setShowSortMenu(!showSortMenu);
+                    }}
+                    style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}
+                  >
+                    <Image
+                      source={require('../../assets/controls (1).png')}
+                      style={{ width: 20, height: 20, tintColor: '#FE734C' }}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                </View>
+                
+                {showSortMenu && Platform.OS !== 'web' && (
+                  <View 
+                    ref={sortMenuRef} 
+                    style={styles.dropdownMenu}
+                    onStartShouldSetResponder={() => true}
+                    onResponderGrant={() => {}}
+                  >
+                    {[
+                      { label: 'None', value: 'none' },
+                      { label: 'Nearest', value: 'nearest' },
+                      { label: 'Price low to high', value: 'price_asc' },
+                      { label: 'Price high to low', value: 'price_desc' },
+                    ].map((opt) => (
+                      <Pressable
+                        key={opt.value}
+                        style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
+                        onPress={(e) => {
+                          e.stopPropagation();
+                          setSortBy(opt.value);
+                          setShowSortMenu(false);
+                          const currentTab = tab || 'dishes';
+                          const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                          router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+                        }}
+                      >
+                        <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
+                          {opt.label}
+                        </Text>
+                      </Pressable>
+                    ))}
+                  </View>
+                )}
+              </View>
+            </View>
+          )}
         </View>
 
         {/* Old search bar removed */}
@@ -819,9 +823,6 @@ export default function BrowsePage() {
                   dish={dish} 
                   variant="explore"
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }} 
-                  chefNameColor="#33393A"
-                  ratingColor="#FE734C"
-                  priceColor="#FE734C"
                 />
               </View>
             ))}
@@ -833,7 +834,6 @@ export default function BrowsePage() {
                 <ChefCard 
                   chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
-                  nameColor="#FE734C"
                   ratingColor="#FE734C"
                 />
               </View>
@@ -913,23 +913,37 @@ export default function BrowsePage() {
 
 const styles = StyleSheet.create({
   title: {
-    fontSize: 28,
+    fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: '800',
     color: '#33393A',
+    textAlign: 'left',
   },
   subtitle: {
     color: '#33393A',
     marginTop: 4,
-    textAlign: 'center',
+    textAlign: 'left',
+  },
+  tabsWrap: {
+    position: 'relative',
+    width: '100%',
+    marginBottom: 16,
+    justifyContent: 'center',
   },
   tabs: {
     flexDirection: 'row',
     alignSelf: 'center',
-    marginBottom: 16,
     alignItems: 'center',
     justifyContent: 'center',
     flexWrap: 'nowrap',
+  },
+  tabsRight: {
+    position: 'absolute',
+    right: 0,
+    top: 0,
+    bottom: 0,
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   tab: {
     paddingHorizontal: 12,
@@ -937,6 +951,7 @@ const styles = StyleSheet.create({
     flexShrink: 0,
     minHeight: 20,
     justifyContent: 'center',
+    alignItems: 'center',
   },
   tabText: {
     color: '#33393A',
@@ -944,6 +959,7 @@ const styles = StyleSheet.create({
     fontWeight: '400',
     fontSize: 20,
     lineHeight: 20,
+    textAlign: 'center',
   },
   tabTextActive: {
     color: '#FE734C',
