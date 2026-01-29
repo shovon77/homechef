@@ -64,12 +64,14 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       backgroundColor: isActive ? activeColor : 'transparent',
       cursor: 'pointer',
       marginRight: isActive ? '8px' : '0px', // Add margin when active to prevent touching location icon
+      flexWrap: 'nowrap',
     };
     const textStyle = {
       fontWeight: isActive ? '700' : '600',
       color: isActive ? '#FFFFFF' : TEXT_DARK,
       fontFamily: theme.typography.fontFamily.body,
       fontSize: '14px',
+      whiteSpace: 'nowrap',
     };
     
     return (
@@ -101,7 +103,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
         <Text style={StyleSheet.flatten([
           styles.navLinkText, 
           isActive && { color: '#FFFFFF', fontWeight: '700' as any }
-        ])}>
+        ])} numberOfLines={1}>
           {label}
         </Text>
       </TouchableOpacity>
@@ -785,7 +787,7 @@ export default function NavBar() {
         {/* Center Section: Navigation */}
         {!isAuthPage && (
         <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
-          <NavButton href="/browse" label="Explore" isActive={isExploreActive} icon={Compass} />
+          <NavButton href="/browse" label="Explore" isActive={isExploreActive} />
             {!loggedIn && (
               <NavButton href="/auth" label="Sign-up" isActive={false} />
             )}
