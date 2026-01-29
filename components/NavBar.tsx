@@ -21,7 +21,10 @@ let Menu: any = null;
 let X: any = null;
 if (Platform.OS === 'web') {
   try {
-    motion = require('framer-motion');
+    // framer-motion CJS export shape is typically { motion, m, ... }
+    // We normalize it so `motion.div` is always defined when available.
+    const fm = require('framer-motion');
+    motion = fm?.motion || fm?.m || null;
     const lucide = require('lucide-react');
     Compass = lucide.Compass;
     Menu = lucide.Menu;
@@ -45,7 +48,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
   const activeColor = '#FE734C'; // Updated brand color
 
   // Web version with framer-motion animations
-  if (Platform.OS === 'web' && motion) {
+  if (Platform.OS === 'web' && motion?.div) {
     const MotionDiv = motion.div;
     
     // Merge all styles into single objects - NO arrays for DOM elements
