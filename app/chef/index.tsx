@@ -24,6 +24,7 @@ import { useRole } from '../../hooks/useRole';
 import type { Profile, OrderStatus } from '../../lib/types';
 import FilePicker from '../../components/FilePicker';
 import { createNotification } from '../../lib/notifications';
+import { Stars } from '../../components/ui/Stars';
 
 // Colors matching homepage
 const PRIMARY_COLOR = '#FE734C';
@@ -271,10 +272,16 @@ export default function ChefDashboard() {
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
   const [earningsRange, setEarningsRange] = useState<'week' | 'month'>('week');
-  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; comment: string | null; created_at: string; user_email?: string; user_name?: string }>>([]);
+  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; comment: string | null; created_at: string; user_email?: string; user_name?: string; user_id?: string; images?: any; type?: 'chef_review' }>>([]);
   const [reviewsLoading, setReviewsLoading] = useState(false);
   const [reviewSearch, setReviewSearch] = useState('');
   const [reviewSort, setReviewSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
+  const [dishRatings, setDishRatings] = useState<Array<{ id: number; dish_id: number; rating: number; comment: string | null; created_at: string; user_id?: string; user_name?: string; user_email?: string; dish_name?: string; type?: 'dish_rating' }>>([]);
+  const [dishRatingsLoading, setDishRatingsLoading] = useState(false);
+  const [reviewsPage, setReviewsPage] = useState(1);
+  const reviewsPerPage = 5;
+  const [menuPage, setMenuPage] = useState(1);
+  const menuPerPage = 5;
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoModalTitle, setInfoModalTitle] = useState('');
@@ -290,11 +297,27 @@ export default function ChefDashboard() {
   const recognitionRef = useRef<any>(null);
   const [financialDateFilter, setFinancialDateFilter] = useState<'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime'>('alltime');
   const [showFinancialDropdown, setShowFinancialDropdown] = useState(false);
+  const [showReviewReplyModal, setShowReviewReplyModal] = useState(false);
+  const [selectedReviewId, setSelectedReviewId] = useState<number | null>(null);
+  const [selectedReviewUserId, setSelectedReviewUserId] = useState<string | null>(null);
+  const [reviewReplyText, setReviewReplyText] = useState('');
+  const [sendingReviewReply, setSendingReviewReply] = useState(false);
+  const [isRecordingReviewReply, setIsRecordingReviewReply] = useState(false);
+  const reviewReplyRecognitionRef = useRef<any>(null);
 
   const showInfo = (title: string, message: string) => {
     setInfoModalTitle(title);
     setInfoModalMessage(message);
     setShowInfoModal(true);
+  };
+
+  const formatReviewDate = (dateString: string): string => {
+    const date = new Date(dateString);
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+    return `${month} ${day}, ${year}`;
   };
   
   type MessageWithUser = {
@@ -601,6 +624,8 @@ export default function ChefDashboard() {
       }
 
       setDishes(p => [...p, created]);
+      // Reset to first page when new dish is added
+      setMenuPage(1);
       setMsg('Dish created ✓');
       setTimeout(() => setMsg(null), 3000);
     } catch (e: any) {
@@ -680,7 +705,15 @@ export default function ChefDashboard() {
         try {
           const { error } = await supabase.from('dishes').delete().eq('id', id);
           if (error) throw error;
-          setDishes(prev => prev.filter(d => d.id !== id));
+          setDishes(prev => {
+            const filtered = prev.filter(d => d.id !== id);
+            // Adjust page if current page is beyond available pages
+            const totalPages = Math.ceil(filtered.length / menuPerPage);
+            if (menuPage > totalPages && totalPages > 0) {
+              setMenuPage(totalPages);
+            }
+            return filtered;
+          });
           setMsg('Dish deleted ✓');
           setTimeout(() => setMsg(null), 3000);
         } catch (e: any) {
@@ -704,7 +737,15 @@ export default function ChefDashboard() {
           try {
             const { error } = await supabase.from('dishes').delete().eq('id', id);
             if (error) throw error;
-            setDishes(prev => prev.filter(d => d.id !== id));
+            setDishes(prev => {
+            const filtered = prev.filter(d => d.id !== id);
+            // Adjust page if current page is beyond available pages
+            const totalPages = Math.ceil(filtered.length / menuPerPage);
+            if (menuPage > totalPages && totalPages > 0) {
+              setMenuPage(totalPages);
+            }
+            return filtered;
+          });
             setMsg('Dish deleted ✓');
             setTimeout(() => setMsg(null), 3000);
           } catch (e: any) {
@@ -1330,82 +1371,277 @@ export default function ChefDashboard() {
     }
   };
 
+  const handleStartReviewReplyVoiceInput = () => {
+    if (Platform.OS !== 'web') {
+      Alert.alert('Info', 'Voice dictation is currently only available on web');
+      return;
+    }
+
+    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
+      Alert.alert('Not Supported', 'Voice dictation is not supported in this browser');
+      return;
+    }
+
+    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
+    const recognition = new SpeechRecognition();
+    recognition.continuous = false;
+    recognition.interimResults = false;
+    recognition.lang = 'en-US';
+
+    recognition.onstart = () => {
+      setIsRecordingReviewReply(true);
+    };
+
+    recognition.onresult = (event: any) => {
+      const transcript = event.results[0][0].transcript;
+      setReviewReplyText(prev => prev + (prev ? ' ' : '') + transcript);
+      setIsRecordingReviewReply(false);
+      recognition.stop();
+    };
+
+    recognition.onerror = (event: any) => {
+      console.error('Speech recognition error:', event.error);
+      setIsRecordingReviewReply(false);
+      recognition.stop();
+    };
+
+    recognition.onend = () => {
+      setIsRecordingReviewReply(false);
+    };
+
+    recognition.start();
+    reviewReplyRecognitionRef.current = recognition;
+  };
+
+  const handleStopReviewReplyVoiceInput = () => {
+    if (reviewReplyRecognitionRef.current) {
+      reviewReplyRecognitionRef.current.stop();
+      setIsRecordingReviewReply(false);
+    }
+  };
+
+  const handleSendReviewReply = async () => {
+    if (!selectedReviewId || !chef || !reviewReplyText.trim()) return;
+    
+    setSendingReviewReply(true);
+    try {
+      // Insert reply into chef_review_replies table
+      const { error: replyError } = await supabase
+        .from('chef_review_replies')
+        .insert({
+          review_id: selectedReviewId,
+          chef_id: chef.id,
+          reply_text: reviewReplyText.trim(),
+          created_at: new Date().toISOString(),
+        });
+
+      if (replyError) {
+        // Check if the error is because the table doesn't exist
+        if (replyError.message?.includes('does not exist') || replyError.code === '42P01') {
+          Alert.alert(
+            'Database Setup Required',
+            'The chef_review_replies table has not been created yet. Please run the migration script in Supabase first. See docs/SUPABASE_REVIEW_CHANGES.md for instructions.'
+          );
+        } else {
+          console.error('Error saving review reply:', replyError);
+          Alert.alert('Error', 'Failed to send reply. Please try again.');
+        }
+        return;
+      }
+
+      // Create notification for the user
+      if (selectedReviewUserId) {
+        try {
+          await createNotification(
+            selectedReviewUserId,
+            'review_reply',
+            'Chef Replied to Your Review',
+            `The chef has replied to your review.`,
+            selectedReviewId,
+            'review'
+          );
+        } catch (notifError) {
+          console.error('Error creating notification for review reply:', notifError);
+        }
+      }
+
+      Alert.alert('Success', 'Reply sent successfully!');
+      setShowReviewReplyModal(false);
+      setReviewReplyText('');
+      setSelectedReviewId(null);
+      setSelectedReviewUserId(null);
+      
+      // Refresh reviews to show the reply
+      if (chef) {
+        await loadReviews(chef.id);
+      }
+    } catch (err: any) {
+      console.error('Error sending review reply:', err);
+      Alert.alert('Error', err?.message || 'Failed to send reply. Please try again.');
+    } finally {
+      setSendingReviewReply(false);
+    }
+  };
+
   async function loadReviews(chefId: number) {
     setReviewsLoading(true);
+    setDishRatingsLoading(true);
     try {
+      // Load chef reviews
       const { data: reviewsData, error } = await supabase
         .from('chef_reviews')
-        .select('id, rating, comment, created_at, user_id')
+        .select('id, rating, comment, created_at, user_id, images')
         .eq('chef_id', chefId)
         .order('created_at', { ascending: false });
 
-      if (error) throw error;
+      if (error) {
+        console.error('Error loading reviews:', error);
+        throw error;
+      }
 
-      const userIds = [...new Set((reviewsData || []).map((r: any) => r.user_id).filter((id): id is string => Boolean(id)))];
-      const { data: profilesData } = userIds.length > 0
-        ? await supabase.from('profiles').select('id, email, name').in('id', userIds)
+      console.log(`Loaded ${reviewsData?.length || 0} reviews for chef ${chefId}`);
+
+      // Load all dishes for this chef
+      const { data: dishesData, error: dishesError } = await supabase
+        .from('dishes')
+        .select('id, name')
+        .eq('chef_id', chefId);
+
+      if (dishesError) {
+        console.error('Error loading dishes:', dishesError);
+      }
+
+      const dishIds = (dishesData || []).map(d => d.id);
+      console.log(`Found ${dishIds.length} dishes for chef ${chefId}`);
+
+      // Load dish ratings for all dishes
+      let allDishRatings: any[] = [];
+      if (dishIds.length > 0) {
+        const { data: dishRatingsData, error: dishRatingsError } = await supabase
+          .from('dish_ratings')
+          .select('id, dish_id, rating, stars, comment, created_at, user_id')
+          .in('dish_id', dishIds)
+          .order('created_at', { ascending: false });
+
+        if (dishRatingsError) {
+          console.error('Error loading dish ratings:', dishRatingsError);
+        } else {
+          allDishRatings = dishRatingsData || [];
+          console.log(`Loaded ${allDishRatings.length} dish ratings`);
+        }
+      }
+
+      // Get all user IDs from both reviews and dish ratings
+      const allUserIds = [
+        ...(reviewsData || []).map((r: any) => r.user_id),
+        ...allDishRatings.map((r: any) => r.user_id)
+      ].filter((id): id is string => Boolean(id));
+      const uniqueUserIds = [...new Set(allUserIds)];
+
+      // Load user profiles
+      const { data: profilesData } = uniqueUserIds.length > 0
+        ? await supabase.from('profiles').select('id, email, name').in('id', uniqueUserIds)
         : { data: [], error: null };
       const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
       const nameMap = new Map((profilesData || []).map((p: any) => [p.id, p.name || null]));
 
+      // Process chef reviews
       const reviewsWithUsers = (reviewsData || []).map((r: any) => {
         const email = r.user_id ? (emailMap.get(r.user_id) || '') : '';
         const name = r.user_id ? (nameMap.get(r.user_id) || null) : null;
-        // Use actual name from profile, or Anonymous if no name
         return {
           id: r.id,
           rating: r.rating,
           comment: r.comment,
           created_at: r.created_at,
+          user_id: r.user_id,
           user_email: email || undefined,
-          user_name: name || 'Anonymous',
+          user_name: name || email || 'Anonymous',
+          images: r.images,
+          type: 'chef_review' as const,
         };
       });
 
+      // Process dish ratings
+      const dishMap = new Map((dishesData || []).map((d: any) => [d.id, d.name]));
+      const dishRatingsWithUsers = allDishRatings.map((r: any) => {
+        const rating = r.rating ?? r.stars ?? 0;
+        const email = r.user_id ? (emailMap.get(r.user_id) || '') : '';
+        const name = r.user_id ? (nameMap.get(r.user_id) || null) : null;
+        return {
+          id: r.id,
+          dish_id: r.dish_id,
+          rating: rating,
+          comment: r.comment,
+          created_at: r.created_at,
+          user_id: r.user_id,
+          user_email: email || undefined,
+          user_name: name || email || 'Anonymous',
+          dish_name: dishMap.get(r.dish_id) || 'Unknown Dish',
+          type: 'dish_rating' as const,
+        };
+      });
+
+      console.log(`Processed ${reviewsWithUsers.length} chef reviews and ${dishRatingsWithUsers.length} dish ratings`);
       setReviews(reviewsWithUsers);
+      setDishRatings(dishRatingsWithUsers);
     } catch (e: any) {
       console.error('loadReviews error', e);
       setReviews([]);
+      setDishRatings([]);
     } finally {
       setReviewsLoading(false);
+      setDishRatingsLoading(false);
     }
   }
 
   const reviewStats = useMemo(() => {
-    if (reviews.length === 0) return { avg: 0, count: 0 };
-    const sum = reviews.reduce((acc, r) => acc + r.rating, 0);
-    return { avg: sum / reviews.length, count: reviews.length };
-  }, [reviews]);
+    const allRatings = [
+      ...reviews.map(r => r.rating),
+      ...dishRatings.map(r => r.rating)
+    ];
+    if (allRatings.length === 0) return { avg: 0, count: 0 };
+    const sum = allRatings.reduce((acc, r) => acc + r, 0);
+    return { avg: sum / allRatings.length, count: allRatings.length };
+  }, [reviews, dishRatings]);
 
   const filteredAndSortedReviews = useMemo(() => {
-    let filtered = reviews;
+    // Combine chef reviews and dish ratings
+    const allItems = [
+      ...reviews.map(r => ({ ...r, type: 'chef_review' as const })),
+      ...dishRatings.map(r => ({ ...r, type: 'dish_rating' as const }))
+    ];
+    
+    let filtered = allItems;
     
     if (reviewSearch.trim()) {
       const searchLower = reviewSearch.toLowerCase();
       filtered = filtered.filter(r => 
         r.comment?.toLowerCase().includes(searchLower) ||
         r.user_name?.toLowerCase().includes(searchLower) ||
-        r.user_email?.toLowerCase().includes(searchLower)
+        r.user_email?.toLowerCase().includes(searchLower) ||
+        (r.type === 'dish_rating' && (r as any).dish_name?.toLowerCase().includes(searchLower))
       );
     }
 
+    // Always sort by newest to oldest
     const sorted = [...filtered];
-    switch (reviewSort) {
-      case 'newest':
-        sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-        break;
-      case 'oldest':
-        sorted.sort((a, b) => new Date(a.created_at).getTime() - new Date(b.created_at).getTime());
-        break;
-      case 'highest':
-        sorted.sort((a, b) => b.rating - a.rating);
-        break;
-      case 'lowest':
-        sorted.sort((a, b) => a.rating - b.rating);
-        break;
-    }
+    sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
     return sorted;
-  }, [reviews, reviewSearch, reviewSort]);
+  }, [reviews, dishRatings, reviewSearch]);
+
+  const paginatedReviews = useMemo(() => {
+    const startIndex = (reviewsPage - 1) * reviewsPerPage;
+    const endIndex = startIndex + reviewsPerPage;
+    return filteredAndSortedReviews.slice(startIndex, endIndex);
+  }, [filteredAndSortedReviews, reviewsPage, reviewsPerPage]);
+
+  const totalPages = Math.ceil(filteredAndSortedReviews.length / reviewsPerPage);
+
+  // Reset to page 1 when search changes
+  useEffect(() => {
+    setReviewsPage(1);
+  }, [reviewSearch]);
 
   if (loading) {
     return (
@@ -1854,7 +2090,10 @@ export default function ChefDashboard() {
                 }}
               >
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          {statusLabel}{count > 0 ? ` (${count})` : ''}
+                          {statusLabel}
+                          {count > 0 && (
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
+                          )}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -1875,7 +2114,10 @@ export default function ChefDashboard() {
                         }}
                       >
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          Declined{declinedCount > 0 ? ` (${declinedCount})` : ''}
+                          Declined
+                          {declinedCount > 0 && (
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {declinedCount}</Text>
+                          )}
                         </Text>
               </TouchableOpacity>
             );
@@ -2069,7 +2311,59 @@ export default function ChefDashboard() {
         {dishes.length === 0 ? (
           <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
         ) : (
-          dishes.map(d => <DishEditor key={d.id} dish={d} onSave={updateDish} onDelete={deleteDish} saving={saving} />)
+          <>
+            {(() => {
+              const startIndex = (menuPage - 1) * menuPerPage;
+              const endIndex = startIndex + menuPerPage;
+              const paginatedDishes = dishes.slice(startIndex, endIndex);
+              const totalMenuPages = Math.ceil(dishes.length / menuPerPage);
+              
+              return (
+                <>
+                  {paginatedDishes.map(d => <DishEditor key={d.id} dish={d} onSave={updateDish} onDelete={deleteDish} saving={saving} />)}
+                  
+                  {/* Pagination Controls */}
+                  {totalMenuPages > 1 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT, position: 'relative' }}>
+                      <TouchableOpacity
+                        onPress={() => setMenuPage(prev => Math.max(1, prev - 1))}
+                        disabled={menuPage === 1}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          borderRadius: 8,
+                          backgroundColor: menuPage === 1 ? BORDER_LIGHT : PRIMARY_COLOR,
+                          opacity: menuPage === 1 ? 0.5 : 1,
+                        }}
+                      >
+                        <Text style={{ color: menuPage === 1 ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Previous</Text>
+                      </TouchableOpacity>
+                      
+                      <View style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                        <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>
+                          Page {menuPage} of {totalMenuPages}
+                        </Text>
+                      </View>
+                      
+                      <TouchableOpacity
+                        onPress={() => setMenuPage(prev => Math.min(totalMenuPages, prev + 1))}
+                        disabled={menuPage === totalMenuPages}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          borderRadius: 8,
+                          backgroundColor: menuPage === totalMenuPages ? BORDER_LIGHT : PRIMARY_COLOR,
+                          opacity: menuPage === totalMenuPages ? 0.5 : 1,
+                        }}
+                      >
+                        <Text style={{ color: menuPage === totalMenuPages ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Next</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </>
+              );
+            })()}
+          </>
         )}
       </View>
     </ScrollView>
@@ -2201,31 +2495,13 @@ export default function ChefDashboard() {
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {/* Rating Summary Card */}
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Reviews summary</Text>
         <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Text style={{ fontSize: 24, color: PRIMARY_COLOR }}>☆</Text>
             <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
               {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
             </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-            {[1, 2, 3, 4, 5].map((star) => {
-              const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
-              if (star <= Math.floor(rounded)) {
-                  return <Text key={star} style={{ fontSize: 28, color: PRIMARY_COLOR }}>★</Text>;
-              } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
-                  // Half star - show half-filled using overlay technique
-                  return (
-                    <View key={star} style={{ position: 'relative', width: 28, height: 28, justifyContent: 'center', alignItems: 'center' }}>
-                      <Text style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>
-                      <View style={{ position: 'absolute', left: 0, top: 0, width: 14, height: 28, overflow: 'hidden' }}>
-                        <Text style={{ fontSize: 28, color: PRIMARY_COLOR, lineHeight: 28 }}>★</Text>
-                      </View>
-                    </View>
-                  );
-              } else {
-                  return <Text key={star} style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>;
-              }
-            })}
-          </View>
           </View>
           <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4 }}>
               Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
@@ -2285,44 +2561,53 @@ export default function ChefDashboard() {
       ) : (
         <View style={{ gap: 16 }}>
           {filteredAndSortedReviews.map((review) => {
-            const reviewDate = new Date(review.created_at);
-            const daysAgo = Math.floor((Date.now() - reviewDate.getTime()) / (1000 * 60 * 60 * 24));
-            const timeAgo = daysAgo === 0 ? 'Today' : daysAgo === 1 ? '1 day ago' : daysAgo < 7 ? `${daysAgo} days ago` : daysAgo < 30 ? `${Math.floor(daysAgo / 7)} weeks ago` : `${Math.floor(daysAgo / 30)} months ago`;
-
             return (
               <View key={review.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                <View style={{ flexDirection: 'row', gap: 16 }}>
-                  <View style={{ width: 48, height: 48, borderRadius: 24, backgroundColor: PRIMARY_COLOR + '20', alignItems: 'center', justifyContent: 'center' }}>
-                    <Text style={{ fontSize: 20 }}>{review.user_name?.[0]?.toUpperCase() || 'A'}</Text>
+                <View style={{ gap: 12 }}>
+                  {/* Stars at top left - show only filled stars */}
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                    {Array.from({ length: Math.floor(review.rating) }).map((_, i) => (
+                      <Text key={i} style={{ fontSize: 16, color: PRIMARY_COLOR }}>☆</Text>
+                    ))}
                   </View>
-                  <View style={{ flex: 1, gap: 8 }}>
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-                      <View>
-                        <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700' }}>{review.user_name || 'Anonymous'}</Text>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginTop: 4 }}>
-                          <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700' }}>
-                            {review.rating.toFixed(1)}
-                          </Text>
-                          <View style={{ flexDirection: 'row' }}>
-                          {[1, 2, 3, 4, 5].map((star) => (
-                              <Text key={star} style={{ fontSize: 16, color: star <= review.rating ? PRIMARY_COLOR : '#D1D5DB' }}>★</Text>
-                          ))}
-                          </View>
-                        </View>
-                      </View>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{timeAgo}</Text>
+                  
+                  {/* Comment */}
+                  {review.comment && (
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>"{review.comment}"</Text>
+                  )}
+                  
+                  {/* Review images if any */}
+                  {(review as any).images && Array.isArray((review as any).images) && (review as any).images.length > 0 && (
+                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                      {(review as any).images.map((imageUrl: string, idx: number) => (
+                        <Image
+                          key={idx}
+                          source={{ uri: imageUrl }}
+                          style={{ width: 80, height: 80, borderRadius: 8 }}
+                          resizeMode="cover"
+                        />
+                      ))}
                     </View>
-                    {review.comment && (
-                      <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>"{review.comment}"</Text>
-                    )}
-                    <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
-                      <TouchableOpacity>
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700' }}>Reply</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Report</Text>
-                      </TouchableOpacity>
-                    </View>
+                  )}
+                  
+                  {/* Reply button */}
+                  <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
+                    <TouchableOpacity
+                      onPress={() => {
+                        setSelectedReviewId(review.id);
+                        setSelectedReviewUserId(review.user_id || null);
+                        setReviewReplyText('');
+                        setShowReviewReplyModal(true);
+                      }}
+                    >
+                      <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700' }}>Reply</Text>
+                    </TouchableOpacity>
+                  </View>
+                  
+                  {/* Name and date at bottom */}
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>{review.user_name || review.user_email || 'Anonymous'}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{formatReviewDate(review.created_at)}</Text>
                   </View>
                 </View>
               </View>
@@ -2613,7 +2898,10 @@ export default function ChefDashboard() {
                         }}
                       >
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          {statusLabel}{count > 0 ? ` (${count})` : ''}
+                          {statusLabel}
+                          {count > 0 && (
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
+                          )}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -2634,7 +2922,10 @@ export default function ChefDashboard() {
                         }}
                       >
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          Declined{declinedCount > 0 ? ` (${declinedCount})` : ''}
+                          Declined
+                          {declinedCount > 0 && (
+                            <Text style={{ color: PRIMARY_COLOR }}> {declinedCount}</Text>
+                          )}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -2841,7 +3132,10 @@ export default function ChefDashboard() {
                         }}
                       >
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          {statusLabel}{count > 0 ? ` (${count})` : ''}
+                          {statusLabel}
+                          {count > 0 && (
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
+                          )}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -2862,7 +3156,10 @@ export default function ChefDashboard() {
                         }}
                       >
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          Declined{declinedCount > 0 ? ` (${declinedCount})` : ''}
+                          Declined
+                          {declinedCount > 0 && (
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {declinedCount}</Text>
+                          )}
                         </Text>
                       </TouchableOpacity>
                     );
@@ -2987,74 +3284,164 @@ export default function ChefDashboard() {
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
               {/* Rating Summary Card */}
               <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Reviews summary</Text>
                 <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                      {reviewStats.avg.toFixed(1)}
-                    </Text>
-                    <View style={{ flexDirection: 'row', alignItems: 'center' }}>
-                      {[1, 2, 3, 4, 5].map((star) => {
-                        const rounded = Math.round(reviewStats.avg * 2) / 2; // Round to nearest 0.5
-                        if (star <= Math.floor(rounded)) {
-                          return <Text key={star} style={{ fontSize: 28, color: PRIMARY_COLOR }}>★</Text>;
-                        } else if (star === Math.ceil(rounded) && rounded % 1 === 0.5) {
-                          // Half star - show half-filled using overlay technique
-                          return (
-                            <View key={star} style={{ position: 'relative', width: 28, height: 28, justifyContent: 'center', alignItems: 'center' }}>
-                              <Text style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>
-                              <View style={{ position: 'absolute', left: 0, top: 0, width: 14, height: 28, overflow: 'hidden' }}>
-                                <Text style={{ fontSize: 28, color: PRIMARY_COLOR, lineHeight: 28 }}>★</Text>
-                              </View>
-                            </View>
-                          );
-                        } else {
-                          return <Text key={star} style={{ fontSize: 28, color: '#D1D5DB' }}>★</Text>;
-                        }
-                      })}
+                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Text style={{ fontSize: 24, color: PRIMARY_COLOR }}>☆</Text>
+                      <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
+                        {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
+                      </Text>
+                    </View>
+                    <View style={{ flex: 1, gap: 4 }}>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                        {reviewStats.count} total {reviewStats.count === 1 ? 'rating' : 'ratings'}
+                      </Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                        {dishRatings.length} dish {dishRatings.length === 1 ? 'rating' : 'ratings'}
+                      </Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                        {reviews.length} chef {reviews.length === 1 ? 'review' : 'reviews'}
+                      </Text>
                     </View>
                   </View>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4 }}>
-                    Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
-                  </Text>
                 </View>
               </View>
+
+              {/* Search */}
+              <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, justifyContent: 'space-between', alignItems: Platform.OS === 'web' ? 'center' : 'stretch' }}>
+                <View style={{ flex: Platform.OS === 'web' ? 1 : 1, position: 'relative', maxWidth: Platform.OS === 'web' ? 400 : '100%' }}>
+                  <View style={{ position: 'absolute', left: 12, top: 12, zIndex: 1, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}>
+                    <Image 
+                      source={require('../../assets/search.png')} 
+                      style={{ width: 24, height: 24, tintColor: PRIMARY_COLOR }}
+                      resizeMode="contain"
+                    />
+                  </View>
+                  <TextInput
+                    value={reviewSearch}
+                    onChangeText={setReviewSearch}
+                    placeholder="Search reviews..."
+                    placeholderTextColor={TEXT_MUTED}
+                    style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }}
+                  />
+                </View>
+              </View>
+
               {/* Reviews List */}
-              {filteredAndSortedReviews.length > 0 ? (
+              {(reviewsLoading || dishRatingsLoading) ? (
+                <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
+                  <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+                  <Text style={{ color: TEXT_MUTED, marginTop: 16 }}>Loading reviews...</Text>
+                </View>
+              ) : filteredAndSortedReviews.length === 0 ? (
+                <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 32, alignItems: 'center' }}>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 16 }}>
+                    {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
+                  </Text>
+                </View>
+              ) : (
                 <View style={{ gap: 16 }}>
-                  {filteredAndSortedReviews.map(review => (
-                    <View key={review.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                      <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: 12 }}>
-                        <View style={{ flex: 1 }}>
-                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700', marginBottom: 4 }}>
-                            {review.user_name || 'Anonymous'}
-                          </Text>
-                          <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>
-                            {formatLocal(review.created_at)}
-                          </Text>
-                        </View>
-                        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '700' }}>
-                            {review.rating.toFixed(1)}
-                          </Text>
-                          <View style={{ flexDirection: 'row' }}>
-                            {[1, 2, 3, 4, 5].map((star) => (
-                              <Text key={star} style={{ fontSize: 20, color: star <= review.rating ? PRIMARY_COLOR : '#D1D5DB' }}>★</Text>
+                  {paginatedReviews.map((item) => {
+                    const isDishRating = item.type === 'dish_rating';
+                    return (
+                      <View key={`${item.type}-${item.id}`} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
+                        <View style={{ gap: 12 }}>
+                          {/* Stars at top left - show only filled stars */}
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
+                            {Array.from({ length: Math.floor(item.rating) }).map((_, i) => (
+                              <Text key={i} style={{ fontSize: 16, color: PRIMARY_COLOR }}>☆</Text>
                             ))}
+                          </View>
+                          
+                          {/* Dish name for dish ratings */}
+                          {isDishRating && (item as any).dish_name && (
+                            <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600' }}>
+                              {(item as any).dish_name}
+                            </Text>
+                          )}
+                          
+                          {/* Comment */}
+                          {item.comment && (
+                            <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>"{item.comment}"</Text>
+                          )}
+                          
+                          {/* Review images if any (only for chef reviews) */}
+                          {!isDishRating && (item as any).images && Array.isArray((item as any).images) && (item as any).images.length > 0 && (
+                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
+                              {(item as any).images.map((imageUrl: string, idx: number) => (
+                                <Image
+                                  key={idx}
+                                  source={{ uri: imageUrl }}
+                                  style={{ width: 80, height: 80, borderRadius: 8 }}
+                                  resizeMode="cover"
+                                />
+                              ))}
+                            </View>
+                          )}
+                          
+                          {/* Name, date, and reply button at bottom */}
+                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
+                            <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>
+                              - {item.user_name || item.user_email || 'Anonymous'} • {formatReviewDate(item.created_at)}
+                            </Text>
+                            {!isDishRating && (
+                              <TouchableOpacity
+                                onPress={() => {
+                                  setSelectedReviewId(item.id);
+                                  setSelectedReviewUserId(item.user_id || null);
+                                  setReviewReplyText('');
+                                  setShowReviewReplyModal(true);
+                                }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700' }}>Reply</Text>
+                              </TouchableOpacity>
+                            )}
                           </View>
                         </View>
                       </View>
-                      {review.comment && (
-                        <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>
-                          {review.comment}
+                    );
+                  })}
+                  
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT, position: 'relative' }}>
+                      <TouchableOpacity
+                        onPress={() => setReviewsPage(prev => Math.max(1, prev - 1))}
+                        disabled={reviewsPage === 1}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          borderRadius: 8,
+                          backgroundColor: reviewsPage === 1 ? BORDER_LIGHT : PRIMARY_COLOR,
+                          opacity: reviewsPage === 1 ? 0.5 : 1,
+                        }}
+                      >
+                        <Text style={{ color: reviewsPage === 1 ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Previous</Text>
+                      </TouchableOpacity>
+                      
+                      <View style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
+                        <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>
+                          Page {reviewsPage} of {totalPages}
                         </Text>
-                      )}
+                      </View>
+                      
+                      <TouchableOpacity
+                        onPress={() => setReviewsPage(prev => Math.min(totalPages, prev + 1))}
+                        disabled={reviewsPage === totalPages}
+                        style={{
+                          paddingVertical: 8,
+                          paddingHorizontal: 16,
+                          borderRadius: 8,
+                          backgroundColor: reviewsPage === totalPages ? BORDER_LIGHT : PRIMARY_COLOR,
+                          opacity: reviewsPage === totalPages ? 0.5 : 1,
+                        }}
+                      >
+                        <Text style={{ color: reviewsPage === totalPages ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Next</Text>
+                      </TouchableOpacity>
                     </View>
-                  ))}
+                  )}
                 </View>
-              ) : (
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', padding: 32 }}>
-                  {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
-                </Text>
               )}
             </ScrollView>
           )}
@@ -3201,6 +3588,74 @@ export default function ChefDashboard() {
     </ScrollView>
         </View>
       </View>
+      </Modal>
+
+      {/* Review Reply Modal */}
+      <Modal
+        visible={showReviewReplyModal}
+        animationType="fade"
+        transparent={true}
+        onRequestClose={() => {
+          setShowReviewReplyModal(false);
+          setReviewReplyText('');
+          handleStopReviewReplyVoiceInput();
+        }}
+      >
+        <View style={messageModalStyles.modalOverlay}>
+          <View style={messageModalStyles.modalContent}>
+            <View style={messageModalStyles.modalHeader}>
+              <View style={messageModalStyles.modalTitleContainer}>
+                <Text style={messageModalStyles.modalTitle}>Reply to Review</Text>
+                <Text style={messageModalStyles.modalSubtitle}>Review #{selectedReviewId}</Text>
+              </View>
+              <TouchableOpacity
+                onPress={() => {
+                  setShowReviewReplyModal(false);
+                  setReviewReplyText('');
+                  handleStopReviewReplyVoiceInput();
+                }}
+                style={messageModalStyles.modalCloseButton}
+              >
+                <Text style={messageModalStyles.modalCloseText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={messageModalStyles.modalBody}>
+              <View style={messageModalStyles.messageInputContainer}>
+                <TextInput
+                  style={messageModalStyles.messageInput}
+                  placeholder="Type your reply..."
+                  placeholderTextColor={TEXT_MUTED}
+                  value={reviewReplyText}
+                  onChangeText={setReviewReplyText}
+                  multiline
+                />
+                <View style={messageModalStyles.messageInputActions}>
+                  <TouchableOpacity
+                    style={[messageModalStyles.micButton, isRecordingReviewReply && messageModalStyles.micButtonActive]}
+                    onPress={isRecordingReviewReply ? handleStopReviewReplyVoiceInput : handleStartReviewReplyVoiceInput}
+                  >
+                    <Image 
+                      source={require('../../assets/microphone.png')} 
+                      style={messageModalStyles.micIconImage}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[messageModalStyles.sendButton, (!reviewReplyText.trim() || sendingReviewReply) && messageModalStyles.sendButtonDisabled]}
+                    onPress={handleSendReviewReply}
+                    disabled={!reviewReplyText.trim() || sendingReviewReply}
+                  >
+                    {sendingReviewReply ? (
+                      <ActivityIndicator size="small" color="#FFFFFF" />
+                    ) : (
+                      <Text style={messageModalStyles.sendButtonIcon}>➤</Text>
+                    )}
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          </View>
+        </View>
       </Modal>
 
       {/* Info Modal */}

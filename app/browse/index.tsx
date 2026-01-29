@@ -7,7 +7,6 @@ import { useAuth } from '../../context/AuthContext';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
 import { theme, elev } from '../../lib/theme';
-import { SortIcon } from '../../components/SortIcon';
 import { useLocationModal } from '../../context/LocationModalContext';
 
 const PER_PAGE = 25; // 5x5 grid layout
@@ -733,33 +732,14 @@ export default function BrowsePage() {
                     }
                     setShowSortMenu(!showSortMenu);
                   }}
-                  style={{ flexDirection: 'row', alignItems: 'center', gap: 6, flexShrink: 0 }}
+                  style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}
                 >
-                  <SortIcon size={20} color="#FE734C" />
-                  <Text style={{ fontFamily: theme.typography.fontFamily.display, fontWeight: '700', color: '#475569' }} numberOfLines={1}>
-                    {sortBy === 'none' ? 'Sort' :
-                     sortBy === 'newest' ? 'Newest' :
-                     sortBy === 'nearest' ? 'Nearest' :
-                     sortBy === 'popular' ? 'Popularity' :
-                     sortBy === 'price_asc' ? 'Price ↑' :
-                     'Price ↓'}
-                  </Text>
+                  <Image
+                    source={require('../../assets/menu (1).png')}
+                    style={{ width: 20, height: 20, tintColor: '#FE734C' }}
+                    resizeMode="contain"
+                  />
                 </TouchableOpacity>
-
-                {sortBy !== 'none' && (
-                  <TouchableOpacity 
-                    onPress={() => {
-                      setSortBy('none');
-                      // Update URL to persist sort selection
-                      const currentTab = tab || 'dishes';
-                      const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
-                      router.push(`/browse?tab=${currentTab}${currentQuery}`);
-                    }}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Text style={{ fontSize: 14, color: '#94a3b8', fontWeight: 'bold' }}>✕</Text>
-                  </TouchableOpacity>
-                )}
               </View>
               
               {showSortMenu && Platform.OS !== 'web' && (

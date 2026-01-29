@@ -13,7 +13,8 @@ export type NotificationType =
   | 'chef_application_approved'
   | 'chef_application_rejected'
   | 'new_order_request'
-  | 'new_user_signup';
+  | 'new_user_signup'
+  | 'review_reply';
 
 export interface Notification {
   id: string;

@@ -970,7 +970,7 @@ export default function HomePage() {
                 <View style={styles.howItWorksIconContainer}>
                   <Image 
                     source={require('../assets/search.png')} 
-                    style={{ width: 24, height: 24, tintColor: '#FFFFFF' }} 
+                    style={styles.howItWorksIconImage} 
                     resizeMode="contain"
                   />
                 </View>
@@ -985,7 +985,7 @@ export default function HomePage() {
                 <View style={styles.howItWorksIconContainer}>
                   <Image 
                     source={require('../assets/shopping-cart.png')} 
-                    style={{ width: 24, height: 24, tintColor: '#FFFFFF' }} 
+                    style={styles.howItWorksIconImage} 
                     resizeMode="contain"
                   />
                 </View>
@@ -1000,7 +1000,7 @@ export default function HomePage() {
                 <View style={styles.howItWorksIconContainer}>
                   <Image 
                     source={require('../assets/add.png')} 
-                    style={{ width: 24, height: 24, tintColor: '#FFFFFF' }} 
+                    style={styles.howItWorksIconImage} 
                     resizeMode="contain"
                   />
                 </View>
@@ -1480,6 +1480,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#FE734C', // Orange background
     justifyContent: "center",
     alignItems: "center",
+  },
+  howItWorksIconImage: {
+    width: 20,
+    height: 20,
+    tintColor: '#FFFFFF',
   },
   howItWorksContent: {
     flex: 1,

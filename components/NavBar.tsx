@@ -1001,7 +1001,7 @@ export default function NavBar() {
           )}
 
           {/* About us button - show for all users */}
-          <NavButton href="/about" label="About us" isActive={isAboutPage} />
+          <NavButton href="/about" label="About Us" isActive={isAboutPage} />
           {/* FAQ button - only show in navbar if user is not logged in or is admin/chef, otherwise it's in menu */}
           {(!loggedIn || isAdmin || isChef) && (
             <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
@@ -1103,7 +1103,7 @@ export default function NavBar() {
                   onPress={() => setIsMenuOpen(false)}
                 >
                   <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                  <Text style={styles.mobileMenuText}>About us</Text>
+                  <Text style={styles.mobileMenuText}>About Us</Text>
                 </TouchableOpacity>
               </Link>
 
@@ -1226,7 +1226,7 @@ export default function NavBar() {
                   onPress={() => setIsMenuOpen(false)}
                 >
                   <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} resizeMode="contain" />
-                  <Text style={styles.mobileMenuText}>About us</Text>
+                  <Text style={styles.mobileMenuText}>About Us</Text>
                 </TouchableOpacity>
               </Link>
 

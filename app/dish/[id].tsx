@@ -294,7 +294,7 @@ export default function DishDetail() {
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
-      <View style={{ paddingBottom: 32 }}>
+      <View style={{ paddingBottom: 120 }}>
         <View style={styles.container}>
         {/* Breadcrumbs - REMOVED */}
         {/* Main Content Grid */}
