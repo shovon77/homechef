@@ -4,6 +4,7 @@ import { z } from "https://deno.land/x/zod@v3.23.8/mod.ts";
 export const LineItemSchema = z.object({
   dish_id: z.number().int().positive(),
   quantity: z.number().int().min(1).max(99),
+  notes: z.string().max(500).optional(),
 });
 
 export const CreateCheckoutBody = z.object({

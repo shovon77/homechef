@@ -156,6 +156,7 @@ export const handler = async (req: Request) => {
         quantity: i.quantity,
         unit_cents,
         subtotal_cents: unit_cents * i.quantity,
+        notes: (i as any).notes,
       };
     });
     const total_cents = lineItems.reduce((s, li) => s + li.subtotal_cents, 0);
@@ -243,6 +244,7 @@ export const handler = async (req: Request) => {
       dish_id: item.dish_id,
       quantity: item.quantity,
       unit_price_cents: item.unit_cents,
+      notes: (item as any).notes,
     }));
 
     const { error: orderItemsError } = await adminClient.from('order_items').insert(orderItemsPayload);

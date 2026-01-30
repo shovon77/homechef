@@ -52,7 +52,8 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
     const MotionDiv = motion.div;
     
     // Merge all styles into single objects - NO arrays for DOM elements
-    const linkStyle = { textDecoration: 'none', outline: 'none' };
+    // RN Web doesn't accept shorthand `outline`
+    const linkStyle = { textDecoration: 'none', outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' };
     const containerStyle = {
       display: 'inline-flex',
       alignItems: 'center',
@@ -1532,7 +1533,9 @@ const styles = StyleSheet.create({
         borderTopWidth: '0px',
         borderLeftWidth: '0px',
         borderRightWidth: '0px',
-        outline: 'none',
+        outlineStyle: 'none',
+        outlineWidth: 0,
+        outlineColor: 'transparent',
       },
     }),
   },

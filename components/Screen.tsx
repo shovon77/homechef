@@ -9,6 +9,7 @@ type ScreenProps = ViewProps & {
   style?: ViewStyle | ViewStyle[];
   contentStyle?: ViewStyle | ViewStyle[];
   scrollViewContentStyle?: ViewStyle | ViewStyle[];
+  scrollRef?: any; // Optional ref for programmatic scrolling
   scroll?: boolean; // kept for compatibility
   contentPadding?: number;
   noHeader?: boolean;
@@ -21,6 +22,7 @@ export default function Screen({
   style,
   contentStyle,
   scrollViewContentStyle,
+  scrollRef,
   contentPadding,
   noHeader = false,
   noFooter = false,
@@ -72,6 +74,7 @@ export default function Screen({
         </View>
       )}
       <ScrollView 
+        ref={scrollRef}
         contentContainerStyle={[
           { flexGrow: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, backgroundColor: baseStyle.backgroundColor || '#ffffff' }, 
           scrollViewContentStyle

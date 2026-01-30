@@ -190,6 +190,7 @@ export default function CheckoutPage() {
         items: items.map(item => ({
           dish_id: Number(item.id),
           quantity: Number(item.quantity),
+          notes: item.notes,
         })),
         chef_id: Number(cartChefId),
         pickupAt: combined,

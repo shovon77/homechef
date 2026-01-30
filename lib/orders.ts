@@ -13,7 +13,7 @@ export async function submitCheckout({
   successUrl,
   cancelUrl,
 }: {
-  items: { dish_id: number; quantity: number }[];
+  items: { dish_id: number; quantity: number; notes?: string }[];
   chef_id: number;
   pickupAt: Date;
   successUrl: string;

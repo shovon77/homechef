@@ -28,6 +28,7 @@ type CartContextType = {
   removeFromCart: (id: string | number) => void;
   clearCart: () => void;
   setQuantity: (id: string | number, qty: number) => void;
+  setNotes: (id: string | number, notes?: string) => void;
   total: number;
   getQty: (id: string | number) => number;
 
@@ -205,6 +206,11 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
     );
   };
 
+  const setNotes = (id: string | number, notes?: string) => {
+    const nextNotes = notes?.trim() ? notes.trim() : undefined;
+    setItems(prev => prev.map(p => (p.id === id ? { ...p, notes: nextNotes } : p)));
+  };
+
   const getQty = (id: string | number) => items.find(p => p.id === id)?.quantity ?? 0;
 
   const total = useMemo(() => items.reduce((sum, i) => sum + i.price * i.quantity, 0), [items]);
@@ -216,7 +222,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <CartContext.Provider
-      value={{ items, cartChefId, addToCart, removeFromCart, clearCart, setQuantity, total, getQty, add, remove, clear }}
+      value={{ items, cartChefId, addToCart, removeFromCart, clearCart, setQuantity, setNotes, total, getQty, add, remove, clear }}
     >
       {children}
     </CartContext.Provider>
