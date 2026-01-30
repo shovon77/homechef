@@ -280,8 +280,9 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
-    marginTop: 4,
-    marginBottom: 2,
+    // Keep vertical rhythm consistent with name/chef spacing
+    marginTop: 2,
+    marginBottom: 0,
     minHeight: 20,
     flexShrink: 0,
   },
@@ -290,7 +291,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
     width: '100%',
-    marginTop: 4,
+    marginTop: 2,
     minHeight: 32,
   },
   quantityRowExplore: {

@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
-import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions, findNodeHandle } from "react-native";
+import React, { useEffect, useState, useMemo } from "react";
+import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
@@ -10,35 +10,22 @@ import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import { Screen } from "../../components/Screen";
 import { formatCad } from "../../lib/money";
-import { NAVBAR_HEIGHT } from "../../constants/layout";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F2F0EF';
-const BRAND_BLACK = '#33393A';
-const TEXT_DARK = BRAND_BLACK;
-const TEXT_MUTED = BRAND_BLACK;
-const TEXT_GRAY = BRAND_BLACK;
+const TEXT_DARK = '#0e1b14';
+const TEXT_MUTED = '#71717a';
+const TEXT_GRAY = '#6b7280';
 const BORDER_LIGHT = '#e5e7eb';
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
-const REVIEWS_SECTION_ID = 'dish-tabs-section';
 
 export default function DishDetail() {
   const router = useRouter();
-  const { id } = useLocalSearchParams();
+  const { id, quantity: quantityParam } = useLocalSearchParams();
   const { width } = useWindowDimensions();
-  // On web, `window.innerWidth` can change when the vertical scrollbar appears/disappears,
-  // which can flip `isMobile` and cause layout jumps (e.g., when toggling Chef notes).
-  const viewportWidth =
-    Platform.OS === 'web' && typeof document !== 'undefined'
-      ? document.documentElement.clientWidth
-      : width;
-  const isMobile = viewportWidth < 768;
-  const pageScrollRef = useRef<any>(null);
-  const tabsSectionRef = useRef<View | null>(null);
-  const [tabsSectionY, setTabsSectionY] = useState(0);
-  const tabsSectionYRef = useRef(0);
+  const isMobile = width < 768;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
   
   const dishId = useMemo(() => {
@@ -47,6 +34,15 @@ export default function DishDetail() {
     const tail = raw.replace(/[^0-9]+/g,'');
     return tail ? Number(tail) : NaN;
   }, [raw]);
+
+  // Parse quantity from URL params
+  const initialQuantity = useMemo(() => {
+    if (quantityParam) {
+      const qty = Number(Array.isArray(quantityParam) ? quantityParam[0] : quantityParam);
+      return isNaN(qty) || qty < 1 ? 1 : qty;
+    }
+    return 1;
+  }, [quantityParam]);
 
   const [dish, setDish] = useState<DishWithChef | null>(null);
   const [chef, setChef] = useState<any>(null);
@@ -58,9 +54,11 @@ export default function DishDetail() {
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [isDishOwner, setIsDishOwner] = useState(false);
+  const [quantity, setQuantity] = useState(initialQuantity);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'reviews'>('ingredients');
   const [chefNotes, setChefNotes] = useState("");
-  const { items: cartItems, addToCart, setQuantity: setCartQuantity, setNotes: setCartNotes, getQty } = useCart();
+  const [showChefNotes, setShowChefNotes] = useState(false);
+  const { addToCart } = useCart();
   const { isAdmin, user } = useRole();
 
   // 1. Fetch public data (dish, ratings) - depends only on dishId
@@ -184,6 +182,28 @@ export default function DishDetail() {
     }
   }, [chef, user]);
 
+  // Sync quantity with URL param when it changes
+  useEffect(() => {
+    setQuantity(initialQuantity);
+  }, [initialQuantity]);
+
+  const handleAddToCart = () => {
+    if (!dish) return;
+    const result = addToCart({ 
+      id: dish.id, 
+      name: dish.name || '', 
+      price: Number(dish.price || 0), 
+      quantity: quantity, 
+      image: dish.image || undefined,
+      chef_id: dish.chef_id || null,
+      notes: chefNotes.trim() || undefined,
+    });
+    if (result.success) {
+      setChefNotes(""); // Clear notes after adding
+      Alert.alert("Success", "Added to cart!");
+    }
+  };
+
   const handleSubmitRating = async () => {
     if (!userRating || userRating < 1 || userRating > 5) {
       Alert.alert("Rating required", "Please select 1–5 stars.");
@@ -233,23 +253,17 @@ export default function DishDetail() {
   };
 
   const renderStars = (value: number) => {
-    const safe = Number.isFinite(value) ? Math.max(0, Math.min(5, value)) : 0;
-    const full = Math.floor(safe);
-    const hasHalf = safe - full >= 0.5;
+    const full = Math.floor(value);
+    const hasHalf = value - full >= 0.5;
     return (
       <View style={styles.starsContainer}>
-        {Array.from({ length: 5 }).map((_, i) => {
-          const idx = i + 1;
-          const opacity = idx <= full ? 1 : (hasHalf && idx === full + 1 ? 0.6 : 0.25);
-          return (
-            <Image
-              key={`s${i}`}
-              source={require('../../assets/star.png')}
-              style={[styles.starIconImage, { opacity }]}
-              resizeMode="contain"
-            />
-          );
-        })}
+        {Array.from({ length: full }).map((_, i) => (
+          <Text key={`f${i}`} style={styles.star}>★</Text>
+        ))}
+        {hasHalf && <Text style={styles.star}>☆</Text>}
+        {Array.from({ length: 5 - full - (hasHalf ? 1 : 0) }).map((_, i) => (
+          <Text key={`e${i}`} style={[styles.star, styles.starEmpty]}>★</Text>
+        ))}
       </View>
     );
   };
@@ -278,90 +292,13 @@ export default function DishDetail() {
   const mainImage = dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=1200&q=80&auto=format&fit=crop";
   const thumbnailImages = [mainImage, mainImage, mainImage, mainImage]; // Placeholder - could be expanded
 
-  const cartQty = getQty(dish.id);
-  const existingNotes = cartItems.find(i => i.id === dish.id)?.notes ?? '';
-
-  // Keep the input prefilled from cart notes when available (without overwriting user edits).
-  useEffect(() => {
-    if (existingNotes && !chefNotes.trim()) {
-      setChefNotes(existingNotes);
-    }
-  }, [existingNotes]);
-
-  const scrollToReviews = () => {
-    setActiveTab('reviews');
-
-    const tryScroll = () => {
-      const baseY = tabsSectionYRef.current || tabsSectionY || 0;
-
-      if (Platform.OS === 'web' && typeof document !== 'undefined') {
-        try {
-          // Prefer the actual rendered node for this screen. After client-side navigation,
-          // the DOM can contain hidden screens and `getElementById` may hit the wrong element.
-          const refEl: any = tabsSectionRef.current as any;
-          if (refEl?.scrollIntoView) {
-            refEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return;
-          }
-
-          const el =
-            (document.getElementById(REVIEWS_SECTION_ID) as HTMLElement | null) ??
-            (document.querySelector(`[data-testid="${REVIEWS_SECTION_ID}"]`) as HTMLElement | null);
-          if (el) {
-            // Prefer native browser behavior; it finds the correct scroll container.
-            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
-            return;
-          }
-        } catch {}
-      }
-
-      if (Platform.OS !== 'web') {
-        const scrollRef: any = pageScrollRef.current;
-        if (scrollRef?.scrollTo && tabsSectionRef.current) {
-          try {
-            const inner = scrollRef?.getInnerViewNode?.() ?? scrollRef;
-            const handle = findNodeHandle(inner);
-            if (handle) {
-              tabsSectionRef.current.measureLayout(
-                handle as any,
-                (_x, y) => scrollRef.scrollTo({ y: Math.max(0, y), animated: true }),
-                () => {
-                  const fallbackY = baseY > 0 ? Math.max(0, baseY) : 9999;
-                  scrollRef.scrollTo({ y: fallbackY, animated: true });
-                }
-              );
-              return;
-            }
-          } catch {
-            // fall through to baseY scroll
-          }
-        }
-      }
-
-      const y = baseY > 0 ? Math.max(0, baseY) : 9999;
-      pageScrollRef.current?.scrollTo?.({ y, animated: true });
-    };
-
-    requestAnimationFrame(tryScroll);
-    setTimeout(tryScroll, 100);
-    setTimeout(tryScroll, 300);
-    setTimeout(tryScroll, 800);
-    setTimeout(() => pageScrollRef.current?.scrollToEnd?.({ animated: true }), 950);
-  };
-
   return (
-    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
+    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
       <View style={{ paddingBottom: 120 }}>
         <View style={styles.container}>
         {/* Breadcrumbs - REMOVED */}
         {/* Main Content Grid */}
-        <View
-          style={[
-            styles.grid,
-            Platform.OS === 'web' && !isMobile && styles.gridWeb,
-            isMobile && styles.gridMobile,
-          ]}
-        >
+        <View style={[styles.grid, isMobile && styles.gridMobile]}>
           {/* Left Column: Image Gallery */}
           <View style={styles.imageColumn}>
             <View style={styles.mainImageContainer}>
@@ -374,10 +311,8 @@ export default function DishDetail() {
           </View>
 
           {/* Right Column: Dish Info & Actions */}
-          <View style={[styles.infoColumn, isMobile && styles.infoColumnMobile]}>
-            <Text style={[styles.dishTitle, isMobile && styles.dishTitleMobile]}>
-              {dish.name}
-            </Text>
+          <View style={styles.infoColumn}>
+            <Text style={styles.dishTitle}>{dish.name}</Text>
             
             {chefId ? (
               <Link href={{ 
@@ -411,12 +346,12 @@ export default function DishDetail() {
             )}
 
             {/* Rating */}
-            <TouchableOpacity style={styles.ratingContainer} activeOpacity={0.7} onPress={scrollToReviews}>
+            <View style={styles.ratingContainer}>
               {renderStars(avgRating)}
-              <Text style={styles.reviewCount} onPress={scrollToReviews}>
+              <Text style={styles.reviewCount}>
                 ({ratingCount} {ratingCount === 1 ? 'review' : 'reviews'})
               </Text>
-            </TouchableOpacity>
+            </View>
 
             {/* Description */}
             {dish.description ? (
@@ -424,115 +359,60 @@ export default function DishDetail() {
             ) : null}
 
             {/* Price */}
-            <Text style={[styles.price, isMobile && styles.priceMobile]}>{formatCad(dish.price)}</Text>
+            <Text style={styles.price}>{formatCad(dish.price)}</Text>
 
-            {/* Cart controls (same layout as explore DishCard) */}
+            {/* Quantity & Add to Cart */}
             <View style={styles.actionRow}>
-              {cartQty === 0 ? (
-                <View style={styles.qtyRowSpread}>
-                  <View style={styles.qtyRowLeft} />
-                  <View style={styles.qtyRowRight}>
-                    <TouchableOpacity
-                      style={styles.qtyIconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        addToCart({
-                          id: dish.id,
-                          name: dish.name || '',
-                          price: Number(dish.price || 0),
-                          quantity: 1,
-                          image: dish.image || undefined,
-                          chef_id: dish.chef_id || null,
-                          notes: chefNotes.trim() || undefined,
-                        });
-                        setChefNotes('');
-                      }}
-                    >
-                      <Image
-                        source={require('../../assets/add (1).png')}
-                        style={styles.qtyIconImage}
-                        resizeMode="contain"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              ) : (
-                <View style={styles.qtyRowSpread}>
-                  <View style={styles.qtyRowLeft}>
-                    <TouchableOpacity
-                      style={styles.qtyIconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => setCartQuantity(dish.id, cartQty - 1)}
-                    >
-                      <Image
-                        source={require('../../assets/minus.png')}
-                        style={styles.qtyIconImage}
-                        resizeMode="contain"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                  <Text style={styles.qtyValue}>{cartQty}</Text>
-                  <View style={styles.qtyRowRight}>
-                    <TouchableOpacity
-                      style={styles.qtyIconBtn}
-                      activeOpacity={0.7}
-                      onPress={() => {
-                        addToCart({
-                          id: dish.id,
-                          name: dish.name || '',
-                          price: Number(dish.price || 0),
-                          quantity: 1,
-                          image: dish.image || undefined,
-                          chef_id: dish.chef_id || null,
-                          notes: chefNotes.trim() || undefined,
-                        });
-                        if (chefNotes.trim()) setChefNotes('');
-                      }}
-                    >
-                      <Image
-                        source={require('../../assets/add (1).png')}
-                        style={styles.qtyIconImage}
-                        resizeMode="contain"
-                      />
-                    </TouchableOpacity>
-                  </View>
-                </View>
-              )}
+              <View style={styles.quantitySelector}>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => setQuantity(Math.max(1, quantity - 1))}
+                >
+                  <Text style={styles.quantityButtonText}>-</Text>
+                </TouchableOpacity>
+                <Text style={styles.quantityValue}>{quantity}</Text>
+                <TouchableOpacity
+                  style={styles.quantityButton}
+                  onPress={() => setQuantity(quantity + 1)}
+                >
+                  <Text style={styles.quantityButtonText}>+</Text>
+                </TouchableOpacity>
+              </View>
+              <TouchableOpacity
+                style={styles.addToCartButton}
+                onPress={handleAddToCart}
+              >
+                <Text style={styles.addToCartButtonText}>Add to cart</Text>
+              </TouchableOpacity>
             </View>
 
             {/* Chef Notes Input */}
             <View style={styles.notesContainer}>
-              <Text style={styles.notesButtonText}>Chef notes</Text>
-              <TextInput
-                style={styles.notesInput}
-                value={chefNotes}
-                onChangeText={(t) => {
-                  setChefNotes(t);
-                  if (cartQty > 0) {
-                    setCartNotes(dish.id, t);
-                  }
-                }}
-                placeholder="Add notes for the chef (e.g., no onions)"
-                placeholderTextColor={TEXT_MUTED}
-                multiline
-              />
+              <TouchableOpacity
+                style={styles.notesButton}
+                onPress={() => setShowChefNotes(!showChefNotes)}
+              >
+                <Text style={styles.notesButtonIcon}>
+                  {showChefNotes ? '−' : '+'}
+                </Text>
+                <Text style={styles.notesButtonText}>Chef notes</Text>
+              </TouchableOpacity>
+              {showChefNotes && (
+                <TextInput
+                  style={styles.notesInput}
+                  value={chefNotes}
+                  onChangeText={setChefNotes}
+                  placeholder="Add notes for the chef (e.g., no onions)"
+                  placeholderTextColor={TEXT_MUTED}
+                  multiline
+                />
+              )}
             </View>
           </View>
         </View>
 
         {/* Tabs Section */}
-        <View
-          style={styles.tabsSection}
-          nativeID={REVIEWS_SECTION_ID}
-          {...(Platform.OS === 'web' ? ({ id: REVIEWS_SECTION_ID } as any) : {})}
-          testID={REVIEWS_SECTION_ID}
-          ref={tabsSectionRef}
-          onLayout={(e) => {
-            const y = e.nativeEvent.layout.y;
-            tabsSectionYRef.current = y;
-            setTabsSectionY(y);
-          }}
-        >
+        <View style={styles.tabsSection}>
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer} contentContainerStyle={{ flexDirection: 'row' }}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'ingredients' && styles.tabActive]}
@@ -577,14 +457,12 @@ export default function DishDetail() {
                       <View style={styles.starsInputRow}>
                         {[1, 2, 3, 4, 5].map(star => (
                           <TouchableOpacity key={star} onPress={() => setUserRating(star)}>
-                            <Image
-                              source={require('../../assets/star.png')}
-                              style={[
-                                styles.starInputIcon,
-                                { opacity: star <= userRating ? 1 : 0.25 }
-                              ]}
-                              resizeMode="contain"
-                            />
+                            <Text style={[
+                              styles.starInput,
+                              { color: star <= userRating ? PRIMARY_COLOR : TEXT_MUTED }
+                            ]}>
+                              ★
+                            </Text>
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -706,15 +584,15 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.medium,
   },
   grid: {
-    flexDirection: 'column',
-    rowGap: 0,
-    columnGap: 0,
+    flexDirection: Platform.select({
+      web: 'row',
+      default: 'column',
+    }),
+    gap: Platform.select({
+      web: theme.spacing['2xl'],
+      default: 0,
+    }),
     marginBottom: theme.spacing['4xl'],
-  },
-  gridWeb: {
-    flexDirection: 'row',
-    rowGap: theme.spacing['2xl'],
-    columnGap: theme.spacing['2xl'],
   },
   imageColumn: {
     flex: 1,
@@ -727,7 +605,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     alignSelf: 'flex-start', // Or center
-    marginBottom: 0,
+    marginBottom: -50, // Increased negative margin to effectively hide the gap
+    ...elev('lg'),
   },
   mainImage: {
     width: '100%',
@@ -735,38 +614,34 @@ const styles = StyleSheet.create({
   },
   infoColumn: {
     flex: 1,
-    paddingTop: 0,
-  },
-  infoColumnMobile: {
-    paddingTop: 0,
+    paddingTop: 0, // Removed paddingTop to reduce spacing
   },
   dishTitle: {
     color: TEXT_DARK,
     fontSize: Platform.select({
-      web: 36,
-      default: 28,
+      web: 48,
+      default: 36,
     }),
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: Platform.select({
-      web: 36 * 1.2,
-      default: 28 * 1.2,
+      web: 48 * 1.2,
+      default: 36 * 1.2,
     }),
     letterSpacing: -0.033,
-    marginTop: theme.spacing.md,
-    position: 'relative',
-    zIndex: 2,
-  },
-  dishTitleMobile: {
-    fontSize: 28,
-    lineHeight: 28 * 1.25,
+    // Spacing is controlled by the next rows' top margins for consistency.
+    marginBottom: 0,
+    // Reduce image->title vertical gap on native (mobile/tablet)
+    marginTop: Platform.select({
+      web: 0,
+      default: theme.spacing.sm,
+    }),
   },
   chefLink: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-    marginTop: 0,
-    flexShrink: 1,
+    marginTop: theme.spacing.md,
   },
   chefIcon: {
     fontSize: theme.typography.fontSize.lg,
@@ -782,6 +657,7 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
+    textDecorationLine: 'underline',
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -792,12 +668,13 @@ const styles = StyleSheet.create({
   starsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
   },
-  starIconImage: {
-    width: 18,
-    height: 18,
-    tintColor: PRIMARY_COLOR,
+  star: {
+    fontSize: 20,
+    color: PRIMARY_COLOR,
+  },
+  starEmpty: {
+    opacity: 0.3,
   },
   reviewCount: {
     color: TEXT_MUTED,
@@ -814,16 +691,12 @@ const styles = StyleSheet.create({
   },
   price: {
     color: TEXT_DARK,
-    fontSize: 28,
+    fontSize: 36,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
-    marginTop: theme.spacing['2xl'],
+    // Match header section spacing (title/chef/rating)
+    marginTop: theme.spacing.md,
     marginBottom: theme.spacing['2xl'],
-  },
-  priceMobile: {
-    fontSize: 24,
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.lg,
   },
   actionRow: {
     flexDirection: Platform.select({
@@ -832,47 +705,6 @@ const styles = StyleSheet.create({
     }),
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
-    width: '100%',
-  },
-  qtyRowSpread: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    minHeight: 40,
-  },
-  qtyRowLeft: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-start',
-  },
-  qtyRowRight: {
-    flex: 1,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'flex-end',
-  },
-  qtyIconBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: 'transparent',
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  qtyIconImage: {
-    width: 20,
-    height: 20,
-    tintColor: PRIMARY_COLOR,
-  },
-  qtyValue: {
-    minWidth: 32,
-    textAlign: 'center',
-    color: TEXT_DARK,
-    fontSize: 24,
-    lineHeight: 28,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
   },
   quantitySelector: {
     flexDirection: 'row',
@@ -935,8 +767,8 @@ const styles = StyleSheet.create({
     letterSpacing: 0.015,
   },
   tabsSection: {
-    marginTop: theme.spacing.lg,
-    paddingTop: theme.spacing.lg,
+    marginTop: theme.spacing['4xl'],
+    paddingTop: theme.spacing['2xl'],
     borderTopWidth: Platform.select({
       web: 1,
       default: 0, // Remove top border on mobile
@@ -957,7 +789,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: 'transparent',
+    borderBottomColor: PRIMARY_COLOR,
   },
   tabText: {
     color: TEXT_MUTED,
@@ -1013,11 +845,6 @@ const styles = StyleSheet.create({
   },
   starInput: {
     fontSize: 28,
-  },
-  starInputIcon: {
-    width: 24,
-    height: 24,
-    tintColor: PRIMARY_COLOR,
   },
   commentInputContainer: {
     gap: theme.spacing.sm,
@@ -1088,8 +915,7 @@ const styles = StyleSheet.create({
   // Mobile styles
   gridMobile: {
     flexDirection: 'column',
-    rowGap: 0,
-    columnGap: 0,
+    gap: 0, // Reduced gap to 0 for mobile view
   },
   reviewsList: {
     gap: theme.spacing.lg,
@@ -1145,10 +971,12 @@ const styles = StyleSheet.create({
   },
   notesContainer: {
     marginTop: theme.spacing.sm,
-    marginBottom: theme.spacing.sm,
+    marginBottom: Platform.select({
+      web: theme.spacing.lg,
+      default: theme.spacing['2xl'], // Increased spacing on mobile to prevent overflow
+    }),
     gap: theme.spacing.xs,
     width: '100%',
-    paddingHorizontal: theme.spacing.md,
   },
   notesButton: {
     alignSelf: 'flex-start',
@@ -1214,10 +1042,7 @@ const styles = StyleSheet.create({
       web: {
         borderWidth: 0,
         borderColor: 'transparent',
-        // RN Web doesn't accept shorthand `outline`
-        outlineStyle: 'none',
-        outlineWidth: 0,
-        outlineColor: 'transparent',
+        outline: 'none',
       },
       default: {
         borderWidth: 0,

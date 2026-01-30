@@ -202,6 +202,33 @@ export default function BrowsePage() {
   const debouncedQuery = useDebounce(query, 800);
   const [cuisineFilter, setCuisineFilter] = useState<string | null>(null);
 
+  // Floating search: collapsed mic FAB -> expanded search bar
+  const [searchExpanded, setSearchExpanded] = useState(false);
+  const searchExpandAnim = useRef(new Animated.Value(0)).current;
+  const searchInputRef = useRef<TextInput | null>(null);
+  const expandedWidth = useMemo(() => Math.max(56, Math.min(580, width - theme.spacing.md * 2)), [width]);
+  const searchWidth = useMemo(
+    () =>
+      searchExpandAnim.interpolate({
+        inputRange: [0, 1],
+        outputRange: [56, expandedWidth],
+      }),
+    [searchExpandAnim, expandedWidth]
+  );
+
+  useEffect(() => {
+    Animated.spring(searchExpandAnim, {
+      toValue: searchExpanded ? 1 : 0,
+      useNativeDriver: false,
+      friction: 12,
+      tension: 90,
+    }).start(({ finished }) => {
+      if (finished && searchExpanded) {
+        setTimeout(() => searchInputRef.current?.focus?.(), 50);
+      }
+    });
+  }, [searchExpanded, searchExpandAnim]);
+
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const fadeAnim = useRef(new Animated.Value(1)).current;
@@ -692,100 +719,103 @@ export default function BrowsePage() {
           default: 80,
         })}
       >
-        <View style={{ alignItems: 'flex-start', marginBottom: 20 }}>
+        <View style={styles.headerBlock}>
           <Text style={styles.title}>Find the taste of home</Text>
           <Text style={styles.subtitle}>Pickup homemade meals near you</Text>
+          <View style={styles.subtitleDivider} />
         </View>
 
         <View style={styles.tabsWrap}>
-          <View style={[styles.tabs, { overflow: 'visible' }]}>
-            <Pressable
-              onPress={() => setTab('dishes')}
-              style={[styles.tab, styles.tabSpacing]}
-            >
-              <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setTab('chefs')}
-              style={[styles.tab, styles.tabSpacing]}
-            >
-              <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
-            </Pressable>
-            <Pressable
-              onPress={() => setTab('cuisines')}
-              style={[styles.tab, styles.tabSpacing]}
-            >
-              <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
-            </Pressable>
-          </View>
-
-          {tab === 'dishes' && (
-            <View style={styles.tabsRight}>
-              <View style={{ position: 'relative', flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
-                <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <TouchableOpacity 
-                    activeOpacity={0.7}
-                    onPress={() => {
-                      if (!showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
-                        // Calculate position synchronously before showing dropdown for smooth animation
-                        // @ts-ignore - web-specific
-                        const button = sortButtonRef.current as any;
-                        if (button && typeof button.getBoundingClientRect === 'function') {
-                          const rect = button.getBoundingClientRect();
-                          setDropdownPosition({
-                            top: rect.bottom + 8,
-                            right: window.innerWidth - rect.right,
-                          });
-                          setDropdownReady(true);
-                        }
-                      }
-                      setShowSortMenu(!showSortMenu);
-                    }}
-                    style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}
-                  >
-                    <Image
-                      source={require('../../assets/controls (1).png')}
-                      style={{ width: 20, height: 20, tintColor: '#FE734C' }}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                </View>
-                
-                {showSortMenu && Platform.OS !== 'web' && (
-                  <View 
-                    ref={sortMenuRef} 
-                    style={styles.dropdownMenu}
-                    onStartShouldSetResponder={() => true}
-                    onResponderGrant={() => {}}
-                  >
-                    {[
-                      { label: 'None', value: 'none' },
-                      { label: 'Nearest', value: 'nearest' },
-                      { label: 'Price low to high', value: 'price_asc' },
-                      { label: 'Price high to low', value: 'price_desc' },
-                    ].map((opt) => (
-                      <Pressable
-                        key={opt.value}
-                        style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
-                        onPress={(e) => {
-                          e.stopPropagation();
-                          setSortBy(opt.value);
-                          setShowSortMenu(false);
-                          const currentTab = tab || 'dishes';
-                          const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
-                          router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
-                        }}
-                      >
-                        <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
-                          {opt.label}
-                        </Text>
-                      </Pressable>
-                    ))}
-                  </View>
-                )}
-              </View>
+          <View style={styles.tabsRow}>
+            <View style={[styles.tabs, { overflow: 'visible' }]}>
+              <Pressable
+                onPress={() => setTab('dishes')}
+                style={[styles.tab, styles.tabSpacing]}
+              >
+                <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setTab('chefs')}
+                style={[styles.tab, styles.tabSpacing]}
+              >
+                <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
+              </Pressable>
+              <Pressable
+                onPress={() => setTab('cuisines')}
+                style={[styles.tab, styles.tabSpacing]}
+              >
+                <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
+              </Pressable>
             </View>
-          )}
+
+            {tab === 'dishes' && (
+              <View style={styles.tabsFilter}>
+                <View style={{ position: 'relative', flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
+                  <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <TouchableOpacity
+                      activeOpacity={0.7}
+                      onPress={() => {
+                        if (!showSortMenu && Platform.OS === 'web' && sortButtonRef.current) {
+                          // Calculate position synchronously before showing dropdown for smooth animation
+                          // @ts-ignore - web-specific
+                          const button = sortButtonRef.current as any;
+                          if (button && typeof button.getBoundingClientRect === 'function') {
+                            const rect = button.getBoundingClientRect();
+                            setDropdownPosition({
+                              top: rect.bottom + 8,
+                              right: window.innerWidth - rect.right,
+                            });
+                            setDropdownReady(true);
+                          }
+                        }
+                        setShowSortMenu(!showSortMenu);
+                      }}
+                      style={{ flexDirection: 'row', alignItems: 'center', flexShrink: 0 }}
+                    >
+                      <Image
+                        source={require('../../assets/controls (1).png')}
+                        style={{ width: 20, height: 20, tintColor: '#FE734C' }}
+                        resizeMode="contain"
+                      />
+                    </TouchableOpacity>
+                  </View>
+
+                  {showSortMenu && Platform.OS !== 'web' && (
+                    <View
+                      ref={sortMenuRef}
+                      style={styles.dropdownMenu}
+                      onStartShouldSetResponder={() => true}
+                      onResponderGrant={() => {}}
+                    >
+                      {[
+                        { label: 'None', value: 'none' },
+                        { label: 'Nearest', value: 'nearest' },
+                        { label: 'Price low to high', value: 'price_asc' },
+                        { label: 'Price high to low', value: 'price_desc' },
+                      ].map((opt) => (
+                        <Pressable
+                          key={opt.value}
+                          style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
+                          onPress={(e) => {
+                            e.stopPropagation();
+                            setSortBy(opt.value);
+                            setShowSortMenu(false);
+                            const currentTab = tab || 'dishes';
+                            const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                            router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+                          }}
+                        >
+                          <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
+                            {opt.label}
+                          </Text>
+                        </Pressable>
+                      ))}
+                    </View>
+                  )}
+                </View>
+              </View>
+            )}
+          </View>
         </View>
 
         {/* Old search bar removed */}
@@ -864,54 +894,80 @@ export default function BrowsePage() {
 
       {/* Floating Search Bar */}
       <View style={styles.floatingSearchContainer}>
-        <View style={styles.floatingSearchBar}>
-          <TouchableOpacity 
-            style={styles.searchIconContainer}
-            onPress={handleSearch}
-          >
-            <Image 
-              source={require('../../assets/search.png')} 
-              style={styles.searchIconImage} 
-            />
-          </TouchableOpacity>
-          <View style={{ flex: 1, justifyContent: 'center' }}>
-            {!query && (
-              <Animated.Text 
-                style={[
-                  styles.floatingSearchPlaceholder, 
-                  { opacity: fadeAnim }
-                ]}
-                numberOfLines={1}
+        <Animated.View
+          style={[
+            styles.floatingSearchBar,
+            { width: searchWidth },
+            searchExpanded ? styles.floatingSearchBarExpanded : styles.floatingSearchBarCollapsed,
+          ]}
+        >
+          {!searchExpanded ? (
+            <TouchableOpacity
+              style={styles.micFabButton}
+              activeOpacity={0.85}
+              onPress={() => setSearchExpanded(true)}
+            >
+              <Image
+                source={require('../../assets/search.png')}
+                style={styles.searchIconImage}
+              />
+            </TouchableOpacity>
+          ) : (
+            <>
+              <TouchableOpacity
+                style={styles.searchIconContainer}
+                onPress={handleSearch}
               >
-                {PLACEHOLDERS[placeholderIndex]}
-              </Animated.Text>
-            )}
-            <TextInput
-              placeholder=""
-              placeholderTextColor="transparent"
-              style={styles.floatingSearchInput}
-              value={query}
-              onChangeText={setQuery}
-              onSubmitEditing={handleSearch}
-              returnKeyType="search"
-            />
-          </View>
-          <TouchableOpacity 
-            style={styles.micIconContainer}
-            onPress={startDictation}
-          >
-            <Image 
-              source={require('../../assets/microphone.png')} 
-              style={styles.micIconImage} 
-            />
-          </TouchableOpacity>
-        </View>
+                <Image
+                  source={require('../../assets/search.png')}
+                  style={styles.searchIconImage}
+                />
+              </TouchableOpacity>
+              <View style={{ flex: 1, justifyContent: 'center' }}>
+                {!query && (
+                  <Animated.Text
+                    style={[
+                      styles.floatingSearchPlaceholder,
+                      { opacity: fadeAnim },
+                    ]}
+                    numberOfLines={1}
+                  >
+                    {PLACEHOLDERS[placeholderIndex]}
+                  </Animated.Text>
+                )}
+                <TextInput
+                  ref={searchInputRef}
+                  placeholder=""
+                  placeholderTextColor="transparent"
+                  style={styles.floatingSearchInput}
+                  value={query}
+                  onChangeText={setQuery}
+                  onSubmitEditing={handleSearch}
+                  returnKeyType="search"
+                />
+              </View>
+              <TouchableOpacity
+                style={styles.micIconContainer}
+                onPress={startDictation}
+              >
+                <Image
+                  source={require('../../assets/microphone.png')}
+                  style={styles.micIconImage}
+                />
+              </TouchableOpacity>
+            </>
+          )}
+        </Animated.View>
       </View>
     </View>
   );
 }
 
 const styles = StyleSheet.create({
+  headerBlock: {
+    alignItems: 'stretch',
+    marginBottom: 20,
+  },
   title: {
     fontSize: 24,
     fontFamily: theme.typography.fontFamily.display,
@@ -924,11 +980,25 @@ const styles = StyleSheet.create({
     marginTop: 4,
     textAlign: 'left',
   },
+  subtitleDivider: {
+    height: 1,
+    backgroundColor: '#FFFFFF',
+    marginTop: theme.spacing.md,
+    // Match navbar bottom line across full width
+    marginHorizontal: -24,
+  },
   tabsWrap: {
     position: 'relative',
     width: '100%',
     marginBottom: 16,
     justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
   },
   tabs: {
     flexDirection: 'row',
@@ -937,11 +1007,8 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     flexWrap: 'nowrap',
   },
-  tabsRight: {
-    position: 'absolute',
-    right: 0,
-    top: 0,
-    bottom: 0,
+  tabsFilter: {
+    marginLeft: 10,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -955,7 +1022,7 @@ const styles = StyleSheet.create({
   },
   tabText: {
     color: '#33393A',
-    fontFamily: theme.typography.fontFamily.display,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: '400',
     fontSize: 20,
     lineHeight: 20,
@@ -963,7 +1030,8 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#FE734C',
-    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '700',
   },
   // Old search style removed/ignored
   search: {
@@ -1169,11 +1237,12 @@ const styles = StyleSheet.create({
       web: theme.spacing['2xl'],
       default: theme.spacing.xl,
     }),
-    left: 0,
-    right: 0,
-    width: "100%",
-    alignItems: "center",
-    paddingHorizontal: theme.spacing.md,
+    left: theme.spacing.md,
+    right: Platform.select({
+      web: theme.spacing.md,
+      default: theme.spacing['2xl'],
+    }),
+    alignItems: "flex-end",
     zIndex: 1000,
     elevation: 1000, // for android
     pointerEvents: "box-none",
@@ -1187,13 +1256,22 @@ const styles = StyleSheet.create({
     }),
     borderRadius: 9999, // rounded-full
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    ...elev('lg'),
     overflow: "hidden",
-    width: "100%",
-    maxWidth: Platform.select<any>({
-      web: 580,
-      default: '100%',
-    }),
+    borderWidth: 1,
+    borderColor: '#FFFFFF',
+  },
+  floatingSearchBarCollapsed: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+  },
+  floatingSearchBarExpanded: {
+    backgroundColor: 'rgba(255, 255, 255, 0.85)',
+  },
+  micFabButton: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   floatingSearchInput: {
     flex: 1,
