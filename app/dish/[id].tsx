@@ -373,8 +373,7 @@ export default function DishDetail() {
           {/* Right Column: Dish Info & Actions */}
           <View style={styles.infoColumn}>
             <Text
-              style={styles.dishTitle}
-              {...(isMobile ? { numberOfLines: 1, ellipsizeMode: "tail" as const } : {})}
+              style={[styles.dishTitle, isMobile && styles.dishTitleMobile]}
             >
               {dish.name}
             </Text>
@@ -424,7 +423,7 @@ export default function DishDetail() {
             ) : null}
 
             {/* Price */}
-            <Text style={styles.price}>{formatCad(dish.price)}</Text>
+            <Text style={[styles.price, isMobile && styles.priceMobile]}>{formatCad(dish.price)}</Text>
 
             {/* Cart quantity (Explore-style minus / qty / plus) */}
             <View style={styles.actionRow}>
@@ -738,6 +737,11 @@ const styles = StyleSheet.create({
       default: theme.spacing.xs,
     }),
   },
+  dishTitleMobile: {
+    fontSize: 22,
+    lineHeight: 22 * 1.2,
+    marginTop: theme.spacing.sm,
+  },
   chefLink: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -807,6 +811,10 @@ const styles = StyleSheet.create({
     // Match header section spacing (title/chef/rating)
     marginTop: theme.spacing.md,
     marginBottom: theme.spacing['2xl'],
+  },
+  priceMobile: {
+    fontSize: 18,
+    lineHeight: 18 * 1.2,
   },
   actionRow: {
     flexDirection: Platform.select({
