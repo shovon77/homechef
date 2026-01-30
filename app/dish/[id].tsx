@@ -738,6 +738,7 @@ const styles = StyleSheet.create({
     }),
   },
   dishTitleMobile: {
+    // Use a smaller title on mobile so it's always visible
     fontSize: 22,
     lineHeight: 22 * 1.2,
     marginTop: theme.spacing.sm,
@@ -813,6 +814,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing['2xl'],
   },
   priceMobile: {
+    // Much smaller on mobile
     fontSize: 18,
     lineHeight: 18 * 1.2,
   },
