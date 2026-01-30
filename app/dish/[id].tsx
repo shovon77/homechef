@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -8,7 +8,7 @@ import { submitDishRating, getDishRatingSummary } from "../../lib/reviews";
 import type { Dish, DishWithChef, DishRating } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
-import { Screen } from "../../components/Screen";
+import Screen from "../../components/Screen";
 import { formatCad } from "../../lib/money";
 
 // Colors from HTML design
@@ -20,12 +20,21 @@ const TEXT_GRAY = '#6b7280';
 const BORDER_LIGHT = '#e5e7eb';
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
+const REVIEWS_SECTION_ID = 'dish-tabs-section';
 
 export default function DishDetail() {
   const router = useRouter();
   const { id, quantity: quantityParam } = useLocalSearchParams();
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const viewportWidth =
+    Platform.OS === 'web' && typeof document !== 'undefined'
+      ? document.documentElement.clientWidth
+      : width;
+  const isMobile = viewportWidth < 768;
+  const pageScrollRef = useRef<any>(null);
+  const tabsSectionRef = useRef<View | null>(null);
+  const [tabsSectionY, setTabsSectionY] = useState(0);
+  const tabsSectionYRef = useRef(0);
   const raw = String(Array.isArray(id) ? id[0] : id || '');
   
   const dishId = useMemo(() => {
@@ -57,8 +66,7 @@ export default function DishDetail() {
   const [quantity, setQuantity] = useState(initialQuantity);
   const [activeTab, setActiveTab] = useState<'ingredients' | 'reviews'>('ingredients');
   const [chefNotes, setChefNotes] = useState("");
-  const [showChefNotes, setShowChefNotes] = useState(false);
-  const { addToCart } = useCart();
+  const { items: cartItems, addToCart, setQuantity: setCartQuantity, setNotes: setCartNotes, getQty } = useCart();
   const { isAdmin, user } = useRole();
 
   // 1. Fetch public data (dish, ratings) - depends only on dishId
@@ -268,6 +276,51 @@ export default function DishDetail() {
     );
   };
 
+  // Keep the input prefilled from cart notes when available (without overwriting user edits).
+  // This MUST be above any early returns to keep hook order stable.
+  const cartDishId = dish?.id ?? (Number.isFinite(dishId) ? dishId : null);
+  const cartQty = cartDishId != null ? getQty(cartDishId) : 0;
+  const existingNotes =
+    cartDishId != null ? (cartItems.find((i) => String(i.id) === String(cartDishId))?.notes ?? "") : "";
+
+  useEffect(() => {
+    if (existingNotes && !chefNotes.trim()) {
+      setChefNotes(existingNotes);
+    }
+  }, [existingNotes]);
+
+  const scrollToReviews = () => {
+    setActiveTab('reviews');
+
+    const tryScroll = () => {
+      const baseY = tabsSectionYRef.current || tabsSectionY || 0;
+
+      if (Platform.OS === 'web' && typeof document !== 'undefined') {
+        try {
+          const refEl: any = tabsSectionRef.current as any;
+          if (refEl?.scrollIntoView) {
+            refEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+          const el =
+            (document.getElementById(REVIEWS_SECTION_ID) as HTMLElement | null) ??
+            (document.querySelector(`[data-testid="${REVIEWS_SECTION_ID}"]`) as HTMLElement | null);
+          if (el) {
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+        } catch {}
+      }
+
+      pageScrollRef.current?.scrollTo?.({ y: baseY > 0 ? Math.max(0, baseY) : 9999, animated: true });
+    };
+
+    requestAnimationFrame(tryScroll);
+    setTimeout(tryScroll, 100);
+    setTimeout(tryScroll, 300);
+    setTimeout(tryScroll, 800);
+  };
+
   if (loading) {
     return (
       <Screen>
@@ -293,7 +346,7 @@ export default function DishDetail() {
   const thumbnailImages = [mainImage, mainImage, mainImage, mainImage]; // Placeholder - could be expanded
 
   return (
-    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
+    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
       <View style={{ paddingBottom: 120 }}>
         <View style={styles.container}>
         {/* Breadcrumbs - REMOVED */}
@@ -346,12 +399,12 @@ export default function DishDetail() {
             )}
 
             {/* Rating */}
-            <View style={styles.ratingContainer}>
+            <TouchableOpacity style={styles.ratingContainer} activeOpacity={0.7} onPress={scrollToReviews}>
               {renderStars(avgRating)}
-              <Text style={styles.reviewCount}>
+              <Text style={styles.reviewCount} onPress={scrollToReviews}>
                 ({ratingCount} {ratingCount === 1 ? 'review' : 'reviews'})
               </Text>
-            </View>
+            </TouchableOpacity>
 
             {/* Description */}
             {dish.description ? (
@@ -386,33 +439,39 @@ export default function DishDetail() {
               </TouchableOpacity>
             </View>
 
-            {/* Chef Notes Input */}
+            {/* Chef Notes Input (always visible) */}
             <View style={styles.notesContainer}>
-              <TouchableOpacity
-                style={styles.notesButton}
-                onPress={() => setShowChefNotes(!showChefNotes)}
-              >
-                <Text style={styles.notesButtonIcon}>
-                  {showChefNotes ? '−' : '+'}
-                </Text>
-                <Text style={styles.notesButtonText}>Chef notes</Text>
-              </TouchableOpacity>
-              {showChefNotes && (
-                <TextInput
-                  style={styles.notesInput}
-                  value={chefNotes}
-                  onChangeText={setChefNotes}
-                  placeholder="Add notes for the chef (e.g., no onions)"
-                  placeholderTextColor={TEXT_MUTED}
-                  multiline
-                />
-              )}
+              <Text style={styles.notesButtonText}>Chef notes</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={chefNotes}
+                onChangeText={(t) => {
+                  setChefNotes(t);
+                  if (dish && cartQty > 0) {
+                    setCartNotes(dish.id, t);
+                  }
+                }}
+                placeholder="Add notes for the chef (e.g., no onions)"
+                placeholderTextColor={TEXT_MUTED}
+                multiline
+              />
             </View>
           </View>
         </View>
 
         {/* Tabs Section */}
-        <View style={styles.tabsSection}>
+        <View
+          style={styles.tabsSection}
+          nativeID={REVIEWS_SECTION_ID}
+          {...(Platform.OS === 'web' ? ({ id: REVIEWS_SECTION_ID } as any) : {})}
+          testID={REVIEWS_SECTION_ID}
+          ref={tabsSectionRef}
+          onLayout={(e) => {
+            const y = e.nativeEvent.layout.y;
+            tabsSectionYRef.current = y;
+            setTabsSectionY(y);
+          }}
+        >
           <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer} contentContainerStyle={{ flexDirection: 'row' }}>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'ingredients' && styles.tabActive]}
@@ -629,13 +688,6 @@ const styles = StyleSheet.create({
       default: 36 * 1.2,
     }),
     letterSpacing: -0.033,
-    // Spacing is controlled by the next rows' top margins for consistency.
-    marginBottom: 0,
-    // Reduce image->title vertical gap on native (mobile/tablet)
-    marginTop: Platform.select({
-      web: 0,
-      default: theme.spacing.sm,
-    }),
   },
   chefLink: {
     flexDirection: 'row',
@@ -694,8 +746,7 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
-    // Match header section spacing (title/chef/rating)
-    marginTop: theme.spacing.md,
+    marginTop: theme.spacing['2xl'],
     marginBottom: theme.spacing['2xl'],
   },
   actionRow: {
@@ -789,7 +840,7 @@ const styles = StyleSheet.create({
     borderBottomColor: 'transparent',
   },
   tabActive: {
-    borderBottomColor: PRIMARY_COLOR,
+    borderBottomColor: 'transparent',
   },
   tabText: {
     color: TEXT_MUTED,
@@ -977,12 +1028,13 @@ const styles = StyleSheet.create({
     }),
     gap: theme.spacing.xs,
     width: '100%',
+    paddingHorizontal: theme.spacing.md,
   },
   notesButton: {
     alignSelf: 'flex-start',
     paddingTop: theme.spacing.sm,
     paddingBottom: 0,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: 0,
     borderRadius: theme.radius.md,
     borderWidth: 0,
     backgroundColor: 'transparent',
