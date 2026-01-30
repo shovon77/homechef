@@ -26,10 +26,10 @@ const REVIEWS_SECTION_ID = 'dish-tabs-section';
 
 export default function DishDetail() {
   const router = useRouter();
-  const { id, quantity: quantityParam } = useLocalSearchParams();
+  const { id } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   // On web, `window.innerWidth` can change when the vertical scrollbar appears/disappears,
-  // which can flip `isMobile` and cause a layout "jump" (e.g., when toggling Chef notes).
+  // which can flip `isMobile` and cause layout jumps (e.g., when toggling Chef notes).
   const viewportWidth =
     Platform.OS === 'web' && typeof document !== 'undefined'
       ? document.documentElement.clientWidth
@@ -184,16 +184,6 @@ export default function DishDetail() {
     }
   }, [chef, user]);
 
-  const cartQty = dish ? getQty(dish.id) : 0;
-  const existingNotes = dish ? (cartItems.find(i => i.id === dish.id)?.notes ?? '') : '';
-
-  // Keep the input prefilled from cart notes when available (without overwriting user edits).
-  useEffect(() => {
-    if (existingNotes && !chefNotes.trim()) {
-      setChefNotes(existingNotes);
-    }
-  }, [existingNotes]);
-
   const handleSubmitRating = async () => {
     if (!userRating || userRating < 1 || userRating > 5) {
       Alert.alert("Rating required", "Please select 1–5 stars.");
@@ -247,7 +237,7 @@ export default function DishDetail() {
     const full = Math.floor(safe);
     const hasHalf = safe - full >= 0.5;
     return (
-      <View style={styles.starsContainer} pointerEvents="none">
+      <View style={styles.starsContainer}>
         {Array.from({ length: 5 }).map((_, i) => {
           const idx = i + 1;
           const opacity = idx <= full ? 1 : (hasHalf && idx === full + 1 ? 0.6 : 0.25);
@@ -287,114 +277,16 @@ export default function DishDetail() {
   const chefName = chef?.name || dish.chef || 'Chef';
   const mainImage = dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=1200&q=80&auto=format&fit=crop";
   const thumbnailImages = [mainImage, mainImage, mainImage, mainImage]; // Placeholder - could be expanded
-  const titleProps =
-    Platform.OS === 'web'
-      ? {}
-      : ({ numberOfLines: 1, ellipsizeMode: 'tail' } as const);
 
-  const scrollToY = (y: number) => {
-    const targetY = Math.max(0, y);
-    const ref: any = pageScrollRef.current;
-    if (!ref) return;
+  const cartQty = getQty(dish.id);
+  const existingNotes = cartItems.find(i => i.id === dish.id)?.notes ?? '';
 
-    // 1) Prefer React Native ScrollView signature (works on native + RNW instances)
-    try {
-      ref?.scrollTo?.({ x: 0, y: targetY, animated: true });
-    } catch {}
-    try {
-      ref?.scrollTo?.({ y: targetY, animated: true });
-    } catch {}
-
-    // 2) On web, also try the underlying DOM scroll node (RNW exposes getScrollableNode())
-    if (Platform.OS === 'web') {
-      const node: any =
-        ref?.getScrollableNode?.() ??
-        ref?.getInnerViewNode?.() ??
-        ref?.getScrollResponder?.()?.getScrollableNode?.() ??
-        // Sometimes the ref itself is the scrollable DOM node
-        (typeof ref?.scrollTop === 'number' ? ref : null);
-
-      if (node) {
-        try {
-          node.scrollTo?.({ top: targetY, left: 0, behavior: 'smooth' });
-        } catch {}
-        try {
-          node.scrollTop = targetY;
-        } catch {}
-      }
-
-      // 3) Last resort: window scroll (in case the page uses window scrolling)
-      try {
-        window?.scrollTo?.({ top: targetY, left: 0, behavior: 'smooth' });
-      } catch {}
+  // Keep the input prefilled from cart notes when available (without overwriting user edits).
+  useEffect(() => {
+    if (existingNotes && !chefNotes.trim()) {
+      setChefNotes(existingNotes);
     }
-  };
-
-  const getScrollY = (): number => {
-    const ref: any = pageScrollRef.current;
-    if (Platform.OS === 'web') {
-      const node: any =
-        ref?.getScrollableNode?.() ??
-        ref?.getInnerViewNode?.() ??
-        ref?.getScrollResponder?.()?.getScrollableNode?.() ??
-        ref;
-
-      const nodeTop = node?.scrollTop;
-      if (typeof nodeTop === 'number') return nodeTop;
-      const winTop = (typeof window !== 'undefined' ? window.scrollY : 0) || 0;
-      return winTop;
-    }
-    return 0;
-  };
-
-  const scrollWebToElement = (el: HTMLElement, offset: number, preferredScrollRoot?: HTMLElement | null) => {
-    const targetOffset = Math.max(0, offset);
-
-    // Prefer the ScrollView's actual scroll container when available; it's the most reliable.
-    const root = preferredScrollRoot ?? null;
-    if (root) {
-      const top =
-        el.getBoundingClientRect().top - root.getBoundingClientRect().top + root.scrollTop - targetOffset;
-      try {
-        root.scrollTo({ top, left: 0, behavior: 'smooth' });
-        return;
-      } catch {}
-      try {
-        root.scrollTop = top;
-        return;
-      } catch {}
-    }
-
-    // Fallback: find the nearest scrollable ancestor (RNW ScrollView is usually an overflow:auto div)
-    let parent: HTMLElement | null = el.parentElement;
-    while (parent && parent !== document.body) {
-      const style = window.getComputedStyle(parent);
-      const overflowY = style.overflowY;
-      const canScroll =
-        (overflowY === 'auto' || overflowY === 'scroll') && parent.scrollHeight > parent.clientHeight;
-      if (canScroll) break;
-      parent = parent.parentElement;
-    }
-
-    if (parent) {
-      const top =
-        el.getBoundingClientRect().top - parent.getBoundingClientRect().top + parent.scrollTop - targetOffset;
-      try {
-        parent.scrollTo({ top, left: 0, behavior: 'smooth' });
-        return;
-      } catch {}
-      try {
-        parent.scrollTop = top;
-        return;
-      } catch {}
-    }
-
-    // Last fallback: window scroll
-    const winTop = el.getBoundingClientRect().top + window.scrollY - targetOffset;
-    try {
-      window.scrollTo({ top: winTop, left: 0, behavior: 'smooth' });
-    } catch {}
-  };
+  }, [existingNotes]);
 
   const scrollToReviews = () => {
     setActiveTab('reviews');
@@ -402,23 +294,27 @@ export default function DishDetail() {
     const tryScroll = () => {
       const baseY = tabsSectionYRef.current || tabsSectionY || 0;
 
-      // Web: scroll the nearest scrollable ancestor (more reliable than relying on ref signatures)
       if (Platform.OS === 'web' && typeof document !== 'undefined') {
         try {
+          // Prefer the actual rendered node for this screen. After client-side navigation,
+          // the DOM can contain hidden screens and `getElementById` may hit the wrong element.
+          const refEl: any = tabsSectionRef.current as any;
+          if (refEl?.scrollIntoView) {
+            refEl.scrollIntoView({ behavior: 'smooth', block: 'start' });
+            return;
+          }
+
           const el =
             (document.getElementById(REVIEWS_SECTION_ID) as HTMLElement | null) ??
             (document.querySelector(`[data-testid="${REVIEWS_SECTION_ID}"]`) as HTMLElement | null);
           if (el) {
-            const scrollRoot =
-              (pageScrollRef.current?.getScrollableNode?.() as HTMLElement | null) ??
-              (document.scrollingElement as HTMLElement | null);
-            scrollWebToElement(el, NAVBAR_HEIGHT + 8, scrollRoot);
+            // Prefer native browser behavior; it finds the correct scroll container.
+            el.scrollIntoView({ behavior: 'smooth', block: 'start' });
             return;
           }
         } catch {}
       }
 
-      // Native: measure actual position inside the ScrollView to avoid stale layout Y.
       if (Platform.OS !== 'web') {
         const scrollRef: any = pageScrollRef.current;
         if (scrollRef?.scrollTo && tabsSectionRef.current) {
@@ -443,10 +339,9 @@ export default function DishDetail() {
       }
 
       const y = baseY > 0 ? Math.max(0, baseY) : 9999;
-      scrollToY(y);
+      pageScrollRef.current?.scrollTo?.({ y, animated: true });
     };
 
-    // Retry a few times to account for layout timing and rendering.
     requestAnimationFrame(tryScroll);
     setTimeout(tryScroll, 100);
     setTimeout(tryScroll, 300);
@@ -480,14 +375,7 @@ export default function DishDetail() {
 
           {/* Right Column: Dish Info & Actions */}
           <View style={[styles.infoColumn, isMobile && styles.infoColumnMobile]}>
-            <Text
-              {...titleProps}
-              style={[
-                styles.dishTitle,
-                isMobile && styles.dishTitleMobile,
-                Platform.OS === 'web' && styles.dishTitleWeb,
-              ]}
-            >
+            <Text style={[styles.dishTitle, isMobile && styles.dishTitleMobile]}>
               {dish.name}
             </Text>
             
@@ -538,7 +426,7 @@ export default function DishDetail() {
             {/* Price */}
             <Text style={[styles.price, isMobile && styles.priceMobile]}>{formatCad(dish.price)}</Text>
 
-            {/* Cart controls (same behavior as explore DishCard) */}
+            {/* Cart controls (same layout as explore DishCard) */}
             <View style={styles.actionRow}>
               {cartQty === 0 ? (
                 <View style={styles.qtyRowSpread}>
@@ -589,7 +477,6 @@ export default function DishDetail() {
                       style={styles.qtyIconBtn}
                       activeOpacity={0.7}
                       onPress={() => {
-                        // Use addToCart to preserve/update notes while incrementing.
                         addToCart({
                           id: dish.id,
                           name: dish.name || '',
@@ -621,8 +508,7 @@ export default function DishDetail() {
                 value={chefNotes}
                 onChangeText={(t) => {
                   setChefNotes(t);
-                  // If already in cart, keep notes synced so they are part of the order.
-                  if (dish && cartQty > 0) {
+                  if (cartQty > 0) {
                     setCartNotes(dish.id, t);
                   }
                 }}
@@ -821,15 +707,12 @@ const styles = StyleSheet.create({
   },
   grid: {
     flexDirection: 'column',
-    // Avoid using `gap` by default on web; it can show up as a purple spacer and
-    // can be tricky to override reliably when layout changes.
     rowGap: 0,
     columnGap: 0,
     marginBottom: theme.spacing['4xl'],
   },
   gridWeb: {
     flexDirection: 'row',
-    // Use explicit row/column gap for web desktop layout
     rowGap: theme.spacing['2xl'],
     columnGap: theme.spacing['2xl'],
   },
@@ -870,13 +753,9 @@ const styles = StyleSheet.create({
       default: 28 * 1.2,
     }),
     letterSpacing: -0.033,
-    marginTop: 0,
-    flexShrink: 1,
-  },
-  // iOS Safari/WebKit can intermittently fail to paint clamped text after layout changes
-  // (e.g., expanding the Chef notes textarea). Avoid line clamping on web for the title.
-  dishTitleWeb: {
-    width: '100%',
+    marginTop: theme.spacing.md,
+    position: 'relative',
+    zIndex: 2,
   },
   dishTitleMobile: {
     fontSize: 28,
@@ -886,7 +765,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.sm,
-    marginTop: theme.spacing.md,
+    marginTop: 0,
+    flexShrink: 1,
   },
   chefIcon: {
     fontSize: theme.typography.fontSize.lg,
@@ -953,11 +833,6 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
     width: '100%',
-  },
-  qtyRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.md,
   },
   qtyRowSpread: {
     flexDirection: 'row',
@@ -1060,7 +935,6 @@ const styles = StyleSheet.create({
     letterSpacing: 0.015,
   },
   tabsSection: {
-    // Keep spacing stable so toggling Chef notes doesn't "jump" the page
     marginTop: theme.spacing.lg,
     paddingTop: theme.spacing.lg,
     borderTopWidth: Platform.select({
@@ -1271,7 +1145,6 @@ const styles = StyleSheet.create({
   },
   notesContainer: {
     marginTop: theme.spacing.sm,
-    // Keep spacing stable so toggling Chef notes doesn't "jump" the page
     marginBottom: theme.spacing.sm,
     gap: theme.spacing.xs,
     width: '100%',
