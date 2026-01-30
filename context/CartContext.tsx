@@ -208,7 +208,9 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   const setNotes = (id: string | number, notes?: string) => {
     const nextNotes = notes?.trim() ? notes.trim() : undefined;
-    setItems(prev => prev.map(p => (p.id === id ? { ...p, notes: nextNotes } : p)));
+    setItems(prev =>
+      prev.map(p => (p.id === id ? { ...p, notes: nextNotes } : p))
+    );
   };
 
   const getQty = (id: string | number) => items.find(p => p.id === id)?.quantity ?? 0;

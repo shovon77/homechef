@@ -68,11 +68,12 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       flexWrap: 'nowrap',
     };
     const textStyle = {
-      fontWeight: isActive ? '700' : '600',
+      fontWeight: theme.typography.fontWeight.bold,
       color: isActive ? '#FFFFFF' : TEXT_DARK,
       fontFamily: theme.typography.fontFamily.body,
       fontSize: '14px',
       whiteSpace: 'nowrap',
+      letterSpacing: '0.015em',
     };
     
     return (
@@ -801,8 +802,7 @@ export default function NavBar() {
                 ])}>
                   <Text style={StyleSheet.flatten([
                     styles.navLinkText, 
-                    { fontWeight: '700' as any },
-                    isOrderActive && { color: PRIMARY_COLOR, fontWeight: '600' as any }
+                    isOrderActive && { color: PRIMARY_COLOR, fontWeight: theme.typography.fontWeight.bold as any }
                   ])}>Order</Text>
                 {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
               </TouchableOpacity>
@@ -1592,10 +1592,11 @@ const styles = StyleSheet.create({
   },
   navLinkText: {
     fontSize: 14,
-    fontWeight: '500',
+    fontWeight: theme.typography.fontWeight.bold as any,
     color: TEXT_DARK,
     lineHeight: 20,
     fontFamily: theme.typography.fontFamily.body,
+    letterSpacing: 0.015,
   },
   rightSection: {
     flexDirection: 'row',

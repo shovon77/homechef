@@ -605,6 +605,15 @@ export default function CartScreen() {
                             {chefName && (
                               <Text style={styles.cartItemChef}>By {chefName}</Text>
                             )}
+                            {!!item.notes?.trim() && (
+                              <Text
+                                style={styles.cartItemNotes}
+                                numberOfLines={2}
+                                ellipsizeMode="tail"
+                              >
+                                Notes: {item.notes.trim()}
+                              </Text>
+                            )}
                           </View>
                         </View>
                         <View style={styles.cartItemRight}>
@@ -749,6 +758,14 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal as any,
     fontFamily: 'OpenSans_400Regular',
+  },
+  cartItemNotes: {
+    color: TEXT_DARK,
+    opacity: 0.72,
+    fontSize: 13,
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
+    lineHeight: 18,
   },
   cartItemRight: {
     alignItems: 'flex-end',
