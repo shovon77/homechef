@@ -262,17 +262,23 @@ export default function DishDetail() {
   };
 
   const renderStars = (value: number) => {
-    const full = Math.floor(value);
-    const hasHalf = value - full >= 0.5;
+    const safe = Number.isFinite(value) ? Math.max(0, Math.min(5, value)) : 0;
+    const full = Math.floor(safe);
+    const hasHalf = safe - full >= 0.5;
     return (
       <View style={styles.starsContainer}>
-        {Array.from({ length: full }).map((_, i) => (
-          <Text key={`f${i}`} style={styles.star}>★</Text>
-        ))}
-        {hasHalf && <Text style={styles.star}>☆</Text>}
-        {Array.from({ length: 5 - full - (hasHalf ? 1 : 0) }).map((_, i) => (
-          <Text key={`e${i}`} style={[styles.star, styles.starEmpty]}>★</Text>
-        ))}
+        {Array.from({ length: 5 }).map((_, i) => {
+          const idx = i + 1;
+          const opacity = idx <= full ? 1 : (hasHalf && idx === full + 1 ? 0.6 : 0.25);
+          return (
+            <Image
+              key={`s${i}`}
+              source={require('../../assets/star.png')}
+              style={[styles.starIconImage, { opacity }]}
+              resizeMode="contain"
+            />
+          );
+        })}
       </View>
     );
   };
@@ -366,7 +372,12 @@ export default function DishDetail() {
 
           {/* Right Column: Dish Info & Actions */}
           <View style={styles.infoColumn}>
-            <Text style={styles.dishTitle}>{dish.name}</Text>
+            <Text
+              style={styles.dishTitle}
+              {...(isMobile ? { numberOfLines: 1, ellipsizeMode: "tail" as const } : {})}
+            >
+              {dish.name}
+            </Text>
             
             {chefId ? (
               <Link href={{ 
@@ -415,29 +426,58 @@ export default function DishDetail() {
             {/* Price */}
             <Text style={styles.price}>{formatCad(dish.price)}</Text>
 
-            {/* Quantity & Add to Cart */}
+            {/* Cart quantity (Explore-style minus / qty / plus) */}
             <View style={styles.actionRow}>
-              <View style={styles.quantitySelector}>
+              <View style={styles.cartQtyRow}>
                 <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => setQuantity(Math.max(1, quantity - 1))}
+                  style={[styles.cartQtyBtn, cartQty <= 0 && styles.cartQtyBtnDisabled]}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (dish && cartQty > 0) {
+                      setCartQuantity(dish.id, cartQty - 1);
+                    }
+                  }}
                 >
-                  <Text style={styles.quantityButtonText}>-</Text>
+                  <Image
+                    source={require('../../assets/minus.png')}
+                    style={styles.cartQtyIconImage}
+                    resizeMode="contain"
+                  />
                 </TouchableOpacity>
-                <Text style={styles.quantityValue}>{quantity}</Text>
-                <TouchableOpacity
-                  style={styles.quantityButton}
-                  onPress={() => setQuantity(quantity + 1)}
+
+                <Text
+                  style={[styles.cartQtyValue, cartQty <= 0 && styles.cartQtyValueHidden]}
                 >
-                  <Text style={styles.quantityButtonText}>+</Text>
+                  {cartQty}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.cartQtyBtn}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (!dish) return;
+                    if (cartQty <= 0) {
+                      addToCart({
+                        id: dish.id,
+                        name: dish.name || '',
+                        price: Number(dish.price || 0),
+                        quantity: 1,
+                        image: dish.image || undefined,
+                        chef_id: dish.chef_id || null,
+                        notes: chefNotes.trim() || undefined,
+                      });
+                      return;
+                    }
+                    setCartQuantity(dish.id, cartQty + 1);
+                  }}
+                >
+                  <Image
+                    source={require('../../assets/add (1).png')}
+                    style={styles.cartQtyIconImage}
+                    resizeMode="contain"
+                  />
                 </TouchableOpacity>
               </View>
-              <TouchableOpacity
-                style={styles.addToCartButton}
-                onPress={handleAddToCart}
-              >
-                <Text style={styles.addToCartButtonText}>Add to cart</Text>
-              </TouchableOpacity>
             </View>
 
             {/* Chef Notes Input (always visible) */}
@@ -665,7 +705,8 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     alignSelf: 'flex-start', // Or center
-    marginBottom: -50, // Increased negative margin to effectively hide the gap
+    // Avoid overlapping the title on mobile/web.
+    marginBottom: 0,
     ...elev('lg'),
   },
   mainImage: {
@@ -680,13 +721,13 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: Platform.select({
       web: 48,
-      default: 36,
+      default: 30,
     }),
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
     lineHeight: Platform.select({
       web: 48 * 1.2,
-      default: 36 * 1.2,
+      default: 30 * 1.2,
     }),
     letterSpacing: -0.033,
     // Spacing is controlled by the next rows' top margins for consistency.
@@ -728,6 +769,12 @@ const styles = StyleSheet.create({
   starsContainer: {
     flexDirection: 'row',
     alignItems: 'center',
+    gap: 4,
+  },
+  starIconImage: {
+    width: 18,
+    height: 18,
+    tintColor: PRIMARY_COLOR,
   },
   star: {
     fontSize: 20,
@@ -751,7 +798,10 @@ const styles = StyleSheet.create({
   },
   price: {
     color: TEXT_DARK,
-    fontSize: 36,
+    fontSize: Platform.select({
+      web: 36,
+      default: 24,
+    }),
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
     // Match header section spacing (title/chef/rating)
@@ -765,6 +815,36 @@ const styles = StyleSheet.create({
     }),
     gap: theme.spacing.md,
     marginBottom: theme.spacing.md,
+  },
+  cartQtyRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+  },
+  cartQtyBtn: {
+    width: 40,
+    height: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cartQtyBtnDisabled: {
+    opacity: 0.3,
+  },
+  cartQtyIconImage: {
+    width: 20,
+    height: 20,
+    tintColor: PRIMARY_COLOR,
+  },
+  cartQtyValue: {
+    flex: 1,
+    textAlign: 'center',
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  cartQtyValueHidden: {
+    opacity: 0,
   },
   quantitySelector: {
     flexDirection: 'row',
