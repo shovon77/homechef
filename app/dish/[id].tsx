@@ -734,8 +734,8 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     // Reduce image->title vertical gap on native (mobile/tablet)
     marginTop: Platform.select({
-      web: 0,
-      default: theme.spacing.sm,
+      web: theme.spacing.xs,
+      default: theme.spacing.xs,
     }),
   },
   chefLink: {
