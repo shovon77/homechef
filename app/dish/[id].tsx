@@ -26,6 +26,7 @@ export default function DishDetail() {
   const router = useRouter();
   const { id, quantity: quantityParam } = useLocalSearchParams();
   const { width } = useWindowDimensions();
+  // On web, `window.innerWidth` can change when the vertical scrollbar appears/disappears.
   const viewportWidth =
     Platform.OS === 'web' && typeof document !== 'undefined'
       ? document.documentElement.clientWidth
@@ -688,6 +689,13 @@ const styles = StyleSheet.create({
       default: 36 * 1.2,
     }),
     letterSpacing: -0.033,
+    // Spacing is controlled by the next rows' top margins for consistency.
+    marginBottom: 0,
+    // Reduce image->title vertical gap on native (mobile/tablet)
+    marginTop: Platform.select({
+      web: 0,
+      default: theme.spacing.sm,
+    }),
   },
   chefLink: {
     flexDirection: 'row',
@@ -746,7 +754,8 @@ const styles = StyleSheet.create({
     fontSize: 36,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
-    marginTop: theme.spacing['2xl'],
+    // Match header section spacing (title/chef/rating)
+    marginTop: theme.spacing.md,
     marginBottom: theme.spacing['2xl'],
   },
   actionRow: {
