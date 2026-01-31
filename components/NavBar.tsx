@@ -68,7 +68,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       flexWrap: 'nowrap',
     };
     const textStyle = {
-      fontWeight: theme.typography.fontWeight.bold,
+      fontWeight: theme.typography.fontWeight.normal,
       color: isActive ? '#FFFFFF' : TEXT_DARK,
       fontFamily: theme.typography.fontFamily.body,
       fontSize: '14px',
@@ -104,7 +104,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       >
         <Text style={StyleSheet.flatten([
           styles.navLinkText, 
-          isActive && { color: '#FFFFFF', fontWeight: '700' as any }
+          isActive && { color: '#FFFFFF' }
         ])} numberOfLines={1}>
           {label}
         </Text>
@@ -802,7 +802,7 @@ export default function NavBar() {
                 ])}>
                   <Text style={StyleSheet.flatten([
                     styles.navLinkText, 
-                    isOrderActive && { color: PRIMARY_COLOR, fontWeight: theme.typography.fontWeight.bold as any }
+                    isOrderActive && { color: PRIMARY_COLOR }
                   ])}>Order</Text>
                 {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
               </TouchableOpacity>
@@ -1592,7 +1592,7 @@ const styles = StyleSheet.create({
   },
   navLinkText: {
     fontSize: 14,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontWeight: theme.typography.fontWeight.normal as any,
     color: TEXT_DARK,
     lineHeight: 20,
     fontFamily: theme.typography.fontFamily.body,
