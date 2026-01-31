@@ -4,8 +4,9 @@ import { Link, useRouter } from "expo-router";
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
 import Screen from "../components/Screen";
+import ChefCard from "./components/ChefCard";
 import { getDishRatings, getChefById } from "../lib/db";
-import { safeToFixed, toNumber } from "../lib/number";
+import { safeToFixed } from "../lib/number";
 import { formatCad } from "../lib/money";
 import { useRole } from "../hooks/useRole";
 
@@ -13,6 +14,7 @@ type Chef = Record<string, any>;
 type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null; chef?: string | null };
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
+const FEATURED_CHEFS_LIMIT = 30;
 
 // Coordinate cache with persistent storage
 const coordinateCache = new Map<string, { lat: number; lon: number } | null>();
@@ -319,71 +321,6 @@ function CircularDishCard({ dish }: { dish: Dish }) {
   );
 }
 
-// Chef card with distance calculation
-function ChefCardWithDistance({ chef, distance, isMobile }: { chef: Chef, distance: number | null, isMobile: boolean }) {
-
-  return (
-    <View style={[styles.featuredChefCardWrapper, isMobile && styles.featuredChefCardWrapperMobile]}>
-      <Link href={{ 
-        pathname: "/chef/[id]", 
-        params: { 
-          id: normalizeId(chef.id),
-          name: chef.name,
-          photo: chef.photo || chef.avatar || "",
-          location: chef.location || "",
-          rating: chef.rating?.toString() || "",
-          rating_count: chef.rating_count?.toString() || "",
-          cuisine: chef.cuisine || ""
-        } 
-      }} asChild>
-        <TouchableOpacity activeOpacity={0.9} style={StyleSheet.flatten([styles.featuredChefCard, isMobile && styles.featuredChefCardMobile])}>
-          <Image
-            source={{ uri: chef?.photo || chef?.avatar || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}` }}
-            style={[styles.featuredChefAvatar, isMobile && styles.featuredChefAvatarMobile]}
-          />
-          <Text style={styles.featuredChefName}>{chef.name}</Text>
-          <Text style={styles.featuredChefCuisine}>{formatCuisine(chef.cuisine)}</Text>
-          <View style={styles.featuredChefLocationRatingRow}>
-            {/* Distance display - only show if distance is calculated, at the front */}
-            {distance !== null && (
-              <View style={styles.featuredChefDistanceContainer}>
-                <Image 
-                  source={require('../assets/map.png')} 
-                  style={styles.featuredChefIcon} 
-                  resizeMode="contain" 
-                />
-                <Text style={styles.featuredChefDistance}>
-                  {distance > 20 ? '>20 km' : `${distance.toFixed(1)} km`}
-                </Text>
-              </View>
-            )}
-            {chef.location && (
-              <View style={styles.featuredChefLocationContainer}>
-                <Image 
-                  source={require('../assets/locationnewicon.png')} 
-                  style={styles.featuredChefIcon} 
-                  resizeMode="contain" 
-                />
-                <Text style={styles.featuredChefLocation} numberOfLines={1}>
-                  {chef.location?.split(',')[1]?.trim() || chef.location?.split(',')[0]}
-                </Text>
-              </View>
-            )}
-            <View style={styles.featuredChefRating}>
-              <Image 
-                source={require('../assets/star.png')} 
-                style={styles.featuredChefIcon} 
-                resizeMode="contain" 
-              />
-              <Text style={styles.featuredChefRatingText}>{safeToFixed(toNumber(chef?.rating, 0))}</Text>
-            </View>
-          </View>
-        </TouchableOpacity>
-      </Link>
-    </View>
-  );
-}
-
 // Dish card matching HTML design
 function HomeDishCard({ dish }: { dish: Dish }) {
   const [rating, setRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
@@ -450,119 +387,6 @@ export default function HomePage() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
-
-  // Create a stable key from chef IDs to track changes
-  const chefsKey = useMemo(() => {
-    return chefs.map(c => normalizeId(c.id)).join(',');
-  }, [chefs]);
-
-  // Recalculate distances when profile location or chefs change (optimized with batching and retries)
-  useEffect(() => {
-    if (profile?.location && chefs.length > 0) {
-      let mounted = true;
-      const distancesMap = new Map<string, number>();
-      let updateTimer: NodeJS.Timeout | null = null;
-      let lastUpdateTime = 0;
-      
-      // Helper to batch state updates (but ensure updates happen)
-      const scheduleUpdate = (force = false) => {
-        const now = Date.now();
-        if (updateTimer && !force) return;
-        
-        if (force || now - lastUpdateTime > 200) {
-          // Immediate update if forced or enough time has passed
-          if (updateTimer) clearTimeout(updateTimer);
-          if (mounted) {
-            setChefDistances(new Map(distancesMap));
-            lastUpdateTime = now;
-          }
-          updateTimer = null;
-        } else {
-          // Schedule batched update
-          if (updateTimer) return;
-          updateTimer = setTimeout(() => {
-            if (mounted) {
-              setChefDistances(new Map(distancesMap));
-              lastUpdateTime = Date.now();
-            }
-            updateTimer = null;
-          }, 200);
-        }
-      };
-      
-      // Calculate distances using stored coordinates (much faster!)
-      (async () => {
-        // Get user coordinates - prefer stored, fallback to geocoding
-        let userCoords: { lat: number; lon: number } | null = null;
-        if (profile.latitude && profile.longitude) {
-          userCoords = { lat: profile.latitude, lon: profile.longitude };
-        } else if (profile.location) {
-          // Fallback to geocoding if coordinates not stored
-          userCoords = await geocodeAddress(profile.location);
-          if (!userCoords) {
-            console.warn('Failed to geocode user location:', profile.location);
-            return;
-          }
-        } else {
-          return; // No location available
-        }
-        
-        if (!mounted) return;
-        
-        const chefsWithLocations = chefs.filter(chef => chef.location);
-        const totalChefs = chefsWithLocations.length;
-        let completedCount = 0;
-        
-        // Process all chefs - use stored coordinates when available
-        for (const chef of chefsWithLocations) {
-          if (!mounted) break;
-          
-          try {
-            let chefCoords: { lat: number; lon: number } | null = null;
-            
-            // Prefer stored coordinates
-            if (chef.latitude && chef.longitude) {
-              chefCoords = { lat: chef.latitude, lon: chef.longitude };
-            } else if (chef.location) {
-              // Fallback to geocoding if coordinates not stored
-              chefCoords = await geocodeAddress(chef.location);
-            }
-            
-            if (chefCoords) {
-              const distance = calculateDistanceFromCoords(userCoords, chefCoords);
-              const chefId = normalizeId(chef.id);
-              distancesMap.set(chefId, distance);
-              completedCount++;
-              scheduleUpdate(); // Schedule batched update
-            } else {
-              completedCount++;
-              console.warn('Failed to get coordinates for chef:', chef.id, chef.location);
-            }
-          } catch (error) {
-            console.warn('Error calculating distance for chef:', chef.id, error);
-            if (mounted) completedCount++;
-          }
-        }
-        
-        // Final update to ensure all calculated distances are shown
-        if (mounted) {
-          if (updateTimer) {
-            clearTimeout(updateTimer);
-            updateTimer = null;
-          }
-          setChefDistances(new Map(distancesMap));
-          console.log(`Distance calculation complete: ${distancesMap.size}/${totalChefs} chefs`);
-        }
-      })();
-      
-      return () => { 
-        mounted = false;
-        if (updateTimer) clearTimeout(updateTimer);
-      };
-    } else {
-      setChefDistances(new Map());
-    }
-  }, [profile?.location, chefsKey, chefs]);
   const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
@@ -734,7 +558,7 @@ export default function HomePage() {
 
       const [{ data: c }, { data: d }] = await Promise.all([
         // Show only featured and active chefs on homepage
-        supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").order("rating", { ascending: false }).limit(5),
+        supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
         // Show all dishes from featured and active chefs, sorted by price (least expensive first)
         supabase.from("dishes")
           .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status)")
@@ -746,19 +570,6 @@ export default function HomePage() {
       setChefs((c || []) as Chef[]);
       setDishes((d || []) as Dish[]);
       setLoading(false);
-
-      // Calculate distances for all chefs in parallel (non-blocking)
-      if (profile?.location && c && c.length > 0) {
-        calculateAllDistances(profile.location, c as Chef[])
-          .then(distances => {
-            if (mounted) {
-              setChefDistances(distances);
-            }
-          })
-          .catch(err => {
-            console.warn('Error calculating distances:', err);
-          });
-      }
 
       // Subscribe to real-time updates for chefs table
       channel = supabase
@@ -780,21 +591,9 @@ export default function HomePage() {
                 .eq("featured", true)
                 .eq("status", "active")
                 .order("rating", { ascending: false })
-                .limit(5);
+                .limit(FEATURED_CHEFS_LIMIT);
               if (mounted && updatedChefs) {
                 setChefs(updatedChefs as Chef[]);
-                // Recalculate distances when chefs are updated
-                if (profile?.location) {
-                  calculateAllDistances(profile.location, updatedChefs as Chef[])
-                    .then(distances => {
-                      if (mounted) {
-                        setChefDistances(distances);
-                      }
-                    })
-                    .catch(err => {
-                      console.warn('Error calculating distances:', err);
-                    });
-                }
               }
             }
           }
@@ -809,6 +608,70 @@ export default function HomePage() {
       }
     };
   }, []);
+
+  // Fast distance calculation for homepage chefs:
+  // - Prefer stored coordinates (profile/chef latitude+longitude) for instant results
+  // - Fallback to geocoding only when coords are missing (small list: max 5 chefs)
+  useEffect(() => {
+    let mounted = true;
+
+    const profileLat = Number((profile as any)?.latitude);
+    const profileLon = Number((profile as any)?.longitude);
+    const hasProfileCoords = Number.isFinite(profileLat) && Number.isFinite(profileLon);
+
+    // If we can't compute user coords quickly, fall back to cached geocoding once.
+    (async () => {
+      let userCoords: { lat: number; lon: number } | null = null;
+
+      if (hasProfileCoords) {
+        userCoords = { lat: profileLat, lon: profileLon };
+      } else if ((profile as any)?.location) {
+        userCoords = await geocodeAddress(String((profile as any).location));
+      }
+
+      if (!mounted || !userCoords || chefs.length === 0) {
+        if (mounted) setChefDistances(new Map());
+        return;
+      }
+
+      const next = new Map<string, number>();
+
+      // Compute distances (coords-first, geocode fallback)
+      await Promise.all(
+        chefs.map(async (chef) => {
+          try {
+            const chefId = normalizeId((chef as any)?.id);
+            const chefLat = Number((chef as any)?.latitude);
+            const chefLon = Number((chef as any)?.longitude);
+
+            if (Number.isFinite(chefLat) && Number.isFinite(chefLon)) {
+              const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
+              if (Number.isFinite(d)) next.set(chefId, d);
+              return;
+            }
+
+            // Fallback: geocode chef location (cached) if coords not stored
+            const chefLoc = (chef as any)?.location;
+            if (chefLoc) {
+              const coords = await geocodeAddress(String(chefLoc));
+              if (coords) {
+                const d = calculateDistanceFromCoords(userCoords, coords);
+                if (Number.isFinite(d)) next.set(chefId, d);
+              }
+            }
+          } catch {
+            // ignore per-chef distance failures
+          }
+        })
+      );
+
+      if (mounted) setChefDistances(next);
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [profile, chefs]);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -952,12 +815,25 @@ export default function HomePage() {
               contentContainerStyle={styles.horizontalScrollContent}
             >
               {chefs.map((chef, i) => (
-                <ChefCardWithDistance 
-                  key={`${normalizeId(chef.id)}-${i}`} 
-                  chef={chef} 
-                  distance={chefDistances.get(normalizeId(chef.id)) || null}
-                  isMobile={isMobile}
-                />
+                <View
+                  key={`${normalizeId(chef.id)}-${i}`}
+                  style={[
+                    styles.homepageChefCardWrapper,
+                    isMobile && styles.homepageChefCardWrapperMobile,
+                  ]}
+                >
+                  <ChefCard
+                    chef={{
+                      ...chef,
+                      id: normalizeId(chef.id),
+                      rating: typeof chef.rating === "number" ? chef.rating : null,
+                    }}
+                    style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
+                    ratingColor="#FE734C"
+                    distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
+                    hideBio
+                  />
+                </View>
               ))}
             </ScrollView>
           </View>
@@ -1511,6 +1387,13 @@ const styles = StyleSheet.create({
   },
   featuredChefCardWrapperMobile: {
     width: 200,
+  },
+  homepageChefCardWrapper: {
+    width: 420,
+    flexShrink: 0,
+  },
+  homepageChefCardWrapperMobile: {
+    width: 360,
   },
   featuredChefCardMobile: {
     padding: theme.spacing.md,

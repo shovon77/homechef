@@ -68,15 +68,21 @@ type Props = {
   style?: StyleProp<ViewStyle>;
   nameColor?: string;
   ratingColor?: string;
+  distanceKm?: number | null;
+  hideBio?: boolean;
 };
 
-export default function ChefCard({ chef, style, nameColor, ratingColor }: Props) {
+export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio }: Props) {
   const avatar =
     chef?.photo ||
     chef?.avatar ||
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
 
   const ratingVal = toNumber(chef?.rating, 0);
+  const showDistance = typeof distanceKm === 'number' && Number.isFinite(distanceKm) && distanceKm > 0;
+  const distanceText = showDistance
+    ? (distanceKm > 20 ? '>20 km' : `${distanceKm.toFixed(1)} km`)
+    : '';
 
   return (
     <View style={[styles.card, style]}>
@@ -86,14 +92,14 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
           <View style={styles.info}>
             <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]} numberOfLines={1}>{chef.name}</Text>
             <Text style={styles.cuisine} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
-            {chef.bio && (
+            {chef.bio && !hideBio && (
               <Text style={styles.bio} numberOfLines={2}>{chef.bio}</Text>
             )}
           {chef.location && formatLocationCityState(chef.location) && (
             <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
               <Image 
                 source={require('../../assets/locationnewicon.png')} 
-                style={{ width: 16, height: 16, tintColor: '#FE734C' }} 
+                style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
                 resizeMode="contain" 
               />
               <Text style={[styles.location, { marginTop: 0 }]} numberOfLines={1}>
@@ -109,6 +115,16 @@ export default function ChefCard({ chef, style, nameColor, ratingColor }: Props)
               resizeMode="contain" 
             />
                 <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
+              </View>
+            )}
+            {showDistance && (
+              <View style={styles.distanceRow}>
+                <Image
+                  source={require('../../assets/map.png')}
+                  style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
+                  resizeMode="contain"
+                />
+                <Text style={styles.distanceText}>{distanceText}</Text>
               </View>
             )}
           </View>
@@ -188,7 +204,24 @@ const styles = StyleSheet.create({
     height: 18,
     tintColor: ACCENT_COLOR,
   },
+  metaIconImage: {
+    width: 18,
+    height: 18,
+    tintColor: '#FE734C',
+  },
   ratingText: {
+    color: '#33393A',
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+  },
+  distanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    marginTop: 4,
+  },
+  distanceText: {
     color: '#33393A',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
