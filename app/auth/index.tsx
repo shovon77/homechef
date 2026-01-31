@@ -231,7 +231,7 @@ export default function AuthPage() {
     <Screen 
       style={{ backgroundColor: C.bg }}
       contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}
-      fixedFooterHeight={140}
+      fixedFooterHeight={72}
     >
       <Animated.View style={{
         transform:[{ translateY: cardSlide }],
@@ -241,7 +241,7 @@ export default function AuthPage() {
         borderWidth:1, borderColor:C.border,
         borderRadius:18, padding:24,
         // Keep the card above the footer overlap area
-        marginBottom: Platform.select({ web: 120, default: 140 }),
+        marginBottom: Platform.select({ web: 28, default: 44 }),
         ...Platform.select({
           web: { boxShadow: '0 8px 14px rgba(0,0,0,0.08)' },
           ios: { shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8} },
