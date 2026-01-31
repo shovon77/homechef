@@ -774,7 +774,8 @@ export default function BrowsePage() {
                     >
                       <Image
                         source={require('../../assets/controls (1).png')}
-                        style={{ width: 20, height: 20, tintColor: '#FE734C' }}
+                        style={{ width: 20, height: 20 }}
+                        tintColor="#FE734C"
                         resizeMode="contain"
                       />
                     </TouchableOpacity>
@@ -910,6 +911,7 @@ export default function BrowsePage() {
               <Image
                 source={require('../../assets/search.png')}
                 style={styles.searchIconImage}
+                tintColor="#FE734C"
               />
             </TouchableOpacity>
           ) : (
@@ -921,6 +923,7 @@ export default function BrowsePage() {
                 <Image
                   source={require('../../assets/search.png')}
                   style={styles.searchIconImage}
+                  tintColor="#FE734C"
                 />
               </TouchableOpacity>
               <View style={{ flex: 1, justifyContent: 'center' }}>
@@ -953,6 +956,7 @@ export default function BrowsePage() {
                 <Image
                   source={require('../../assets/microphone.png')}
                   style={styles.micIconImage}
+                  tintColor="#FE734C"
                 />
               </TouchableOpacity>
             </>
@@ -1317,7 +1321,6 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     resizeMode: 'contain',
-    tintColor: '#FE734C',
   },
   emptyStateContainer: {
     flex: 1,
@@ -1385,7 +1388,6 @@ const styles = StyleSheet.create({
     width: 24,
     height: 24,
     resizeMode: 'contain',
-    tintColor: '#FE734C',
   },
   cuisineCardWrapper: {
     padding: 4,

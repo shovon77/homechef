@@ -1,4 +1,5 @@
 import { theme } from "../../constants/theme";
+import { Platform } from "react-native";
 
 export const buttonStyles = {
   base: {
@@ -8,11 +9,22 @@ export const buttonStyles = {
     borderRadius: 10,
     alignItems: "center",
     justifyContent: "center",
-    shadowColor: theme.colors.primary,
-    shadowOpacity: 0.4,
-    shadowOffset: { width: 0, height: 4 },
-    shadowRadius: 6,
-    elevation: 5,
+    ...Platform.select({
+      web: {
+        // RN Web: shadow* is deprecated; use boxShadow
+        boxShadow: `0 4px 6px rgba(254, 115, 76, 0.4)`,
+      },
+      ios: {
+        shadowColor: theme.colors.primary,
+        shadowOpacity: 0.4,
+        shadowOffset: { width: 0, height: 4 },
+        shadowRadius: 6,
+      },
+      android: {
+        elevation: 5,
+      },
+      default: {},
+    }),
   },
   text: {
     color: theme.colors.white,

@@ -272,7 +272,8 @@ export default function IntroPage() {
   const MenuIcon = React.useMemo(() => (
     <Image 
       source={require('../assets/menu.png')} 
-      style={{ width: 24, height: 24, tintColor: PRIMARY_COLOR }} 
+      style={{ width: 24, height: 24 }} 
+      tintColor={PRIMARY_COLOR}
       resizeMode="contain" 
     />
   ), []);
@@ -327,6 +328,7 @@ export default function IntroPage() {
                 <Image 
                   source={require('../assets/alarm.png')} 
                   style={styles.notificationsIconImage}
+                  tintColor={PRIMARY_COLOR}
                   resizeMode="contain"
                 />
                 {unreadCount > 0 && (
@@ -729,7 +731,6 @@ const styles = StyleSheet.create({
   notificationsIconImage: {
     width: 20,
     height: 20,
-    tintColor: PRIMARY_COLOR,
   },
   faqButtonText: {
     fontSize: 14,

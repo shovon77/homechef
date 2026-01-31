@@ -52,6 +52,7 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
       <Image
         source={require('../../assets/star.png')}
         style={styles.starIconImage}
+        tintColor={BRAND_BLACK}
         resizeMode="contain"
       />
       <Text style={styles.ratingText}>{safeToFixed(avg)}</Text>
@@ -150,6 +151,7 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
                   <Image
                     source={require('../../assets/star.png')}
                     style={[styles.starIconImage, styles.starIconExplore]}
+                    tintColor={BRAND_BLACK}
                     resizeMode="contain"
                   />
                   <Text style={[styles.ratingText, styles.ratingTextExplore]}>{safeToFixed(avg)}</Text>
@@ -182,6 +184,7 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
                   <Image
                     source={require('../../assets/add (1).png')}
                     style={styles.plusIconImage}
+                    tintColor={PRIMARY_COLOR}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -195,6 +198,7 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
                     <Image
                       source={require('../../assets/minus.png')}
                       style={styles.quantityIconImage}
+                      tintColor={PRIMARY_COLOR}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -208,6 +212,7 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
                     <Image
                       source={require('../../assets/add (1).png')}
                       style={styles.quantityIconImage}
+                      tintColor={PRIMARY_COLOR}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -387,7 +392,6 @@ const styles = StyleSheet.create({
   starIconImage: {
     width: 18,
     height: 18,
-    tintColor: BRAND_BLACK,
   },
   starIconExplore: {
     width: 12,
@@ -470,12 +474,10 @@ const styles = StyleSheet.create({
   plusIconImage: {
     width: 20,
     height: 20,
-    tintColor: PRIMARY_COLOR,
   },
   quantityIconImage: {
     width: 20,
     height: 20,
-    tintColor: PRIMARY_COLOR,
   },
   plusIconText: {
     fontSize: 18,
@@ -490,12 +492,16 @@ const styles = StyleSheet.create({
     minWidth: 60,
   },
   buttonNoShadow: {
-    shadowColor: 'transparent',
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0,
-    shadowRadius: 0,
-    elevation: 0,
-    ...(Platform.OS === 'web' ? { boxShadow: 'none' } : {}),
+    ...Platform.select({
+      web: { boxShadow: 'none' as any },
+      default: {
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+        elevation: 0,
+      } as any,
+    }),
   },
   quantityControl: {
     flexDirection: 'row',

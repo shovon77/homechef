@@ -80,6 +80,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
 
   const ratingVal = toNumber(chef?.rating, 0);
+  const starTint = ratingColor ?? ACCENT_COLOR;
+  const metaTint = ratingColor ?? '#FE734C';
   const showDistance = typeof distanceKm === 'number' && Number.isFinite(distanceKm) && distanceKm > 0;
   const distanceText = showDistance
     ? (distanceKm > 20 ? '>20 km' : `${distanceKm.toFixed(1)} km`)
@@ -104,7 +106,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.rating}>
                     <Image 
                       source={require('../../assets/star.png')} 
-                      style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      style={styles.starIconImage}
+                      tintColor={starTint}
                       resizeMode="contain" 
                     />
                     <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
@@ -114,7 +117,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.distanceRow}>
                     <Image
                       source={require('../../assets/map.png')}
-                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
+                      style={styles.metaIconImage}
+                      tintColor={metaTint}
                       resizeMode="contain"
                     />
                     <Text style={styles.distanceText}>{distanceText}</Text>
@@ -124,7 +128,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.locationRow}>
                     <Image 
                       source={require('../../assets/locationnewicon.png')} 
-                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      style={styles.metaIconImage}
+                      tintColor={metaTint}
                       resizeMode="contain" 
                     />
                     <Text style={styles.location} numberOfLines={1}>
@@ -139,7 +144,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.locationRow}>
                     <Image 
                       source={require('../../assets/locationnewicon.png')} 
-                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      style={styles.metaIconImage}
+                      tintColor={metaTint}
                       resizeMode="contain" 
                     />
                     <Text style={styles.location} numberOfLines={1}>
@@ -151,7 +157,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.rating}>
                     <Image 
                       source={require('../../assets/star.png')} 
-                      style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      style={styles.starIconImage}
+                      tintColor={starTint}
                       resizeMode="contain" 
                     />
                     <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
@@ -161,7 +168,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.distanceRow}>
                     <Image
                       source={require('../../assets/map.png')}
-                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
+                      style={styles.metaIconImage}
+                      tintColor={metaTint}
                       resizeMode="contain"
                     />
                     <Text style={styles.distanceText}>{distanceText}</Text>
@@ -249,12 +257,10 @@ const styles = StyleSheet.create({
   starIconImage: {
     width: 18,
     height: 18,
-    tintColor: ACCENT_COLOR,
   },
   metaIconImage: {
     width: 18,
     height: 18,
-    tintColor: '#FE734C',
   },
   ratingText: {
     color: '#33393A',

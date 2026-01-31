@@ -14,13 +14,22 @@ import { formatCad } from "../../lib/money";
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#0e1b14';
-const TEXT_MUTED = '#71717a';
-const TEXT_GRAY = '#6b7280';
-const BORDER_LIGHT = '#e5e7eb';
+const BRAND_BLACK = '#33393A';
+const TEXT_DARK = BRAND_BLACK;
+// Keep the hierarchy via opacity in styles (but same base brand black)
+const TEXT_MUTED = BRAND_BLACK;
+const TEXT_GRAY = BRAND_BLACK;
+// Use white for all separator lines on this page
+const BORDER_LIGHT = '#FFFFFF';
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 const REVIEWS_SECTION_ID = 'dish-tabs-section';
+
+// TS helper: Screen/View styles in this file are a mix of RNW + native.
+// We keep the runtime behavior and relax typings locally to avoid red lints.
+const ScreenCmp: any = Screen;
+const ViewCmp: any = View;
+const ImageCmp: any = Image;
 
 export default function DishDetail() {
   const router = useRouter();
@@ -271,10 +280,11 @@ export default function DishDetail() {
           const idx = i + 1;
           const opacity = idx <= full ? 1 : (hasHalf && idx === full + 1 ? 0.6 : 0.25);
           return (
-            <Image
+            <ImageCmp
               key={`s${i}`}
               source={require('../../assets/star.png')}
-              style={[styles.starIconImage, { opacity }]}
+              style={[styles.starIconImage as any, { opacity }]}
+              tintColor={PRIMARY_COLOR}
               resizeMode="contain"
             />
           );
@@ -330,20 +340,20 @@ export default function DishDetail() {
 
   if (loading) {
     return (
-      <Screen>
+      <ScreenCmp>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
         </View>
-      </Screen>
+      </ScreenCmp>
     );
   }
   if (!dish) {
     return (
-      <Screen>
+      <ScreenCmp>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
           <Text style={{ color: TEXT_MUTED }}>Dish not found.</Text>
         </View>
-      </Screen>
+      </ScreenCmp>
     );
   }
 
@@ -353,7 +363,7 @@ export default function DishDetail() {
   const thumbnailImages = [mainImage, mainImage, mainImage, mainImage]; // Placeholder - could be expanded
 
   return (
-    <Screen style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
+    <ScreenCmp style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
       <View style={{ paddingBottom: 120 }}>
         <View style={styles.container}>
         {/* Breadcrumbs - REMOVED */}
@@ -364,7 +374,7 @@ export default function DishDetail() {
             <View style={styles.mainImageContainer}>
               <Image
                 source={{ uri: mainImage }}
-                style={styles.mainImage}
+                style={styles.mainImage as any}
                 resizeMode="cover"
               />
             </View>
@@ -394,7 +404,7 @@ export default function DishDetail() {
                   {chef?.photo || chef?.avatar ? (
                     <Image 
                       source={{ uri: chef.photo || chef.avatar }} 
-                      style={styles.chefAvatar} 
+                      style={styles.chefAvatar as any} 
                     />
                   ) : (
                     <Text style={styles.chefIcon}>🏪</Text>
@@ -439,7 +449,8 @@ export default function DishDetail() {
                 >
                   <Image
                     source={require('../../assets/minus.png')}
-                    style={styles.cartQtyIconImage}
+                    style={styles.cartQtyIconImage as any}
+                    tintColor={PRIMARY_COLOR}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -472,7 +483,8 @@ export default function DishDetail() {
                 >
                   <Image
                     source={require('../../assets/add (1).png')}
-                    style={styles.cartQtyIconImage}
+                    style={styles.cartQtyIconImage as any}
+                    tintColor={PRIMARY_COLOR}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -512,7 +524,17 @@ export default function DishDetail() {
             setTabsSectionY(y);
           }}
         >
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} style={styles.tabsContainer} contentContainerStyle={{ flexDirection: 'row' }}>
+          <ScrollView
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            style={styles.tabsContainer}
+            contentContainerStyle={{
+              flexGrow: 1,
+              flexDirection: 'row',
+              justifyContent: 'center',
+              alignItems: 'center',
+            }}
+          >
             <TouchableOpacity
               style={[styles.tab, activeTab === 'ingredients' && styles.tabActive]}
               onPress={() => setActiveTab('ingredients')}
@@ -607,7 +629,7 @@ export default function DishDetail() {
                 {/* Reviews List */}
                 <View style={styles.reviewsList}>
                   {reviews.map((review) => (
-                    <View key={review.id} style={styles.reviewItem}>
+                    <ViewCmp key={review.id} style={styles.reviewItem}>
                       <View style={styles.reviewHeader}>
                         <Text style={styles.reviewerName}>{review.user_name || 'Anonymous'}</Text>
                         <Text style={styles.reviewDate}>
@@ -620,7 +642,7 @@ export default function DishDetail() {
                       {review.comment ? (
                         <Text style={styles.reviewComment}>{review.comment}</Text>
                       ) : null}
-                    </View>
+                    </ViewCmp>
                   ))}
                 </View>
 
@@ -641,7 +663,7 @@ export default function DishDetail() {
         </View>
         </View>
       </View>
-    </Screen>
+    </ScreenCmp>
   );
 }
 
@@ -668,19 +690,19 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as any,
   },
   breadcrumbSeparator: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as any,
   },
   breadcrumbCurrent: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as any,
   },
   grid: {
     flexDirection: Platform.select({
@@ -706,7 +728,11 @@ const styles = StyleSheet.create({
     alignSelf: 'flex-start', // Or center
     // Avoid overlapping the title on mobile/web.
     marginBottom: 0,
-    ...elev('lg'),
+    // No shadow for the dish image container (web + native)
+    ...Platform.select({
+      web: { boxShadow: 'none' as any },
+      default: { elevation: 0, shadowOpacity: 0 } as any,
+    }),
   },
   mainImage: {
     width: '100%',
@@ -723,7 +749,7 @@ const styles = StyleSheet.create({
       default: 30,
     }),
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.black,
+    fontWeight: theme.typography.fontWeight.black as any,
     lineHeight: Platform.select({
       web: 48 * 1.2,
       default: 30 * 1.2,
@@ -759,11 +785,11 @@ const styles = StyleSheet.create({
     backgroundColor: '#eee',
   },
   chefLinkText: {
-    color: TEXT_GRAY,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
-    textDecorationLine: 'underline',
+    fontWeight: theme.typography.fontWeight.medium as any,
+    textDecorationLine: 'none',
   },
   ratingContainer: {
     flexDirection: 'row',
@@ -779,7 +805,6 @@ const styles = StyleSheet.create({
   starIconImage: {
     width: 18,
     height: 18,
-    tintColor: PRIMARY_COLOR,
   },
   star: {
     fontSize: 20,
@@ -792,7 +817,7 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as any,
   },
   description: {
     color: TEXT_GRAY,
@@ -808,7 +833,7 @@ const styles = StyleSheet.create({
       default: 24,
     }),
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
     // Match header section spacing (title/chef/rating)
     marginTop: theme.spacing.md,
     marginBottom: theme.spacing['2xl'],
@@ -843,7 +868,6 @@ const styles = StyleSheet.create({
   cartQtyIconImage: {
     width: 20,
     height: 20,
-    tintColor: PRIMARY_COLOR,
   },
   cartQtyValue: {
     flex: 1,
@@ -851,7 +875,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   cartQtyValueHidden: {
     opacity: 0,
@@ -885,7 +909,7 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   quantityValue: {
     width: 48,
@@ -893,7 +917,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   addToCartButton: {
     flex: 1,
@@ -913,29 +937,31 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
     letterSpacing: 0.015,
   },
   tabsSection: {
     marginTop: theme.spacing['4xl'],
-    paddingTop: theme.spacing['2xl'],
-    borderTopWidth: Platform.select({
-      web: 1,
-      default: 0, // Remove top border on mobile
-    }),
-    borderTopColor: Platform.select({
-      web: BORDER_LIGHT,
-      default: 'transparent',
-    }),
+    // Top divider is handled by tabsContainer so tabs can be vertically centered
+    paddingTop: 0,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
   },
   tabsContainer: {
+    // Two white separator lines with centered tabs
+    height: 56,
+    borderTopWidth: 1,
+    borderTopColor: BORDER_LIGHT,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
   },
   tab: {
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
-    borderBottomWidth: 2,
+    height: '100%',
+    justifyContent: 'center',
+    alignItems: 'center',
+    // No underline on tabs; keep layout stable
+    borderBottomWidth: 0,
     borderBottomColor: 'transparent',
   },
   tabActive: {
@@ -945,12 +971,12 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as any,
   },
   tabTextActive: {
     color: PRIMARY_COLOR,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   tabContent: {
     paddingVertical: theme.spacing['2xl'],
@@ -979,7 +1005,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   ratingInputContainer: {
     gap: theme.spacing.sm,
@@ -1030,7 +1056,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   ratingSummary: {
     padding: theme.spacing.md,
@@ -1048,7 +1074,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as any,
   },
   signInPrompt: {
     color: TEXT_MUTED,
@@ -1088,7 +1114,7 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   reviewDate: {
     color: TEXT_MUTED,
@@ -1114,7 +1140,7 @@ const styles = StyleSheet.create({
   footerWarningText: {
     color: TEXT_MUTED,
     fontSize: 16,
-    fontFamily: 'OpenSans_400Regular',
+    fontFamily: theme.typography.fontFamily.body,
     textAlign: 'left', // Changed from center to left
     maxWidth: 600,
     lineHeight: 24,
@@ -1144,16 +1170,16 @@ const styles = StyleSheet.create({
   notesButtonIcon: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: 'OpenSans_400Regular',
-    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any,
     width: 20,
     textAlign: 'center',
   },
   notesButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: 'OpenSans_400Regular',
-    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any,
   },
   notesInput: {
     borderWidth: 0,
@@ -1193,7 +1219,10 @@ const styles = StyleSheet.create({
       web: {
         borderWidth: 0,
         borderColor: 'transparent',
-        outline: 'none',
+        // RN Web doesn't accept shorthand `outline`
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
       },
       default: {
         borderWidth: 0,

@@ -306,7 +306,8 @@ function CircularDishCard({ dish }: { dish: Dish }) {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
                 <Image 
                   source={require('../assets/star.png')} 
-                  style={{ width: 14, height: 14, tintColor: '#FE734C' }} 
+                  style={{ width: 14, height: 14 }} 
+                  tintColor="#FE734C"
                   resizeMode="contain" 
                 />
                 <Text style={{ fontSize: 12, color: '#666', fontFamily: theme.typography.fontFamily.body }}>
@@ -366,7 +367,8 @@ function HomeDishCard({ dish }: { dish: Dish }) {
             <View style={styles.dishRating}>
               <Image 
                 source={require('../assets/star.png')} 
-                style={{ width: 14, height: 14, tintColor: '#FE734C' }} 
+                style={{ width: 14, height: 14 }} 
+                tintColor="#FE734C"
                 resizeMode="contain" 
               />
               <Text style={styles.ratingText}>{safeToFixed(rating?.avg)}</Text>
@@ -848,6 +850,7 @@ export default function HomePage() {
                   <Image 
                     source={require('../assets/search.png')} 
                     style={styles.howItWorksIconImage} 
+                    tintColor="#FFFFFF"
                     resizeMode="contain"
                   />
                 </View>
@@ -863,6 +866,7 @@ export default function HomePage() {
                   <Image 
                     source={require('../assets/shopping-cart.png')} 
                     style={styles.howItWorksIconImage} 
+                    tintColor="#FFFFFF"
                     resizeMode="contain"
                   />
                 </View>
@@ -878,6 +882,7 @@ export default function HomePage() {
                   <Image 
                     source={require('../assets/add.png')} 
                     style={styles.howItWorksIconImage} 
+                    tintColor="#FFFFFF"
                     resizeMode="contain"
                   />
                 </View>
@@ -922,6 +927,7 @@ export default function HomePage() {
               <Image 
                 source={require('../assets/search.png')} 
                 style={styles.searchIconImage} 
+                tintColor="#FE734C"
                 resizeMode="contain"
               />
             </TouchableOpacity>
@@ -954,6 +960,7 @@ export default function HomePage() {
               <Image 
                 source={require('../assets/microphone.png')} 
                 style={styles.micIconImage} 
+                tintColor="#FE734C"
                 resizeMode="contain"
               />
             </TouchableOpacity>
@@ -1122,12 +1129,10 @@ const styles = StyleSheet.create({
   searchIconImage: {
     width: 24,
     height: 24,
-    tintColor: '#FE734C',
   },
   micIconImage: {
     width: 24,
     height: 24,
-    tintColor: '#FE734C',
   },
   searchInput: {
     flex: 1,
@@ -1361,7 +1366,6 @@ const styles = StyleSheet.create({
   howItWorksIconImage: {
     width: 20,
     height: 20,
-    tintColor: '#FFFFFF',
   },
   howItWorksContent: {
     flex: 1,
@@ -1442,7 +1446,6 @@ const styles = StyleSheet.create({
   featuredChefIcon: {
     width: 18,
     height: 18,
-    tintColor: '#FE734C',
   },
   featuredChefLocationContainer: {
     flexDirection: 'row',

@@ -1730,7 +1730,8 @@ export default function ChefDashboard() {
               >
                 <Image 
                   source={item.iconSource} 
-                  style={[styles.footerNavIcon, { tintColor: '#FE734C' }]} 
+                  style={styles.footerNavIcon} 
+                  tintColor={PRIMARY_COLOR}
                   resizeMode="contain" 
                 />
                 <Text style={styles.footerNavLabel}>
@@ -1786,7 +1787,8 @@ export default function ChefDashboard() {
             <View style={styles.tabContent}>
               <Image 
                 source={item.iconSource} 
-                style={[styles.tabIcon, { tintColor: activeTab === item.key ? '#FFFFFF' : '#33393A' }]} 
+                style={styles.tabIcon} 
+                tintColor={activeTab === item.key ? '#FFFFFF' : '#33393A'}
                 resizeMode="contain" 
               />
               <Text style={[styles.tabText, activeTab === item.key && styles.tabTextActive]}>
@@ -3314,7 +3316,8 @@ export default function ChefDashboard() {
                   <View style={{ position: 'absolute', left: 12, top: 12, zIndex: 1, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}>
                     <Image 
                       source={require('../../assets/search.png')} 
-                      style={{ width: 24, height: 24, tintColor: PRIMARY_COLOR }}
+                      style={{ width: 24, height: 24 }}
+                      tintColor={PRIMARY_COLOR}
                       resizeMode="contain"
                     />
                   </View>
@@ -3568,6 +3571,7 @@ export default function ChefDashboard() {
                       <Image 
                         source={require('../../assets/microphone.png')} 
                         style={messageModalStyles.micIconImage}
+                        tintColor={PRIMARY_COLOR}
                         resizeMode="contain"
                       />
                     </TouchableOpacity>
@@ -3637,6 +3641,7 @@ export default function ChefDashboard() {
                     <Image 
                       source={require('../../assets/microphone.png')} 
                       style={messageModalStyles.micIconImage}
+                      tintColor={PRIMARY_COLOR}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -4110,7 +4115,6 @@ const messageModalStyles = StyleSheet.create({
   micIconImage: {
     width: 24,
     height: 24,
-    tintColor: PRIMARY_COLOR,
   },
   sendButton: {
     width: 44,

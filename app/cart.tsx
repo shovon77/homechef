@@ -425,6 +425,7 @@ export default function CartScreen() {
               <Image
                 source={require('../assets/shopping-cart.png')}
                 style={styles.emptyCartImage}
+                tintColor={PRIMARY_COLOR}
                 resizeMode="contain"
               />
             </View>
@@ -916,7 +917,6 @@ const styles = StyleSheet.create({
   emptyCartImage: {
     width: 64,
     height: 64,
-    tintColor: PRIMARY_COLOR,
   },
   emptyCartTitle: {
     color: TEXT_DARK,
@@ -971,7 +971,6 @@ const styles = StyleSheet.create({
   emptyCartFooterIcon: {
     width: 16,
     height: 16,
-    tintColor: '#FE734C',
   },
   emptyCartFooterText: {
     color: '#33393A',

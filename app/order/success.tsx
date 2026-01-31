@@ -564,6 +564,7 @@ export default function OrderSuccessPage() {
                   <Image 
                     source={require('../../assets/chat.png')} 
                     style={styles.messageChefIcon}
+                    tintColor={PRIMARY}
                     resizeMode="contain"
                   />
                 </TouchableOpacity>
@@ -604,6 +605,7 @@ export default function OrderSuccessPage() {
                             <Image 
                               source={require('../../assets/locationnewicon.png')} 
                               style={styles.locationIcon}
+                              tintColor={PRIMARY}
                               resizeMode="contain"
                             />
                           </TouchableOpacity>
@@ -875,6 +877,7 @@ export default function OrderSuccessPage() {
                       <Image 
                         source={require('../../assets/microphone.png')} 
                         style={[styles.reportIssueMicIconImage, isRecordingIssue && styles.reportIssueMicIconImageActive]}
+                        tintColor={isRecordingIssue ? '#FFFFFF' : PRIMARY}
                         resizeMode="contain"
                       />
                     </TouchableOpacity>
@@ -999,6 +1002,7 @@ export default function OrderSuccessPage() {
                     <Image 
                       source={require('../../assets/microphone.png')} 
                       style={[styles.micIconImage, isRecording && styles.micIconImageActive]}
+                      tintColor={isRecording ? '#FFFFFF' : PRIMARY}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -1158,7 +1162,6 @@ const styles = StyleSheet.create({
   messageChefIcon: {
     width: 50,
     height: 50,
-    tintColor: PRIMARY,
   },
   pickupDateTime: {
     color: TEXT_DARK,
@@ -1194,7 +1197,6 @@ const styles = StyleSheet.create({
   locationIcon: {
     width: 24,
     height: 24,
-    tintColor: PRIMARY,
   },
   pickupLocation: {
     flex: 1,
@@ -1547,10 +1549,8 @@ const styles = StyleSheet.create({
   reportIssueMicIconImage: {
     width: 24,
     height: 24,
-    tintColor: PRIMARY,
   },
   reportIssueMicIconImageActive: {
-    tintColor: '#FFFFFF',
     backgroundColor: PRIMARY,
     borderRadius: 12,
   },
@@ -1739,10 +1739,8 @@ const styles = StyleSheet.create({
   micIconImage: {
     width: 24,
     height: 24,
-    tintColor: PRIMARY,
   },
   micIconImageActive: {
-    tintColor: '#FFFFFF',
   },
   sendButton: {
     width: 44,

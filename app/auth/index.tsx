@@ -170,8 +170,13 @@ export default function AuthPage() {
         backgroundColor:C.panel,
         borderWidth:1, borderColor:C.border,
         borderRadius:18, padding:24,
-        shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8},
-        elevation:2, gap:16
+        ...Platform.select({
+          web: { boxShadow: '0 8px 14px rgba(0,0,0,0.08)' },
+          ios: { shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8} },
+          android: { elevation:2 },
+          default: { elevation:2 },
+        }),
+        gap:16
       }}>
         {/* Welcome Text */}
         <Text style={{ color:C.text, fontSize:28, fontWeight:'900', fontFamily: theme.typography.fontFamily.display, marginBottom: 2 }}>
@@ -209,7 +214,12 @@ export default function AuthPage() {
                 paddingVertical:12, paddingHorizontal:16,
                 borderRadius:12, alignItems:'center',
                 flexDirection:'row', justifyContent:'center', gap:10,
-                shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2},
+                ...Platform.select({
+                  web: { boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
+                  ios: { shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2} },
+                  android: { elevation:1 },
+                  default: { elevation:1 },
+                }),
                 opacity: googleLoading ? 0.7 : 1,
               }}>
               <Image

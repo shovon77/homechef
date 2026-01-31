@@ -178,7 +178,8 @@ export default function NavBar() {
   const MenuIcon = useMemo(() => (
     <Image 
       source={require('../assets/menu.png')} 
-      style={{ width: 24, height: 24, tintColor: '#FE734C' }} 
+      style={{ width: 24, height: 24 }} 
+      tintColor={PRIMARY_COLOR}
       resizeMode="contain" 
     />
   ), [])
@@ -822,10 +823,11 @@ export default function NavBar() {
                 onPress={() => setShowLocationModal(true)}
                 style={styles.locationNavButton}
               >
-                <Image 
-                  source={require('../assets/locationnewicon.png')} 
-                  style={styles.locationNavIcon as any} 
-                  resizeMode="contain" 
+                <Image
+                  source={require('../assets/locationnewicon.png')}
+                  style={styles.locationNavIcon as any}
+                  tintColor={PRIMARY_COLOR}
+                  resizeMode="contain"
                 />
                 <Text style={styles.locationNavText} numberOfLines={1}>
                   {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
@@ -856,6 +858,7 @@ export default function NavBar() {
                   <Image 
                     source={require('../assets/alarm.png')} 
                     style={styles.notificationsIconImage as any}
+                    tintColor={PRIMARY_COLOR}
                     resizeMode="contain"
                   />
                   {unreadCount > 0 && (
@@ -872,7 +875,8 @@ export default function NavBar() {
                 <TouchableOpacity style={styles.cartButton}>
                   <Image 
                     source={require('../assets/shopping-cart.png')} 
-                      style={styles.cartIconImage as any}
+                    style={styles.cartIconImage as any}
+                    tintColor={PRIMARY_COLOR}
                     resizeMode="contain"
                   />
                   {cartQty > 0 && (
@@ -1022,6 +1026,7 @@ export default function NavBar() {
               <Image 
                 source={require('../assets/alarm.png')} 
                 style={styles.notificationsIconImage as any}
+                tintColor={PRIMARY_COLOR}
                 resizeMode="contain"
               />
               {notifications.filter(n => !n.read).length > 0 && (
@@ -1038,7 +1043,8 @@ export default function NavBar() {
             <TouchableOpacity style={styles.cartButton}>
               <Image 
                 source={require('../assets/shopping-cart.png')} 
-                  style={styles.cartIconImage as any}
+                style={styles.cartIconImage as any}
+                tintColor={PRIMARY_COLOR}
                 resizeMode="contain"
               />
               {cartQty > 0 && (
@@ -1082,7 +1088,7 @@ export default function NavBar() {
                 }}
                 style={styles.mobileMenuItem}
               >
-                <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                <Image source={require('../assets/user.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                 <Text style={styles.mobileMenuText}>Profile</Text>
               </TouchableOpacity>
               
@@ -1095,7 +1101,7 @@ export default function NavBar() {
                   }}
                   style={styles.mobileMenuItem}
                 >
-                  <Image source={require('../assets/locationnewicon.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/locationnewicon.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>
                     {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
                   </Text>
@@ -1108,7 +1114,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>About Us</Text>
                 </TouchableOpacity>
               </Link>
@@ -1120,7 +1126,7 @@ export default function NavBar() {
                     style={styles.mobileMenuItem}
                     onPress={() => setIsMenuOpen(false)}
                   >
-                    <Image source={require('../assets/list.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                    <Image source={require('../assets/list.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                     <Text style={styles.mobileMenuText}>FAQ</Text>
                   </TouchableOpacity>
                 </Link>
@@ -1132,7 +1138,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/folder.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/folder.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>Legal</Text>
                 </TouchableOpacity>
               </Link>
@@ -1219,7 +1225,7 @@ export default function NavBar() {
                 }}
                 style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
               >
-                <Image source={require('../assets/exit.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                <Image source={require('../assets/exit.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                 <Text style={styles.mobileMenuText}>Logout</Text>
               </TouchableOpacity>
             </>
@@ -1231,7 +1237,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/idea.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>About Us</Text>
                 </TouchableOpacity>
               </Link>
@@ -1242,7 +1248,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/list.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/list.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>FAQ</Text>
                 </TouchableOpacity>
               </Link>
@@ -1253,7 +1259,7 @@ export default function NavBar() {
                   style={styles.mobileMenuItem}
                   onPress={() => setIsMenuOpen(false)}
                 >
-                  <Image source={require('../assets/folder.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                  <Image source={require('../assets/folder.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>Legal</Text>
                 </TouchableOpacity>
               </Link>
@@ -1264,7 +1270,7 @@ export default function NavBar() {
                   onPress={() => setIsMenuOpen(false)}
                 >
                   {/* Assuming user icon for login or could import another one */}
-                   <Image source={require('../assets/user.png')} style={styles.menuIcon as any} resizeMode="contain" />
+                   <Image source={require('../assets/user.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>Login / Sign-up</Text>
                 </TouchableOpacity>
               </Link>
@@ -1616,7 +1622,6 @@ const styles = StyleSheet.create({
   locationNavIcon: {
     width: 16,
     height: 16,
-    tintColor: '#FE734C',
     flexShrink: 0, // Prevent icon from shrinking
   },
   locationNavText: {
@@ -1677,7 +1682,6 @@ const styles = StyleSheet.create({
   cartIconImage: {
     width: 20,
     height: 20,
-    tintColor: '#FE734C',
   },
   notificationsButton: {
     position: 'relative',
@@ -1691,7 +1695,6 @@ const styles = StyleSheet.create({
   notificationsIconImage: {
     width: 20,
     height: 20,
-    tintColor: '#FE734C',
   },
   notificationBadge: {
     position: 'absolute',
@@ -1783,7 +1786,6 @@ const styles = StyleSheet.create({
   iconButtonImage: {
     width: 20,
     height: 20,
-    tintColor: '#FE734C',
   },
   secondaryButtonMobile: {
     height: 36,
@@ -1850,7 +1852,6 @@ const styles = StyleSheet.create({
   menuIcon: {
     width: 20,
     height: 20,
-    tintColor: '#FE734C',
     resizeMode: 'contain',
   },
   mobileMenuText: {
@@ -2013,7 +2014,6 @@ const styles = StyleSheet.create({
   mobileLocationIcon: {
     width: 14,
     height: 14,
-    tintColor: '#FE734C',
   },
   mobileLocationText: {
     fontSize: 12,

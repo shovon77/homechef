@@ -351,13 +351,13 @@ export default function ChefDetailView() {
                   {bio ? <Text style={styles.chefCardBio} numberOfLines={2}>{bio}</Text> : null}
                   {location && formatLocationCityState(location) ? (
                     <View style={styles.chefCardLocationRow}>
-                      <Image source={require('../../assets/locationnewicon.png')} style={styles.chefCardLocationIcon} resizeMode="contain" />
+                      <Image source={require('../../assets/locationnewicon.png')} style={styles.chefCardLocationIcon} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                       <Text style={styles.chefCardLocation} numberOfLines={1}>{formatLocationCityState(location)}</Text>
                     </View>
                   ) : null}
                   {avgRating > 0 ? (
                     <View style={styles.chefCardRating}>
-                      <Image source={require('../../assets/star.png')} style={styles.chefCardStarIcon} resizeMode="contain" />
+                      <Image source={require('../../assets/star.png')} style={styles.chefCardStarIcon} tintColor={STAR_COLOR} resizeMode="contain" />
                       <Text style={styles.chefCardRatingText}>{avgRating.toFixed(1)}</Text>
                     </View>
                   ) : null}
@@ -462,10 +462,8 @@ export default function ChefDetailView() {
                             <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
                               <Image 
                                 source={require('../../assets/star.png')} 
-                                style={[
-                                  styles.starButtonImage,
-                                  { tintColor: star <= reviewRating ? STAR_COLOR : TEXT_MUTED }
-                                ]} 
+                                style={styles.starButtonImage}
+                                tintColor={star <= reviewRating ? STAR_COLOR : TEXT_MUTED}
                                 resizeMode="contain" 
                               />
                             </TouchableOpacity>
@@ -513,6 +511,7 @@ export default function ChefDetailView() {
                               <Image 
                                 source={require('../../assets/star.png')} 
                                 style={styles.reviewStarImage} 
+                                tintColor={STAR_COLOR}
                                 resizeMode="contain" 
                               />
                               <Text style={styles.reviewRatingValue}>{r.rating.toFixed(1)}</Text>
@@ -675,7 +674,6 @@ const styles = StyleSheet.create({
   chefCardLocationIcon: {
     width: 16,
     height: 16,
-    tintColor: PRIMARY_COLOR,
   },
   chefCardLocation: {
     color: BRAND_BLACK,
@@ -691,7 +689,6 @@ const styles = StyleSheet.create({
   chefCardStarIcon: {
     width: 16,
     height: 16,
-    tintColor: STAR_COLOR,
   },
   chefCardRatingText: {
     color: BRAND_BLACK,
@@ -733,7 +730,6 @@ const styles = StyleSheet.create({
   starIconImage: {
     width: 20,
     height: 20,
-    tintColor: STAR_COLOR,
   },
   statLabel: {
     color: BRAND_BLACK,
@@ -1117,7 +1113,6 @@ const styles = StyleSheet.create({
   reviewStarImage: {
     width: 14,
     height: 14,
-    tintColor: STAR_COLOR,
   },
   reviewRatingValue: {
     color: BRAND_BLACK,

@@ -1135,6 +1135,7 @@ export default function TrackOrderPage() {
                   <Image 
                     source={require('../../assets/locationnewicon.png')} 
                     style={styles.locationIcon}
+                    tintColor={PRIMARY}
                     resizeMode="contain"
                   />
                   <Text style={styles.pickupLocation}>{chef.location}</Text>
@@ -1459,6 +1460,7 @@ export default function TrackOrderPage() {
                       <Image 
                         source={require('../../assets/microphone.png')} 
                         style={[styles.reportIssueMicIconImage, isRecordingIssue && styles.reportIssueMicIconImageActive]}
+                        tintColor={isRecordingIssue ? '#FFFFFF' : PRIMARY}
                         resizeMode="contain"
                       />
                     </TouchableOpacity>
@@ -1579,6 +1581,7 @@ export default function TrackOrderPage() {
                     <Image 
                       source={require('../../assets/microphone.png')} 
                       style={styles.micIconImage}
+                        tintColor={PRIMARY}
                       resizeMode="contain"
                     />
                   </TouchableOpacity>
@@ -1911,7 +1914,6 @@ const styles = StyleSheet.create({
   locationIcon: {
     width: 14,
     height: 14,
-    tintColor: PRIMARY,
     marginTop: 2,
   },
   pickupLocation: {
@@ -2223,7 +2225,6 @@ const styles = StyleSheet.create({
   micIconImage: {
     width: 24,
     height: 24,
-    tintColor: PRIMARY,
   },
   sendButton: {
     width: 44,
@@ -2430,10 +2431,8 @@ const styles = StyleSheet.create({
   reportIssueMicIconImage: {
     width: 24,
     height: 24,
-    tintColor: PRIMARY,
   },
   reportIssueMicIconImageActive: {
-    tintColor: '#FFFFFF',
     backgroundColor: PRIMARY,
     borderRadius: 12,
   },
