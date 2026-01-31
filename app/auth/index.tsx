@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image, Alert } from 'react-native';
 import { useRouter, Link, usePathname } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -9,6 +9,8 @@ import { redirectAfterLogin } from '../../lib/authRedirect';
 import Screen from '../../components/Screen';
 import { useRole } from '../../hooks/useRole';
 import { theme } from '../../lib/theme';
+
+const INVALID_CREDENTIALS_MESSAGE = 'Inavlid email/password provided';
 
 /** Light brand palette */
 const C = {
@@ -37,6 +39,59 @@ export default function AuthPage() {
   const googleButtonScale = useRef(new Animated.Value(1)).current;
 
   const { loading, user, isChef, isAdmin, role } = useRole();
+
+  const normalizeEmail = (v: string) => String(v || '').trim().toLowerCase();
+  const emailNormalized = useMemo(() => normalizeEmail(email), [email]);
+  const emailIsValid = useMemo(
+    () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalized),
+    [emailNormalized]
+  );
+
+  const getPasswordPolicy = (pwd: string) => {
+    const p = String(pwd || '');
+    const hasLower = /[a-z]/.test(p);
+    const hasUpper = /[A-Z]/.test(p);
+    const hasNumber = /\d/.test(p);
+    const hasSymbol = /[^A-Za-z0-9]/.test(p);
+    const len = p.length;
+    const minLenOk = len >= 8;
+    const meets = minLenOk && hasLower && hasUpper && hasNumber && hasSymbol;
+    return { len, minLenOk, hasLower, hasUpper, hasNumber, hasSymbol, meets };
+  };
+
+  const passwordPolicy = useMemo(() => getPasswordPolicy(password), [password]);
+  const passwordStrength = useMemo(() => {
+    // Score out of 5: length + 4 character classes
+    const classes =
+      (passwordPolicy.hasLower ? 1 : 0) +
+      (passwordPolicy.hasUpper ? 1 : 0) +
+      (passwordPolicy.hasNumber ? 1 : 0) +
+      (passwordPolicy.hasSymbol ? 1 : 0);
+    const lenScore = passwordPolicy.len >= 12 ? 1 : passwordPolicy.len >= 8 ? 0.6 : passwordPolicy.len >= 6 ? 0.3 : 0;
+    const raw = (classes / 4) * 0.8 + lenScore * 0.2; // 0..1
+    const pct = Math.round(raw * 100);
+    const label =
+      pct >= 80 ? 'Strong' :
+      pct >= 60 ? 'Good' :
+      pct >= 40 ? 'Weak' :
+      passwordPolicy.len > 0 ? 'Very weak' : '';
+    const color =
+      pct >= 80 ? '#16A34A' :
+      pct >= 60 ? '#22C55E' :
+      pct >= 40 ? '#F59E0B' :
+      '#EF4444';
+    return { pct, label, color };
+  }, [passwordPolicy]);
+
+  const isInvalidCredentialsError = (e: any) => {
+    const msg = String(e?.message || '');
+    return (
+      /invalid\s+login\s+credentials/i.test(msg) ||
+      /invalid\s+email\s*\/?\s*password/i.test(msg) ||
+      /invalid\s+email\s+or\s+password/i.test(msg) ||
+      e?.status === 400
+    );
+  };
 
   // Entrance animation
   const cardSlide = useRef(new Animated.Value(15)).current;
@@ -107,11 +162,21 @@ export default function AuthPage() {
   async function doEmailPassword() {
     setErr(null); setBusy(true);
     try {
+      if (!emailIsValid) {
+        setErr('Please enter a valid email address.');
+        return;
+      }
+
+      if (mode === 'signup' && !passwordPolicy.meets) {
+        setErr('Please choose a stronger password that meets the requirements below.');
+        return;
+      }
+
       if (mode === 'signup') {
-        const { error } = await supabase.auth.signUp({ email, password });
+        const { error } = await supabase.auth.signUp({ email: emailNormalized, password });
         if (error) throw error;
       } else {
-        const { error } = await supabase.auth.signInWithPassword({ email, password });
+        const { error } = await supabase.auth.signInWithPassword({ email: emailNormalized, password });
         if (error) throw error;
       }
       const res = await ensureUser();
@@ -119,7 +184,11 @@ export default function AuthPage() {
       
       // Redirect will be handled by useEffect
     } catch (e:any) {
-      setErr(e.message || String(e));
+      if (mode === 'signin' && isInvalidCredentialsError(e)) {
+        setErr(INVALID_CREDENTIALS_MESSAGE);
+      } else {
+        setErr(e.message || String(e));
+      }
     } finally {
       setBusy(false);
     }
@@ -162,6 +231,7 @@ export default function AuthPage() {
     <Screen 
       style={{ backgroundColor: C.bg }}
       contentStyle={{ alignItems: 'center', justifyContent: 'center', padding: 16 }}
+      fixedFooterHeight={140}
     >
       <Animated.View style={{
         transform:[{ translateY: cardSlide }],
@@ -170,6 +240,8 @@ export default function AuthPage() {
         backgroundColor:C.panel,
         borderWidth:1, borderColor:C.border,
         borderRadius:18, padding:24,
+        // Keep the card above the footer overlap area
+        marginBottom: Platform.select({ web: 120, default: 140 }),
         ...Platform.select({
           web: { boxShadow: '0 8px 14px rgba(0,0,0,0.08)' },
           ios: { shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8} },
@@ -279,6 +351,24 @@ export default function AuthPage() {
                 color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body
               }}
             />
+            {mode === 'signup' && (
+              <View style={{ gap: 6 }}>
+                <Text style={{ color: C.subtext, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                  Use at least 8 characters, including an uppercase letter, lowercase letter, number, and symbol.
+                </Text>
+                <View style={{ height: 8, borderRadius: 999, backgroundColor: '#E5E7EB', overflow: 'hidden' }}>
+                  <View style={{ height: '100%', width: `${passwordStrength.pct}%`, backgroundColor: passwordStrength.color }} />
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                  <Text style={{ color: passwordStrength.color, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                    {passwordStrength.label ? `Strength: ${passwordStrength.label}` : ' '}
+                  </Text>
+                  <Text style={{ color: C.subtext, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                    {passwordPolicy.len > 0 ? `${passwordPolicy.len}/8+` : ' '}
+                  </Text>
+                </View>
+              </View>
+            )}
           </View>
 
           <TouchableOpacity

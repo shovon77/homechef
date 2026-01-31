@@ -110,7 +110,12 @@ export default function ChefSignup() {
     'Other'
   ];
   const [phone, setPhone] = useState('');
+  const [phoneTouched, setPhoneTouched] = useState(false);
   const [email, setEmail] = useState('');
+  const [emailTouched, setEmailTouched] = useState(false);
+  const [emailChecking, setEmailChecking] = useState(false);
+  const [emailExists, setEmailExists] = useState(false);
+  const [emailCheckUnavailable, setEmailCheckUnavailable] = useState(false);
   const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
@@ -162,21 +167,118 @@ export default function ChefSignup() {
   const [msg, setMsg] = useState<string | null>(null);
   const [existingApplication, setExistingApplication] = useState<{ id: string; status: string } | null>(null);
   const [isAlreadyChef, setIsAlreadyChef] = useState(false);
+  const [isLoggedIn, setIsLoggedIn] = useState(false);
   const [focusedInput, setFocusedInput] = useState<string | null>(null);
   const [bannerUrl, setBannerUrl] = useState<string | null>(null);
   const [loadingBanner, setLoadingBanner] = useState(true);
 
+  const normalizeCanadianPhoneTenDigits = (input: string): string => {
+    const digits = String(input || '').replace(/\D/g, '');
+    if (digits.length === 11 && digits.startsWith('1')) return digits.slice(1);
+    if (digits.length === 10) return digits;
+    return '';
+  };
+
+  // Canadian phone numbers are NANP (+1) numbers.
+  // Enforce 10 digits with NANP rules: area code and exchange cannot start with 0/1.
+  const isValidCanadianPhone = (input: string): boolean => {
+    const ten = normalizeCanadianPhoneTenDigits(input);
+    if (!ten) return false;
+    const areaFirst = ten[0];
+    const exchangeFirst = ten[3];
+    if (!areaFirst || !exchangeFirst) return false;
+    if (areaFirst < '2' || exchangeFirst < '2') return false;
+    return true;
+  };
+
+  const phoneIsValid = useMemo(() => isValidCanadianPhone(phone), [phone]);
+  const phoneE164 = useMemo(() => {
+    const ten = normalizeCanadianPhoneTenDigits(phone);
+    return ten ? `+1${ten}` : '';
+  }, [phone]);
+
+  const normalizeEmail = (v: string) => String(v || '').trim().toLowerCase();
+  const isValidEmail = (v: string) => {
+    const e = normalizeEmail(v);
+    if (!e) return false;
+    // Simple, pragmatic email validation
+    return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(e);
+  };
+
+  const emailNormalized = useMemo(() => normalizeEmail(email), [email]);
+  const emailIsValid = useMemo(() => {
+    if (isLoggedIn) return emailNormalized.length > 0;
+    return isValidEmail(emailNormalized);
+  }, [isLoggedIn, emailNormalized]);
+
+  const emailOk = useMemo(() => {
+    if (isLoggedIn) return emailIsValid;
+    // If we can't validate existence due to permissions, fall back to format-only here.
+    const existsOk = emailCheckUnavailable ? true : !emailExists;
+    return emailIsValid && existsOk && !emailChecking;
+  }, [isLoggedIn, emailIsValid, emailExists, emailChecking, emailCheckUnavailable]);
+
+  // When logged out, check if an account already exists for the provided email.
+  // Best-effort: if the query is blocked by RLS, we fall back to signup-time checks.
+  useEffect(() => {
+    if (isLoggedIn) return;
+    setEmailExists(false);
+    setEmailCheckUnavailable(false);
+    if (!emailIsValid) return;
+
+    let cancelled = false;
+    const t = setTimeout(async () => {
+      setEmailChecking(true);
+      try {
+        const e = emailNormalized;
+        const [profilesRes, chefsRes] = await Promise.all([
+          supabase.from('profiles').select('id').eq('email', e).maybeSingle(),
+          supabase.from('chefs').select('id').eq('email', e).maybeSingle(),
+        ]);
+
+        if (cancelled) return;
+
+        const profilesErr = (profilesRes as any)?.error;
+        const chefsErr = (chefsRes as any)?.error;
+
+        // If both checks fail (likely RLS), mark as unavailable so we don't block onboarding.
+        if (profilesErr && chefsErr) {
+          setEmailCheckUnavailable(true);
+          setEmailExists(false);
+          return;
+        }
+
+        const found = !!(profilesRes?.data?.id || chefsRes?.data?.id);
+        setEmailExists(found);
+      } catch (e) {
+        if (!cancelled) {
+          setEmailCheckUnavailable(true);
+          setEmailExists(false);
+        }
+      } finally {
+        if (!cancelled) setEmailChecking(false);
+      }
+    }, 450);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(t);
+    };
+  }, [isLoggedIn, emailIsValid, emailNormalized]);
+
   useEffect(() => {
     // Check if user is already logged in, if so get their email and check status
     supabase.auth.getUser().then(async ({ data }) => {
-      if (data?.user) {
-        setEmail(data.user.email || '');
+      const user = data?.user ?? null;
+      setIsLoggedIn(!!user);
+      if (user) {
+        setEmail(user.email || '');
         
         // Check if user is already a chef
         const { data: profile } = await supabase
           .from('profiles')
           .select('is_chef')
-          .eq('id', data.user.id)
+          .eq('id', user.id)
           .maybeSingle();
         
         if (profile?.is_chef) {
@@ -188,13 +290,15 @@ export default function ChefSignup() {
         const { data: existingApp } = await supabase
           .from('chef_applications')
           .select('id, status')
-          .eq('user_id', data.user.id)
+          .eq('user_id', user.id)
           .eq('status', 'submitted')
           .maybeSingle();
         
         if (existingApp) {
           setExistingApplication(existingApp);
         }
+      } else {
+        setIsAlreadyChef(false);
       }
     });
   }, []);
@@ -290,7 +394,7 @@ export default function ChefSignup() {
     saveData();
   }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, password, pickupSlots, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
 
-  const canProceedToStep2 = fullName && brandName && briefDescription && cuisineType.length > 0 && phone && email && address;
+  const canProceedToStep2 = fullName && brandName && briefDescription && cuisineType.length > 0 && phoneIsValid && emailOk && address;
   const canProceedToStep3 = pickupSlots.length > 0;
   const canProceedToStep4 = dishes.length > 0; // At least one dish required
   const canProceedToStep5 = foodSafetyAcknowledged && allergensDisclosed && platformInspectionUnderstood && agreementAccepted && feeAccepted && payoutAccepted;
@@ -299,6 +403,20 @@ export default function ChefSignup() {
   function handleNext() {
     if (step === 1 && canProceedToStep2) {
       setStep(2);
+    } else if (step === 1) {
+      setPhoneTouched(true);
+      setEmailTouched(true);
+      if (!phoneIsValid) {
+        Alert.alert('Invalid phone number', 'Please enter a valid Canadian phone number (e.g., (416) 555-1234).');
+      } else if (!emailIsValid) {
+        Alert.alert('Invalid email', 'Please enter a valid email address (e.g., chef@example.com).');
+      } else if (!emailCheckUnavailable && emailExists) {
+        Alert.alert(
+          'Account already exists',
+          'An account with this email already exists. Please log in first, then continue the chef sign-up.',
+          [{ text: 'Log in', onPress: () => router.push('/auth') }, { text: 'OK' }]
+        );
+      }
     } else if (step === 2 && canProceedToStep3) {
       setStep(3);
     } else if (step === 3 && canProceedToStep4) {
@@ -462,6 +580,8 @@ export default function ChefSignup() {
     setBusy(true);
     setMsg(null);
     try {
+      const emailForAuth = emailNormalized;
+
       // Extract form values
       const chefName = brandName || fullName || 'Chef';
       const chefBio = briefDescription || bio || null;
@@ -480,7 +600,7 @@ export default function ChefSignup() {
         
         // Try to sign up
         const su = await supabase.auth.signUp({ 
-          email, 
+          email: emailForAuth, 
           password: tempPassword,
           options: {
             emailRedirectTo: `${window.location.origin}/auth?mode=reset`
@@ -510,7 +630,7 @@ export default function ChefSignup() {
         // If signup succeeded, try to establish session
         if (su.data?.user && !su.data.session) {
           // User created but no session - try to sign in with password
-          const sessionResult = await ensureSession(supabase, email, tempPassword);
+          const sessionResult = await ensureSession(supabase, emailForAuth, tempPassword);
           if (sessionResult) {
             session = {
               access_token: sessionResult.access_token,
@@ -561,8 +681,8 @@ export default function ChefSignup() {
           .from('chefs')
           .update({
             name: chefName,
-            email: email || null,
-            phone: phone || null,
+            email: emailNormalized || null,
+            phone: phoneIsValid ? phoneE164 : (phone || null),
             location: chefLocation,
             bio: chefBio,
             cuisine: chefCuisine,
@@ -583,8 +703,8 @@ export default function ChefSignup() {
           .from('chefs')
           .insert({
             name: chefName,
-            email: email || null,
-          phone: phone || null,
+            email: emailNormalized || null,
+          phone: phoneIsValid ? phoneE164 : (phone || null),
             location: chefLocation,
             bio: chefBio,
             cuisine: chefCuisine,
@@ -680,8 +800,8 @@ export default function ChefSignup() {
           .insert({
           user_id: session.user.id,
             name: chefName,
-            email: email || null,
-          phone: phone || null,
+            email: emailNormalized || null,
+          phone: phoneIsValid ? phoneE164 : (phone || null),
             location: chefLocation,
             short_bio: chefBio,
             cuisine_specialty: chefCuisine,
@@ -743,9 +863,61 @@ export default function ChefSignup() {
     }
   }
 
-  const progress = (step - 1) * 20; // Step 1 = 0%, Step 2 = 20%, Step 3 = 40%, Step 4 = 60%, Step 5 = 80%
-  const stepTitles = ['Personal Info', 'Availability & Pickup', 'Menu', 'About You', 'Agreement'];
+  const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
+
+  // Live, engaging progress (updates as fields are filled)
+  const step1Checks = [
+    fullName.trim().length > 0,
+    brandName.trim().length > 0,
+    briefDescription.trim().length > 0,
+    cuisineType.length > 0,
+    phoneIsValid,
+    emailOk,
+    address.trim().length > 0,
+  ];
+  const step1Done = step1Checks.filter(Boolean).length;
+  const step1Total = step1Checks.length;
+  const step1Ratio = step1Total ? step1Done / step1Total : 0;
+
+  // Step 2 becomes "complete" with 1 slot, but gains extra progress with more slots.
+  const step2Ratio =
+    pickupSlots.length === 0
+      ? 0
+      : clamp01(0.7 + 0.3 * Math.min(1, pickupSlots.length / 3));
+
+  // Step 3 becomes "complete" with 1 dish, but gains extra progress with more dishes.
+  const step3Ratio =
+    dishes.length === 0 ? 0 : clamp01(0.7 + 0.3 * Math.min(1, dishes.length / 3));
+
+  const step4Checks = [
+    agreementAccepted,
+    feeAccepted,
+    payoutAccepted,
+    foodSafetyAcknowledged,
+    allergensDisclosed,
+    platformInspectionUnderstood,
+  ];
+  const step4Done = step4Checks.filter(Boolean).length;
+  const step4Total = step4Checks.length;
+  const step4Ratio = step4Total ? step4Done / step4Total : 0;
+
+  const step5Ratio = step === 5 ? 1 : 0;
+
+  const progress = Math.round((step1Ratio + step2Ratio + step3Ratio + step4Ratio + step5Ratio) * 20);
+
+  const stepTitles = ['Personal Info', 'Availability & Pickup', 'Menu', 'Agreement', 'Review'];
   const stepTitle = stepTitles[step - 1] || '';
+
+  const progressDetail =
+    step === 1
+      ? `${stepTitle} • ${step1Done}/${step1Total} complete`
+      : step === 2
+        ? `${stepTitle} • ${Math.min(pickupSlots.length, 3)}/3 pickup slots set`
+        : step === 3
+          ? `${stepTitle} • ${Math.min(dishes.length, 3)}/3 dishes added`
+          : step === 4
+            ? `${stepTitle} • ${step4Done}/${step4Total} acknowledgements`
+            : `${stepTitle} • ready to submit`;
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
@@ -808,6 +980,7 @@ export default function ChefSignup() {
               <View style={styles.progressBar}>
                 <View style={[styles.progressFill, { width: `${progress}%` }]} />
               </View>
+              <Text style={styles.progressSubtext}>{progressDetail}</Text>
             </View>
 
             <View style={styles.form}>
@@ -951,13 +1124,24 @@ export default function ChefSignup() {
                       </View>
           <TextInput
             value={phone}
-            onChangeText={setPhone}
-                        placeholder="(123) 456-7890"
+            onChangeText={(v) => {
+              setPhone(v);
+              if (!phoneTouched) setPhoneTouched(true);
+            }}
+                        placeholder="(416) 555-1234"
                         style={[styles.input, focusedInput === 'phone' && styles.inputFocused]}
                         keyboardType="phone-pad"
                         onFocus={() => setFocusedInput('phone')}
-                        onBlur={() => setFocusedInput(null)}
+                        onBlur={() => {
+                          setFocusedInput(null);
+                          setPhoneTouched(true);
+                        }}
                       />
+                      {phoneTouched && phone.trim().length > 0 && !phoneIsValid && (
+                        <Text style={styles.validationError}>
+                          Please enter a valid Canadian phone number (e.g., (416) 555-1234).
+                        </Text>
+                      )}
                       <Text style={styles.hint}>Share a contact number for customers.</Text>
                     </View>
 
@@ -968,15 +1152,39 @@ export default function ChefSignup() {
                       </View>
                         <TextInput
                         value={email}
-                        onChangeText={setEmail}
+                        onChangeText={(v) => {
+                          if (isLoggedIn) return;
+                          setEmail(v);
+                          if (!emailTouched) setEmailTouched(true);
+                        }}
                         placeholder="you@example.com"
-                        style={[styles.input, styles.inputReadOnly, focusedInput === 'email' && styles.inputFocused]}
+                        style={[
+                          styles.input,
+                          isLoggedIn && styles.inputReadOnly,
+                          focusedInput === 'email' && styles.inputFocused,
+                        ]}
                         keyboardType="email-address"
                           autoCapitalize="none"
-                        editable={false}
+                        editable={!isLoggedIn}
                         onFocus={() => setFocusedInput('email')}
-                        onBlur={() => setFocusedInput(null)}
+                        onBlur={() => {
+                          setFocusedInput(null);
+                          if (!isLoggedIn) setEmailTouched(true);
+                        }}
                       />
+                      {!isLoggedIn && emailChecking && emailIsValid && (
+                        <Text style={styles.validationHint}>Checking email…</Text>
+                      )}
+                      {!isLoggedIn && emailTouched && email.trim().length > 0 && !emailIsValid && (
+                        <Text style={styles.validationError}>
+                          Please enter a valid email address.
+                        </Text>
+                      )}
+                      {!isLoggedIn && emailTouched && emailIsValid && !emailCheckUnavailable && emailExists && (
+                        <Text style={styles.validationError}>
+                          An account with this email already exists. Please log in first, then continue chef sign-up.
+                        </Text>
+                      )}
                       <Text style={styles.hint}>Share a business email for reference.</Text>
                       </View>
 
@@ -2381,6 +2589,11 @@ const styles = StyleSheet.create({
       web: theme.spacing['4xl'],
       default: 0,
     }),
+    // Prevent last content from being hidden under fixed footer/nav.
+    paddingBottom: Platform.select({
+      web: 140,
+      default: 160,
+    }) as any,
   },
   container: {
     flex: 1,
@@ -2448,6 +2661,12 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: PRIMARY_COLOR,
     borderRadius: 4,
+  },
+  progressSubtext: {
+    marginTop: theme.spacing.xs,
+    color: TEXT_MUTED,
+    fontSize: 13,
+    fontFamily: theme.typography.fontFamily.body,
   },
   form: {
     gap: theme.spacing['2xl'],
@@ -2524,6 +2743,12 @@ const styles = StyleSheet.create({
   inputReadOnly: {
     backgroundColor: '#F9FAFB',
     color: TEXT_MUTED,
+  },
+  validationHint: {
+    marginTop: 6,
+    color: TEXT_MUTED,
+    fontSize: 13,
+    fontFamily: theme.typography.fontFamily.body,
   },
   textArea: {
     height: 120,
@@ -2734,6 +2959,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     marginTop: theme.spacing.xs,
     fontStyle: 'normal',
+  },
+  validationError: {
+    marginTop: 6,
+    color: '#DC2626',
+    fontSize: 13,
+    fontFamily: theme.typography.fontFamily.body,
   },
   locationPickerContainer: {
     width: '100%',
