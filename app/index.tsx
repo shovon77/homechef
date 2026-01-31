@@ -832,6 +832,7 @@ export default function HomePage() {
                     ratingColor="#FE734C"
                     distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
                     hideBio
+                    metaVariant="homepage"
                   />
                 </View>
               ))}

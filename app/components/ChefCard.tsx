@@ -70,9 +70,10 @@ type Props = {
   ratingColor?: string;
   distanceKm?: number | null;
   hideBio?: boolean;
+  metaVariant?: 'default' | 'homepage';
 };
 
-export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio }: Props) {
+export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default' }: Props) {
   const avatar =
     chef?.photo ||
     chef?.avatar ||
@@ -83,6 +84,8 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
   const distanceText = showDistance
     ? (distanceKm > 20 ? '>20 km' : `${distanceKm.toFixed(1)} km`)
     : '';
+  const locationText = chef.location ? formatLocationCityState(chef.location) : '';
+  const showLocation = !!locationText;
 
   return (
     <View style={[styles.card, style]}>
@@ -95,37 +98,76 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
             {chef.bio && !hideBio && (
               <Text style={styles.bio} numberOfLines={2}>{chef.bio}</Text>
             )}
-          {chef.location && formatLocationCityState(chef.location) && (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 4 }}>
-              <Image 
-                source={require('../../assets/locationnewicon.png')} 
-                style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
-                resizeMode="contain" 
-              />
-              <Text style={[styles.location, { marginTop: 0 }]} numberOfLines={1}>
-                {formatLocationCityState(chef.location)}
-              </Text>
-            </View>
-          )}
-            {ratingVal > 0 && (
-          <View style={styles.rating}>
-            <Image 
-              source={require('../../assets/star.png')} 
-              style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
-              resizeMode="contain" 
-            />
-                <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
-              </View>
-            )}
-            {showDistance && (
-              <View style={styles.distanceRow}>
-                <Image
-                  source={require('../../assets/map.png')}
-                  style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
-                  resizeMode="contain"
-                />
-                <Text style={styles.distanceText}>{distanceText}</Text>
-              </View>
+            {metaVariant === 'homepage' ? (
+              <>
+                {ratingVal > 0 && (
+                  <View style={styles.rating}>
+                    <Image 
+                      source={require('../../assets/star.png')} 
+                      style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
+                  </View>
+                )}
+                {showDistance && (
+                  <View style={styles.distanceRow}>
+                    <Image
+                      source={require('../../assets/map.png')}
+                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.distanceText}>{distanceText}</Text>
+                  </View>
+                )}
+                {showLocation && (
+                  <View style={styles.locationRow}>
+                    <Image 
+                      source={require('../../assets/locationnewicon.png')} 
+                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={styles.location} numberOfLines={1}>
+                      {locationText}
+                    </Text>
+                  </View>
+                )}
+              </>
+            ) : (
+              <>
+                {showLocation && (
+                  <View style={styles.locationRow}>
+                    <Image 
+                      source={require('../../assets/locationnewicon.png')} 
+                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={styles.location} numberOfLines={1}>
+                      {locationText}
+                    </Text>
+                  </View>
+                )}
+                {ratingVal > 0 && (
+                  <View style={styles.rating}>
+                    <Image 
+                      source={require('../../assets/star.png')} 
+                      style={[styles.starIconImage, ratingColor ? { tintColor: ratingColor } : undefined]} 
+                      resizeMode="contain" 
+                    />
+                    <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
+                  </View>
+                )}
+                {showDistance && (
+                  <View style={styles.distanceRow}>
+                    <Image
+                      source={require('../../assets/map.png')}
+                      style={[styles.metaIconImage, ratingColor ? { tintColor: ratingColor } : undefined]}
+                      resizeMode="contain"
+                    />
+                    <Text style={styles.distanceText}>{distanceText}</Text>
+                  </View>
+                )}
+              </>
             )}
           </View>
         </Pressable>
@@ -187,7 +229,12 @@ const styles = StyleSheet.create({
     color: '#33393A',
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
     marginTop: 2,
+    gap: 4,
   },
   rating: {
     flexDirection: "row",
