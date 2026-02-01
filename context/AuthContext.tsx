@@ -2,6 +2,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import { supabase } from '../lib/supabase';
 import { isLocalAdmin } from '../lib/admin';
+import { toFiniteNumberOrNull } from '../lib/number';
 import type { Profile } from '../lib/types';
 
 type Role = 'admin' | 'chef' | 'user';
@@ -54,13 +55,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const [profileResult, chefResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, email, is_admin, is_chef, name, location')
+          .select('id, email, is_admin, is_chef, name, location, latitude, longitude')
           .eq('id', sessionUser.id)
           .maybeSingle(),
         sessionUser.email 
           ? supabase
               .from('chefs')
-              .select('id, location, status, is_active')
+              .select('id, location, status, is_active, latitude, longitude')
               .eq('email', sessionUser.email)
               .maybeSingle()
           : Promise.resolve({ data: null })
@@ -72,6 +73,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       // Use chef location if profile location is missing
       if (profile && !profile.location && chefData?.location) {
         profile.location = chefData.location;
+      }
+
+      // Use chef coordinates if profile coordinates are missing (helps distance calculations)
+      if (profile) {
+        const lat = toFiniteNumberOrNull((profile as any)?.latitude);
+        const lon = toFiniteNumberOrNull((profile as any)?.longitude);
+        const hasCoords = lat !== null && lon !== null;
+        if (!hasCoords) {
+          const chefLat = toFiniteNumberOrNull((chefData as any)?.latitude);
+          const chefLon = toFiniteNumberOrNull((chefData as any)?.longitude);
+          if (chefLat !== null && chefLon !== null) {
+            (profile as any).latitude = chefLat as any;
+            (profile as any).longitude = chefLon as any;
+          }
+        }
       }
 
       // Compute isAdmin

@@ -82,9 +82,13 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
   const ratingVal = toNumber(chef?.rating, 0);
   const starTint = ratingColor ?? ACCENT_COLOR;
   const metaTint = ratingColor ?? '#FE734C';
-  const showDistance = typeof distanceKm === 'number' && Number.isFinite(distanceKm) && distanceKm > 0;
+  const showDistance = typeof distanceKm === 'number' && Number.isFinite(distanceKm) && distanceKm >= 0;
   const distanceText = showDistance
-    ? (distanceKm > 20 ? '>20 km' : `${distanceKm.toFixed(1)} km`)
+    ? (distanceKm > 10
+        ? '>10 km'
+        : distanceKm < 1
+          ? '<1 km'
+          : `${distanceKm.toFixed(1)} km`)
     : '';
   const locationText = chef.location ? formatLocationCityState(chef.location) : '';
   const showLocation = !!locationText;

@@ -21,3 +21,15 @@ export function toNumber(value: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
+/**
+ * Convert a value to a finite number (or null).
+ * Unlike Number(x), this will treat null/undefined/'' as "missing" (null),
+ * which is important for coordinates (Number(null) === 0 is almost never desired).
+ */
+export function toFiniteNumberOrNull(value: unknown): number | null {
+  if (value === null || value === undefined) return null;
+  if (typeof value === 'string' && value.trim() === '') return null;
+  const n = Number(value);
+  return Number.isFinite(n) ? n : null;
+}
+

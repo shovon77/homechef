@@ -1,12 +1,14 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
 import Screen from "../components/Screen";
 import ChefCard from "./components/ChefCard";
 import { getDishRatings, getChefById } from "../lib/db";
 import { safeToFixed } from "../lib/number";
+import { toFiniteNumberOrNull } from "../lib/number";
 import { formatCad } from "../lib/money";
 import { useRole } from "../hooks/useRole";
 
@@ -18,6 +20,8 @@ const FEATURED_CHEFS_LIMIT = 30;
 
 // Coordinate cache with persistent storage
 const coordinateCache = new Map<string, { lat: number; lon: number } | null>();
+// In-memory cache for chef coords from profiles (faster than geocoding)
+const chefProfileCoordCache = new Map<string, { lat: number; lon: number } | null>();
 
 // Load cache from localStorage on initialization
 if (Platform.OS === 'web' && typeof window !== 'undefined') {
@@ -225,6 +229,15 @@ async function calculateAllDistances(userLocation: string | null, chefs: Chef[])
   return distances;
 }
 
+// Normalize a location string for "same place" checks.
+function normalizeLocationKey(loc: any): string {
+  return String(loc || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/,+/g, ',');
+}
+
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
   if (!cuisine) return 'Chef';
@@ -397,6 +410,15 @@ export default function HomePage() {
   const autoScrollPosition = React.useRef(0);
   const autoScrollTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
   const resumeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  // Trigger distance recalculation whenever the homepage is focused again (e.g. navigating away and back).
+  const [distanceRecalcNonce, setDistanceRecalcNonce] = useState(0);
+  useFocusEffect(
+    React.useCallback(() => {
+      setDistanceRecalcNonce((n) => n + 1);
+      return () => {};
+    }, [])
+  );
   
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -617,16 +639,17 @@ export default function HomePage() {
   useEffect(() => {
     let mounted = true;
 
-    const profileLat = Number((profile as any)?.latitude);
-    const profileLon = Number((profile as any)?.longitude);
-    const hasProfileCoords = Number.isFinite(profileLat) && Number.isFinite(profileLon);
+    const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
+    const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
+    const hasProfileCoords = profileLat !== null && profileLon !== null;
 
     // If we can't compute user coords quickly, fall back to cached geocoding once.
     (async () => {
       let userCoords: { lat: number; lon: number } | null = null;
+      const userLocationKey = normalizeLocationKey((profile as any)?.location);
 
       if (hasProfileCoords) {
-        userCoords = { lat: profileLat, lon: profileLon };
+        userCoords = { lat: profileLat!, lon: profileLon! };
       } else if ((profile as any)?.location) {
         userCoords = await geocodeAddress(String((profile as any).location));
       }
@@ -636,6 +659,41 @@ export default function HomePage() {
         return;
       }
 
+      // Prefetch chef coordinates from profiles when chef table has no lat/lon.
+      // This avoids geocoding and makes distance display faster.
+      try {
+        const chefUserIds = Array.from(
+          new Set(
+            chefs
+              .map((c) => String((c as any)?.user_id || ''))
+              .filter(Boolean)
+          )
+        );
+
+        const missingUserIds = chefUserIds.filter((uid) => !chefProfileCoordCache.has(uid));
+
+        if (missingUserIds.length > 0) {
+          const { data: rows, error } = await supabase
+            .from('profiles')
+            .select('id, latitude, longitude')
+            .in('id', missingUserIds);
+
+          if (!error && Array.isArray(rows)) {
+            // Mark all requested IDs as null by default; fill when valid coords present.
+            missingUserIds.forEach((uid) => chefProfileCoordCache.set(uid, null));
+            rows.forEach((r: any) => {
+              const lat = toFiniteNumberOrNull(r?.latitude);
+              const lon = toFiniteNumberOrNull(r?.longitude);
+              if (lat !== null && lon !== null) {
+                chefProfileCoordCache.set(String(r.id), { lat, lon });
+              }
+            });
+          }
+        }
+      } catch {
+        // If profile lookups are blocked (RLS) or fail, we just fall back to geocoding.
+      }
+
       const next = new Map<string, number>();
 
       // Compute distances (coords-first, geocode fallback)
@@ -643,13 +701,31 @@ export default function HomePage() {
         chefs.map(async (chef) => {
           try {
             const chefId = normalizeId((chef as any)?.id);
-            const chefLat = Number((chef as any)?.latitude);
-            const chefLon = Number((chef as any)?.longitude);
+            const chefLat = toFiniteNumberOrNull((chef as any)?.latitude);
+            const chefLon = toFiniteNumberOrNull((chef as any)?.longitude);
 
-            if (Number.isFinite(chefLat) && Number.isFinite(chefLon)) {
+            // If the user and chef location strings match, treat distance as 0 (avoid bad geocode mismatches).
+            const chefLocationKey = normalizeLocationKey((chef as any)?.location);
+            if (userLocationKey && chefLocationKey && userLocationKey === chefLocationKey) {
+              next.set(chefId, 0);
+              return;
+            }
+
+            if (chefLat !== null && chefLon !== null) {
               const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
               if (Number.isFinite(d)) next.set(chefId, d);
               return;
+            }
+
+            // Second preference: chef's profile stored coordinates (if available)
+            const chefUserId = String((chef as any)?.user_id || '');
+            if (chefUserId) {
+              const profCoords = chefProfileCoordCache.get(chefUserId);
+              if (profCoords) {
+                const d = calculateDistanceFromCoords(userCoords, profCoords);
+                if (Number.isFinite(d)) next.set(chefId, d);
+                return;
+              }
             }
 
             // Fallback: geocode chef location (cached) if coords not stored
@@ -673,7 +749,7 @@ export default function HomePage() {
     return () => {
       mounted = false;
     };
-  }, [profile, chefs]);
+  }, [profile, chefs, distanceRecalcNonce]);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {

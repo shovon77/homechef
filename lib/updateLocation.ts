@@ -5,6 +5,7 @@
 
 import { supabase } from './supabase';
 import { geocodeAddress } from './geocode';
+import { toFiniteNumberOrNull } from './number';
 
 export async function updateLocationWithCoordinates(
   userId: string,
@@ -17,10 +18,30 @@ export async function updateLocationWithCoordinates(
 
     // Geocode location if provided
     if (locationValue) {
-      const coords = await geocodeAddress(locationValue);
-      if (coords) {
-        latitude = coords.lat;
-        longitude = coords.lon;
+      // Prefer Google geocoding (more accurate for precise addresses),
+      // fallback to OSM/Nominatim if the edge function fails.
+      try {
+        const { data, error } = await supabase.functions.invoke('google-geocode-forward', {
+          body: { address: locationValue },
+        });
+
+        const lat = toFiniteNumberOrNull((data as any)?.lat);
+        const lng = toFiniteNumberOrNull((data as any)?.lng);
+        // Guard against Number(null) === 0 causing (0,0) to be saved.
+        if (!error && lat !== null && lng !== null) {
+          latitude = lat;
+          longitude = lng;
+        }
+      } catch {
+        // ignore and fall back
+      }
+
+      if (latitude === null || longitude === null) {
+        const coords = await geocodeAddress(locationValue);
+        if (coords) {
+          latitude = coords.lat;
+          longitude = coords.lon;
+        }
       }
     }
 
@@ -38,6 +59,10 @@ export async function updateLocationWithCoordinates(
       updateData.longitude = longitude;
     } else if (locationValue === null) {
       // Clear coordinates if location is cleared
+      updateData.latitude = null;
+      updateData.longitude = null;
+    } else {
+      // If location changed but we couldn't geocode, clear coords to avoid using stale values.
       updateData.latitude = null;
       updateData.longitude = null;
     }
