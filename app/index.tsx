@@ -1177,7 +1177,8 @@ const styles = StyleSheet.create({
   },
   // Sections
   section: {
-    marginBottom: theme.spacing.xl,
+    // Keep spacing consistent between homepage sections
+    marginBottom: theme.spacing.lg,
   },
   howItWorksSection: {
     paddingBottom: 0,
@@ -1497,7 +1498,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleMobile: {
     fontFamily: theme.typography.fontFamily.display,
-    fontSize: 24,
+    fontSize: 20,
     paddingHorizontal: 0,
     fontWeight: theme.typography.fontWeight.bold,
   },
