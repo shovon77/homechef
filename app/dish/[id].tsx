@@ -438,22 +438,27 @@ export default function DishDetail() {
             {/* Cart quantity (Explore-style minus / qty / plus) */}
             <View style={styles.actionRow}>
               <View style={styles.cartQtyRow}>
-                <TouchableOpacity
-                  style={[styles.cartQtyBtn, cartQty <= 0 && styles.cartQtyBtnDisabled]}
-                  activeOpacity={0.7}
-                  onPress={() => {
-                    if (dish && cartQty > 0) {
-                      setCartQuantity(dish.id, cartQty - 1);
-                    }
-                  }}
-                >
-                  <Image
-                    source={require('../../assets/minus.png')}
-                    style={styles.cartQtyIconImage as any}
-                    tintColor={PRIMARY_COLOR}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
+                {cartQty > 0 ? (
+                  <TouchableOpacity
+                    style={styles.cartQtyBtn}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (dish && cartQty > 0) {
+                        setCartQuantity(dish.id, cartQty - 1);
+                      }
+                    }}
+                  >
+                    <Image
+                      source={require('../../assets/minus.png')}
+                      style={styles.cartQtyIconImage as any}
+                      tintColor={PRIMARY_COLOR}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  // Keep spacing consistent, but hide minus icon when qty is 0
+                  <View style={styles.cartQtyBtn} pointerEvents="none" />
+                )}
 
                 <Text
                   style={[styles.cartQtyValue, cartQty <= 0 && styles.cartQtyValueHidden]}
@@ -569,21 +574,22 @@ export default function DishDetail() {
                 {/* Rating form for signed-in users */}
                 {user && (
                   <View style={styles.reviewForm}>
-                    <Text style={styles.reviewFormTitle}>
-                      {userRating > 0 ? 'Update your rating' : 'Rate this dish'}
-                    </Text>
+                    <Text style={styles.reviewFormTitle}>Share a review</Text>
                     
                     <View style={styles.ratingInputContainer}>
                       <Text style={styles.ratingLabel}>Rating (required)</Text>
                       <View style={styles.starsInputRow}>
                         {[1, 2, 3, 4, 5].map(star => (
                           <TouchableOpacity key={star} onPress={() => setUserRating(star)}>
-                            <Text style={[
-                              styles.starInput,
-                              { color: star <= userRating ? PRIMARY_COLOR : TEXT_MUTED }
-                            ]}>
-                              ★
-                            </Text>
+                            <ImageCmp
+                              source={require('../../assets/star.png')}
+                              style={[
+                                styles.starInputImage as any,
+                                { opacity: star <= userRating ? 1 : 0.25 },
+                              ]}
+                              tintColor={PRIMARY_COLOR}
+                              resizeMode="contain"
+                            />
                           </TouchableOpacity>
                         ))}
                       </View>
@@ -608,7 +614,7 @@ export default function DishDetail() {
                       style={[styles.submitButton, (submitting || !userRating) && styles.submitButtonDisabled]}
                     >
                       <Text style={styles.submitButtonText}>
-                        {submitting ? "Submitting..." : userRating > 0 ? "Update Rating" : "Submit Rating"}
+                        {submitting ? "Submitting..." : "Submit"}
                       </Text>
                     </TouchableOpacity>
                   </View>
@@ -1019,8 +1025,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     gap: theme.spacing.sm,
   },
-  starInput: {
-    fontSize: 28,
+  starInputImage: {
+    width: 28,
+    height: 28,
   },
   commentInputContainer: {
     gap: theme.spacing.sm,
@@ -1040,7 +1047,16 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     minHeight: 100,
     textAlignVertical: 'top',
-    backgroundColor: '#FFFFFF',
+    backgroundColor: BACKGROUND_LIGHT,
+    // Keep focus border pure white on web (remove default outline ring)
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        boxShadow: 'none' as any,
+      },
+    }),
   },
   submitButton: {
     height: 40,
@@ -1048,6 +1064,9 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'center',
+    width: '85%',
+    maxWidth: 320,
   },
   submitButtonDisabled: {
     opacity: 0.7,

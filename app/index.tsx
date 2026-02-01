@@ -1176,6 +1176,15 @@ const styles = StyleSheet.create({
     paddingLeft: theme.spacing.sm,
     paddingRight: theme.spacing.sm,
     zIndex: 2, // Ensure input is above placeholder
+    // Remove web focus outline ring
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        boxShadow: 'none' as any,
+      },
+    }),
   },
   floatingSearchPlaceholder: {
     position: 'absolute',

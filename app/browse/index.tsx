@@ -206,14 +206,18 @@ export default function BrowsePage() {
   const [searchExpanded, setSearchExpanded] = useState(false);
   const searchExpandAnim = useRef(new Animated.Value(0)).current;
   const searchInputRef = useRef<TextInput | null>(null);
-  const expandedWidth = useMemo(() => Math.max(56, Math.min(580, width - theme.spacing.md * 2)), [width]);
+  const collapsedSize = Platform.select({ web: 64, default: 56 }) as number;
+  const expandedWidth = useMemo(
+    () => Math.max(collapsedSize, Math.min(580, width - theme.spacing.md * 2)),
+    [width, collapsedSize]
+  );
   const searchWidth = useMemo(
     () =>
       searchExpandAnim.interpolate({
         inputRange: [0, 1],
-        outputRange: [56, expandedWidth],
+        outputRange: [collapsedSize, expandedWidth],
       }),
-    [searchExpandAnim, expandedWidth]
+    [searchExpandAnim, collapsedSize, expandedWidth]
   );
 
   useEffect(() => {
@@ -1291,6 +1295,15 @@ const styles = StyleSheet.create({
     paddingLeft: theme.spacing.sm,
     paddingRight: theme.spacing.sm,
     zIndex: 2, // Ensure input is above placeholder
+    // Remove web focus outline ring
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        boxShadow: 'none' as any,
+      },
+    }),
   },
   floatingSearchPlaceholder: {
     position: 'absolute',
