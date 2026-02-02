@@ -33,6 +33,7 @@ export default function AuthPage() {
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
   const [resettingPassword, setResettingPassword] = useState(false);
+  const [resetSentTo, setResetSentTo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
   
   // Button press animation
@@ -209,6 +210,9 @@ export default function AuthPage() {
       });
       
       if (error) throw error;
+
+      // Show inline confirmation under the email field (only for the current email).
+      setResetSentTo(emailNormalized);
       
       Alert.alert(
         'Password Reset Email Sent',
@@ -216,6 +220,7 @@ export default function AuthPage() {
         [{ text: 'OK' }]
       );
     } catch (e: any) {
+      setResetSentTo(null);
       Alert.alert('Error', e.message || 'Failed to send password reset email. Please try again.');
     } finally {
       setResettingPassword(false);
@@ -317,7 +322,12 @@ export default function AuthPage() {
             <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Email</Text>
             <TextInput
               value={email}
-              onChangeText={setEmail}
+              onChangeText={(v) => {
+                setEmail(v);
+                // Hide the "sent" message when the email changes.
+                const next = normalizeEmail(v);
+                if (resetSentTo && resetSentTo !== next) setResetSentTo(null);
+              }}
               placeholder="you@example.com"
               autoCapitalize="none"
               keyboardType="email-address"
@@ -327,6 +337,11 @@ export default function AuthPage() {
                 color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body
               }}
             />
+            {mode === 'signin' && resetSentTo && resetSentTo === emailNormalized ? (
+              <Text style={{ color: '#33393A', fontFamily: theme.typography.fontFamily.body, fontSize: 12 }}>
+                A password reset email has been sent.
+              </Text>
+            ) : null}
           </View>
 
           <View style={{ gap:6 }}>

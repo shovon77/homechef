@@ -408,7 +408,8 @@ export default function HomePage() {
   const featuredScrollRef = React.useRef<ScrollView>(null);
   const isUserScrollingRef = React.useRef(false);
   const autoScrollPosition = React.useRef(0);
-  const autoScrollTimer = React.useRef<ReturnType<typeof setInterval> | null>(null);
+  const autoScrollRafRef = React.useRef<number | null>(null);
+  const lastAutoScrollTsRef = React.useRef<number>(0);
   const resumeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
   // Trigger distance recalculation whenever the homepage is focused again (e.g. navigating away and back).
@@ -466,14 +467,21 @@ export default function HomePage() {
   // Track if we're in the process of resetting to start
   const isResettingRef = React.useRef(false);
   
+  const stopAutoScroll = React.useCallback(() => {
+    if (autoScrollRafRef.current != null) {
+      cancelAnimationFrame(autoScrollRafRef.current);
+      autoScrollRafRef.current = null;
+    }
+    lastAutoScrollTsRef.current = 0;
+  }, []);
+
   // Function to start auto-scroll from current position
   const startAutoScroll = React.useCallback(() => {
     if (dishes.length === 0) return;
-    if (autoScrollTimer.current) {
-      clearInterval(autoScrollTimer.current);
-    }
+    stopAutoScroll();
     
     const maxScroll = Math.max(0, displayDishes.length * TOTAL_ITEM_WIDTH - width);
+    const AUTO_SCROLL_PX_PER_SEC = 40; // slightly faster than before, but smoother (time-based)
     
     // If starting at or very close to the end, reset to beginning first
     if (autoScrollPosition.current >= maxScroll - 5) {
@@ -487,51 +495,62 @@ export default function HomePage() {
       }, 500);
       return;
     }
-    
-    autoScrollTimer.current = setInterval(() => {
-      if (!isUserScrollingRef.current && !isResettingRef.current && featuredScrollRef.current) {
-        autoScrollPosition.current += 1;
-        
-        // When reaching the end, smoothly reset to start
-        if (autoScrollPosition.current >= maxScroll) {
-          isResettingRef.current = true;
-          clearInterval(autoScrollTimer.current!);
-          autoScrollTimer.current = null;
-          
-          // Wait a moment at the end, then smoothly scroll back
-          setTimeout(() => {
-            autoScrollPosition.current = 0;
-            featuredScrollRef.current?.scrollTo({ x: 0, animated: true });
-            
-            // Wait for reset animation, then resume auto-scroll
-            setTimeout(() => {
-              isResettingRef.current = false;
-              startAutoScroll();
-            }, 500);
-          }, 1000);
-        } else {
-          featuredScrollRef.current.scrollTo({
-            x: autoScrollPosition.current,
-            animated: false,
-          });
-        }
+
+    const tick = (ts: number) => {
+      // If user is interacting or we're resetting, stop the loop (resume is handled elsewhere).
+      if (isUserScrollingRef.current || isResettingRef.current) {
+        stopAutoScroll();
+        return;
       }
-    }, 30); // Smooth scrolling at ~33fps
-  }, [dishes.length, displayDishes.length, TOTAL_ITEM_WIDTH, width]);
+
+      const prev = lastAutoScrollTsRef.current || ts;
+      // Cap dt to avoid big jumps after backgrounding / GC pauses.
+      const dtMs = Math.min(40, Math.max(0, ts - prev));
+      lastAutoScrollTsRef.current = ts;
+
+      autoScrollPosition.current += (AUTO_SCROLL_PX_PER_SEC * dtMs) / 1000;
+
+      // When reaching the end, smoothly reset to start
+      if (autoScrollPosition.current >= maxScroll) {
+        stopAutoScroll();
+        isResettingRef.current = true;
+
+        // Wait a moment at the end, then smoothly scroll back
+        setTimeout(() => {
+          autoScrollPosition.current = 0;
+          featuredScrollRef.current?.scrollTo({ x: 0, animated: true });
+
+          // Wait for reset animation, then resume auto-scroll
+          setTimeout(() => {
+            isResettingRef.current = false;
+            startAutoScroll();
+          }, 500);
+        }, 800);
+        return;
+      }
+
+      featuredScrollRef.current?.scrollTo({
+        x: autoScrollPosition.current,
+        animated: false,
+      });
+
+      autoScrollRafRef.current = requestAnimationFrame(tick);
+    };
+
+    autoScrollRafRef.current = requestAnimationFrame(tick);
+  }, [dishes.length, displayDishes.length, TOTAL_ITEM_WIDTH, width, stopAutoScroll]);
 
   // Auto-scroll effect for featured dishes - start on mount
   useEffect(() => {
     startAutoScroll();
     
     return () => {
-      if (autoScrollTimer.current) {
-        clearInterval(autoScrollTimer.current);
-      }
+      stopAutoScroll();
       if (resumeTimeoutRef.current) {
         clearTimeout(resumeTimeoutRef.current);
       }
     };
-  }, [startAutoScroll]);
+  }, [startAutoScroll, stopAutoScroll]);
   
 
   useEffect(() => {
@@ -834,10 +853,7 @@ export default function HomePage() {
               scrollEventThrottle={16}
               onTouchStart={() => {
                 isUserScrollingRef.current = true;
-                if (autoScrollTimer.current) {
-                  clearInterval(autoScrollTimer.current);
-                  autoScrollTimer.current = null;
-                }
+                stopAutoScroll();
                 if (resumeTimeoutRef.current) {
                   clearTimeout(resumeTimeoutRef.current);
                 }
@@ -848,10 +864,7 @@ export default function HomePage() {
               }}
               onScrollBeginDrag={() => {
                 isUserScrollingRef.current = true;
-                if (autoScrollTimer.current) {
-                  clearInterval(autoScrollTimer.current);
-                  autoScrollTimer.current = null;
-                }
+                stopAutoScroll();
                 if (resumeTimeoutRef.current) {
                   clearTimeout(resumeTimeoutRef.current);
                 }
