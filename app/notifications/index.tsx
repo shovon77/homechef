@@ -1,5 +1,5 @@
 'use client';
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, ActivityIndicator, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -13,7 +13,7 @@ const palette = {
   surface: '#FFFFFF',
   border: '#E2E8F0',
   text: '#33393A',
-  muted: '#64748B',
+  muted: '#33393A',
   primary: '#FE734C',
 };
 
@@ -118,40 +118,40 @@ export default function NotificationsPage() {
     }
   }
 
-  async function markAllAsRead() {
-    if (!user?.id) return;
-    
-    try {
-      const unreadIds = notifications.filter(n => !n.read).map(n => n.id);
-      if (unreadIds.length === 0) return;
+  const getOrderIdFromNotification = (notification: typeof notifications[0]): string => {
+    const id = notification.related_id;
+    if (typeof id === 'number' && Number.isFinite(id)) return String(id);
+    const hay = `${notification.title || ''} ${notification.message || ''}`;
+    return hay.match(/order\s*#\s*(\d+)/i)?.[1] ?? '';
+  };
 
-      const { error } = await supabase
-        .from('notifications')
-        .update({ read: true })
-        .in('id', unreadIds);
-      
-      if (!error) {
-        setNotifications(prev => 
-          prev.map(n => ({ ...n, read: true }))
-        );
-      }
-    } catch (err) {
-      console.error('Error marking all as read:', err);
+  const getPreviewCopy = (notification: typeof notifications[0]) => {
+    if (notification.type === 'order_message') {
+      const oid = getOrderIdFromNotification(notification);
+      return {
+        title: oid ? `Order #${oid} - Update!` : 'Order - Update!',
+        message: 'You have a new message from a customer.',
+      };
     }
-  }
-
-  const unreadCount = useMemo(() => {
-    return notifications.filter(n => !n.read).length;
-  }, [notifications]);
+    if (notification.type === 'welcome') {
+      return {
+        title: 'Welcome!',
+        message: 'Explore homemade meals or start selling.',
+      };
+    }
+    return {
+      title: notification.title,
+      message: notification.message,
+    };
+  };
 
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleDateString('en-US', {
-      month: 'short',
+      timeZone: 'America/New_York',
+      month: 'long',
       day: 'numeric',
       year: 'numeric',
-      hour: 'numeric',
-      minute: '2-digit'
     });
   };
 
@@ -163,6 +163,18 @@ export default function NotificationsPage() {
     // Handle welcome notification - show modal
     if (notification.type === 'welcome') {
       setShowWelcomeModal(true);
+      return;
+    }
+
+    // Order message notifications: route based on role
+    if (notification.type === 'order_message' && notification.related_id) {
+      if (isAdmin) {
+        router.push('/admin');
+      } else if (isChef) {
+        router.push('/chef');
+      } else {
+        router.push(`/orders/track?id=${notification.related_id}`);
+      }
       return;
     }
     
@@ -177,14 +189,6 @@ export default function NotificationsPage() {
       <View style={styles.container}>
         <View style={styles.header}>
           <Text style={styles.title}>Notifications</Text>
-          {unreadCount > 0 && (
-            <TouchableOpacity
-              onPress={markAllAsRead}
-              style={styles.markAllReadButton}
-            >
-              <Text style={styles.markAllReadText}>Mark all as read</Text>
-            </TouchableOpacity>
-          )}
         </View>
 
         {loading ? (
@@ -202,69 +206,30 @@ export default function NotificationsPage() {
             contentContainerStyle={styles.scrollContent}
             showsVerticalScrollIndicator={!isMobile}
           >
-            <ScrollView 
-              horizontal
-              showsHorizontalScrollIndicator={!isMobile}
-              contentContainerStyle={styles.tableScroll}
-            >
-              <View style={styles.tableContainer}>
-                {/* Table Header */}
-                <View style={[styles.tableHeader, !isMobile && { minWidth: 1000 }]}>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 40, minWidth: 40 } : { flex: 0.3 }]}>
-                    <Text style={styles.tableHeaderCellText}>Read</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                    <Text style={styles.tableHeaderCellText}>Type</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 200, minWidth: 200 } : { flex: 2 }]}>
-                    <Text style={styles.tableHeaderCellText}>Title</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 250, minWidth: 250 } : { flex: 2.5 }]}>
-                    <Text style={styles.tableHeaderCellText}>Message</Text>
-                  </View>
-                  <View style={[styles.tableHeaderCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.2 }]}>
-                    <Text style={styles.tableHeaderCellText}>Date</Text>
-                  </View>
-                </View>
-
-                {/* Table Rows */}
-                {notifications.map((notification) => (
+            <View style={styles.cards}>
+              {notifications.map((notification) => {
+                const preview = getPreviewCopy(notification);
+                return (
                   <TouchableOpacity
                     key={notification.id}
                     style={[
-                      styles.tableRow,
-                      !notification.read && styles.tableRowUnread,
-                      !isMobile && { minWidth: 1000 }
+                      styles.card,
+                      notification.read ? styles.cardRead : styles.cardUnread,
                     ]}
+                    activeOpacity={0.85}
                     onPress={() => handleNotificationClick(notification)}
                   >
-                    <View style={[styles.tableCell, isMobile ? { width: 40, minWidth: 40 } : { flex: 0.3 }]}>
-                      {notification.read ? (
-                        <Text style={styles.readIndicator}>✓</Text>
-                      ) : (
-                        <View style={styles.unreadIndicator} />
-                      )}
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.5 }]}>
-                      <Text style={styles.tableCellText}>{notification.type.replace(/_/g, ' ')}</Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 200, minWidth: 200 } : { flex: 2 }]}>
-                      <Text style={[styles.tableCellText, !notification.read && styles.tableCellTextBold]}>
-                        {notification.title}
-                      </Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 250, minWidth: 250 } : { flex: 2.5 }]}>
-                      <Text style={styles.tableCellText} numberOfLines={2}>
-                        {notification.message}
-                      </Text>
-                    </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 150, minWidth: 150 } : { flex: 1.2 }]}>
-                      <Text style={styles.tableCellText}>{formatDate(notification.created_at)}</Text>
-                    </View>
+                    <Text style={styles.cardTitle} numberOfLines={1} ellipsizeMode="tail">
+                      {preview.title}
+                    </Text>
+                    <Text style={styles.cardMessage} numberOfLines={1} ellipsizeMode="tail">
+                      {preview.message}
+                    </Text>
+                    <Text style={styles.cardDate}>{formatDate(notification.created_at)}</Text>
                   </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
+                );
+              })}
+            </View>
           </ScrollView>
         )}
       </View>
@@ -302,20 +267,8 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 28,
     fontWeight: '700',
-    color: palette.text,
+    color: palette.primary,
     fontFamily: theme.typography.fontFamily.display,
-  },
-  markAllReadButton: {
-    paddingVertical: 8,
-    paddingHorizontal: 16,
-    borderRadius: 8,
-    backgroundColor: palette.primary,
-  },
-  markAllReadText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: '#FFFFFF',
-    fontFamily: theme.typography.fontFamily.body,
   },
   loadingState: {
     flex: 1,
@@ -326,7 +279,7 @@ const styles = StyleSheet.create({
   loadingText: {
     marginTop: 16,
     fontSize: 16,
-    color: palette.muted,
+    color: palette.text,
     fontFamily: theme.typography.fontFamily.body,
   },
   emptyState: {
@@ -337,76 +290,49 @@ const styles = StyleSheet.create({
   },
   emptyText: {
     fontSize: 16,
-    color: palette.muted,
+    color: palette.text,
     fontFamily: theme.typography.fontFamily.body,
   },
   scrollContent: {
     flexGrow: 1,
+    paddingBottom: 24,
   },
-  tableScroll: {
-    minWidth: '100%',
+  cards: {
+    gap: 12,
   },
-  tableContainer: {
-    position: 'relative',
+  card: {
+    borderRadius: 12,
+    padding: 16,
   },
-  tableHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingVertical: 12,
-    paddingLeft: 12,
-    paddingRight: 6,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
-    backgroundColor: '#F8FAFC',
+  cardRead: {
+    // Match navbar notification dropdown (read)
+    backgroundColor: 'rgba(51, 57, 58, 0.05)',
   },
-  tableHeaderCell: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    paddingHorizontal: 4,
+  cardUnread: {
+    // Match navbar notification dropdown (unread)
+    backgroundColor: 'rgba(254, 115, 76, 0.05)',
   },
-  tableHeaderCellText: {
+  cardTitle: {
     color: palette.text,
-    fontSize: 14,
-    fontWeight: '700',
     fontFamily: theme.typography.fontFamily.body,
-  },
-  tableRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    backgroundColor: palette.surface,
-    borderBottomWidth: 1,
-    borderBottomColor: palette.border,
-    paddingVertical: 12,
-    paddingLeft: 12,
-    paddingRight: 6,
-  },
-  tableRowUnread: {
-    backgroundColor: '#FFF9F7',
-  },
-  tableCell: {
-    paddingVertical: 8,
-    paddingHorizontal: 4,
-    justifyContent: 'center',
-    overflow: 'hidden',
-  },
-  readIndicator: {
+    fontWeight: '700',
     fontSize: 16,
-    color: '#10B981',
-    fontWeight: '700',
-    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 22,
+    marginBottom: 6,
   },
-  unreadIndicator: {
-    width: 10,
-    height: 10,
-    borderRadius: 5,
-    backgroundColor: palette.primary,
-  },
-  tableCellText: {
-    fontSize: 14,
+  cardMessage: {
     color: palette.text,
     fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
+    fontSize: 14,
+    lineHeight: 20,
+    marginBottom: 8,
   },
-  tableCellTextBold: {
-    fontWeight: '600',
+  cardDate: {
+    color: palette.text,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
+    fontSize: 12,
+    lineHeight: 18,
   },
 });

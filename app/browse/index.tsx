@@ -716,7 +716,7 @@ export default function BrowsePage() {
         </View>
       )}
       <Screen 
-        contentStyle={{ paddingHorizontal: 24, paddingTop: 24 }}
+        contentStyle={{ paddingHorizontal: 24, paddingTop: 0 }}
         style={{ backgroundColor: '#F2F0EF' }}
         fixedFooterHeight={Platform.select({
           web: 100,
@@ -724,8 +724,10 @@ export default function BrowsePage() {
         })}
       >
         <View style={styles.headerBlock}>
-          <Text style={styles.title}>Find the taste of home</Text>
-          <Text style={styles.subtitle}>Pickup homemade meals near you</Text>
+          <View style={styles.headerTextBlock}>
+            <Text style={styles.title}>Find the taste of home</Text>
+            <Text style={styles.subtitle}>Pickup homemade meals near you</Text>
+          </View>
           <View style={styles.subtitleDivider} />
         </View>
 
@@ -974,7 +976,18 @@ export default function BrowsePage() {
 const styles = StyleSheet.create({
   headerBlock: {
     alignItems: 'stretch',
-    marginBottom: 20,
+    marginBottom: 16,
+    // Center title/subtitle vertically between navbar and divider line
+    position: 'relative',
+    justifyContent: 'center',
+    paddingVertical: theme.spacing.sm,
+    minHeight: Platform.select({
+      web: 96,
+      default: 88,
+    }),
+  },
+  headerTextBlock: {
+    alignItems: 'flex-start',
   },
   title: {
     fontSize: 24,
@@ -991,9 +1004,11 @@ const styles = StyleSheet.create({
   subtitleDivider: {
     height: 1,
     backgroundColor: '#FFFFFF',
-    marginTop: theme.spacing.md,
-    // Match navbar bottom line across full width
-    marginHorizontal: -24,
+    // Pin divider to bottom so header text can be vertically centered above it
+    position: 'absolute',
+    left: -24,
+    right: -24,
+    bottom: 0,
   },
   tabsWrap: {
     position: 'relative',

@@ -38,6 +38,7 @@ if (Platform.OS === 'web') {
 const PRIMARY_COLOR = '#FE734C';
 const BG_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b18';
+const BRAND_BLACK = '#33393A';
 const BORDER_LIGHT = '#E5E7EB';
 const MAXW = 1280; // max-w-7xl
 
@@ -1299,7 +1300,7 @@ export default function NavBar() {
                 }}
                 style={styles.allNotificationsButton}
               >
-                <Text style={styles.allNotificationsButtonText}>All notifications</Text>
+                <Text style={styles.allNotificationsButtonText}>All</Text>
               </TouchableOpacity>
             </View>
             {notificationsLoading ? (
@@ -1315,11 +1316,12 @@ export default function NavBar() {
                 style={styles.notificationsList}
                 contentContainerStyle={styles.notificationsListContent}
               >
-                {notifications.map((notification) => (
+                {notifications.slice(0, 3).map((notification, idx, arr) => (
                   <TouchableOpacity
                     key={notification.id}
                     style={[
                       styles.notificationItem,
+                      idx === arr.length - 1 && styles.notificationItemLast,
                       !notification.read && styles.notificationItemUnread
                     ]}
                     onPress={async () => {
@@ -1349,6 +1351,20 @@ export default function NavBar() {
                         return;
                       }
                       
+                      // Order message notifications: route based on role
+                      if (notification.type === 'order_message' && notification.related_id) {
+                        setIsNotificationsOpen(false);
+                        if (isAdmin) {
+                          router.push('/admin');
+                        } else if (isChef) {
+                          // "Sales" dashboard for chefs
+                          router.push('/chef');
+                        } else {
+                          router.push(`/orders/track?id=${notification.related_id}`);
+                        }
+                        return;
+                      }
+
                       // Handle navigation based on notification type
                       if (notification.related_id && notification.related_type === 'order') {
                         router.push(`/orders/track?id=${notification.related_id}`);
@@ -1357,8 +1373,32 @@ export default function NavBar() {
                     }}
                   >
                     <View style={styles.notificationItemContent}>
-                      <Text style={styles.notificationItemTitle}>{notification.title}</Text>
-                      <Text style={styles.notificationItemMessage}>{notification.message}</Text>
+                      {notification.type === 'order_message' ? (
+                        <>
+                          <Text style={styles.notificationItemTitle}>
+                            {`Order #${
+                              notification.related_id ??
+                              String(notification.title || notification.message || '').match(/order\s*#\s*(\d+)/i)?.[1] ??
+                              ''
+                            } - Update!`}
+                          </Text>
+                          <Text style={styles.notificationItemMessage}>
+                            You have a new message from a customer.
+                          </Text>
+                        </>
+                      ) : notification.type === 'welcome' ? (
+                        <>
+                          <Text style={styles.notificationItemTitle}>Welcome!</Text>
+                          <Text style={styles.notificationItemMessage}>
+                            Explore homemade meals or start selling.
+                          </Text>
+                        </>
+                      ) : (
+                        <>
+                          <Text style={styles.notificationItemTitle}>{notification.title}</Text>
+                          <Text style={styles.notificationItemMessage}>{notification.message}</Text>
+                        </>
+                      )}
                       <Text style={styles.notificationItemTime}>
                         {new Date(notification.created_at).toLocaleDateString('en-US', {
                           timeZone: 'America/New_York',
@@ -1892,7 +1932,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
-    paddingVertical: 8,
+    // Remove extra bottom space under last notification
+    paddingVertical: 0,
     paddingHorizontal: 0,
     ...Platform.select({
       web: {
@@ -1926,13 +1967,16 @@ const styles = StyleSheet.create({
     paddingHorizontal: 16,
     paddingVertical: 12,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER_LIGHT,
+    // White divider line under the header
+    borderBottomColor: '#FFFFFF',
   },
   notificationsTitle: {
     fontSize: 16,
-    fontWeight: '600',
-    color: TEXT_DARK,
+    fontWeight: '700',
+    // Orange title
+    color: PRIMARY_COLOR,
     fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 20,
   },
   notificationsContent: {
     paddingHorizontal: 16,
@@ -1942,7 +1986,7 @@ const styles = StyleSheet.create({
   },
   noNotificationsText: {
     fontSize: 14,
-    color: '#667085',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
   },
@@ -1950,7 +1994,8 @@ const styles = StyleSheet.create({
     maxHeight: 400,
   },
   notificationsListContent: {
-    paddingVertical: 4,
+    // Avoid extra whitespace below last item
+    paddingVertical: 0,
   },
   notificationItem: {
     flexDirection: 'row',
@@ -1958,31 +2003,37 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     borderBottomWidth: 1,
     borderBottomColor: '#F3F4F6',
-    backgroundColor: '#FFFFFF',
+    // Read notifications: 5% brand black background
+    backgroundColor: 'rgba(51, 57, 58, 0.05)',
+  },
+  notificationItemLast: {
+    borderBottomWidth: 0,
   },
   notificationItemUnread: {
-    backgroundColor: '#FFF9F7',
+    // Unread notifications: 5% opacity orange
+    backgroundColor: 'rgba(254, 115, 76, 0.05)',
   },
   notificationItemContent: {
     flex: 1,
   },
   notificationItemTitle: {
     fontSize: 14,
-    fontWeight: '600',
-    color: TEXT_DARK,
+    // Bold subject/title
+    fontWeight: '700',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     marginBottom: 4,
   },
   notificationItemMessage: {
     fontSize: 13,
-    color: '#667085',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     marginBottom: 4,
     lineHeight: 18,
   },
   notificationItemTime: {
     fontSize: 11,
-    color: '#9CA3AF',
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
   },
   notificationUnreadDot: {
@@ -1994,14 +2045,17 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
   allNotificationsButton: {
-    paddingVertical: 4,
+    paddingVertical: 0,
     paddingHorizontal: 8,
+    justifyContent: 'center',
   },
   allNotificationsButtonText: {
     fontSize: 13,
     fontWeight: '600',
-    color: PRIMARY_COLOR,
+    // Brand black
+    color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 20,
   },
   mobileLocationBar: {
     flexDirection: 'row',
