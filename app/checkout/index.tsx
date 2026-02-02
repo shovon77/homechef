@@ -12,6 +12,7 @@ import { submitCheckout } from '../../lib/orders';
 import ENV from '@/lib/env';
 import { formatCad } from '../../lib/money';
 import { theme } from '../../lib/theme';
+import { supabase } from '../../lib/supabase';
 
 const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
@@ -21,10 +22,14 @@ const PRIMARY_COLOR = '#FE734C';
 const ACCENT = '#1dbf73';
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
+const BRAND_BLACK = '#33393A';
+const CART_ITEM_IMAGE_SIZE = 96;
+const CART_ITEM_IMAGE_BLOCK_WIDTH = CART_ITEM_IMAGE_SIZE + theme.spacing.lg;
+const CART_ITEM_CONTENT_LEFT = CART_ITEM_IMAGE_BLOCK_WIDTH + theme.spacing.md;
 
 export default function CheckoutPage() {
   const router = useRouter();
-  const { items, cartChefId } = useCart();
+  const { items, cartChefId, isReady } = useCart();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [chefName, setChefName] = useState<string | null>(null);
@@ -38,15 +43,58 @@ export default function CheckoutPage() {
   const [showDateTimePicker, setShowDateTimePicker] = useState(false);
 
   useEffect(() => {
-    if (cartChefId) {
-      getChefById(cartChefId).then(chef => {
-        setChefName(chef?.name ?? null);
-        setChefLocation(chef?.location ?? null);
-      });
-    } else {
-      setChefName(null);
-      setChefLocation(null);
-    }
+    let cancelled = false;
+
+    (async () => {
+      if (!cartChefId) {
+        if (!cancelled) {
+          setChefName(null);
+          setChefLocation(null);
+        }
+        return;
+      }
+
+      const chef = await getChefById(cartChefId);
+      if (cancelled) return;
+
+      setChefName(chef?.name ?? null);
+
+      // Pickup location should come from the chef's profile record (fallback to chefs.location).
+      let pickupLocation: string | null = chef?.location ?? null;
+      try {
+        if (chef?.user_id) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('location')
+            .eq('id', chef.user_id)
+            .maybeSingle();
+          const loc = (data as any)?.location;
+          if (typeof loc === 'string' && loc.trim().length > 0) {
+            pickupLocation = loc.trim();
+          }
+        } else if (chef?.email) {
+          const { data } = await supabase
+            .from('profiles')
+            .select('location')
+            .eq('email', chef.email)
+            .maybeSingle();
+          const loc = (data as any)?.location;
+          if (typeof loc === 'string' && loc.trim().length > 0) {
+            pickupLocation = loc.trim();
+          }
+        }
+      } catch (e) {
+        // Non-blocking: fall back to chefs.location if profiles fetch fails.
+      }
+
+      if (!cancelled) {
+        setChefLocation(pickupLocation);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
   }, [cartChefId]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
@@ -54,9 +102,9 @@ export default function CheckoutPage() {
   const platformFee = 1.50;
   // Taxes: 13% HST on subtotal only (Ontario rate)
   const taxes = useMemo(() => subtotal * 0.13, [subtotal]);
-  // Total: subtotal + platform service fee + taxes
+  // Total (customer): subtotal + platform service fee (taxes excluded)
   // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not paid by customer
-  const total = useMemo(() => subtotal + platformFee + taxes, [subtotal, platformFee, taxes]);
+  const total = useMemo(() => subtotal + platformFee, [subtotal, platformFee]);
   const totalCents = useMemo(() => Math.round(total * 100), [total]);
   
   // Generate dates for next day + 2 days (3 days total)
@@ -222,6 +270,16 @@ export default function CheckoutPage() {
     }
   };
 
+  if (!isReady) {
+    return (
+      <Screen style={{ backgroundColor: BACKGROUND }} contentStyle={styles.emptyContent}>
+        <View style={{ alignItems: 'center', justifyContent: 'center', gap: 12 }}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+        </View>
+      </Screen>
+    );
+  }
+
   if (items.length === 0) {
     return (
       <Screen style={{ backgroundColor: BACKGROUND }} contentStyle={styles.emptyContent}>
@@ -248,47 +306,37 @@ export default function CheckoutPage() {
             
             return (
               <View key={String(item.id)} style={styles.cartItem}>
+                <Link href={`/dish/${item.id}`} asChild>
+                  <TouchableOpacity style={styles.cartItemImageLink}>
+                    <Image
+                      source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
+                      style={styles.cartItemImage}
+                      resizeMode="cover"
+                    />
+                  </TouchableOpacity>
+                </Link>
                 <View style={styles.cartItemContent}>
-                  <View style={styles.cartItemLeft}>
-                    <Link href={`/dish/${item.id}`} asChild>
-                      <TouchableOpacity>
-                        <Image
-                          source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
-                          style={styles.cartItemImage}
-                          resizeMode="cover"
-                        />
-                      </TouchableOpacity>
-                    </Link>
-                    <View style={styles.cartItemInfo}>
-                      <Text style={styles.cartItemName}>{item.name || "Item"}</Text>
-                      {chefName && (
-                        <Text style={styles.cartItemChef}>By {chefName}</Text>
-                      )}
-                      {!!item.notes?.trim() && (
-                        <Text
-                          style={styles.cartItemNotes}
-                          numberOfLines={2}
-                          ellipsizeMode="tail"
-                        >
-                          Notes: {item.notes.trim()}
-                        </Text>
-                      )}
-                    </View>
-                  </View>
-                  <View style={[styles.cartItemRight, isMobile && styles.cartItemRightMobile]}>
-                    {isMobile ? (
-                      <View style={styles.cartItemPriceQuantityMobile}>
-                        <Text style={styles.cartItemQuantity}>{item.quantity}</Text>
-                        <Text style={styles.cartItemMultiplier}>×</Text>
-                        <Text style={styles.cartItemPrice}>{itemPrice}</Text>
-                      </View>
-                    ) : (
-                      <>
-                        <Text style={styles.cartItemPrice}>{itemPrice}</Text>
-                        <Text style={styles.cartItemQuantity}>{item.quantity}×</Text>
-                      </>
+                  <View style={styles.cartItemInfo}>
+                    <Text style={styles.cartItemName}>{item.name || "Item"}</Text>
+                    {chefName && (
+                      <Text style={styles.cartItemChef}>{chefName}</Text>
+                    )}
+                    {!!item.notes?.trim() && (
+                      <Text
+                        style={styles.cartItemNotes}
+                        numberOfLines={2}
+                        ellipsizeMode="tail"
+                      >
+                        Notes: {item.notes.trim()}
+                      </Text>
                     )}
                   </View>
+                </View>
+                <View style={styles.cartItemPriceCorner}>
+                  <Text style={styles.cartItemPriceCornerText}>{itemPrice}</Text>
+                </View>
+                <View style={styles.cartItemQtyCorner}>
+                  <Text style={styles.cartItemQtyCornerText}>{item.quantity}</Text>
                 </View>
               </View>
             );
@@ -517,6 +565,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
     padding: 12,
     fontSize: 16,
+    fontFamily: 'OpenSans_400Regular',
     color: TEXT_DARK,
     backgroundColor: '#FFFFFF',
   },
@@ -561,39 +610,45 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_700Bold',
   },
   cartItemsList: {
+    backgroundColor: 'transparent',
+    gap: theme.spacing.md,
+    overflow: 'visible',
+  },
+  cartItem: {
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.lg,
     borderWidth: 1,
     borderColor: BORDER_COLOR,
     overflow: 'hidden',
-  },
-  cartItem: {
-    borderBottomWidth: 1,
-    borderBottomColor: BORDER_COLOR,
-    paddingHorizontal: theme.spacing.lg,
+    position: 'relative',
+    paddingLeft: CART_ITEM_CONTENT_LEFT,
+    paddingRight: theme.spacing.lg,
     paddingVertical: theme.spacing.md,
+    paddingBottom: theme.spacing.xl,
   },
   cartItemContent: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
     gap: theme.spacing.md,
   },
-  cartItemLeft: {
-    flexDirection: 'row',
-    gap: theme.spacing.md,
-    flex: 1,
+  cartItemImageLink: {
+    position: 'absolute',
+    left: 0,
+    top: 0,
+    bottom: 0,
+    width: CART_ITEM_IMAGE_BLOCK_WIDTH,
   },
   cartItemImage: {
-    width: 96,
-    height: 96,
-    borderRadius: theme.radius.lg,
+    width: '100%',
+    height: '100%',
+    borderRadius: 0,
     backgroundColor: '#f0f0f0',
   },
   cartItemInfo: {
     flex: 1,
     justifyContent: 'flex-start',
     gap: theme.spacing.xs / 2,
+    paddingBottom: theme.spacing.lg,
   },
   cartItemName: {
     color: TEXT_DARK,
@@ -602,8 +657,19 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_400Regular',
   },
   cartItemChef: {
-    color: PRIMARY_COLOR,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  cartItemPriceCorner: {
+    position: 'absolute',
+    left: CART_ITEM_CONTENT_LEFT,
+    bottom: theme.spacing.sm,
+  },
+  cartItemPriceCornerText: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.normal as any,
     fontFamily: 'OpenSans_400Regular',
   },
@@ -614,35 +680,16 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_400Regular',
     lineHeight: 18,
   },
-  cartItemRight: {
-    alignItems: 'flex-end',
-    gap: theme.spacing.sm,
+  cartItemQtyCorner: {
+    position: 'absolute',
+    right: theme.spacing.lg,
+    bottom: theme.spacing.sm,
   },
-  cartItemRightMobile: {
-    alignItems: 'flex-start',
-  },
-  cartItemPriceQuantityMobile: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-  },
-  cartItemPrice: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.normal as any,
-    fontFamily: 'OpenSans_400Regular',
-  },
-  cartItemQuantity: {
-    color: TEXT_DARK,
+  cartItemQtyCornerText: {
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
     fontFamily: 'OpenSans_400Regular',
-  },
-  cartItemMultiplier: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.base,
-    fontFamily: 'OpenSans_400Regular',
-    alignSelf: 'center',
   },
   orderSummaryCard: {
     backgroundColor: '#FFFFFF',
@@ -678,7 +725,7 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   infoIcon: {
-    color: PRIMARY_COLOR,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'OpenSans_400Regular',
   },
@@ -709,7 +756,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
     marginTop: theme.spacing.sm,
-    fontStyle: 'italic',
   },
   pickerButton: {
     borderWidth: 1,
@@ -826,12 +872,12 @@ const styles = StyleSheet.create({
   dateTimePickerButton: {
     padding: 8,
     borderRadius: 8,
-    backgroundColor: PRIMARY_COLOR + '15',
+    backgroundColor: BACKGROUND,
   },
   dateTimePickerButtonText: {
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
-    color: PRIMARY_COLOR,
+    color: BRAND_BLACK,
     fontWeight: '600' as any,
   },
   selectedDateTimeDisplay: {

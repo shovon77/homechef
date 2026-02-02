@@ -16,14 +16,15 @@ import LocationPicker from "../components/LocationPicker";
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
 const BACKGROUND_LIGHT = '#F2F0EF';
-const TEXT_DARK = '#0e1b18';
-const TEXT_MUTED = '#88B361';
+const BRAND_BLACK = '#33393A';
+const TEXT_DARK = BRAND_BLACK;
+const TEXT_MUTED = BRAND_BLACK;
 const BORDER_COLOR = '#e7f3f0';
 const BORDER_LIGHT = '#E5E7EB';
 
 export default function CartScreen() {
   const router = useRouter();
-  const { items, setQuantity, removeFromCart, total } = useCart();
+  const { items, isReady, setQuantity, removeFromCart, total } = useCart();
   const { user, profile, refreshRole } = useRole();
   const [chefNames, setChefNames] = useState<Map<number | null, string>>(new Map());
   const { width } = useWindowDimensions();
@@ -408,8 +409,23 @@ export default function CartScreen() {
       return;
     }
 
+    if (!user) {
+      router.push('/auth');
+      return;
+    }
+
     router.push('/checkout');
   };
+
+  if (!isReady) {
+    return (
+      <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: theme.spacing.xl }}>
+          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+        </View>
+      </Screen>
+    );
+  }
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
@@ -604,8 +620,9 @@ export default function CartScreen() {
                           <View style={styles.cartItemInfo}>
                             <Text style={styles.cartItemName}>{item.name || "Item"}</Text>
                             {chefName && (
-                              <Text style={styles.cartItemChef}>By {chefName}</Text>
+                              <Text style={styles.cartItemChef}>{chefName}</Text>
                             )}
+                            <Text style={styles.cartItemPriceInline}>{itemPrice}</Text>
                             {!!item.notes?.trim() && (
                               <Text
                                 style={styles.cartItemNotes}
@@ -617,32 +634,40 @@ export default function CartScreen() {
                             )}
                           </View>
                         </View>
-                        <View style={styles.cartItemRight}>
-                            <Text style={styles.cartItemPriceDesktop}>{itemPrice}</Text>
-                          <View style={styles.quantityControls}>
-                            <TouchableOpacity
-                              style={styles.quantityButton}
-                              onPress={() => setQuantity(item.id, item.quantity - 1)}
-                            >
-                              <Text style={styles.quantityButtonText}>-</Text>
-                            </TouchableOpacity>
-                            <TextInput
-                              style={styles.quantityInput}
-                              value={String(item.quantity)}
-                              onChangeText={(text) => {
-                                const qty = parseInt(text) || 0;
-                                setQuantity(item.id, Math.max(0, qty));
-                              }}
-                              keyboardType="numeric"
-                              selectTextOnFocus
+                      </View>
+                      <View style={styles.cartItemQtyBar}>
+                        <View style={styles.cartItemQtySlotLeft}>
+                          <TouchableOpacity
+                            style={[
+                              styles.quantityIconButton,
+                              item.quantity <= 0 && styles.quantityIconButtonDisabled,
+                            ]}
+                            onPress={() => setQuantity(item.id, Math.max(0, item.quantity - 1))}
+                            disabled={item.quantity <= 0}
+                          >
+                            <Image
+                              source={require('../assets/minus.png')}
+                              style={styles.quantityIconImage as any}
+                              tintColor={PRIMARY_COLOR}
+                              resizeMode="contain"
                             />
-                            <TouchableOpacity
-                              style={styles.quantityButton}
-                              onPress={() => setQuantity(item.id, item.quantity + 1)}
-                            >
-                              <Text style={styles.quantityButtonText}>+</Text>
-                            </TouchableOpacity>
-                          </View>
+                          </TouchableOpacity>
+                        </View>
+                        <View style={styles.cartItemQtySlotCenter}>
+                          <Text style={styles.cartItemQtyText}>{String(item.quantity)}</Text>
+                        </View>
+                        <View style={styles.cartItemQtySlotRight}>
+                          <TouchableOpacity
+                            style={styles.quantityIconButton}
+                            onPress={() => setQuantity(item.id, item.quantity + 1)}
+                          >
+                            <Image
+                              source={require('../assets/add (1).png')}
+                              style={styles.quantityIconImage as any}
+                              tintColor={PRIMARY_COLOR}
+                              resizeMode="contain"
+                            />
+                          </TouchableOpacity>
                         </View>
                       </View>
                     </View>
@@ -728,7 +753,7 @@ const styles = StyleSheet.create({
   },
   cartItemContent: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'flex-start',
     gap: theme.spacing.md,
   },
@@ -755,8 +780,14 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_400Regular',
   },
   cartItemChef: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  cartItemPriceInline: {
+    color: TEXT_DARK,
+    fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.normal as any,
     fontFamily: 'OpenSans_400Regular',
   },
@@ -768,44 +799,43 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_400Regular',
     lineHeight: 18,
   },
-  cartItemRight: {
-    alignItems: 'flex-end',
-    gap: theme.spacing.sm,
-  },
-  cartItemPriceDesktop: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.normal as any,
-    fontFamily: 'OpenSans_400Regular',
-  },
-  quantityControls: {
+  cartItemQtyBar: {
+    marginTop: theme.spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: theme.spacing.sm,
   },
-  quantityButton: {
-    width: 28,
-    height: 28,
-    borderRadius: 14,
-    backgroundColor: BORDER_COLOR,
+  cartItemQtySlotLeft: {
+    flex: 1,
+    alignItems: 'flex-start',
+  },
+  cartItemQtySlotCenter: {
+    flex: 1,
     alignItems: 'center',
-    justifyContent: 'center',
   },
-  quantityButtonText: {
-    color: TEXT_DARK,
-    fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+  cartItemQtySlotRight: {
+    flex: 1,
+    alignItems: 'flex-end',
   },
-  quantityInput: {
-    width: 24,
-    textAlign: 'center',
+  cartItemQtyText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium as any,
     fontFamily: 'OpenSans_400Regular',
-    padding: 0,
+  },
+  // cartItemPriceDesktop removed (price now displayed under chef name)
+  quantityIconButton: {
+    width: 32,
+    height: 32,
     backgroundColor: 'transparent',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityIconButtonDisabled: {
+    opacity: 0.35,
+  },
+  quantityIconImage: {
+    width: 16,
+    height: 16,
   },
   deleteButton: {
     marginLeft: theme.spacing.sm,
@@ -845,7 +875,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   orderSummaryLabel: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'OpenSans_400Regular',
   },
@@ -950,7 +980,7 @@ const styles = StyleSheet.create({
     maxWidth: 300,
   },
   emptyCartButtonText: {
-    color: '#FFFFFF',
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
@@ -1037,7 +1067,7 @@ const styles = StyleSheet.create({
   modalSubtitle: {
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     lineHeight: theme.typography.fontSize.sm * 1.4,
   },
   modalCloseButton: {
@@ -1073,7 +1103,7 @@ const styles = StyleSheet.create({
   currentLocationText: {
     fontSize: theme.typography.fontSize.base,
     fontFamily: 'OpenSans_400Regular',
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     lineHeight: theme.typography.fontSize.base * 1.4,
   },
   enableLocationButton: {
@@ -1091,7 +1121,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   enableLocationButtonText: {
-    color: '#FFFFFF',
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
@@ -1109,7 +1139,7 @@ const styles = StyleSheet.create({
   },
   modalHint: {
     fontSize: theme.typography.fontSize.sm,
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontFamily: 'OpenSans_400Regular',
     marginTop: theme.spacing.xs,
   },
@@ -1158,7 +1188,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
   },
   showFoodButtonText: {
-    color: '#FFFFFF',
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
@@ -1169,7 +1199,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.sm,
   },
   useCurrentLocationLinkText: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
     textDecorationLine: 'underline',
@@ -1186,7 +1216,7 @@ const styles = StyleSheet.create({
     minWidth: 150,
   },
   manualEntryButtonText: {
-    color: '#FFFFFF',
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
@@ -1202,7 +1232,7 @@ const styles = StyleSheet.create({
     backgroundColor: 'transparent',
   },
   dontAllowButtonLinkText: {
-    color: PRIMARY_COLOR,
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',
@@ -1222,7 +1252,7 @@ const styles = StyleSheet.create({
     opacity: 0.6,
   },
   saveLocationButtonText: {
-    color: '#FFFFFF',
+    color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',

@@ -23,6 +23,7 @@ export type CartItem = {
 
 type CartContextType = {
   items: CartItem[];
+  isReady: boolean; // true once cart has hydrated from storage/session
   cartChefId: number | null; // Current chef ID for the cart (single-chef constraint)
   addToCart: (item: CartItem) => { success: boolean; error?: string };
   removeFromCart: (id: string | number) => void;
@@ -93,6 +94,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
       
       // If user changed (login or logout), switch carts
       if (userId !== previousUserId) {
+        setIsLoaded(false);
         userIdRef.current = userId;
         setCurrentUserId(userId);
         
@@ -101,6 +103,8 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
         
         // Load new user's cart
         await loadCartForUser(userId);
+
+        setIsLoaded(true);
         
         // If user logged out, also clear anonymous cart storage
         if (!userId && previousUserId) {
@@ -224,7 +228,7 @@ export const CartProvider = ({ children }: { children: React.ReactNode }) => {
 
   return (
     <CartContext.Provider
-      value={{ items, cartChefId, addToCart, removeFromCart, clearCart, setQuantity, setNotes, total, getQty, add, remove, clear }}
+      value={{ items, isReady: isLoaded, cartChefId, addToCart, removeFromCart, clearCart, setQuantity, setNotes, total, getQty, add, remove, clear }}
     >
       {children}
     </CartContext.Provider>
