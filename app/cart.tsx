@@ -445,40 +445,16 @@ export default function CartScreen() {
                 resizeMode="contain"
               />
             </View>
-            <Text style={styles.emptyCartTitle}>Your cart is empty!</Text>
-            <Text style={styles.emptyCartText}>
-              Find homemade meals near you
-            </Text>
+            <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
             <View style={styles.emptyCartButtons}>
-              <Link href="/browse?tab=dishes" asChild>
-              <TouchableOpacity style={styles.emptyCartButton}>
-                  <Text style={styles.emptyCartButtonText}>Explore homemade meals</Text>
-                </TouchableOpacity>
-              </Link>
-              <Link href="/browse?tab=chefs" asChild>
-                <TouchableOpacity style={styles.emptyCartButton}>
-                  <Text style={styles.emptyCartButtonText}>Browse popular chefs</Text>
+              <TouchableOpacity
+                style={[styles.emptyCartButton, styles.emptyCartButtonTransparent]}
+                onPress={() => router.push('/browse?tab=dishes')}
+              >
+                <Text style={styles.emptyCartButtonText}>Discover homemade meals</Text>
               </TouchableOpacity>
-            </Link>
             </View>
             <View style={styles.emptyCartFooterContainer}>
-              <View style={styles.emptyCartFooterLine}>
-                <TouchableOpacity onPress={() => {
-                  if (user) {
-                    setShowLocationModal(true);
-                  } else {
-                    Alert.alert("Login Required", "Please log in to set your location.");
-                    router.push('/auth');
-                  }
-                }}>
-                  <Text style={[styles.emptyCartFooterText, styles.emptyCartFooterLink]} numberOfLines={1}>
-                    Set your location to find nearby chefs
-                  </Text>
-                </TouchableOpacity>
-              </View>
-              <Text style={styles.emptyCartFooterText} numberOfLines={1}>
-                All meals are prepared by independent chefs
-              </Text>
             </View>
 
             {/* Location Modal */}
@@ -715,7 +691,9 @@ const styles = StyleSheet.create({
       default: theme.spacing.md,
     }),
     paddingTop: theme.spacing['2xl'],
-    paddingBottom: 0,
+    // Extra bottom space so the footer doesn't overlap the last content.
+    // The global `Screen` footer is pulled up with a negative margin.
+    paddingBottom: 100,
   },
   pageTitle: {
     color: TEXT_DARK,
@@ -951,9 +929,9 @@ const styles = StyleSheet.create({
   emptyCartTitle: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize['2xl'],
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontWeight: theme.typography.fontWeight.normal as any,
     marginBottom: theme.spacing.xs,
-    fontFamily: 'OpenSans_700Bold',
+    fontFamily: 'OpenSans_400Regular',
   },
   emptyCartText: {
     color: TEXT_DARK,
@@ -979,11 +957,14 @@ const styles = StyleSheet.create({
     minWidth: 200,
     maxWidth: 300,
   },
+  emptyCartButtonTransparent: {
+    backgroundColor: 'transparent',
+  },
   emptyCartButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
   },
   emptyCartFooterContainer: {
     marginTop: theme.spacing.md,

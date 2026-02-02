@@ -24,8 +24,9 @@ const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
 const BRAND_BLACK = '#33393A';
 const CART_ITEM_IMAGE_SIZE = 96;
-const CART_ITEM_IMAGE_BLOCK_WIDTH = CART_ITEM_IMAGE_SIZE + theme.spacing.lg;
-const CART_ITEM_CONTENT_LEFT = CART_ITEM_IMAGE_BLOCK_WIDTH + theme.spacing.md;
+const CART_ITEM_IMAGE_PAD = theme.spacing.sm;
+const CART_ITEM_CONTENT_LEFT = CART_ITEM_IMAGE_PAD + CART_ITEM_IMAGE_SIZE + theme.spacing.md;
+const CART_ITEM_MIN_HEIGHT = CART_ITEM_IMAGE_SIZE + CART_ITEM_IMAGE_PAD * 2 + theme.spacing.lg;
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -621,9 +622,10 @@ const styles = StyleSheet.create({
     borderColor: BORDER_COLOR,
     overflow: 'hidden',
     position: 'relative',
+    minHeight: CART_ITEM_MIN_HEIGHT,
     paddingLeft: CART_ITEM_CONTENT_LEFT,
     paddingRight: theme.spacing.lg,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.lg,
     paddingBottom: theme.spacing.xl,
   },
   cartItemContent: {
@@ -633,16 +635,21 @@ const styles = StyleSheet.create({
   },
   cartItemImageLink: {
     position: 'absolute',
-    left: 0,
-    top: 0,
-    bottom: 0,
-    width: CART_ITEM_IMAGE_BLOCK_WIDTH,
+    left: CART_ITEM_IMAGE_PAD,
+    top: CART_ITEM_IMAGE_PAD,
+    bottom: CART_ITEM_IMAGE_PAD,
+    width: CART_ITEM_IMAGE_SIZE,
+    borderRadius: theme.radius.lg,
+    overflow: 'hidden',
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: BORDER_COLOR,
   },
   cartItemImage: {
     width: '100%',
     height: '100%',
-    borderRadius: 0,
-    backgroundColor: '#f0f0f0',
+    borderRadius: theme.radius.lg,
+    backgroundColor: 'transparent',
   },
   cartItemInfo: {
     flex: 1,
