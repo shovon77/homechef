@@ -983,8 +983,8 @@ const styles = StyleSheet.create({
   emptyCartButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '300' as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   emptyCartSubtext: {
     color: TEXT_DARK,

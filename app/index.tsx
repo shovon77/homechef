@@ -1305,7 +1305,7 @@ const styles = StyleSheet.create({
     color: '#FFFFFF',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontWeight: '300' as any,
   },
   sellCtaText: {
     fontFamily: theme.typography.fontFamily.body,

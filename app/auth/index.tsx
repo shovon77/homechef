@@ -469,7 +469,7 @@ export default function AuthPage() {
               minWidth: 120,
               maxWidth: 200,
             }}>
-            <Text style={{ color: (mode === 'signup' && passwordStrength.count < 5) ? '#6B7280' : '#FFFFFF', fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>
+            <Text style={{ color: (mode === 'signup' && passwordStrength.count < 5) ? '#6B7280' : '#FFFFFF', fontWeight:'300' as any, fontFamily: theme.typography.fontFamily.body }}>
               {busy ? 'Please wait…' : (mode === 'signin' ? 'Login' : 'Sign-up')}
             </Text>
           </TouchableOpacity>
