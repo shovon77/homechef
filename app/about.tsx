@@ -78,14 +78,14 @@ export default function AboutPage() {
 
       <View style={styles.container}>
         <View style={styles.section}>
-          <Text style={[styles.heading, styles.headingOrange, isMobile && styles.headingMobile]}>Our Mission</Text>
+          <Text style={[styles.heading, styles.headingOrange, isMobile && styles.headingMobile]}>Our mission</Text>
           <Text style={styles.paragraph}>
             YourHomeChef connects passionate home cooks with people who appreciate authentic, handcrafted meals. We believe homemade food carries stories — of family, tradition, and culture — and our mission is to help those stories be shared within local communities.
           </Text>
         </View>
 
         <View style={styles.section}>
-          <Text style={styles.heading}>What We Do</Text>
+          <Text style={styles.heading}>What we do</Text>
           <Text style={styles.paragraph}>
             YourHomeChef is a marketplace that helps independent home chefs share their food with nearby customers by providing tools to:
           </Text>
@@ -100,7 +100,7 @@ export default function AboutPage() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.heading, styles.headingOrange]}>Our Values</Text>
+          <Text style={[styles.heading, styles.headingOrange]}>Our values</Text>
           <View style={styles.list}>
             <Text style={styles.listItem}>
               <Text style={styles.bold}>Authenticity</Text>{"\n"}
@@ -118,7 +118,7 @@ export default function AboutPage() {
         </View>
 
         <View style={styles.section}>
-          <Text style={[styles.heading, styles.headingOrange]}>Join Us</Text>
+          <Text style={[styles.heading, styles.headingOrange]}>Join us</Text>
           <Text style={styles.paragraph}>
             Whether you’re a cook ready to share your creations or someone searching for meals that taste like home, YourHomeChef is your place to discover, connect, and belong.
           </Text>

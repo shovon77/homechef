@@ -1,6 +1,6 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image, Alert, useWindowDimensions } from 'react-native';
 import { useRouter, Link, usePathname } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
@@ -25,9 +25,14 @@ const C = {
 };
 
 export default function AuthPage() {
+  const { width } = useWindowDimensions();
+  const isMobile = width < 768;
   const router = useRouter();
   const pathname = usePathname();
   const [mode, setMode] = useState<'signin'|'signup'>('signin');
+  const [firstName, setFirstName] = useState('');
+  const [lastName, setLastName] = useState('');
+  const [phone, setPhone] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
@@ -62,26 +67,26 @@ export default function AuthPage() {
 
   const passwordPolicy = useMemo(() => getPasswordPolicy(password), [password]);
   const passwordStrength = useMemo(() => {
-    // Score out of 5: length + 4 character classes
-    const classes =
+    // 5 criteria: 8+ chars, uppercase, lowercase, number, symbol
+    const count =
+      (passwordPolicy.minLenOk ? 1 : 0) +
       (passwordPolicy.hasLower ? 1 : 0) +
       (passwordPolicy.hasUpper ? 1 : 0) +
       (passwordPolicy.hasNumber ? 1 : 0) +
       (passwordPolicy.hasSymbol ? 1 : 0);
-    const lenScore = passwordPolicy.len >= 12 ? 1 : passwordPolicy.len >= 8 ? 0.6 : passwordPolicy.len >= 6 ? 0.3 : 0;
-    const raw = (classes / 4) * 0.8 + lenScore * 0.2; // 0..1
-    const pct = Math.round(raw * 100);
+    const pct = (count / 5) * 100;
     const label =
-      pct >= 80 ? 'Strong' :
-      pct >= 60 ? 'Good' :
-      pct >= 40 ? 'Weak' :
-      passwordPolicy.len > 0 ? 'Very weak' : '';
+      count === 5 ? 'Strong' :
+      count === 4 ? 'Good' :
+      count === 3 ? 'Fair' :
+      count === 2 ? 'Weak' :
+      count === 1 ? 'Very weak' : '';
     const color =
-      pct >= 80 ? '#16A34A' :
-      pct >= 60 ? '#22C55E' :
-      pct >= 40 ? '#F59E0B' :
+      count === 5 ? '#16A34A' :
+      count >= 4 ? '#22C55E' :
+      count >= 3 ? '#F59E0B' :
       '#EF4444';
-    return { pct, label, color };
+    return { count, pct, label, color };
   }, [passwordPolicy]);
 
   const isInvalidCredentialsError = (e: any) => {
@@ -168,20 +173,35 @@ export default function AuthPage() {
         return;
       }
 
-      if (mode === 'signup' && !passwordPolicy.meets) {
-        setErr('Please choose a stronger password that meets the requirements below.');
-        return;
+      if (mode === 'signup') {
+        const fn = firstName.trim();
+        const ln = lastName.trim();
+        if (!fn || !ln) {
+          setErr('Please enter your first name and last name.');
+          return;
+        }
+        if (!passwordPolicy.meets) {
+          setErr('Please choose a stronger password that meets the requirements below.');
+          return;
+        }
       }
 
       if (mode === 'signup') {
         const { error } = await supabase.auth.signUp({ email: emailNormalized, password });
         if (error) throw error;
+        const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(' ');
+        const phoneVal = phone.trim();
+        const res = await ensureUser({
+          ...(fullName ? { name: fullName } : {}),
+          ...(phoneVal ? { phone: phoneVal } : {}),
+        });
+        if (res?.error) console.warn('ensureUser:', res.error);
       } else {
         const { error } = await supabase.auth.signInWithPassword({ email: emailNormalized, password });
         if (error) throw error;
+        const res = await ensureUser();
+        if (res?.error) console.warn('ensureUser:', res.error);
       }
-      const res = await ensureUser();
-      if (res?.error) console.warn('ensureUser:', res.error);
       
       // Redirect will be handled by useEffect
     } catch (e:any) {
@@ -318,6 +338,54 @@ export default function AuthPage() {
 
         {/* Email / Password */}
         <View style={{ gap:10 }}>
+          {mode === 'signup' && (
+            <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 12 }}>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>First name</Text>
+                <TextInput
+                  value={firstName}
+                  onChangeText={setFirstName}
+                  autoCapitalize="words"
+                  style={{
+                    backgroundColor:'#FAFCFB',
+                    borderWidth:1, borderColor:C.border,
+                    color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body,
+                    ...Platform.select({ web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any }, default: {} }),
+                  }}
+                />
+              </View>
+              <View style={{ flex: 1, gap: 6 }}>
+                <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Last name</Text>
+                <TextInput
+                  value={lastName}
+                  onChangeText={setLastName}
+                  autoCapitalize="words"
+                  style={{
+                    backgroundColor:'#FAFCFB',
+                    borderWidth:1, borderColor:C.border,
+                    color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body,
+                    ...Platform.select({ web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any }, default: {} }),
+                  }}
+                />
+              </View>
+            </View>
+          )}
+          {mode === 'signup' && (
+            <View style={{ gap: 6 }}>
+              <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Phone number</Text>
+              <TextInput
+                value={phone}
+                onChangeText={setPhone}
+                keyboardType="phone-pad"
+                style={{
+                  backgroundColor:'#FAFCFB',
+                  borderWidth:1, borderColor:C.border,
+                  color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body,
+                  ...Platform.select({ web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any }, default: {} }),
+                }}
+              />
+            </View>
+          )}
           <View style={{ gap:6 }}>
             <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Email</Text>
             <TextInput
@@ -334,7 +402,8 @@ export default function AuthPage() {
               style={{
                 backgroundColor:'#FAFCFB',
                 borderWidth:1, borderColor:C.border,
-                color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body
+                color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body,
+                ...Platform.select({ web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any }, default: {} }),
               }}
             />
             {mode === 'signin' && resetSentTo && resetSentTo === emailNormalized ? (
@@ -363,7 +432,8 @@ export default function AuthPage() {
               style={{
                 backgroundColor:'#FAFCFB',
                 borderWidth:1, borderColor:C.border,
-                color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body
+                color:C.text, padding:12, borderRadius:12, fontFamily: theme.typography.fontFamily.body,
+                ...Platform.select({ web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any }, default: {} }),
               }}
             />
             {mode === 'signup' && (
@@ -379,7 +449,7 @@ export default function AuthPage() {
                     {passwordStrength.label ? `Strength: ${passwordStrength.label}` : ' '}
                   </Text>
                   <Text style={{ color: C.subtext, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
-                    {passwordPolicy.len > 0 ? `${passwordPolicy.len}/8+` : ' '}
+                    {passwordPolicy.len > 0 ? `${passwordStrength.count}/5` : ' '}
                   </Text>
                 </View>
               </View>
@@ -388,18 +458,18 @@ export default function AuthPage() {
 
           <TouchableOpacity
             onPress={doEmailPassword}
-            disabled={busy}
+            disabled={busy || (mode === 'signup' && passwordStrength.count < 5)}
             style={{
-              backgroundColor: busy ? '#FFCCBC' : C.primary,
+              backgroundColor: busy ? '#FFCCBC' : (mode === 'signup' && passwordStrength.count < 5) ? '#D1D5DB' : C.primary,
               paddingVertical:13, 
               paddingHorizontal:24,
               borderRadius:12, 
               alignItems:'center',
               alignSelf: 'center',
               minWidth: 120,
-              maxWidth: 200
+              maxWidth: 200,
             }}>
-            <Text style={{ color:'#FFFFFF', fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>
+            <Text style={{ color: (mode === 'signup' && passwordStrength.count < 5) ? '#6B7280' : '#FFFFFF', fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>
               {busy ? 'Please wait…' : (mode === 'signin' ? 'Login' : 'Sign-up')}
             </Text>
           </TouchableOpacity>

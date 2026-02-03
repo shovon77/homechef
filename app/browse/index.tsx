@@ -111,13 +111,17 @@ export default function BrowsePage() {
   const { q, tab: paramTab, sort: paramSort } = useLocalSearchParams<{ q?: string, tab?: string, sort?: string }>();
   const [tab, setTab] = useState<'dishes' | 'chefs' | 'cuisines'>('dishes');
   
-  // Initialize sortBy from URL param if present. Default to 'newest' (never auto-apply 'nearest' when user/location may be missing)
+  const validDishSorts = ['none', 'price_asc', 'price_desc', 'popular', 'newest', 'nearest'];
+  const validChefSorts = ['none', 'a_z', 'z_a', 'newest', 'popular'];
+  const validCuisineSorts = ['none', 'a_z', 'z_a'];
   const initialSort = (() => {
     const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
-    if (s === 'none' || s === 'price_asc' || s === 'price_desc' || s === 'popular' || s === 'newest' || s === 'nearest') {
-      return s;
-    }
-    return 'newest';
+    const t = Array.isArray(paramTab) ? paramTab[0] : paramTab;
+    if (t === 'chefs' && validChefSorts.includes(s as string)) return s;
+    if (t === 'cuisines' && validCuisineSorts.includes(s as string)) return s;
+    if ((t === 'dishes' || !t) && validDishSorts.includes(s as string)) return s;
+    if (t === 'cuisines') return 'none';
+    return t === 'chefs' ? 'none' : 'newest';
   })();
   
   const [sortBy, setSortBy] = useState(initialSort);
@@ -136,12 +140,15 @@ export default function BrowsePage() {
   
   useEffect(() => {
     const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
-    if (s === 'none' || s === 'price_asc' || s === 'price_desc' || s === 'popular' || s === 'newest' || s === 'nearest') {
+    const currentTab = tab || 'dishes';
+    if (currentTab === 'chefs' && validChefSorts.includes(s as string)) {
+      setSortBy(s);
+    } else if (currentTab === 'cuisines' && validCuisineSorts.includes(s as string)) {
+      setSortBy(s);
+    } else if (currentTab === 'dishes' && validDishSorts.includes(s as string)) {
       setSortBy(s);
     } else if (!s) {
-      // If no sort param, default based on tab (use 'newest' for dishes - never auto-apply 'nearest')
-      const currentTab = tab || 'dishes';
-      setSortBy(currentTab === 'dishes' ? 'newest' : 'none');
+      setSortBy(currentTab === 'dishes' ? 'newest' : currentTab === 'chefs' || currentTab === 'cuisines' ? 'none' : 'none');
     }
   }, [paramSort, tab]);
 
@@ -180,13 +187,12 @@ export default function BrowsePage() {
     }
   }, [showSortMenu]);
   
-  // When dishes tab is active and no sort is specified in URL, default to 'newest' (not 'nearest')
   useEffect(() => {
     const currentTab = tab || 'dishes';
     const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
-    if (currentTab === 'dishes' && !s && (sortBy === 'none' || !sortBy)) {
-      setSortBy('newest');
-    }
+    if (!s && currentTab === 'dishes' && (sortBy === 'none' || !sortBy)) setSortBy('newest');
+    if (!s && currentTab === 'chefs' && !validChefSorts.includes(sortBy as string)) setSortBy('none');
+    if (!s && currentTab === 'cuisines' && !validCuisineSorts.includes(sortBy as string)) setSortBy('none');
   }, [tab, paramSort]);
   
   const [page, setPage] = useState(1);
@@ -519,31 +525,61 @@ export default function BrowsePage() {
           setTotal(count ?? (data?.length ?? 0));
           }
         } else if (tab === 'chefs') {
+          const ninetyDaysAgo = new Date();
+          ninetyDaysAgo.setDate(ninetyDaysAgo.getDate() - 90);
+          const ninetyDaysAgoISO = ninetyDaysAgo.toISOString();
+
           let request = supabase
             .from('chefs')
-            .select('id,name,location,photo,rating,cuisine,bio', { count: 'exact' })
-            .eq('status', 'active')
-            .order('created_at', { ascending: false })
-            .range(from, to);
+            .select('id,name,location,photo,rating,cuisine,bio,created_at', { count: 'exact' })
+            .eq('status', 'active');
 
-          if (debouncedQuery.trim()) {
-            const term = cleanSearchQuery(debouncedQuery.trim());
-            const safeTerm = term.replace(/,/g, ' ');
-            // Use websearch_to_tsquery (wfts) for natural language search
-            const searchFilter = [
-              `name.ilike.%${safeTerm}%`,
-              `name.wfts.${safeTerm}`,
-              `location.wfts.${safeTerm}`,
-              `bio.wfts.${safeTerm}`
-            ].join(',');
-            request = request.or(searchFilter);
+          let skipFetch = false;
+          if (sortBy === 'newest') {
+            request = request.gte('created_at', ninetyDaysAgoISO).order('created_at', { ascending: false });
+          } else if (sortBy === 'popular') {
+            const { data: orderData } = await supabase
+              .from('orders')
+              .select('chef_id')
+              .gte('created_at', ninetyDaysAgoISO)
+              .not('chef_id', 'is', null)
+              .in('status', ['requested', 'pending', 'ready', 'paid', 'completed']);
+            if (cancelled) return;
+            const chefIds = [...new Set((orderData ?? []).map((o: any) => o.chef_id).filter(Boolean))];
+            if (chefIds.length === 0) {
+              setChefs([]);
+              setTotal(0);
+              skipFetch = true;
+            } else {
+              request = request.in('id', chefIds).order('created_at', { ascending: false });
+            }
+          } else if (sortBy === 'a_z') {
+            request = request.order('name', { ascending: true });
+          } else if (sortBy === 'z_a') {
+            request = request.order('name', { ascending: false });
+          } else {
+            request = request.order('created_at', { ascending: false });
           }
 
-          const { data, error, count } = await request;
-          if (cancelled) return;
-          if (error) throw error;
-          setChefs(data ?? []);
-          setTotal(count ?? (data?.length ?? 0));
+          if (!skipFetch) {
+            request = request.range(from, to);
+            if (debouncedQuery.trim()) {
+              const term = cleanSearchQuery(debouncedQuery.trim());
+              const safeTerm = term.replace(/,/g, ' ');
+              const searchFilter = [
+                `name.ilike.%${safeTerm}%`,
+                `name.wfts.${safeTerm}`,
+                `location.wfts.${safeTerm}`,
+                `bio.wfts.${safeTerm}`
+              ].join(',');
+              request = request.or(searchFilter);
+            }
+            const { data, error, count } = await request;
+            if (cancelled) return;
+            if (error) throw error;
+            setChefs(data ?? []);
+            setTotal(count ?? (data?.length ?? 0));
+          }
         } else {
           // Cuisines tab
           // Fetch active chefs to get available cuisines
@@ -568,7 +604,12 @@ export default function BrowsePage() {
             const splitCuisines = formattedCuisines.flatMap(s =>
               s.split(',').map(c => c.trim()).filter(Boolean)
             );
-            const uniqueCuisines = Array.from(new Set(splitCuisines)).sort();
+            let uniqueCuisines = Array.from(new Set(splitCuisines));
+            if (sortBy === 'a_z') {
+              uniqueCuisines = [...uniqueCuisines].sort((a, b) => a.localeCompare(b));
+            } else if (sortBy === 'z_a') {
+              uniqueCuisines = [...uniqueCuisines].sort((a, b) => b.localeCompare(a));
+            }
             // Manual pagination for cuisines since we do distinct client-side
             const pagedCuisines = uniqueCuisines.slice(from, to + 1);
             setCuisines(pagedCuisines);
@@ -672,12 +713,27 @@ export default function BrowsePage() {
           // @ts-ignore - web-specific
           onClick={(e: any) => e.stopPropagation()}
         >
-          {[
-            { label: 'None', value: 'none' },
-            { label: 'Nearest', value: 'nearest' },
-            { label: 'Price low to high', value: 'price_asc' },
-            { label: 'Price high to low', value: 'price_desc' },
-          ].map((opt) => (
+          {(tab === 'chefs'
+            ? [
+                { label: 'None', value: 'none' },
+                { label: 'Alphabetically A-Z', value: 'a_z' },
+                { label: 'Alphabetically Z-A', value: 'z_a' },
+                { label: 'Newest', value: 'newest' },
+                { label: 'Popular', value: 'popular' },
+              ]
+            : tab === 'cuisines'
+            ? [
+                { label: 'None', value: 'none' },
+                { label: 'Alphabetically A-Z', value: 'a_z' },
+                { label: 'Alphabetically Z-A', value: 'z_a' },
+              ]
+            : [
+                { label: 'None', value: 'none' },
+                { label: 'Nearest', value: 'nearest' },
+                { label: 'Price low to high', value: 'price_asc' },
+                { label: 'Price high to low', value: 'price_desc' },
+              ]
+          ).map((opt) => (
             <Pressable
               key={opt.value}
               style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
@@ -736,7 +792,7 @@ export default function BrowsePage() {
               </Pressable>
             </View>
 
-            {tab === 'dishes' && (
+            {(tab === 'dishes' || tab === 'chefs' || tab === 'cuisines') && (
               <View style={styles.tabsFilter}>
                 <View style={{ position: 'relative', flexShrink: 0, zIndex: 10001, overflow: 'visible' }}>
                   <View ref={sortButtonRef} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
@@ -776,12 +832,27 @@ export default function BrowsePage() {
                       onStartShouldSetResponder={() => true}
                       onResponderGrant={() => {}}
                     >
-                      {[
-                        { label: 'None', value: 'none' },
-                        { label: 'Nearest', value: 'nearest' },
-                        { label: 'Price low to high', value: 'price_asc' },
-                        { label: 'Price high to low', value: 'price_desc' },
-                      ].map((opt) => (
+                      {(tab === 'chefs'
+                        ? [
+                            { label: 'None', value: 'none' },
+                            { label: 'Alphabetically A-Z', value: 'a_z' },
+                            { label: 'Alphabetically Z-A', value: 'z_a' },
+                            { label: 'Newest', value: 'newest' },
+                            { label: 'Popular', value: 'popular' },
+                          ]
+                        : tab === 'cuisines'
+                        ? [
+                            { label: 'None', value: 'none' },
+                            { label: 'Alphabetically A-Z', value: 'a_z' },
+                            { label: 'Alphabetically Z-A', value: 'z_a' },
+                          ]
+                        : [
+                            { label: 'None', value: 'none' },
+                            { label: 'Nearest', value: 'nearest' },
+                            { label: 'Price low to high', value: 'price_asc' },
+                            { label: 'Price high to low', value: 'price_desc' },
+                          ]
+                      ).map((opt) => (
                         <Pressable
                           key={opt.value}
                           style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}

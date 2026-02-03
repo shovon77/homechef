@@ -1,6 +1,13 @@
 import { supabase } from './supabase';
 
-export async function ensureUser(): Promise<{ ok: boolean; error?: string }> {
+export type EnsureUserOptions = {
+  /** Override name for new sign-ups (e.g. from First name + Last name fields) */
+  name?: string;
+  /** Phone number from sign-up (stored in profiles.phone) */
+  phone?: string;
+};
+
+export async function ensureUser(options?: EnsureUserOptions): Promise<{ ok: boolean; error?: string }> {
   try {
     const { data: ud, error: authErr } = await supabase.auth.getUser();
     if (authErr) return { ok: false, error: `auth.getUser: ${authErr.message}` };
@@ -10,12 +17,13 @@ export async function ensureUser(): Promise<{ ok: boolean; error?: string }> {
     // Check if profile already exists to preserve existing fields
     const { data: existingProfile } = await supabase
       .from('profiles')
-      .select('name, is_chef, role, photo_url, is_admin, stripe_account_id, charges_enabled, location')
+      .select('name, is_chef, role, photo_url, is_admin, stripe_account_id, charges_enabled, location, phone')
       .eq('id', u.id)
       .maybeSingle();
 
-    // Only use metadata name if profile doesn't exist or name is null
-    const name = existingProfile?.name || 
+    // Prefer explicit name from options (e.g. sign-up form), then existing profile, then metadata
+    const name = (options?.name?.trim()) ||
+      existingProfile?.name || 
       (u.user_metadata?.name as string) ||
       (u.user_metadata?.full_name as string) ||
       (u.user_metadata?.display_name as string) ||
@@ -49,10 +57,14 @@ export async function ensureUser(): Promise<{ ok: boolean; error?: string }> {
       if (existingProfile.stripe_account_id !== undefined) profileData.stripe_account_id = existingProfile.stripe_account_id;
       if (existingProfile.charges_enabled !== undefined) profileData.charges_enabled = existingProfile.charges_enabled;
       if (existingProfile.location !== undefined) profileData.location = existingProfile.location;
+      if (existingProfile.phone !== undefined) profileData.phone = existingProfile.phone;
     } else {
       // New profile, set defaults
       profileData.is_chef = false;
       profileData.is_admin = false;
+    }
+    if (options?.phone?.trim() && (!existingProfile || existingProfile.phone == null)) {
+      profileData.phone = options.phone.trim();
     }
 
     const up2 = await supabase
