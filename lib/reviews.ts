@@ -207,6 +207,7 @@ export async function submitChefReview({
 
 /**
  * Get chef reviews with pagination
+ * Uses RPC get_chef_reviews_with_names to include user names for both logged-in and anonymous users
  */
 export async function getChefReviews(
   chefId: number,
@@ -214,9 +215,33 @@ export async function getChefReviews(
 ): Promise<ChefReview[]> {
   const { limit = 50, offset = 0 } = options;
 
+  const { data: reviews, error } = await supabase.rpc('get_chef_reviews_with_names', {
+    p_chef_id: chefId,
+    p_limit: limit,
+    p_offset: offset,
+  });
+
+  if (error) {
+    // Fallback to direct query if RPC not yet deployed (e.g. migration not run)
+    return getChefReviewsFallback(chefId, options);
+  }
+
+  return (reviews || []) as ChefReview[];
+}
+
+/**
+ * Fallback when RPC is not available - fetches reviews and profiles separately.
+ * Profiles may be empty for anonymous users due to RLS.
+ */
+async function getChefReviewsFallback(
+  chefId: number,
+  options: { limit?: number; offset?: number } = {}
+): Promise<ChefReview[]> {
+  const { limit = 50, offset = 0 } = options;
+
   let query = supabase
     .from('chef_reviews')
-    .select('id, chef_id, rating, comment, created_at, user_id') // Added user_id
+    .select('id, chef_id, rating, comment, created_at, user_id')
     .eq('chef_id', chefId)
     .order('created_at', { ascending: false });
 
@@ -231,22 +256,21 @@ export async function getChefReviews(
     return [];
   }
 
-  // If we have reviews, fetch the user names from profiles
   if (reviews && reviews.length > 0) {
     const userIds = [...new Set(reviews.map((r: any) => r.user_id).filter(Boolean))];
-    
+
     if (userIds.length > 0) {
       const { data: profiles } = await supabase
         .from('profiles')
         .select('id, name, email')
         .in('id', userIds);
-      
-      if (profiles) {
+
+      if (profiles && profiles.length > 0) {
         const profileMap = new Map(profiles.map((p: any) => [p.id, p.name || p.email || 'Anonymous']));
-        
+
         return reviews.map((r: any) => ({
           ...r,
-          user_name: r.user_id ? profileMap.get(r.user_id) : 'Anonymous',
+          user_name: r.user_id ? profileMap.get(r.user_id) || 'Anonymous' : 'Anonymous',
         })) as ChefReview[];
       }
     }

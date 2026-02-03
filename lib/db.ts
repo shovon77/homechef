@@ -244,8 +244,27 @@ export async function getDishRatings(dishId: number): Promise<DishRatingStats> {
 
 /**
  * Get dish reviews with user names
+ * Uses RPC get_dish_reviews_with_names to include user names for both logged-in and anonymous users
  */
 export async function getDishReviews(dishId: number, limit = 100): Promise<DishRating[]> {
+  const { data: ratings, error } = await supabase.rpc('get_dish_reviews_with_names', {
+    p_dish_id: dishId,
+    p_limit: limit,
+  });
+
+  if (error) {
+    // Fallback when RPC not yet deployed (e.g. migration not run)
+    return getDishReviewsFallback(dishId, limit);
+  }
+
+  return (ratings || []) as DishRating[];
+}
+
+/**
+ * Fallback when RPC is not available - fetches ratings and profiles separately.
+ * Profiles may be empty for anonymous users due to RLS.
+ */
+async function getDishReviewsFallback(dishId: number, limit = 100): Promise<DishRating[]> {
   const { data: ratings, error } = await supabase
     .from('dish_ratings')
     .select('*')
@@ -258,7 +277,6 @@ export async function getDishReviews(dishId: number, limit = 100): Promise<DishR
     return [];
   }
 
-  // Fetch profiles for names
   const userIds = [...new Set(ratings.map((r: any) => r.user_id).filter(Boolean))];
   const { data: profiles } = userIds.length > 0
     ? await supabase
@@ -267,11 +285,11 @@ export async function getDishReviews(dishId: number, limit = 100): Promise<DishR
         .in('id', userIds)
     : { data: [] };
 
-  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p.name || p.email]));
+  const profileMap = new Map((profiles || []).map((p: any) => [p.id, p.name || p.email || 'Anonymous']));
 
   return ratings.map((r: any) => ({
     ...r,
-    user_name: profileMap.get(r.user_id) || 'Anonymous',
+    user_name: r.user_id ? (profileMap.get(r.user_id) || 'Anonymous') : 'Anonymous',
   })) as DishRating[];
 }
 

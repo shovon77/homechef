@@ -1130,7 +1130,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   reviewerName: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.bold as any,
