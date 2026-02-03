@@ -118,7 +118,7 @@ export default function NavBar() {
   const router = useRouter()
   const { width } = useWindowDimensions()
   const isMobile = width < 768
-  const { isAdmin, isChef, user, profile, refreshRole } = useRole()
+  const { isAdmin, isChef, user, profile, refreshRole, hasProfileLocation } = useRole()
   const { items } = useCart()
   const { showLocationModal, setShowLocationModal } = useLocationModal()
   const params = useLocalSearchParams<{ id?: string; type?: string }>()
@@ -831,7 +831,7 @@ export default function NavBar() {
                   resizeMode="contain"
                 />
                 <Text style={styles.locationNavText} numberOfLines={1}>
-                  {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
+                  {hasProfileLocation && location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
                 </Text>
             </TouchableOpacity>
           )}
@@ -1104,7 +1104,7 @@ export default function NavBar() {
                 >
                   <Image source={require('../assets/locationnewicon.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>
-                    {location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
+                    {hasProfileLocation && location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
                   </Text>
                 </TouchableOpacity>
               )}

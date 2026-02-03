@@ -12,18 +12,18 @@ export default function TermsPage() {
     >
       <View style={styles.container}>
         <Text style={styles.title}>Customer Terms of Service & Marketplace Disclosure</Text>
-        <Text style={styles.lastUpdated}>Last Updated: January 27, 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: February 2, 2026</Text>
 
         <View style={styles.section}>
           <Text style={styles.paragraph}>
-            By accessing or using Your Home Chef (the "Platform"), you ("Customer") agree to the following Terms of Service ("Terms"). If you do not agree, do not use the Platform.
+            By accessing or using YourHomeChef (the "Platform"), you ("Customer") agree to the following Terms of Service ("Terms"). If you do not agree, do not use the Platform.
           </Text>
         </View>
 
         <View style={styles.section}>
           <Text style={styles.heading}>1. What the Platform Is (and Is Not)</Text>
           <Text style={styles.paragraph}>
-            1.1 Your Home Chef is an online marketplace that connects customers with independent, third-party food preparers ("Chefs").
+            1.1 YourHomeChef is an online marketplace that connects customers with independent, third-party food preparers ("Chefs").
           </Text>
           <Text style={styles.paragraph}>
             1.2 The Platform does not prepare, cook, package, store, inspect, or deliver food and has no responsibility for food preparation or safety.
@@ -181,7 +181,7 @@ export default function TermsPage() {
         <View style={styles.section}>
           <Text style={[styles.heading, styles.headingOrange]}>8. Limitation of Liability</Text>
           <Text style={styles.paragraph}>
-            8.1 To the maximum extent permitted by law, Your Home Chef shall not be liable for:
+            8.1 To the maximum extent permitted by law, YourHomeChef shall not be liable for:
           </Text>
           <View style={styles.list}>
             <Text style={styles.listItem}>• Foodborne illness</Text>

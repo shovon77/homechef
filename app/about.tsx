@@ -30,31 +30,53 @@ export default function AboutPage() {
   return (
     <Screen 
       contentStyle={styles.content}
+      contentPadding={0}
       style={{ backgroundColor: '#F2F0EF' }}
     >
       <View style={styles.container}>
         <Text style={styles.title}>About us</Text>
         
         <Text style={[styles.subtitle, isMobile && styles.subtitleMobile]}>YourHomeChef</Text>
+      </View>
 
+      {/* Hero full-bleed outside container so rounded corners aren't clipped */}
+      <View style={styles.heroOuter}>
         {loading ? (
-          <View style={[styles.heroImage, isMobile && styles.heroImageMobile, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
+          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
             <ActivityIndicator size="large" color={theme.colors.primary} />
           </View>
+        ) : Platform.OS === 'web' && bannerUrl ? (
+          <View
+            style={[
+              styles.heroWrapper,
+              isMobile && styles.heroImageMobile,
+              {
+                backgroundImage: `url(${bannerUrl})`,
+                backgroundSize: 'cover',
+                backgroundPosition: 'center',
+              } as any,
+            ]}
+          />
         ) : bannerUrl ? (
-          <Image 
-            source={{ uri: bannerUrl }} 
-            style={[styles.heroImage, isMobile && styles.heroImageMobile]}
-            resizeMode="cover"
-          />
+          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile]}>
+            <Image
+              source={{ uri: bannerUrl }}
+              style={[styles.heroImage, Platform.OS === 'web' && { objectPosition: 'center center' } as any]}
+              resizeMode="cover"
+            />
+          </View>
         ) : (
-          <Image 
-            source={require('../assets/About us.png')} 
-            style={[styles.heroImage, isMobile && styles.heroImageMobile]}
-            resizeMode="contain"
-          />
+          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile]}>
+            <Image
+              source={require('../assets/About us.png')}
+              style={styles.heroImage}
+              resizeMode="cover"
+            />
+          </View>
         )}
+      </View>
 
+      <View style={styles.container}>
         <View style={styles.section}>
           <Text style={[styles.heading, styles.headingOrange, isMobile && styles.headingMobile]}>Our Mission</Text>
           <Text style={styles.paragraph}>
@@ -143,11 +165,32 @@ const styles = StyleSheet.create({
   subtitleMobile: {
     marginBottom: 8,
   },
-  heroImage: {
+  heroOuter: {
+    maxWidth: 800,
+    width: '100%',
+    alignSelf: 'center',
+    paddingHorizontal: Platform.select({
+      web: theme.spacing['4xl'],
+      default: theme.spacing.lg,
+    }),
+    marginBottom: theme.spacing.lg,
+  },
+  heroWrapper: {
     width: '100%',
     height: 300,
-    borderRadius: theme.radius.xl,
-    marginBottom: theme.spacing.lg,
+    borderRadius: 24,
+    overflow: 'hidden',
+    position: 'relative' as const,
+  },
+  heroImage: {
+    position: 'absolute' as const,
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    width: '100%',
+    height: '100%',
+    borderRadius: 24,
   },
   heroImageMobile: {
     height: 180,

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import { View, Text, Image, TouchableOpacity, ScrollView, Platform, Alert, TextInput, StyleSheet, useWindowDimensions, Modal, ActivityIndicator } from "react-native";
 import { theme } from "../lib/theme";
 import { Link } from "expo-router";
@@ -9,8 +9,10 @@ import { Screen } from "../components/Screen";
 import { safeToFixed } from "../lib/number";
 import { formatCad } from "../lib/money";
 import { useRouter } from "expo-router";
+import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../lib/supabase";
 import { useRole } from "../hooks/useRole";
+import { useLocationModal } from "../context/LocationModalContext";
 import LocationPicker from "../components/LocationPicker";
 
 // Colors from HTML design
@@ -25,7 +27,8 @@ const BORDER_LIGHT = '#E5E7EB';
 export default function CartScreen() {
   const router = useRouter();
   const { items, isReady, setQuantity, removeFromCart, total } = useCart();
-  const { user, profile, refreshRole } = useRole();
+  const { user, profile, refreshRole, hasProfileLocation } = useRole();
+  const { setShowLocationModal: openNavbarLocationModal } = useLocationModal();
   const [chefNames, setChefNames] = useState<Map<number | null, string>>(new Map());
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
@@ -42,6 +45,13 @@ export default function CartScreen() {
   const [postalCode, setPostalCode] = useState("");
 
   const subtotal = total;
+
+  // Refresh profile when cart page gains focus (e.g. after returning from profile page)
+  useFocusEffect(
+    useCallback(() => {
+      refreshRole();
+    }, [refreshRole])
+  );
 
   // Load chef names for all items
   useEffect(() => {
@@ -429,11 +439,13 @@ export default function CartScreen() {
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
-      <View style={{ paddingBottom: 0 }}>
+      <View style={{ flex: 1, paddingBottom: 0 }}>
         <View style={[styles.container, isMobile && styles.containerMobile]}>
         {/* Breadcrumbs - REMOVED */}
-        {/* Page Heading */}
-        <Text style={styles.pageTitle}>Cart summary</Text>
+        {/* Page Heading - only show when cart has items */}
+        {items.length > 0 && (
+          <Text style={styles.pageTitle}>Cart summary</Text>
+        )}
 
         {items.length === 0 ? (
           <View style={styles.emptyCart}>
@@ -448,13 +460,22 @@ export default function CartScreen() {
             <Text style={styles.emptyCartTitle}>Your cart is empty</Text>
             <View style={styles.emptyCartButtons}>
               <TouchableOpacity
-                style={[styles.emptyCartButton, styles.emptyCartButtonTransparent]}
+                style={styles.emptyCartButton}
                 onPress={() => router.push('/browse?tab=dishes')}
               >
                 <Text style={styles.emptyCartButtonText}>Discover homemade meals</Text>
               </TouchableOpacity>
             </View>
+            <Text style={styles.emptyCartSubtext}>Pickup from local chefs nearby</Text>
             <View style={styles.emptyCartFooterContainer}>
+              {user && !hasProfileLocation && (
+                <TouchableOpacity
+                  style={styles.setLocationButton}
+                  onPress={() => openNavbarLocationModal(true)}
+                >
+                  <Text style={styles.setLocationButtonText}>Set location to find chefs near you</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Location Modal */}
@@ -906,15 +927,17 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_700Bold',
   },
   emptyCart: {
+    flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: theme.spacing.lg,
-    paddingBottom: 0,
+    paddingBottom: theme.spacing.lg,
     paddingHorizontal: theme.spacing['2xl'],
     borderWidth: 2,
     borderStyle: 'dashed',
     borderColor: BORDER_COLOR,
     borderRadius: theme.radius.lg,
+    minHeight: 280,
   },
   emptyCartIcon: {
     backgroundColor: 'transparent',
@@ -929,9 +952,9 @@ const styles = StyleSheet.create({
   emptyCartTitle: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize['2xl'],
-    fontWeight: theme.typography.fontWeight.normal as any,
-    marginBottom: theme.spacing.xs,
-    fontFamily: 'OpenSans_400Regular',
+    fontWeight: theme.typography.fontWeight.bold as any,
+    marginBottom: 48,
+    fontFamily: 'OpenSans_700Bold',
   },
   emptyCartText: {
     color: TEXT_DARK,
@@ -957,13 +980,29 @@ const styles = StyleSheet.create({
     minWidth: 200,
     maxWidth: 300,
   },
-  emptyCartButtonTransparent: {
-    backgroundColor: 'transparent',
-  },
   emptyCartButtonText: {
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.base,
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  emptyCartSubtext: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
+  },
+  setLocationButton: {
+    alignSelf: 'center',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    marginTop: theme.spacing.md,
+  },
+  setLocationButtonText: {
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
   },
   emptyCartFooterContainer: {

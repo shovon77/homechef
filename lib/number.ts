@@ -32,4 +32,3 @@ export function toFiniteNumberOrNull(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
-

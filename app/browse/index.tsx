@@ -4,6 +4,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import { useAuth } from '../../context/AuthContext';
+import { toFiniteNumberOrNull } from '../../lib/number';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
 import { theme, elev } from '../../lib/theme';
@@ -110,14 +111,13 @@ export default function BrowsePage() {
   const { q, tab: paramTab, sort: paramSort } = useLocalSearchParams<{ q?: string, tab?: string, sort?: string }>();
   const [tab, setTab] = useState<'dishes' | 'chefs' | 'cuisines'>('dishes');
   
-  // Initialize sortBy from URL param if present, or default to 'nearest' for dishes tab
+  // Initialize sortBy from URL param if present. Default to 'newest' (never auto-apply 'nearest' when user/location may be missing)
   const initialSort = (() => {
     const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
     if (s === 'none' || s === 'price_asc' || s === 'price_desc' || s === 'popular' || s === 'newest' || s === 'nearest') {
       return s;
     }
-    // Always default to 'nearest' (dishes tab is default)
-    return 'nearest';
+    return 'newest';
   })();
   
   const [sortBy, setSortBy] = useState(initialSort);
@@ -139,9 +139,9 @@ export default function BrowsePage() {
     if (s === 'none' || s === 'price_asc' || s === 'price_desc' || s === 'popular' || s === 'newest' || s === 'nearest') {
       setSortBy(s);
     } else if (!s) {
-      // If no sort param, default based on tab
+      // If no sort param, default based on tab (use 'newest' for dishes - never auto-apply 'nearest')
       const currentTab = tab || 'dishes';
-      setSortBy(currentTab === 'dishes' ? 'nearest' : 'none');
+      setSortBy(currentTab === 'dishes' ? 'newest' : 'none');
     }
   }, [paramSort, tab]);
 
@@ -180,14 +180,12 @@ export default function BrowsePage() {
     }
   }, [showSortMenu]);
   
-  // Ensure "nearest" sort is applied when dishes tab is active and no sort is specified in URL
-  // Only set if sortBy is 'none' or undefined to allow user to change it
-  // Don't override if paramSort is explicitly set (including 'nearest')
+  // When dishes tab is active and no sort is specified in URL, default to 'newest' (not 'nearest')
   useEffect(() => {
     const currentTab = tab || 'dishes';
     const s = Array.isArray(paramSort) ? paramSort[0] : paramSort;
     if (currentTab === 'dishes' && !s && (sortBy === 'none' || !sortBy)) {
-      setSortBy('nearest');
+      setSortBy('newest');
     }
   }, [tab, paramSort]);
   
@@ -324,7 +322,7 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location, cuisine)', { count: 'exact' })
+            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location, cuisine, latitude, longitude)', { count: 'exact' })
             .eq('chefs.status', 'active');
           if (cuisineFilter?.trim()) {
             request = request.ilike('chefs.cuisine', `%${cuisineFilter.trim()}%`);
@@ -372,8 +370,8 @@ export default function BrowsePage() {
             // Use sortBy state if it's set and not 'none'
             effectiveSort = sortBy;
           } else if (tab === 'dishes') {
-            // Default to 'nearest' for dishes tab if no sort is specified
-            effectiveSort = 'nearest';
+            // Default to 'newest' for dishes tab (never auto-apply 'nearest' when user/location may be missing)
+            effectiveSort = 'newest';
           } else {
             // Fallback to 'none' for other tabs
             effectiveSort = 'none';
@@ -423,94 +421,78 @@ export default function BrowsePage() {
           if (cancelled) return;
           if (error) throw error;
           
-          // If nearest sort, calculate distances and filter
-          if (effectiveSort === 'nearest' && profile?.location && data && Array.isArray(data) && data.length > 0) {
+          // If nearest sort, calculate distances using profile lat/lon (user) and chefs lat/lon
+          const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
+          const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
+          const hasUserCoords = profileLat !== null && profileLon !== null;
+          const hasUserLocation = !!(profile?.location?.trim());
+
+          if (effectiveSort === 'nearest' && profile && (hasUserCoords || hasUserLocation) && data && Array.isArray(data) && data.length > 0) {
             try {
-              console.log('Calculating distances for nearest sort. User location:', profile.location);
-              console.log('Total dishes to process:', data.length);
-              
-              // Geocode user location
-              const { data: userGeoData, error: userGeoError } = await supabase.functions.invoke('google-geocode-forward', {
-                body: { address: profile.location },
-              });
-              
-              console.log('User geocoding result:', { userGeoData, userGeoError });
-              
-              if (userGeoError) {
-                console.error('User geocoding error:', userGeoError);
-                setDishes([]);
-                setTotal(0);
-                return;
-              }
-              
-              if (userGeoData?.lat && userGeoData?.lng) {
-                const userLat = userGeoData.lat;
-                const userLng = userGeoData.lng;
-                
-                console.log('User coordinates:', { lat: userLat, lng: userLng });
-                
-                // Helper function to calculate distance using Haversine formula
-                const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
-                  const R = 6371; // Earth's radius in km
-                  const dLat = (lat2 - lat1) * Math.PI / 180;
-                  const dLng = (lng2 - lng1) * Math.PI / 180;
-                  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-                    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
-                    Math.sin(dLng / 2) * Math.sin(dLng / 2);
-                  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-                  return R * c;
-                };
-                
-                // Geocode chef locations and calculate distances
-                const dishesWithDistance = await Promise.all(
-                  (data as any[]).map(async (dish: any) => {
-                    if (!dish.chefs?.location) {
-                      console.log('Dish missing chef location:', dish.id);
-                      return { dish, distance: Infinity };
-                    }
-                    
-                    try {
-                      const { data: chefGeoData, error: chefGeoError } = await supabase.functions.invoke('google-geocode-forward', {
-                        body: { address: dish.chefs.location },
-                      });
-                      
-                      if (!chefGeoError && chefGeoData?.lat && chefGeoData?.lng) {
-                        const distance = calculateDistance(userLat, userLng, chefGeoData.lat, chefGeoData.lng);
-                        console.log(`Dish ${dish.id} - Chef location: ${dish.chefs.location}, Distance: ${distance.toFixed(2)}km`);
-                        return { dish, distance };
-                      } else {
-                        console.log('Chef geocoding failed:', { chefLocation: dish.chefs.location, chefGeoError, chefGeoData });
-                      }
-                    } catch (err) {
-                      console.error('Error geocoding chef location:', err, dish.chefs.location);
-                    }
-                    
-                    return { dish, distance: Infinity };
-                  })
-                );
-                
-                // Filter dishes within 50km and sort by distance
-                const nearbyDishes = dishesWithDistance
-                  .filter(({ distance }) => {
-                    const isNearby = distance <= 50;
-                    if (!isNearby) {
-                      console.log(`Dish filtered out - distance: ${distance.toFixed(2)}km`);
-                    }
-                    return isNearby;
-                  })
-                  .sort((a, b) => a.distance - b.distance)
-                  .map(({ dish }) => dish);
-                
-                console.log(`Filtered ${nearbyDishes.length} dishes within 50km out of ${dishesWithDistance.length} total`);
-                
-                setDishes(nearbyDishes);
-                setTotal(nearbyDishes.length);
+              // Get user coordinates: use profile lat/lon when available, else geocode
+              let userLat: number;
+              let userLng: number;
+              if (hasUserCoords) {
+                userLat = profileLat as number;
+                userLng = profileLon as number;
               } else {
-                console.error('Failed to geocode user location:', { userGeoError, userGeoData });
-                // If geocoding fails, don't show any dishes for nearest sort
-                setDishes([]);
-                setTotal(0);
+                const { data: userGeoData, error: userGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                  body: { address: profile!.location },
+                });
+                if (userGeoError || !userGeoData?.lat || !userGeoData?.lng) {
+                  setDishes([]);
+                  setTotal(0);
+                  return;
+                }
+                userLat = userGeoData.lat;
+                userLng = userGeoData.lng;
               }
+
+              const calculateDistance = (lat1: number, lng1: number, lat2: number, lng2: number): number => {
+                const R = 6371;
+                const dLat = (lat2 - lat1) * Math.PI / 180;
+                const dLng = (lng2 - lng1) * Math.PI / 180;
+                const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+                  Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+                  Math.sin(dLng / 2) * Math.sin(dLng / 2);
+                const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+                return R * c;
+              };
+
+              // Use chef's profile lat/lon (chefs table) when available; else geocode
+              const dishesWithDistance = await Promise.all(
+                (data as any[]).map(async (dish: any) => {
+                  const chefLat = toFiniteNumberOrNull(dish.chefs?.latitude);
+                  const chefLon = toFiniteNumberOrNull(dish.chefs?.longitude);
+                  if (chefLat !== null && chefLon !== null) {
+                    const distance = calculateDistance(userLat, userLng, chefLat, chefLon);
+                    return { dish, distance };
+                  }
+                  if (!dish.chefs?.location?.trim()) {
+                    return { dish, distance: Infinity };
+                  }
+                  try {
+                    const { data: chefGeoData, error: chefGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                      body: { address: dish.chefs.location },
+                    });
+                    if (!chefGeoError && chefGeoData?.lat != null && chefGeoData?.lng != null) {
+                      const distance = calculateDistance(userLat, userLng, chefGeoData.lat, chefGeoData.lng);
+                      return { dish, distance };
+                    }
+                  } catch {
+                    // ignore
+                  }
+                  return { dish, distance: Infinity };
+                })
+              );
+
+              const nearbyDishes = dishesWithDistance
+                .filter(({ distance }) => distance <= 50)
+                .sort((a, b) => a.distance - b.distance)
+                .map(({ dish }) => dish);
+
+              setDishes(nearbyDishes);
+              setTotal(nearbyDishes.length);
             } catch (distError) {
               console.error('Error calculating distances:', distError);
               // If error, don't show any dishes for nearest sort

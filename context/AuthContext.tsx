@@ -14,6 +14,8 @@ type AuthState = {
   isChef: boolean;
   user: { id: string; email?: string | null } | null;
   profile: Profile | null;
+  /** True only when profile.location (from DB, before chef fallback) is set. Use for "Set location" prompts. */
+  hasProfileLocation: boolean;
   refreshRole: () => Promise<void>;
 };
 
@@ -24,6 +26,7 @@ const AuthContext = createContext<AuthState>({
   isChef: false,
   user: null,
   profile: null,
+  hasProfileLocation: false,
   refreshRole: async () => {},
 });
 
@@ -35,6 +38,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     isChef: false,
     user: null,
     profile: null,
+    hasProfileLocation: false,
   });
 
   const fetchProfileAndRole = async (sessionUser: any) => {
@@ -47,6 +51,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           isChef: false,
           user: null,
           profile: null,
+          hasProfileLocation: false,
         });
         return;
       }
@@ -69,6 +74,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
 
       const profile = profileResult.data as Profile | null;
       const chefData = chefResult.data;
+      const profileLocationFromDb = (profileResult.data as any)?.location ?? '';
+      const hasProfileLocation = !!String(profileLocationFromDb).trim();
 
       // Use chef location if profile location is missing
       if (profile && !profile.location && chefData?.location) {
@@ -129,6 +136,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           email: sessionUser.email,
         },
         profile: profile || null,
+        hasProfileLocation,
       });
 
     } catch (e) {
