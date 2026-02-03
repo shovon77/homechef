@@ -763,9 +763,13 @@ const styles = StyleSheet.create({
   },
   tabContainer: {
     flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
     gap: theme.spacing['2xl'],
+    minHeight: 64,
+    paddingVertical: theme.spacing.lg,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER_LIGHT,
+    borderBottomColor: '#FFFFFF',
   },
   tab: {
     paddingVertical: theme.spacing.sm,

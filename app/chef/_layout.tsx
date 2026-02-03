@@ -15,16 +15,17 @@ export default function ChefLayout() {
   const { loading, user, isAdmin, isChef } = useRole();
 
   useEffect(() => {
-    if (!loading) {
+    if (!loading && pathname?.startsWith('/chef')) {
+      // Only run redirect logic when we're actually on a chef route (avoids redirecting when navigating away to /browse etc.)
+      const isChefDetailPage = pathname?.startsWith('/chef/') && pathname !== '/chef/' && !pathname?.startsWith('/chef/profile') && pathname !== '/chef/index';
+      const isChefDashboard = pathname === '/chef' || pathname === '/chef/' || pathname === '/chef/index';
+
       if (!user) {
+        // Allow unauthenticated access only to chef detail pages
+        if (isChefDetailPage) return;
         router.replace('/auth');
         return;
       }
-      
-      // Allow admins to view chef detail pages (e.g., /chef/[id], /chef/[id]/reviews)
-      // Only redirect from the chef dashboard (/chef or /chef/index)
-      const isChefDashboard = pathname === '/chef' || pathname === '/chef/' || pathname === '/chef/index';
-      const isChefDetailPage = pathname?.startsWith('/chef/') && pathname !== '/chef' && pathname !== '/chef/' && pathname !== '/chef/index';
       
       // If admin is trying to access chef dashboard, redirect to admin
       // But allow admins to view individual chef pages
