@@ -146,6 +146,26 @@ export default function CartScreen() {
     }
   }
 
+  async function handleDontAllow() {
+    setShowLocationModal(false);
+    setIsLocationInputFocused(false);
+    if (!user) return;
+    try {
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, null);
+      if (result.ok) {
+        setLocation("");
+        setCurrentLocation("");
+        setManualInputLocation("");
+        setStreetAddress("");
+        setPostalCode("");
+        await refreshRole();
+      }
+    } catch (e: any) {
+      console.error("Error clearing location:", e);
+    }
+  }
+
   async function handleSaveSelectedLocation() {
     if (!user || !selectedLocation.trim()) {
       Alert.alert("Error", "Please select a location first.");
@@ -580,10 +600,7 @@ export default function CartScreen() {
                   {locationView === 'default' && (
                     <TouchableOpacity
                       style={styles.dontAllowButtonLink}
-                      onPress={() => {
-                        setShowLocationModal(false);
-                        setIsLocationInputFocused(false);
-                      }}
+                      onPress={handleDontAllow}
                     >
                       <Text style={styles.dontAllowButtonLinkText}>Don't allow</Text>
                     </TouchableOpacity>
@@ -1134,8 +1151,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
     backgroundColor: PRIMARY_COLOR,
-    flex: 1,
-    minWidth: 150,
+    alignSelf: 'center',
+    maxWidth: 200,
   },
   enableLocationButtonDisabled: {
     opacity: 0.6,
@@ -1143,8 +1160,8 @@ const styles = StyleSheet.create({
   enableLocationButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   locationInputTitle: {
     fontSize: theme.typography.fontSize.base,
@@ -1194,6 +1211,15 @@ const styles = StyleSheet.create({
     fontFamily: 'OpenSans_400Regular',
     color: TEXT_DARK,
     backgroundColor: '#FFFFFF',
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        boxShadow: 'none' as any,
+      },
+      default: {},
+    }),
   },
   showFoodButton: {
     alignSelf: 'center',
@@ -1210,8 +1236,8 @@ const styles = StyleSheet.create({
   showFoodButtonText: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   useCurrentLocationLink: {
     alignSelf: 'center',
@@ -1231,15 +1257,15 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: 'transparent',
     flex: 1,
     minWidth: 150,
   },
   manualEntryButtonText: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   dontAllowButtonLink: {
     alignSelf: 'center',
@@ -1248,11 +1274,11 @@ const styles = StyleSheet.create({
     marginVertical: theme.spacing.md,
     borderRadius: theme.radius.lg,
     borderWidth: 1,
-    borderColor: PRIMARY_COLOR,
+    borderColor: '#FFFFFF',
     backgroundColor: 'transparent',
   },
   dontAllowButtonLinkText: {
-    color: TEXT_DARK,
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: 'OpenSans_700Bold',

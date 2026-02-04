@@ -242,6 +242,22 @@ export default function AdminProfilePage() {
             </View>
           </View>
 
+          {/* Terms and Legal Section */}
+          <View style={{ paddingTop: 20, borderTopWidth: 1, borderTopColor: "rgba(255,255,255,0.10)", gap: 12 }}>
+            <Text style={{ color: theme.colors.text, fontSize: 18, fontWeight: "700", marginBottom: 4 }}>Terms & legal</Text>
+            <Text style={{ color: theme.colors.textMuted, fontSize: 14, marginBottom: 8 }}>
+              By using the platform, you agree to our terms.
+            </Text>
+            <View style={{ gap: 12 }}>
+              <TouchableOpacity onPress={() => router.push('/terms')}>
+                <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Terms of Service</Text>
+              </TouchableOpacity>
+              <TouchableOpacity onPress={() => router.push('/terms')}>
+                <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Legal</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+
           {/* Save button */}
           <TouchableOpacity
             onPress={handleSave}

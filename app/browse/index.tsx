@@ -1487,8 +1487,8 @@ const styles = StyleSheet.create({
   },
   cuisineText: {
     fontSize: 13,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '300',
     color: '#33393A',
     textAlign: 'center',
   },

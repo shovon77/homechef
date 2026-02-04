@@ -637,7 +637,7 @@ export default function ProfilePage() {
                   }
                 }}
               >
-                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>Your Orders</Text>
+                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>Your orders</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.navItem, activeNavTab === "settings" && styles.navItemActive]}
@@ -771,7 +771,7 @@ export default function ProfilePage() {
                   {saving ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={styles.saveButtonText}>Save Changes</Text>
+                    <Text style={styles.saveButtonText}>Save</Text>
                   )}
                 </TouchableOpacity>
               </View>
@@ -830,6 +830,22 @@ export default function ProfilePage() {
                     placeholder="Search for your location..."
                     style={styles.locationPicker}
                   />
+                </View>
+
+                {/* Terms and Legal Section */}
+                <View style={[styles.settingsSection, { paddingTop: theme.spacing.xl, borderTopWidth: 1, borderTopColor: '#EAECF0' }]}>
+                  <Text style={[styles.settingsSectionTitle, { fontSize: 18, marginBottom: 12 }]}>Terms & legal</Text>
+                  <Text style={{ color: '#667085', fontSize: 14, marginBottom: 12 }}>
+                    By using the platform, you agree to our terms.
+                  </Text>
+                  <View style={{ gap: 12, marginBottom: 16 }}>
+                    <TouchableOpacity onPress={() => router.push('/terms')}>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Terms of Service</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => router.push('/terms')}>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Legal</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
 
                 <View style={styles.actionButtons}>
@@ -1273,7 +1289,7 @@ const styles = StyleSheet.create({
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: '300',
     fontFamily: theme.typography.fontFamily.body,
   },
   actionButtons: {
@@ -1282,7 +1298,7 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.xl,
   },
   logoutButton: {
-    flex: 1,
+    maxWidth: 120,
     backgroundColor: theme.colors.primary,
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
@@ -1293,11 +1309,11 @@ const styles = StyleSheet.create({
   logoutButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: '300',
     fontFamily: theme.typography.fontFamily.body,
   },
   deleteButton: {
-    flex: 1,
+    maxWidth: 120,
     backgroundColor: theme.colors.primary,
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
@@ -1308,7 +1324,7 @@ const styles = StyleSheet.create({
   deleteButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: '300',
     fontFamily: theme.typography.fontFamily.body,
   },
   // Mobile Styles

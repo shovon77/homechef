@@ -340,13 +340,22 @@ export default function NavBar() {
     }
   }, [profile?.location]);
 
-  // Load location when modal opens
+  // Track when modal was last closed so we only reset view on open, not on effect re-runs
+  const prevShowLocationModalRef = React.useRef(false);
+
+  // Load location when modal opens (only reset view when modal transitions from closed to open)
   useEffect(() => {
     if (showLocationModal && user) {
       loadLocation();
-      setLocationView('default');
-      setStreetAddress("");
-      setPostalCode("");
+      // Only reset to default view when modal first opens, not when effect re-runs (e.g. user ref change)
+      if (!prevShowLocationModalRef.current) {
+        setLocationView('default');
+        setStreetAddress("");
+        setPostalCode("");
+      }
+      prevShowLocationModalRef.current = true;
+    } else {
+      prevShowLocationModalRef.current = false;
     }
   }, [showLocationModal, user]);
 
@@ -656,6 +665,26 @@ export default function NavBar() {
       Alert.alert("Error", e.message || "Failed to save location. Please try again.");
     } finally {
       setSavingLocation(false);
+    }
+  }
+
+  async function handleDontAllow() {
+    setShowLocationModal(false);
+    setIsLocationInputFocused(false);
+    if (!user) return;
+    try {
+      const { updateLocationWithCoordinates } = await import('../lib/updateLocation');
+      const result = await updateLocationWithCoordinates(user.id, null);
+      if (result.ok) {
+        setLocation("");
+        setCurrentLocation("");
+        setManualInputLocation("");
+        setStreetAddress("");
+        setPostalCode("");
+        await refreshRole();
+      }
+    } catch (e: any) {
+      console.error("Error clearing location:", e);
     }
   }
 
@@ -1521,10 +1550,7 @@ export default function NavBar() {
             {locationView === 'default' && (
               <TouchableOpacity
                 style={styles.dontAllowButtonLink}
-                onPress={() => {
-                  setShowLocationModal(false);
-                  setIsLocationInputFocused(false);
-                }}
+                onPress={handleDontAllow}
               >
                 <Text style={styles.dontAllowButtonLinkText}>Don't allow</Text>
               </TouchableOpacity>
@@ -2171,7 +2197,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
     backgroundColor: PRIMARY_COLOR,
-    width: '100%',
+    alignSelf: 'center',
+    maxWidth: 200,
   },
   enableLocationButtonDisabled: {
     opacity: 0.6,
@@ -2179,8 +2206,8 @@ const styles = StyleSheet.create({
   enableLocationButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   locationInputTitle: {
     fontSize: theme.typography.fontSize.base,
@@ -2194,16 +2221,16 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
-    backgroundColor: PRIMARY_COLOR,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
     width: '100%',
   },
   manualEntryButtonText: {
-    color: '#FFFFFF',
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   dontAllowButtonLink: {
     paddingVertical: theme.spacing.sm,
@@ -2212,11 +2239,11 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     marginBottom: theme.spacing.md,
     borderWidth: 1,
-    borderColor: PRIMARY_COLOR,
+    borderColor: '#FFFFFF',
     borderRadius: theme.radius.lg,
   },
   dontAllowButtonLinkText: {
-    color: '#9CA3AF',
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: '600' as any,
     fontFamily: theme.typography.fontFamily.body,
@@ -2242,6 +2269,15 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     backgroundColor: '#FFFFFF',
     fontFamily: theme.typography.fontFamily.body,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        boxShadow: 'none' as any,
+      },
+      default: {},
+    }),
   },
   showFoodButton: {
     backgroundColor: PRIMARY_COLOR,
@@ -2257,8 +2293,8 @@ const styles = StyleSheet.create({
   showFoodButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700' as any,
-    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   useCurrentLocationLink: {
     paddingVertical: 12,

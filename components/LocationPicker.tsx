@@ -259,6 +259,15 @@ const styles = StyleSheet.create({
     color: '#101828',
     backgroundColor: '#FFFFFF',
     paddingRight: 40,
+    ...Platform.select({
+      web: {
+        outlineStyle: 'none' as any,
+        outlineWidth: 0,
+        outlineColor: 'transparent',
+        boxShadow: 'none' as any,
+      },
+      default: {},
+    }),
   },
   loaderContainer: {
     position: 'absolute',
