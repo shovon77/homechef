@@ -1,6 +1,9 @@
 // lib/notifications.ts
 import { supabase } from './supabase';
 
+// SMS is sent via database trigger (trigger_send_notification_sms) on notifications INSERT.
+// No client-side invoke needed - more reliable.
+
 export type NotificationType = 
   | 'welcome'
   | 'order_placed'

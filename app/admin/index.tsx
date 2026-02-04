@@ -49,7 +49,7 @@ export default function AdminPage() {
   // Ensure fixed elements are not rendered on mobile
   const shouldShowFixedElements = !isMobile;
   const { tab } = useLocalSearchParams<{ tab?: string }>();
-  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'finance', 'issues', 'app-settings'];
+  const tabKeys = ['overview', 'orders', 'chefs', 'users', 'finance', 'issues', 'notifications', 'app-settings'];
   const initialTabIdx = tabKeys.indexOf(tab || 'overview');
   const safeInitial = initialTabIdx >= 0 ? initialTabIdx : 0;
   const { isAdmin, loading: adminLoading, user, profile } = useRole();
@@ -101,6 +101,17 @@ export default function AdminPage() {
   const [showSnapshotDropdown, setShowSnapshotDropdown] = useState(false);
   const [showFinanceDropdown, setShowFinanceDropdown] = useState(false);
   const [financeOrderSearch, setFinanceOrderSearch] = useState('');
+  const [notificationRecipientFilter, setNotificationRecipientFilter] = useState<string>('all');
+  const [showNotificationRecipientDropdown, setShowNotificationRecipientDropdown] = useState(false);
+  const [adminNotifications, setAdminNotifications] = useState<Array<{
+    id: string;
+    user_id: string;
+    type: string;
+    title: string;
+    message: string;
+    created_at: string;
+    user_name: string | null;
+  }>>([]);
 
   // Persist issueActions to localStorage whenever it changes
   useEffect(() => {
@@ -557,6 +568,27 @@ export default function AdminPage() {
       setUsers(usersWithStats || []);
       setApplications((applicationRows as any[]) || []);
       setIssues(issuesWithImages);
+
+      // Load all notifications for admin log (requires admin RLS policy)
+      const { data: notificationsData } = await supabase
+        .from('notifications')
+        .select('id, user_id, type, title, message, created_at')
+        .order('created_at', { ascending: false })
+        .limit(500);
+      
+      if (notificationsData && notificationsData.length > 0) {
+        const userIds = [...new Set(notificationsData.map((n: any) => n.user_id).filter(Boolean))];
+        const { data: profilesData } = userIds.length > 0
+          ? await supabase.from('profiles').select('id, name, email').in('id', userIds)
+          : { data: [] };
+        const nameMap = new Map((profilesData || []).map((p: any) => [p.id, (p.name || p.email || 'Unknown').trim() || 'Unknown']));
+        setAdminNotifications(notificationsData.map((n: any) => ({
+          ...n,
+          user_name: nameMap.get(n.user_id) ?? 'Unknown',
+        })));
+      } else {
+        setAdminNotifications([]);
+      }
       
       // Fetch actionable counts
       // Count issues pending review (status is 'pending' or 'reviewing')
@@ -3120,6 +3152,78 @@ export default function AdminPage() {
     }
   }
 
+  function formatNotificationType(type: string): string {
+    return (type || '')
+      .split('_')
+      .map((w) => w.charAt(0).toUpperCase() + w.slice(1).toLowerCase())
+      .join(' ');
+  }
+
+  const NotificationsTab = (
+    <View style={styles.issuesTabWrapper}>
+      <ScrollView contentContainerStyle={[styles.tabScroll, styles.issuesTabScrollContent]} horizontal>
+        <View style={styles.issuesTabInner}>
+          {loading && adminNotifications.length === 0 ? (
+            <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
+          ) : adminNotifications.length === 0 ? (
+            <View style={styles.emptyState}><Text style={styles.emptyText}>No notifications sent yet.</Text></View>
+          ) : (
+            <View style={styles.tableContainer}>
+              <View style={[styles.tableHeader, !isMobile && { minWidth: 1100 }]}>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
+                  <Text style={styles.tableHeaderCellText}>User name</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }]}>
+                  <Text style={styles.tableHeaderCellText}>Notification time</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }]}>
+                  <Text style={styles.tableHeaderCellText}>Notification type</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 280, minWidth: 280 } : { flex: 2 }]}>
+                  <Text style={styles.tableHeaderCellText}>Notification text in app</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Notification text in SMS</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
+                  <Text style={styles.tableHeaderCellText}>Email sent</Text>
+                </View>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
+                  <Text style={styles.tableHeaderCellText}>SMS sent</Text>
+                </View>
+              </View>
+              {adminNotifications.map((n) => (
+                <View key={n.id} style={[styles.tableRow, !isMobile && { minWidth: 1100 }]}>
+                  <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]} numberOfLines={1}>
+                    {n.user_name ?? 'Unknown'}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.createdCell]}>
+                    {formatEst(n.created_at)}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }]} numberOfLines={1}>
+                    {formatNotificationType(n.type)}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 280, minWidth: 280 } : { flex: 2 }]}>
+                    {n.title ? `${n.title}: ${n.message}` : n.message}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }, { color: palette.muted }]}>
+                    —
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, { color: palette.muted }]}>
+                    —
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, { color: palette.muted }]}>
+                    —
+                  </Text>
+                </View>
+              ))}
+            </View>
+          )}
+        </View>
+      </ScrollView>
+    </View>
+  );
+
   const AppSettingsTab = (
     <ScrollView contentContainerStyle={styles.tabScroll}>
       <View style={styles.chartCard}>
@@ -3297,6 +3401,156 @@ export default function AdminPage() {
           )}
         </View>
       </View>
+
+      {/* Platform notifications reference */}
+      {(() => {
+        const notificationItems = [
+          { type: 'welcome', title: 'Welcome', recipient: 'New user', scenario: 'When a user signs up or completes profile creation. Shown as a welcome message with platform intro.' },
+          { type: 'order_placed', title: 'Order placed', recipient: 'Customer', scenario: 'When a customer completes checkout and payment succeeds. Confirms the order was placed and the chef will start preparing.' },
+          { type: 'order_ready', title: 'Order ready for pickup', recipient: 'Customer', scenario: 'When the chef marks an order as "ready". Tells the customer to collect the order from the chef.' },
+          { type: 'order_message', title: 'New message in order', recipient: 'Customer or chef', scenario: 'When a customer sends a message about an order (from order success or track page), the chef is notified. When a chef sends a message from the chef dashboard, the customer is notified.' },
+          { type: 'order_issue_updated', title: 'Order issue updated', recipient: 'Customer', scenario: 'When an admin updates the status of a reported issue (e.g. refunded, in review). Notifies the customer of the update.' },
+          { type: 'issue_reported', title: 'Issue reported', recipient: 'Admins', scenario: 'When a customer reports an issue with an order from the order tracking page. All admins are notified to review.' },
+          { type: 'chef_request', title: 'New chef request', recipient: 'Admins', scenario: 'When a user submits a chef application (becomes a chef). All admins are notified to review the application.' },
+          { type: 'chef_application_submitted', title: 'Chef application submitted', recipient: 'Applicant', scenario: 'When a user successfully submits their chef application. Confirms receipt and that it will be reviewed.' },
+          { type: 'chef_application_approved', title: 'Chef application approved', recipient: 'Chef', scenario: 'When an admin approves a chef application. The applicant is notified they can start listing dishes.' },
+          { type: 'chef_application_rejected', title: 'Chef application rejected', recipient: 'Chef', scenario: 'When an admin rejects a chef application. The applicant is notified of the decision.' },
+          { type: 'new_order_request', title: 'New order request', recipient: 'Chef', scenario: 'When a customer places an order and payment succeeds. The chef is notified to review and respond to the order.' },
+          { type: 'new_user_signup', title: 'New user signup', recipient: 'Admins', scenario: 'When a new user creates an account (database trigger on profiles insert). All admins are notified.' },
+          { type: 'review_reply', title: 'Chef replied to your review', recipient: 'Customer', scenario: 'When a chef replies to a customer review on the chef dashboard. The reviewer is notified of the reply.' },
+        ];
+        const recipientOrder = [...new Set(notificationItems.map((i) => i.recipient))].sort((a, b) => a.localeCompare(b));
+        const grouped = recipientOrder.reduce<{ [key: string]: typeof notificationItems }>((acc, r) => {
+          acc[r] = notificationItems.filter((i) => i.recipient === r);
+          return acc;
+        }, {});
+        const recipientOptions = [{ value: 'all', label: 'All' }, ...recipientOrder.map((r) => ({ value: r, label: r }))];
+        const displayedRecipients = notificationRecipientFilter === 'all' ? recipientOrder : [notificationRecipientFilter];
+        return (
+          <View style={styles.chartCard}>
+            <View style={styles.chartHeader}>
+              <Text style={styles.chartTitle}>Platform notifications</Text>
+              <Text style={styles.chartSubtitle}>All notification types the platform triggers and when they fire</Text>
+            </View>
+            <View style={styles.searchWrapper}>
+              <View style={{ marginBottom: 16, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                <Text style={{ fontSize: 14, color: palette.muted, fontFamily: theme.typography.fontFamily.body }}>Recipient:</Text>
+                <View style={[styles.dateFilterDropdownWrapper, { zIndex: 9999 }]}>
+                  <TouchableOpacity
+                    style={[styles.dateFilterDropdownButton, { minWidth: 160 }]}
+                    onPress={() => setShowNotificationRecipientDropdown(!showNotificationRecipientDropdown)}
+                  >
+                    <Text style={styles.dateFilterDropdownButtonText}>
+                      {notificationRecipientFilter === 'all' ? 'All' : notificationRecipientFilter}
+                    </Text>
+                  </TouchableOpacity>
+                  {showNotificationRecipientDropdown && (
+                    <>
+                      {isMobile ? (
+                        <Modal
+                          visible={showNotificationRecipientDropdown}
+                          transparent
+                          animationType="fade"
+                          onRequestClose={() => setShowNotificationRecipientDropdown(false)}
+                        >
+                          <TouchableOpacity
+                            style={styles.dateFilterModalOverlay}
+                            activeOpacity={1}
+                            onPress={() => setShowNotificationRecipientDropdown(false)}
+                          >
+                            <TouchableOpacity activeOpacity={1} onPress={(e) => e.stopPropagation()}>
+                              <ScrollView style={styles.dateFilterDropdownMenuMobile} contentContainerStyle={{ paddingVertical: 4 }}>
+                                {recipientOptions.map((opt, idx) => (
+                                  <TouchableOpacity
+                                    key={opt.value}
+                                    style={[
+                                      styles.dateFilterDropdownOption,
+                                      idx === recipientOptions.length - 1 && styles.dateFilterDropdownOptionLast,
+                                    ]}
+                                    onPress={() => {
+                                      setNotificationRecipientFilter(opt.value);
+                                      setShowNotificationRecipientDropdown(false);
+                                    }}
+                                  >
+                                    <Text style={[styles.dateFilterDropdownOptionText, notificationRecipientFilter === opt.value && { color: palette.primary, fontWeight: '700' }]}>
+                                      {opt.label}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </ScrollView>
+                            </TouchableOpacity>
+                          </TouchableOpacity>
+                        </Modal>
+                      ) : (
+                        <>
+                          <TouchableOpacity
+                            style={styles.dateFilterDropdownOverlay}
+                            activeOpacity={1}
+                            onPress={() => setShowNotificationRecipientDropdown(false)}
+                          />
+                          <View style={styles.dateFilterDropdownMenu}>
+                            {recipientOptions.map((opt, idx) => (
+                              <TouchableOpacity
+                                key={opt.value}
+                                style={[
+                                  styles.dateFilterDropdownOption,
+                                  idx === recipientOptions.length - 1 && styles.dateFilterDropdownOptionLast,
+                                ]}
+                                onPress={() => {
+                                  setNotificationRecipientFilter(opt.value);
+                                  setShowNotificationRecipientDropdown(false);
+                                }}
+                              >
+                                <Text style={[styles.dateFilterDropdownOptionText, notificationRecipientFilter === opt.value && { color: palette.primary, fontWeight: '700' }]}>
+                                  {opt.label}
+                                </Text>
+                              </TouchableOpacity>
+                            ))}
+                          </View>
+                        </>
+                      )}
+                    </>
+                  )}
+                </View>
+              </View>
+              <View style={{ gap: 24 }}>
+                {displayedRecipients.map((recipient) => {
+                  const items = grouped[recipient] || [];
+                  if (items.length === 0) return null;
+                  return (
+                    <View key={recipient} style={{ gap: 12 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '600', color: palette.text, fontFamily: theme.typography.fontFamily.body }}>
+                        {recipient}
+                      </Text>
+                      <View style={{ gap: 12 }}>
+                        {items.map((item) => (
+                          <View
+                            key={item.type}
+                            style={{
+                              padding: 12,
+                              backgroundColor: '#F8FAFC',
+                              borderRadius: 8,
+                              borderLeftWidth: 4,
+                              borderLeftColor: palette.primary,
+                            }}
+                          >
+                            <Text style={{ fontWeight: '600', color: palette.text, marginBottom: 4, fontFamily: theme.typography.fontFamily.body }}>
+                              {item.title}
+                            </Text>
+                            <Text style={{ fontSize: 14, color: palette.text, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>
+                              {item.scenario}
+                            </Text>
+                          </View>
+                        ))}
+                      </View>
+                    </View>
+                  );
+                })}
+              </View>
+            </View>
+          </View>
+        );
+      })()}
     </ScrollView>
   );
 
@@ -4351,6 +4605,7 @@ export default function AdminPage() {
             { key: 'users', title: 'Users', content: UsersTab },
             { key: 'finance', title: 'Finance', content: FinanceTab },
             { key: 'issues', title: 'Issues', content: IssuesTab },
+            { key: 'notifications', title: 'Notifications', content: NotificationsTab },
             { key: 'app-settings', title: 'App settings', content: AppSettingsTab },
           ]}
         />
