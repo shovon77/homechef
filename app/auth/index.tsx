@@ -302,6 +302,7 @@ export default function AuthPage() {
         <View>
           <Animated.View style={{ transform: [{ scale: googleButtonScale }] }}>
             <TouchableOpacity
+              testID="auth-google"
               onPress={doGoogle}
               disabled={googleLoading}
               activeOpacity={0.7}
@@ -343,6 +344,7 @@ export default function AuthPage() {
               <View style={{ flex: 1, gap: 6 }}>
                 <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>First name</Text>
                 <TextInput
+                  testID="auth-first-name"
                   value={firstName}
                   onChangeText={setFirstName}
                   autoCapitalize="words"
@@ -357,6 +359,7 @@ export default function AuthPage() {
               <View style={{ flex: 1, gap: 6 }}>
                 <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Last name</Text>
                 <TextInput
+                  testID="auth-last-name"
                   value={lastName}
                   onChangeText={setLastName}
                   autoCapitalize="words"
@@ -374,6 +377,7 @@ export default function AuthPage() {
             <View style={{ gap: 6 }}>
               <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Phone number</Text>
               <TextInput
+                testID="auth-phone"
                 value={phone}
                 onChangeText={setPhone}
                 keyboardType="phone-pad"
@@ -389,6 +393,7 @@ export default function AuthPage() {
           <View style={{ gap:6 }}>
             <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Email</Text>
             <TextInput
+              testID="auth-email"
               value={email}
               onChangeText={(v) => {
                 setEmail(v);
@@ -425,6 +430,7 @@ export default function AuthPage() {
               )}
             </View>
             <TextInput
+              testID="auth-password"
               value={password}
               onChangeText={setPassword}
               placeholder="••••••••"
@@ -457,6 +463,7 @@ export default function AuthPage() {
           </View>
 
           <TouchableOpacity
+            testID="auth-submit"
             onPress={doEmailPassword}
             disabled={busy || (mode === 'signup' && passwordStrength.count < 5)}
             style={{
@@ -475,7 +482,7 @@ export default function AuthPage() {
           </TouchableOpacity>
 
           {/* Toggle sign-in / sign-up */}
-          <TouchableOpacity onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
+          <TouchableOpacity testID="auth-toggle" onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
             <Text style={{ color:C.link, textAlign:'center', marginTop:6, fontFamily: theme.typography.fontFamily.body }}>
               {mode === 'signin' ? 'New to YourHomeChef? Sign-up' : 'Already have a profile? Login.'}
             </Text>

@@ -51,5 +51,8 @@ node_modules
 .env.local
 .env.development.local
 .env.production.local
+.env.test
 
 .vercel
+e2e-results
+test-results
