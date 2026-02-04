@@ -535,15 +535,18 @@ export default function CheckoutPage() {
           style={{
             backgroundColor: PRIMARY_COLOR,
             paddingVertical: 16,
+            paddingHorizontal: 24,
             borderRadius: 12,
             alignItems: 'center',
+            alignSelf: 'center',
+            maxWidth: 200,
             opacity: (submitting || !isFormValid) ? 0.6 : 1,
           }}
         >
           {submitting ? (
             <ActivityIndicator color="#FFFFFF" />
           ) : (
-            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '800', fontFamily: 'OpenSans_700Bold' }}>
+            <Text style={{ color: '#FFFFFF', fontSize: 16, fontWeight: '300', fontFamily: theme.typography.fontFamily.body }}>
               {!isFormValid ? 'Order' : 'Order'}
             </Text>
           )}
@@ -604,6 +607,8 @@ const styles = StyleSheet.create({
     paddingVertical: 12,
     paddingHorizontal: 24,
     borderRadius: 999,
+    alignSelf: 'center',
+    maxWidth: 200,
   },
   emptyButtonText: {
     color: '#FFFFFF',

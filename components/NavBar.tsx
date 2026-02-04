@@ -834,7 +834,7 @@ export default function NavBar() {
                   <Text style={StyleSheet.flatten([
                     styles.navLinkText, 
                     isOrderActive && { color: PRIMARY_COLOR }
-                  ])}>Order</Text>
+                  ])}>Orders</Text>
                 {hasReadyOrder ? <View style={{ width: 8, height: 8, borderRadius: 4, backgroundColor: PRIMARY_COLOR }} /> : null}
               </TouchableOpacity>
             </Link>
@@ -2315,7 +2315,7 @@ const styles = StyleSheet.create({
     padding: theme.spacing.xl,
     borderTopWidth: 1,
     borderTopColor: BORDER_LIGHT,
-    gap: theme.spacing.md,
+    gap: 2,
   },
   dontAllowButton: {
     paddingHorizontal: theme.spacing.xl,

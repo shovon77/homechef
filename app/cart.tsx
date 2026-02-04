@@ -940,8 +940,8 @@ const styles = StyleSheet.create({
   checkoutButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   emptyCart: {
     flex: 1,

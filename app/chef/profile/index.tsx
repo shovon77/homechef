@@ -631,7 +631,7 @@ export default function ChefProfilePage() {
                 style={[profileStyles.navItem, activeNavTab === "orders" && profileStyles.navItemActive]}
                 onPress={() => setActiveNavTab("orders")}
               >
-                <Text style={[profileStyles.navText, activeNavTab === "orders" && profileStyles.navTextActive]}>Your Orders</Text>
+                <Text style={[profileStyles.navText, activeNavTab === "orders" && profileStyles.navTextActive]}>Orders</Text>
               </TouchableOpacity>
             </ScrollView>
               </View>

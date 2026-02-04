@@ -637,7 +637,7 @@ export default function ProfilePage() {
                   }
                 }}
               >
-                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>Your orders</Text>
+                <Text style={[styles.navText, activeNavTab === "orders" && styles.navTextActive]}>Orders</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[styles.navItem, activeNavTab === "settings" && styles.navItemActive]}

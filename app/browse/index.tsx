@@ -1106,8 +1106,8 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: '#FE734C',
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '300',
   },
   // Old search style removed/ignored
   search: {
