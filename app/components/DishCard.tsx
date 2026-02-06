@@ -409,8 +409,8 @@ const styles = StyleSheet.create({
   },
   price: {
     color: BRAND_BLACK,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.extrabold,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
     fontSize: theme.typography.fontSize.lg,
   },
   priceExplore: {
@@ -418,8 +418,8 @@ const styles = StyleSheet.create({
     lineHeight: 18,
     flexShrink: 0,
     color: BRAND_BLACK,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
   },
   footer: {
     flexDirection: 'row',
@@ -542,7 +542,7 @@ const styles = StyleSheet.create({
   },
   quantityText: {
     fontSize: theme.typography.fontSize.lg,
-    fontWeight: '600',
+    fontWeight: '400',
     paddingHorizontal: 4,
     minWidth: 20,
     textAlign: 'center',
@@ -556,5 +556,6 @@ const styles = StyleSheet.create({
     color: BRAND_BLACK,
     flex: 1,
     textAlign: 'center',
+    fontWeight: '400',
   },
 });

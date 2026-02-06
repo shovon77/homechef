@@ -763,8 +763,8 @@ export default function BrowsePage() {
       >
         <View style={styles.headerBlock}>
           <View style={styles.headerTextBlock}>
-            <Text style={styles.title}>Find the taste of home</Text>
-            <Text style={styles.subtitle}>Pickup homemade meals near you</Text>
+            <Text style={[styles.title, isMobile && styles.titleMobile]}>Pickup homemade meals near you</Text>
+            <Text style={styles.subtitle}>For a taste of home today</Text>
           </View>
           <View style={styles.subtitleDivider} />
         </View>
@@ -1048,6 +1048,9 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     color: '#33393A',
     textAlign: 'left',
+  },
+  titleMobile: {
+    fontSize: 18,
   },
   subtitle: {
     color: '#33393A',

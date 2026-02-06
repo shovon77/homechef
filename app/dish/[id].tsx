@@ -432,12 +432,11 @@ export default function DishDetail() {
               <Text style={styles.description}>{dish.description}</Text>
             ) : null}
 
-            {/* Price */}
-            <Text style={[styles.price, isMobile && styles.priceMobile]}>{formatCad(dish.price)}</Text>
-
-            {/* Cart quantity (Explore-style minus / qty / plus) */}
-            <View style={styles.actionRow}>
-              <View style={styles.cartQtyRow}>
+            {/* Price (right-aligned above plus) and Cart quantity (minus / qty / plus) */}
+            <View style={styles.priceAndCartRow}>
+              <Text style={[styles.price, styles.priceRight, isMobile && styles.priceMobile]}>{formatCad(dish.price)}</Text>
+              <View style={styles.actionRow}>
+                <View style={styles.cartQtyRow}>
                 {cartQty > 0 ? (
                   <TouchableOpacity
                     style={styles.cartQtyBtn}
@@ -494,6 +493,7 @@ export default function DishDetail() {
                   />
                 </TouchableOpacity>
               </View>
+            </View>
             </View>
 
             {/* Chef Notes Input (always visible) */}
@@ -838,8 +838,8 @@ const styles = StyleSheet.create({
       web: 36,
       default: 24,
     }),
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '300',
     // Match header section spacing (title/chef/rating)
     marginTop: theme.spacing.md,
     marginBottom: theme.spacing['2xl'],
@@ -849,13 +849,21 @@ const styles = StyleSheet.create({
     fontSize: 18,
     lineHeight: 18 * 1.2,
   },
-  actionRow: {
-    flexDirection: Platform.select({
-      web: 'row',
-      default: 'column',
-    }),
-    gap: theme.spacing.md,
+  priceRight: {
+    alignSelf: 'flex-end',
+    marginTop: 0,
+    marginBottom: theme.spacing.sm,
+  },
+  priceAndCartRow: {
+    flexDirection: 'column',
+    alignItems: 'stretch',
+    marginTop: theme.spacing.md,
     marginBottom: theme.spacing.md,
+  },
+  actionRow: {
+    flexDirection: 'row',
+    gap: theme.spacing.md,
+    width: '100%',
   },
   cartQtyRow: {
     flexDirection: 'row',
@@ -880,8 +888,8 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '300',
   },
   cartQtyValueHidden: {
     opacity: 0,
