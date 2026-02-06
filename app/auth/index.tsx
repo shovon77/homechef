@@ -22,6 +22,7 @@ const C = {
   primary: '#FE734C',
   primaryHi: '#FE734C',
   link: '#FE734C',
+  brandBlack: '#33393A',
 };
 
 export default function AuthPage() {
@@ -40,6 +41,7 @@ export default function AuthPage() {
   const [resettingPassword, setResettingPassword] = useState(false);
   const [resetSentTo, setResetSentTo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   
   // Button press animation
   const googleButtonScale = useRef(new Animated.Value(1)).current;
@@ -265,14 +267,8 @@ export default function AuthPage() {
         backgroundColor:C.panel,
         borderWidth:1, borderColor:C.border,
         borderRadius:18, padding:24,
-        // Keep the card above the footer overlap area
-        marginBottom: Platform.select({ web: 28, default: 44 }),
-        ...Platform.select({
-          web: { boxShadow: '0 8px 14px rgba(0,0,0,0.08)' },
-          ios: { shadowColor:'#000', shadowOpacity:0.08, shadowRadius:14, shadowOffset:{width:0,height:8} },
-          android: { elevation:2 },
-          default: { elevation:2 },
-        }),
+        // Match spacing below widget to spacing above
+        marginBottom: 8,
         gap:16
       }}>
         {/* Welcome Text */}
@@ -308,16 +304,10 @@ export default function AuthPage() {
               activeOpacity={0.7}
               style={{
                 backgroundColor: googleLoading ? '#F5F5F5' : '#FFFFFF',
-                borderWidth:1, borderColor:C.border,
+                borderWidth:1, borderColor:'#FFFFFF',
                 paddingVertical:12, paddingHorizontal:16,
                 borderRadius:12, alignItems:'center',
                 flexDirection:'row', justifyContent:'center', gap:10,
-                ...Platform.select({
-                  web: { boxShadow: '0 2px 8px rgba(0,0,0,0.05)' },
-                  ios: { shadowColor:'#000', shadowOpacity:0.05, shadowRadius:8, shadowOffset:{width:0,height:2} },
-                  android: { elevation:1 },
-                  default: { elevation:1 },
-                }),
                 opacity: googleLoading ? 0.7 : 1,
               }}>
               <Image
@@ -332,9 +322,9 @@ export default function AuthPage() {
         </View>
 
         <View style={{ flexDirection:'row', alignItems:'center', gap:10 }}>
-          <View style={{ flex:1, height:1, backgroundColor:C.border }} />
+          <View style={{ flex:1, height:1, backgroundColor:'#FFFFFF' }} />
           <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>OR</Text>
-          <View style={{ flex:1, height:1, backgroundColor:C.border }} />
+          <View style={{ flex:1, height:1, backgroundColor:'#FFFFFF' }} />
         </View>
 
         {/* Email / Password */}
@@ -412,28 +402,33 @@ export default function AuthPage() {
               }}
             />
             {mode === 'signin' && resetSentTo && resetSentTo === emailNormalized ? (
-              <Text style={{ color: '#33393A', fontFamily: theme.typography.fontFamily.body, fontSize: 12 }}>
+              <Text style={{ color: C.brandBlack, fontFamily: theme.typography.fontFamily.body, fontSize: 12 }}>
                 A password reset email has been sent.
               </Text>
             ) : null}
           </View>
 
+          {mode === 'signin' && (
+            <View style={{ alignItems: 'flex-end', justifyContent: 'center', minHeight: 28 }}>
+              <TouchableOpacity onPress={doResetPassword} disabled={resettingPassword}>
+                <Text style={{ color: C.brandBlack, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                  {resettingPassword ? 'Sending...' : 'Forgot password?'}
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+
           <View style={{ gap:6 }}>
             <View style={{ flexDirection:'row', alignItems:'center', justifyContent:'space-between' }}>
               <Text style={{ color:C.subtext, fontWeight:'700', fontFamily: theme.typography.fontFamily.display }}>Password</Text>
-              {mode === 'signin' && (
-                <TouchableOpacity onPress={doResetPassword} disabled={resettingPassword}>
-                  <Text style={{ color:C.primary, fontSize:12, fontFamily: theme.typography.fontFamily.body, textDecorationLine: 'underline' }}>
-                    {resettingPassword ? 'Sending...' : 'Forgot password?'}
-                  </Text>
-                </TouchableOpacity>
-              )}
             </View>
             <TextInput
               testID="auth-password"
               value={password}
               onChangeText={setPassword}
-              placeholder="••••••••"
+              onFocus={() => setPasswordFocused(true)}
+              onBlur={() => setPasswordFocused(false)}
+              placeholder={passwordFocused ? '' : '••••••••'}
               secureTextEntry
               style={{
                 backgroundColor:'#FAFCFB',
@@ -483,8 +478,8 @@ export default function AuthPage() {
 
           {/* Toggle sign-in / sign-up */}
           <TouchableOpacity testID="auth-toggle" onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
-            <Text style={{ color:C.link, textAlign:'center', marginTop:6, fontFamily: theme.typography.fontFamily.body }}>
-              {mode === 'signin' ? 'New to YourHomeChef? Sign-up' : 'Already have a profile? Login.'}
+            <Text style={{ color:C.brandBlack, textAlign:'center', marginTop:6, fontFamily: theme.typography.fontFamily.body }}>
+              {mode === 'signin' ? 'New to YourHomeChef? Sign-up.' : 'Already have a profile? Login.'}
             </Text>
           </TouchableOpacity>
         </View>
@@ -495,7 +490,7 @@ export default function AuthPage() {
         <Text style={{ color:C.subtext, fontSize:12, textAlign:'center', marginTop:16, fontFamily: theme.typography.fontFamily.body }}>
           By continuing, you agree to our{' '}
           <Link href="/terms" asChild>
-            <Text style={{ color:C.primary, textDecorationLine: 'underline' }}>Terms of Service</Text>
+            <Text style={{ color:C.primary }}>Terms of Service</Text>
           </Link>
           .
         </Text>

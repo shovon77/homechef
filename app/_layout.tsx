@@ -13,6 +13,7 @@ import { LocationModalProvider } from '../context/LocationModalContext';
 import { redirectAfterLogin } from '../lib/authRedirect';
 import { 
   useFonts, 
+  OpenSans_300Light,
   OpenSans_400Regular, 
   OpenSans_600SemiBold, 
   OpenSans_700Bold, 
@@ -28,6 +29,7 @@ export default function RootLayout() {
   const initialized = useRef(false);
 
   const [fontsLoaded] = useFonts({
+    OpenSans_300Light,
     OpenSans_400Regular,
     OpenSans_600SemiBold,
     OpenSans_700Bold,

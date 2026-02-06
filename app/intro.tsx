@@ -734,9 +734,9 @@ const styles = StyleSheet.create({
   },
   faqButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '300',
     color: PRIMARY_COLOR,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_300Light',
   },
   orderButton: {
     flexDirection: 'row',

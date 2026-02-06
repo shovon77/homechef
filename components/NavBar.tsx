@@ -872,7 +872,7 @@ export default function NavBar() {
           {!isFaqPage && (isAuthPage && !isChefSignupPage) ? (
             <Link href="/faq" asChild>
               <TouchableOpacity style={styles.secondaryButton}>
-                <Text style={styles.secondaryButtonText}>FAQ</Text>
+                <Text style={[styles.secondaryButtonText, { fontWeight: '300', fontFamily: 'OpenSans_300Light' }]}>FAQ</Text>
               </TouchableOpacity>
             </Link>
           ) : (
@@ -1846,7 +1846,8 @@ const styles = StyleSheet.create({
   },
   faqButtonText: {
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '300',
+    fontFamily: 'OpenSans_300Light',
     color: '#FE734C',
   },
   iconButtonImage: {
