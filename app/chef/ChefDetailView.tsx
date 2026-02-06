@@ -1131,8 +1131,8 @@ const styles = StyleSheet.create({
   reviewRatingValue: {
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.normal,
   },
   reviewAuthor: {
     color: BRAND_BLACK,
