@@ -419,7 +419,7 @@ export default function ChefDetailView() {
                       <View style={styles.sectionBlock}>
                         <Text style={styles.sectionTitle}>Best-sellers now</Text>
                         {bestSellerDishes.length === 0 ? (
-                          <Text style={styles.sectionEmpty}>No dishes sold in the last 90 days.</Text>
+                          <Text style={[styles.sectionEmpty, { fontStyle: 'normal' }]}>No dishes sold in the last 90 days.</Text>
                         ) : (
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
                             {bestSellerDishes.map(d => (
@@ -597,7 +597,16 @@ const styles = StyleSheet.create({
     borderColor: BORDER_LIGHT,
     borderRadius: theme.radius.xl,
     backgroundColor: '#FFFFFF',
-    ...elev('sm'),
+    ...Platform.select({
+      web: { boxShadow: 'none' },
+      android: { elevation: 0 },
+      default: {
+        shadowColor: 'transparent',
+        shadowOffset: { width: 0, height: 0 },
+        shadowOpacity: 0,
+        shadowRadius: 0,
+      },
+    }),
   },
   chefCardLayout: {
     flexDirection: 'row',
@@ -775,17 +784,18 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
     borderRadius: theme.radius.lg,
+    backgroundColor: PRIMARY_COLOR,
   },
   tabActive: {},
   tabText: {
-    color: BRAND_BLACK,
+    color: '#FFFFFF',
     fontSize: theme.typography.fontSize.lg,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.normal,
     letterSpacing: 0.015,
   },
   tabTextActive: {
-    color: PRIMARY_COLOR,
+    color: '#FFFFFF',
   },
   sectionBlock: {
     marginBottom: theme.spacing['2xl'],
@@ -1214,10 +1224,10 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   disclaimerBlock: {
-    marginTop: theme.spacing['2xl'],
-    marginBottom: theme.spacing.xl,
+    marginTop: theme.spacing.sm,
+    marginBottom: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
     width: '100%',
   },
   disclaimerText: {

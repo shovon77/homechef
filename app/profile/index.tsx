@@ -834,16 +834,13 @@ export default function ProfilePage() {
 
                 {/* Terms and Legal Section */}
                 <View style={[styles.settingsSection, { paddingTop: theme.spacing.xl, borderTopWidth: 1, borderTopColor: '#EAECF0' }]}>
-                  <Text style={[styles.settingsSectionTitle, { fontSize: 18, marginBottom: 12 }]}>Terms & legal</Text>
+                  <Text style={[styles.settingsSectionTitle, { fontSize: 18, marginBottom: 0 }]}>Terms & legal</Text>
                   <Text style={{ color: '#667085', fontSize: 14, marginBottom: 12 }}>
                     By using the platform, you agree to our terms.
                   </Text>
                   <View style={{ gap: 12, marginBottom: 16 }}>
                     <TouchableOpacity onPress={() => router.push('/terms')}>
-                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Terms of Service</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => router.push('/terms')}>
-                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Legal</Text>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14 }}>Legal</Text>
                     </TouchableOpacity>
                   </View>
                 </View>

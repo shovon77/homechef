@@ -2132,10 +2132,10 @@ const styles = StyleSheet.create({
   modalHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     padding: theme.spacing.xl,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER_LIGHT,
+    borderBottomColor: '#FFFFFF',
   },
   modalTitleContainer: {
     flex: 1,
@@ -2146,7 +2146,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: theme.typography.fontFamily.display,
     color: TEXT_DARK,
-    marginBottom: theme.spacing.xs,
+    lineHeight: 32,
   },
   modalSubtitle: {
     fontSize: theme.typography.fontSize.sm,
@@ -2157,6 +2157,8 @@ const styles = StyleSheet.create({
   modalCloseButton: {
     width: 32,
     height: 32,
+    minWidth: 32,
+    minHeight: 32,
     justifyContent: 'center',
     alignItems: 'center',
   },
@@ -2315,7 +2317,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     padding: theme.spacing.xl,
     borderTopWidth: 1,
-    borderTopColor: BORDER_LIGHT,
+    borderTopColor: '#FFFFFF',
     gap: 2,
   },
   dontAllowButton: {

@@ -389,17 +389,7 @@ export default function DishDetail() {
             </Text>
             
             {chefId ? (
-              <Link href={{ 
-                pathname: "/chef/[id]", 
-                params: { 
-                  id: String(chefId),
-                  name: chefName,
-                  photo: chef?.photo || chef?.avatar || "",
-                  location: chef?.location || "",
-                  rating: chef?.rating?.toString() || "",
-                  rating_count: chef?.rating_count?.toString() || "",
-                } 
-              }} asChild>
+              <Link href={`/chef/${chefId}?name=${encodeURIComponent(chefName)}&photo=${encodeURIComponent(chef?.photo || chef?.avatar || '')}&location=${encodeURIComponent(chef?.location || '')}&rating=${chef?.rating ?? ''}&rating_count=${chef?.rating_count ?? ''}`} asChild>
                 <TouchableOpacity style={styles.chefLink}>
                   {chef?.photo || chef?.avatar ? (
                     <Image 
