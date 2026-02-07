@@ -3,6 +3,7 @@ import React, { useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import Screen from '../components/Screen';
+import Footer from '../components/Footer';
 import { theme } from '../lib/theme';
 import { useRole } from '../hooks/useRole';
 import { supabase } from '../lib/supabase';
@@ -126,7 +127,7 @@ export default function IntroPage() {
   }, [loading, user, isAdmin, isChef, router]);
 
   return (
-    <Screen style={{ backgroundColor: BG_LIGHT }}>
+    <Screen style={{ backgroundColor: BG_LIGHT }} noFooter>
       <View style={styles.container}>
         <View style={styles.content}>
           {/* Welcome Section */}
@@ -182,13 +183,13 @@ export default function IntroPage() {
           </View>
         </View>
       </View>
+      <Footer />
     </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
-    flex: 1,
     backgroundColor: BG_LIGHT,
     paddingHorizontal: Platform.select({
       web: theme.spacing['3xl'],

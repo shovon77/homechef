@@ -82,7 +82,7 @@ export default function FAQPage() {
       style={{ backgroundColor: '#F2F0EF' }}
     >
       <View style={styles.container}>
-        <Text style={styles.title}>Food Safety FAQ</Text>
+        <Text style={styles.title}>Frequently asked questions</Text>
 
         {faqData.map((faq, index) => (
           <View key={index} style={styles.accordionItem}>
@@ -137,15 +137,15 @@ const styles = StyleSheet.create({
   },
   title: {
     color: '#FE734C',
-    fontSize: 36,
+    fontSize: Platform.select({ web: 24, default: 14 }),
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.black,
-    lineHeight: 36 * 1.2,
+    lineHeight: Platform.select({ web: 24 * 1.2, default: 18 }),
     letterSpacing: -0.02,
     marginBottom: theme.spacing['2xl'],
   },
   accordionItem: {
-    marginBottom: theme.spacing.md,
+    paddingVertical: theme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: '#E5E5E5',
   },
@@ -153,21 +153,22 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    paddingVertical: theme.spacing.md,
+    paddingVertical: theme.spacing.xs,
     paddingHorizontal: theme.spacing.sm,
     width: '100%',
   },
   questionText: {
-    fontSize: 24,
+    fontSize: 20,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
-    lineHeight: 24 * 1.4,
+    lineHeight: 20 * 1.4,
     flex: 1,
     paddingRight: theme.spacing.md,
   },
   answerContainer: {
     paddingHorizontal: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
   },
   paragraph: {
     color: '#33393A',

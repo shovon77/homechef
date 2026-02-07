@@ -297,7 +297,6 @@ const styles = StyleSheet.create({
     color: '#33393A',
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-    fontStyle: 'italic',
     marginBottom: theme.spacing['2xl'],
   },
   section: {
