@@ -784,18 +784,20 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
     borderRadius: theme.radius.lg,
+  },
+  tabActive: {
     backgroundColor: PRIMARY_COLOR,
   },
-  tabActive: {},
   tabText: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.lg,
+    color: BRAND_BLACK,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
     letterSpacing: 0.015,
   },
   tabTextActive: {
     color: '#FFFFFF',
+    fontWeight: theme.typography.fontWeight.normal,
   },
   sectionBlock: {
     marginBottom: theme.spacing['2xl'],

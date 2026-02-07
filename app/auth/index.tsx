@@ -304,7 +304,7 @@ export default function AuthPage() {
               activeOpacity={0.7}
               style={{
                 backgroundColor: googleLoading ? '#F5F5F5' : '#FFFFFF',
-                borderWidth:1, borderColor:'#FFFFFF',
+                borderWidth: 1, borderColor: '#F2F0EF',
                 paddingVertical:12, paddingHorizontal:16,
                 borderRadius:12, alignItems:'center',
                 flexDirection:'row', justifyContent:'center', gap:10,
@@ -457,43 +457,45 @@ export default function AuthPage() {
             )}
           </View>
 
-          <TouchableOpacity
-            testID="auth-submit"
-            onPress={doEmailPassword}
-            disabled={busy || (mode === 'signup' && passwordStrength.count < 5)}
-            style={{
-              backgroundColor: busy ? '#FFCCBC' : (mode === 'signup' && passwordStrength.count < 5) ? '#D1D5DB' : C.primary,
-              paddingVertical:13, 
-              paddingHorizontal:24,
-              borderRadius:12, 
-              alignItems:'center',
-              alignSelf: 'center',
-              minWidth: 120,
-              maxWidth: 200,
-            }}>
-            <Text style={{ color: (mode === 'signup' && passwordStrength.count < 5) ? '#6B7280' : '#FFFFFF', fontWeight:'300' as any, fontFamily: theme.typography.fontFamily.body }}>
-              {busy ? 'Please wait…' : (mode === 'signin' ? 'Login' : 'Sign-up')}
-            </Text>
-          </TouchableOpacity>
+          <View style={{ gap: 4, alignItems: 'center', paddingVertical: 10 }}>
+            <TouchableOpacity
+              testID="auth-submit"
+              onPress={doEmailPassword}
+              disabled={busy || (mode === 'signup' && passwordStrength.count < 5)}
+              style={{
+                backgroundColor: busy ? '#FFCCBC' : (mode === 'signup' && passwordStrength.count < 5) ? '#D1D5DB' : C.primary,
+                paddingVertical:13, 
+                paddingHorizontal:24,
+                borderRadius:12, 
+                alignItems:'center',
+                alignSelf: 'center',
+                minWidth: 120,
+                maxWidth: 200,
+              }}>
+              <Text style={{ color: (mode === 'signup' && passwordStrength.count < 5) ? '#6B7280' : '#FFFFFF', fontWeight:'300' as any, fontFamily: theme.typography.fontFamily.body }}>
+                {busy ? 'Please wait…' : (mode === 'signin' ? 'Login' : 'Sign-up')}
+              </Text>
+            </TouchableOpacity>
 
-          {/* Toggle sign-in / sign-up */}
-          <TouchableOpacity testID="auth-toggle" onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
-            <Text style={{ color:C.brandBlack, textAlign:'center', marginTop:6, fontFamily: theme.typography.fontFamily.body }}>
-              {mode === 'signin' ? 'New to YourHomeChef? Sign-up.' : 'Already have a profile? Login.'}
-            </Text>
-          </TouchableOpacity>
+            {/* Toggle sign-in / sign-up */}
+            <TouchableOpacity testID="auth-toggle" onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
+              <Text style={{ color:C.brandBlack, textAlign:'center', fontFamily: theme.typography.fontFamily.body }}>
+                {mode === 'signin' ? 'New to YourHomeChef? Sign-up.' : 'Already have a profile? Login.'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+
+          {/* Terms of Service - tight spacing from toggle */}
+          <Text style={{ color:C.subtext, fontSize:12, textAlign:'center', marginTop: -6, fontFamily: theme.typography.fontFamily.body }}>
+            By continuing, you agree to our{' '}
+            <Link href="/terms" asChild>
+              <Text style={{ color:C.primary }}>Terms of Service</Text>
+            </Link>
+            .
+          </Text>
         </View>
 
         {err ? <Text style={{ color:'tomato', marginTop:4, fontFamily: theme.typography.fontFamily.body }}>{err}</Text> : null}
-
-        {/* Terms of Service */}
-        <Text style={{ color:C.subtext, fontSize:12, textAlign:'center', marginTop:16, fontFamily: theme.typography.fontFamily.body }}>
-          By continuing, you agree to our{' '}
-          <Link href="/terms" asChild>
-            <Text style={{ color:C.primary }}>Terms of Service</Text>
-          </Link>
-          .
-        </Text>
       </Animated.View>
     </Screen>
   );

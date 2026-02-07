@@ -9,6 +9,7 @@ import { supabase } from '../lib/supabase';
 import { isLocalAdmin } from '../lib/admin';
 
 const PRIMARY_COLOR = '#FE734C';
+const BRAND_BLACK = '#33393A';
 const BG_LIGHT = '#F2F0EF';
 const TEXT_DARK = '#0e1b18';
 const TEXT_GREY = '#667085';
@@ -194,7 +195,10 @@ const styles = StyleSheet.create({
       default: theme.spacing.md,
     }),
     paddingTop: theme.spacing.xl,
-    paddingBottom: theme.spacing.xl, // Space before footer
+    paddingBottom: Platform.select({
+      web: theme.spacing.xl,
+      default: 100, // Extra space on mobile so unsure section is visible above footer
+    }),
   },
   content: {
     maxWidth: 800,
@@ -231,7 +235,6 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.xl,
     padding: theme.spacing.xl,
     gap: theme.spacing.md,
-    ...theme.shadows.sm,
   },
   optionTitle: {
     fontSize: theme.typography.fontSize.lg,
@@ -261,10 +264,12 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
   },
   actionButtonChef: {
-    backgroundColor: '#F2F0EF',
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: PRIMARY_COLOR,
   },
   actionButtonTextChef: {
-    color: PRIMARY_COLOR,
+    color: BRAND_BLACK,
   },
   unsureSection: {
     gap: theme.spacing.xs,

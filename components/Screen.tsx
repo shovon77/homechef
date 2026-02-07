@@ -83,7 +83,7 @@ export default function Screen({
         contentInsetAdjustmentBehavior="never"
       >
         <View style={[content, { minHeight: '100%', justifyContent: 'space-between' }]}>
-          <View style={{ flex: 1 }}>
+          <View style={{ flexGrow: 1, flexShrink: 0 }}>
             {children}
           </View>
           {!noFooter && (
