@@ -61,6 +61,7 @@ export type Dish = {
   thumbnail: string | null;
   featured: boolean; // default false
   created_at: string | null; // timestamptz
+  is_active?: boolean; // default true; when false, hidden from public listings
 };
 
 export type DishWithChef = Dish & {

@@ -329,7 +329,8 @@ export default function BrowsePage() {
           let request = supabase
             .from('dishes')
             .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location, cuisine, latitude, longitude)', { count: 'exact' })
-            .eq('chefs.status', 'active');
+            .eq('chefs.status', 'active')
+            .or('is_active.eq.true,is_active.is.null');
           if (cuisineFilter?.trim()) {
             request = request.ilike('chefs.cuisine', `%${cuisineFilter.trim()}%`);
           }

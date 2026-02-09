@@ -607,6 +607,7 @@ export default function HomePage() {
           .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status)")
           .eq("chefs.featured", true)
           .eq("chefs.status", "active")
+          .or("is_active.eq.true,is_active.is.null")
           .order("price", { ascending: true }),
       ]);
       if (!mounted) return;

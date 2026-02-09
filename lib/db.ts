@@ -141,11 +141,12 @@ export async function getChefById(id: number): Promise<Chef | null> {
  * Uses dishes.chef_id if available, otherwise falls back to dishes.chef = chefs.name
  */
 export async function getDishesByChefId(chefId: number): Promise<Dish[]> {
-  // First try by chef_id FK
+  // First try by chef_id FK (only active dishes for public display)
   const { data: byFk, error: fkError } = await supabase
     .from('dishes')
     .select('*')
     .eq('chef_id', chefId)
+    .or('is_active.eq.true,is_active.is.null')
     .order('id', { ascending: true });
 
   if (!fkError && byFk && byFk.length > 0) {
@@ -162,6 +163,7 @@ export async function getDishesByChefId(chefId: number): Promise<Dish[]> {
     .from('dishes')
     .select('*')
     .eq('chef', chef.name)
+    .or('is_active.eq.true,is_active.is.null')
     .order('id', { ascending: true });
 
   if (nameError) {

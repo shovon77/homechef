@@ -152,6 +152,7 @@ export default function ChefDetailView() {
           .from('dishes')
           .select('*', { count: 'exact' })
           .eq('chef_id', chefId)
+          .or('is_active.eq.true,is_active.is.null')
           .order('id', { ascending: true })
           .range(0, 499);
           
@@ -173,6 +174,7 @@ export default function ChefDetailView() {
           .from('dishes')
           .select('*')
           .eq('chef_id', chefId)
+          .or('is_active.eq.true,is_active.is.null')
           .gte('created_at', since)
           .order('created_at', { ascending: false });
         if (mounted && data) setNewlyAddedDishes(data);
@@ -209,6 +211,7 @@ export default function ChefDetailView() {
           .from('dishes')
           .select('*')
           .eq('chef_id', chefId)
+          .or('is_active.eq.true,is_active.is.null')
           .in('id', dishIds);
         if (mounted && dishesData) setBestSellerDishes(dishesData);
       } catch (e) {

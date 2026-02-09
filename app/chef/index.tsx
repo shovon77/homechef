@@ -37,7 +37,7 @@ const TEXT_MUTED = '#555555';
 const BORDER_LIGHT = '#EAECF0';
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
-type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null };
+type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
 
 export default function ChefDashboard() {
@@ -610,7 +610,8 @@ export default function ChefDashboard() {
         name: d.name,
         price: d.price,
         description: d.description || null,
-        ingredients: d.ingredients || null
+        ingredients: d.ingredients || null,
+        is_active: true
       }).select('*').single();
       if (ins.error) throw ins.error;
       const created = ins.data as DishRow;
@@ -694,30 +695,22 @@ export default function ChefDashboard() {
     }
   }
 
-  async function deleteDish(id: number) {
+  async function deactivateDish(id: number) {
     if (!chef) return;
 
     if (Platform.OS === 'web') {
-      if (window.confirm('Are you sure you want to delete this dish?')) {
+      if (window.confirm('Are you sure you want to deactivate this dish? It will be hidden from homepage, search, and explore.')) {
         setSaving(true);
         setMsg(null);
         setErr(null);
         try {
-          const { error } = await supabase.from('dishes').delete().eq('id', id);
+          const { error } = await supabase.from('dishes').update({ is_active: false }).eq('id', id);
           if (error) throw error;
-          setDishes(prev => {
-            const filtered = prev.filter(d => d.id !== id);
-            // Adjust page if current page is beyond available pages
-            const totalPages = Math.ceil(filtered.length / menuPerPage);
-            if (menuPage > totalPages && totalPages > 0) {
-              setMenuPage(totalPages);
-            }
-            return filtered;
-          });
-          setMsg('Dish deleted ✓');
+          setDishes(prev => prev.map(d => d.id === id ? { ...d, is_active: false } : d));
+          setMsg('Dish deactivated ✓');
           setTimeout(() => setMsg(null), 3000);
         } catch (e: any) {
-          setErr('Delete failed: ' + (e.message || String(e)));
+          setErr('Deactivate failed: ' + (e.message || String(e)));
         } finally {
           setSaving(false);
         }
@@ -725,37 +718,47 @@ export default function ChefDashboard() {
       return;
     }
 
-    Alert.alert('Delete Dish', 'Are you sure you want to delete this dish?', [
+    Alert.alert('Deactivate Dish', 'Are you sure you want to deactivate this dish? It will be hidden from homepage, search, and explore.', [
       { text: 'Cancel', style: 'cancel' },
       {
-        text: 'Delete',
+        text: 'Deactivate',
         style: 'destructive',
         onPress: async () => {
           setSaving(true);
           setMsg(null);
           setErr(null);
           try {
-            const { error } = await supabase.from('dishes').delete().eq('id', id);
+            const { error } = await supabase.from('dishes').update({ is_active: false }).eq('id', id);
             if (error) throw error;
-            setDishes(prev => {
-            const filtered = prev.filter(d => d.id !== id);
-            // Adjust page if current page is beyond available pages
-            const totalPages = Math.ceil(filtered.length / menuPerPage);
-            if (menuPage > totalPages && totalPages > 0) {
-              setMenuPage(totalPages);
-            }
-            return filtered;
-          });
-            setMsg('Dish deleted ✓');
+            setDishes(prev => prev.map(d => d.id === id ? { ...d, is_active: false } : d));
+            setMsg('Dish deactivated ✓');
             setTimeout(() => setMsg(null), 3000);
           } catch (e: any) {
-            setErr('Delete failed: ' + (e.message || String(e)));
+            setErr('Deactivate failed: ' + (e.message || String(e)));
           } finally {
             setSaving(false);
           }
         }
       }
     ]);
+  }
+
+  async function activateDish(id: number) {
+    if (!chef) return;
+    setSaving(true);
+    setMsg(null);
+    setErr(null);
+    try {
+      const { error } = await supabase.from('dishes').update({ is_active: true }).eq('id', id);
+      if (error) throw error;
+      setDishes(prev => prev.map(d => d.id === id ? { ...d, is_active: true } : d));
+      setMsg('Dish activated ✓');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e: any) {
+      setErr('Activate failed: ' + (e.message || String(e)));
+    } finally {
+      setSaving(false);
+    }
   }
 
   async function updateOrderStatus(orderId: number, newStatus: string) {
@@ -1674,7 +1677,7 @@ export default function ChefDashboard() {
     { key: 'dashboard' as const, label: 'Overview', iconSource: require('../../assets/controls.png') },
     { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
     { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
-    { key: 'reviews' as const, label: 'My reviews', iconSource: require('../../assets/edit.png') },
+    { key: 'reviews' as const, label: 'Reviews', iconSource: require('../../assets/edit.png') },
     { key: 'payouts' as const, label: 'Payment', iconSource: require('../../assets/credit-card.png') },
   ];
 
@@ -2253,7 +2256,7 @@ export default function ChefDashboard() {
             marginBottom: 16,
           }}
         >
-          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
+          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
         </TouchableOpacity>
         {topSellingDishes.length > 0 ? (
           <ScrollView horizontal showsHorizontalScrollIndicator={true}>
@@ -2261,13 +2264,13 @@ export default function ChefDashboard() {
               {/* Table Header */}
               <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingLeft: 12, paddingRight: 6, borderBottomWidth: 1, borderBottomColor: BORDER_LIGHT, backgroundColor: '#F8FAFC' }}>
                 <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Dish name</Text>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Dish name</Text>
                 </View>
                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>Quantity</Text>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>Quantity</Text>
                 </View>
                 <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body, textAlign: 'right' }}>Price</Text>
+                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body, textAlign: 'right' }}>Price</Text>
                 </View>
               </View>
               {/* Table Rows */}
@@ -2322,7 +2325,7 @@ export default function ChefDashboard() {
               
               return (
                 <>
-                  {paginatedDishes.map(d => <DishEditor key={d.id} dish={d} onSave={updateDish} onDelete={deleteDish} saving={saving} />)}
+                  {paginatedDishes.map(d => <DishEditor key={d.id} dish={d} onSave={updateDish} onDeactivate={deactivateDish} onActivate={activateDish} saving={saving} />)}
                   
                   {/* Pagination Controls */}
                   {totalMenuPages > 1 && (
@@ -2386,7 +2389,7 @@ export default function ChefDashboard() {
               minWidth: 100,
             }}
           >
-            <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+            <Text style={{ color: orderStatusFilter === status ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
               {status.charAt(0).toUpperCase() + status.slice(1)}
             </Text>
           </TouchableOpacity>
@@ -3061,7 +3064,7 @@ export default function ChefDashboard() {
                     marginBottom: 16,
                   }}
                 >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
                 </TouchableOpacity>
         {topSellingDishes.length > 0 ? (
           <View style={{ gap: 8 }}>
@@ -3105,7 +3108,7 @@ export default function ChefDashboard() {
                   <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
                 ) : (
                   dishes.map(d => (
-                    <DishEditor key={d.id} dish={d} onSave={updateDish} onDelete={deleteDish} />
+                    <DishEditor key={d.id} dish={d} onSave={updateDish} onDeactivate={deactivateDish} onActivate={activateDish} saving={saving} />
                   ))
                 )}
               </View>
@@ -3133,7 +3136,7 @@ export default function ChefDashboard() {
                           minWidth: 50,
                         }}
                       >
-                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           {statusLabel}
                           {count > 0 && (
                             <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
@@ -3157,7 +3160,7 @@ export default function ChefDashboard() {
                           minWidth: 50,
                         }}
                       >
-                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
+                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           Declined
                           {declinedCount > 0 && (
                             <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {declinedCount}</Text>
@@ -3828,14 +3831,14 @@ const styles = StyleSheet.create({
   tabText: {
     color: '#33393A',
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: '600',
+    fontWeight: theme.typography.fontWeight.normal,
     letterSpacing: theme.typography.letterSpacing.wide,
     fontFamily: theme.typography.fontFamily.body,
   },
   tabTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.normal,
+    fontFamily: theme.typography.fontFamily.body,
   },
   sidebarSectionFooter: {
     borderTopWidth: 1,
@@ -3905,7 +3908,7 @@ const styles = StyleSheet.create({
   tableHeaderCellText: {
     color: TEXT_DARK,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   tableRow: {
@@ -4246,7 +4249,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               opacity: (!valid || saving) ? 0.6 : 1
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -4254,7 +4257,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
   );
 }
 
-function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave: (p: { id: number; name?: string; price?: number | string; description?: string; ingredients?: string; file?: File | null; preview?: string }) => void; onDelete: (id: number) => void; saving: boolean }) {
+function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: DishRow; onSave: (p: { id: number; name?: string; price?: number | string; description?: string; ingredients?: string; file?: File | null; preview?: string }) => void; onDeactivate: (id: number) => void; onActivate: (id: number) => void; saving: boolean }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [name, setName] = useState(dish.name || '');
@@ -4265,7 +4268,12 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
   const [preview, setPreview] = useState<string | null>(dish.image || dish.thumbnail || '');
 
   return (
-    <View style={{ backgroundColor: BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
+    <View style={{ backgroundColor: dish.is_active === false ? '#F8FAFC' : BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
+      {dish.is_active === false && (
+        <View style={{ marginBottom: 12, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#FEF3C7', borderRadius: 6, alignSelf: 'flex-start' }}>
+          <Text style={{ color: '#92400E', fontSize: 12, fontWeight: '500' }}>Deactivated — hidden from homepage, search & explore</Text>
+        </View>
+      )}
       <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 24 }}>
         <Image 
           source={{ uri: preview || 'https://placehold.co/192x192?text=Dish' }} 
@@ -4363,20 +4371,20 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: DishRow; onSave:
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Save</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
-                onPress={() => onDelete(dish.id)}
+                onPress={() => (dish.is_active !== false ? onDeactivate(dish.id) : onActivate(dish.id))}
                 disabled={saving}
                 style={{ 
-                  backgroundColor: '#DC2626', 
+                  backgroundColor: dish.is_active !== false ? '#DC2626' : '#16a34a', 
                   paddingVertical: 10, 
                   paddingHorizontal: 16, 
                   borderRadius: 8,
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Delete</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{dish.is_active !== false ? 'Deactivate' : 'Activate'}</Text>
               </TouchableOpacity>
             </View>
           </View>

@@ -129,7 +129,7 @@ export default function NavBar() {
   const isOrderActive = pathname.startsWith('/orders') && !pathname.includes('/thank-you');
   // Hide Order button on tracking page EXCEPT when viewing history (rejected/cancelled) orders
   const isOnOrderTrackingPage = pathname.startsWith('/orders/track') && params.type !== 'history';
-  const isDashboardActive = pathname.startsWith('/admin') || pathname.startsWith('/chef');
+  const isDashboardActive = pathname.startsWith('/admin') || pathname === '/chef' || pathname === '/chef/' || pathname === '/chef/index';
   const isChefDashboard = pathname.startsWith('/chef');
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
   const isCartPage = pathname.startsWith('/cart');

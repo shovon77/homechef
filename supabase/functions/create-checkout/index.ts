@@ -94,8 +94,9 @@ export const handler = async (req: Request) => {
     const dishIds = body.items.map((i) => i.dish_id);
     const { data: dishes, error: dishErr } = await adminClient
       .from('dishes')
-      .select('id, chef_id, price, name')
-      .in('id', dishIds);
+      .select('id, chef_id, price, name, is_active')
+      .in('id', dishIds)
+      .or('is_active.eq.true,is_active.is.null');
 
     if (dishErr) {
       console.error('[create-checkout] Dish query failed:', dishErr);
