@@ -193,69 +193,72 @@ export default function NavBar() {
   ), [])
 
   // Remove border and white background on chef dashboard for web using CSS injection
-  // Use a more targeted approach that won't interfere with icons
+  // Re-apply after mount so we override styles added later (hydration, auth, etc.)
   useEffect(() => {
     if (Platform.OS === 'web' && isChefDashboard && typeof document !== 'undefined') {
       const styleId = 'chef-dashboard-navbar-no-border';
-      let styleElement = document.getElementById(styleId);
-      
-      if (!styleElement) {
-        styleElement = document.createElement('style');
-        styleElement.id = styleId;
-        document.head.appendChild(styleElement);
-      }
-      
-      // Target both the navbar header and its wrapper to remove white borders
-      // Match the homepage border width (1px) but make it transparent/matching background
-      styleElement.textContent = `
-        /* Target the navbar header container itself - set border to match homepage width but transparent */
+      const css = `
         [data-testid="chef-dashboard-navbar"] {
-          border-bottom: 1px solid ${BG_LIGHT} !important;
-          border-bottom-width: 1px !important;
-          border-bottom-color: ${BG_LIGHT} !important;
+          border-bottom: 1px solid #FFFFFF !important;
           background-color: ${BG_LIGHT} !important;
         }
-        /* Target the Screen component wrapper around the navbar */
+        /* Wrapper: no bottom border so only one line shows (under navbar) */
         [data-testid="chef-dashboard-navbar-wrapper"] {
-          border-bottom: 1px solid ${BG_LIGHT} !important;
-          border-bottom-width: 1px !important;
-          border-bottom-color: ${BG_LIGHT} !important;
+          border-bottom: none !important; border-bottom-width: 0 !important;
+          border-top: none !important; border-top-width: 0 !important;
           background-color: ${BG_LIGHT} !important;
         }
-        /* Target any child View elements with white backgrounds that might create the border */
-        [data-testid="chef-dashboard-navbar-wrapper"] > *,
-        [data-testid="chef-dashboard-navbar"] > * {
-          border-bottom: 1px solid ${BG_LIGHT} !important;
+        [data-testid="chef-dashboard-navbar-wrapper"] > *, [data-testid="chef-dashboard-navbar"] > * {
+          border-bottom: none !important;
         }
-        /* Target React Native Web's border classes on the wrapper - match homepage width */
-        [data-testid="chef-dashboard-navbar-wrapper"][class*="r-borderBottomColor-"],
-        [data-testid="chef-dashboard-navbar-wrapper"][class*="r-borderBottomWidth-"],
         [data-testid="chef-dashboard-navbar"][class*="r-borderBottomColor-"],
         [data-testid="chef-dashboard-navbar"][class*="r-borderBottomWidth-"] {
-          border-bottom: 1px solid ${BG_LIGHT} !important;
-          border-bottom-width: 1px !important;
-          border-bottom-color: ${BG_LIGHT} !important;
+          border-bottom: 1px solid #FFFFFF !important;
         }
-        /* Target any white background elements that might be creating the visual border */
         [data-testid="chef-dashboard-navbar-wrapper"] [class*="r-backgroundColor-"][style*="rgb(255, 255, 255)"],
         [data-testid="chef-dashboard-navbar-wrapper"] [class*="r-backgroundColor-"][style*="#ffffff"],
         [data-testid="chef-dashboard-navbar-wrapper"] [class*="r-backgroundColor-"][style*="#FFFFFF"] {
           background-color: ${BG_LIGHT} !important;
         }
-      `;
-      
-      return () => {
-        const el = document.getElementById(styleId);
-        if (el) {
-          el.remove();
+        [data-testid="chef-dashboard-navbar"] { border-top: none !important; border-top-width: 0 !important; }
+        [data-testid="chef-dashboard-navbar-wrapper"] + *, [data-testid="chef-dashboard-scroll-wrapper"] {
+          border-top: none !important; border-top-width: 0 !important;
+          padding-top: 0 !important; margin-top: 0 !important;
+          background-color: ${BG_LIGHT} !important;
         }
+        [data-testid="chef-dashboard-scroll-wrapper"] > div,
+        [data-testid="chef-dashboard-scroll-wrapper"] > div > div:first-child {
+          background-color: ${BG_LIGHT} !important; border-top: none !important;
+        }
+        /* Remove second line below navbar - no top border on scroll content */
+        [data-testid="chef-dashboard-scroll-wrapper"],
+        [data-testid="chef-dashboard-scroll-content"],
+        [data-testid="chef-dashboard-header-area"] {
+          border-top: none !important; border-top-width: 0 !important;
+        }
+      `;
+      function apply() {
+        let el = document.getElementById(styleId);
+        if (!el) {
+          el = document.createElement('style');
+          el.id = styleId;
+          document.head.appendChild(el);
+        }
+        el.textContent = css;
+      }
+      apply();
+      const t1 = setTimeout(apply, 50);
+      const t2 = setTimeout(apply, 200);
+      const t3 = setTimeout(apply, 500);
+      const t4 = setTimeout(apply, 1200);
+      return () => {
+        clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); clearTimeout(t4);
+        const el = document.getElementById(styleId);
+        if (el) el.remove();
       };
     } else if (Platform.OS === 'web' && !isChefDashboard && typeof document !== 'undefined') {
-      // Clean up when leaving chef dashboard
-      const styleElement = document.getElementById('chef-dashboard-navbar-no-border');
-      if (styleElement) {
-        styleElement.remove();
-      }
+      const el = document.getElementById('chef-dashboard-navbar-no-border');
+      if (el) el.remove();
     }
   }, [isChefDashboard]);
 
@@ -1593,14 +1596,14 @@ const styles = StyleSheet.create({
   },
   headerNoBorder: {
     borderBottomWidth: 1,
-    borderBottomColor: BG_LIGHT,
+    borderBottomColor: '#FFFFFF',
     borderTopWidth: 0,
     borderLeftWidth: 0,
     borderRightWidth: 0,
     ...Platform.select({
       web: {
         borderBottomWidth: '1px',
-        borderBottomColor: BG_LIGHT,
+        borderBottomColor: '#FFFFFF',
         borderBottomStyle: 'solid',
         borderTopWidth: '0px',
         borderLeftWidth: '0px',
@@ -2103,7 +2106,6 @@ const styles = StyleSheet.create({
     fontWeight: '700',
   },
   mobileLocationLink: {
-    textDecorationLine: 'underline',
     color: PRIMARY_COLOR,
   },
   modalOverlay: {

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Platform, Linking, ScrollView } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -27,6 +27,8 @@ export default function PayoutSettings({ onStatusChange }: Props) {
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<ConnectStatus | null>(null);
   const params = useLocalSearchParams();
+  const onStatusChangeRef = useRef(onStatusChange);
+  onStatusChangeRef.current = onStatusChange;
 
   const fetchStatus = useCallback(async () => {
     try {
@@ -34,7 +36,7 @@ export default function PayoutSettings({ onStatusChange }: Props) {
       const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setStatus(null);
-        onStatusChange?.(null, false);
+        onStatusChangeRef.current?.(null, false);
         return;
       }
 
@@ -48,12 +50,12 @@ export default function PayoutSettings({ onStatusChange }: Props) {
         const remoteStatus = await callFn<ConnectStatus>('get-connect-status', {});
         setStatus(remoteStatus);
         const hasAccount = remoteStatus?.hasAccount ?? Boolean(profileAccountId);
-        onStatusChange?.(remoteStatus, hasAccount);
+        onStatusChangeRef.current?.(remoteStatus, hasAccount);
       } catch (error: any) {
         console.error('get-connect-status error', error);
         Alert.alert('Error', error?.message || 'Failed to load payout status');
         setStatus(profileAccountId ? { hasAccount: true, accountId: profileAccountId } : { hasAccount: false });
-        onStatusChange?.(null, Boolean(profileAccountId));
+        onStatusChangeRef.current?.(null, Boolean(profileAccountId));
       }
     } catch (err: any) {
       console.error('fetch payout status error', err);
@@ -61,7 +63,7 @@ export default function PayoutSettings({ onStatusChange }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [onStatusChange]);
+  }, []);
 
   useEffect(() => {
     fetchStatus();
@@ -119,9 +121,11 @@ export default function PayoutSettings({ onStatusChange }: Props) {
         <View style={styles.card}>
           <Text style={styles.cardTitle}>No payout account yet</Text>
           <Text style={styles.cardBody}>Connect with Stripe to start receiving payouts.</Text>
-          <Pressable style={styles.primaryBtn} onPress={openStripeLink} disabled={busy}>
-            <Text style={styles.primaryBtnText}>{busy ? 'Opening…' : 'Connect with Stripe'}</Text>
-          </Pressable>
+          <View style={styles.buttonRow}>
+            <Pressable style={styles.primaryBtn} onPress={openStripeLink} disabled={busy}>
+              <Text style={styles.primaryBtnText}>{busy ? 'Opening…' : 'Connect with Stripe'}</Text>
+            </Pressable>
+          </View>
         </View>
       )}
 
@@ -208,14 +212,17 @@ export default function PayoutSettings({ onStatusChange }: Props) {
   );
 }
 
+const NAVBAR_BG = '#F2F0EF';
+
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: '#FFFFFF',
+    backgroundColor: NAVBAR_BG,
   },
   wrap: {
     padding: 24,
-    backgroundColor: '#FFFFFF',
+    paddingBottom: 100,
+    backgroundColor: NAVBAR_BG,
   },
   center: {
     flex: 1,
@@ -286,6 +293,9 @@ const styles = StyleSheet.create({
   buttonRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    alignSelf: 'stretch',
   },
   detailRow: {
     flexDirection: 'row',
@@ -312,7 +322,7 @@ const styles = StyleSheet.create({
   },
   primaryBtnText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '400',
   },
   secondaryBtn: {
     paddingHorizontal: 16,
@@ -324,7 +334,7 @@ const styles = StyleSheet.create({
   },
   secondaryBtnText: {
     color: '#1F2937',
-    fontWeight: '600',
+    fontWeight: '400',
   },
   infoBox: {
     borderRadius: 12,

@@ -6243,7 +6243,6 @@ const styles = StyleSheet.create({
   viewDetailsLink: {
     color: palette.primary,
     fontSize: 14,
-    textDecorationLine: 'underline',
     fontFamily: theme.typography.fontFamily.body,
   },
   chefCell: {

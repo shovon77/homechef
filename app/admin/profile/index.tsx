@@ -250,10 +250,10 @@ export default function AdminProfilePage() {
             </Text>
             <View style={{ gap: 12 }}>
               <TouchableOpacity onPress={() => router.push('/terms')}>
-                <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Terms of Service</Text>
+                <Text style={{ color: theme.colors.primary, fontSize: 14 }}>Terms of Service</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => router.push('/terms')}>
-                <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Legal</Text>
+                <Text style={{ color: theme.colors.primary, fontSize: 14 }}>Legal</Text>
               </TouchableOpacity>
             </View>
           </View>

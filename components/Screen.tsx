@@ -48,6 +48,8 @@ export default function Screen({
         borderRightWidth: 0, 
         borderLeftWidth: 0, 
         borderTopWidth: 0,
+        paddingTop: 0,
+        marginTop: 0,
         ...Platform.select({
           web: {
             borderBottomWidth: '0px',
@@ -66,6 +68,8 @@ export default function Screen({
         borderTopWidth: 0 
       };
 
+  const scrollBg = isChefDashboard ? BG_LIGHT : (baseStyle.backgroundColor || '#ffffff');
+  const scrollWrapStyle = isChefDashboard ? { flex: 1, backgroundColor: BG_LIGHT, overflow: 'hidden' as const, borderTopWidth: 0, borderTopColor: 'transparent' } : undefined;
   return (
     <View style={baseStyle}>
       {!noHeader && (
@@ -73,17 +77,18 @@ export default function Screen({
           <NavBar />
         </View>
       )}
-      <ScrollView 
-        ref={scrollRef}
-        contentContainerStyle={[
-          { flexGrow: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, backgroundColor: baseStyle.backgroundColor || '#ffffff' }, 
-          scrollViewContentStyle
-        ]}
-        style={{ flex: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, backgroundColor: baseStyle.backgroundColor || '#ffffff' }}
-        contentInsetAdjustmentBehavior="never"
-      >
-        <View style={[content, { minHeight: '100%', justifyContent: 'space-between' }]}>
-          <View style={{ flexGrow: 1, flexShrink: 0 }}>
+      <View style={scrollWrapStyle} data-testid={isChefDashboard ? 'chef-dashboard-scroll-wrapper' : undefined}>
+        <ScrollView 
+          ref={scrollRef}
+          contentContainerStyle={[
+            { flexGrow: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, backgroundColor: scrollBg, borderTopWidth: 0, borderTopColor: 'transparent' }, 
+            scrollViewContentStyle
+          ]}
+          style={{ flex: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, backgroundColor: scrollBg, borderTopWidth: 0 }}
+          contentInsetAdjustmentBehavior="never"
+        >
+        <View style={[content, { minHeight: '100%', justifyContent: 'space-between' }, isChefDashboard && { backgroundColor: BG_LIGHT, borderTopWidth: 0, borderTopColor: 'transparent' }]} data-testid={isChefDashboard ? 'chef-dashboard-scroll-content' : undefined}>
+          <View style={[{ flexGrow: 1, flexShrink: 0 }, isChefDashboard && { backgroundColor: BG_LIGHT, borderTopWidth: 0, borderTopColor: 'transparent' }]}>
             {children}
           </View>
           {!noFooter && (
@@ -120,7 +125,8 @@ export default function Screen({
         </View>
         {/* Spacer for fixed bottom elements */}
         {fixedFooterHeight > 0 && <View style={{ height: fixedFooterHeight }} />}
-      </ScrollView>
+        </ScrollView>
+      </View>
     </View>
   );
 }

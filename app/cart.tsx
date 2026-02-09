@@ -1049,8 +1049,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
   },
   emptyCartFooterLink: {
-    textDecorationLine: 'underline',
-    textDecorationColor: PRIMARY_COLOR,
     color: TEXT_DARK,
     ...Platform.select({
       web: {
@@ -1248,7 +1246,6 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
-    textDecorationLine: 'underline',
   },
   manualEntryButton: {
     flexDirection: 'row',

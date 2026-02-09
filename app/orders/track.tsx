@@ -1921,7 +1921,6 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
-    textDecorationLine: 'underline',
   },
   pickupReminder: {
     color: TEXT_MUTED,

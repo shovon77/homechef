@@ -36,6 +36,12 @@ const TEXT_DARK = '#33393A';
 const TEXT_MUTED = '#555555';
 const BORDER_LIGHT = '#EAECF0';
 
+// Remove orange/default focus outline on web when typing in inputs
+const INPUT_NO_FOCUS_OUTLINE = Platform.select({
+  web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any },
+  default: {},
+});
+
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
@@ -1651,7 +1657,7 @@ export default function ChefDashboard() {
       <Screen style={{ backgroundColor: BG_PAGE }}>
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: BG_PAGE }}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={{ color: TEXT_MUTED, marginTop: 16 }}>Loading dashboard...</Text>
+          <Text style={{ color: TEXT_MUTED, marginTop: 16, fontFamily: theme.typography.fontFamily.body }}>Loading dashboard...</Text>
         </View>
       </Screen>
     );
@@ -1807,13 +1813,14 @@ export default function ChefDashboard() {
   const DashboardTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
       {msg && (
-        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
+        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Image source={require('../../assets/success.png')} style={{ width: 24, height: 24 }} tintColor={PRIMARY_COLOR} />
+          <Text style={{ color: TEXT_DARK, fontWeight: '700', flex: 1, fontFamily: theme.typography.fontFamily.body }}>{msg}</Text>
         </View>
       )}
       {err && (
         <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+          <Text style={{ color: '#ef4444', fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{err}</Text>
         </View>
       )}
 
@@ -1987,7 +1994,7 @@ export default function ChefDashboard() {
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -2006,7 +2013,7 @@ export default function ChefDashboard() {
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -2025,7 +2032,7 @@ export default function ChefDashboard() {
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
                   <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
                   </View>
                 </TouchableOpacity>
               </View>
@@ -2097,7 +2104,7 @@ export default function ChefDashboard() {
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           {statusLabel}
                           {count > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {count}</Text>
                           )}
                         </Text>
                       </TouchableOpacity>
@@ -2121,7 +2128,7 @@ export default function ChefDashboard() {
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           Declined
                           {declinedCount > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {declinedCount}</Text>
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {declinedCount}</Text>
                           )}
                         </Text>
               </TouchableOpacity>
@@ -2137,12 +2144,12 @@ export default function ChefDashboard() {
                   <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
                   <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                 </View>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
                   {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
                 </Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Placed: {formatLocal(order.created_at)}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_email || 'Unknown'}</Text>
+                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
                 <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                   {order.status === 'requested' ? (
                     <>
@@ -2177,7 +2184,7 @@ export default function ChefDashboard() {
                               opacity: canAccept ? 1 : 0.5,
                             }}
                           >
-                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                           </TouchableOpacity>
                         );
                       })()}
@@ -2192,7 +2199,7 @@ export default function ChefDashboard() {
                         }}
                         style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                       </TouchableOpacity>
                     </>
                   ) : order.status === 'pending' ? (
@@ -2208,19 +2215,19 @@ export default function ChefDashboard() {
                         }}
                         style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Mark as Ready</Text>
                       </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                         style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                       </TouchableOpacity>
-                      <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                      <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
                     </View>
                   ) : order.status === 'ready' ? (
                     <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                      <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                      <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
                     </View>
                   ) : null}
                   {order.status !== 'pending' && (
@@ -2228,7 +2235,7 @@ export default function ChefDashboard() {
                       onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                       style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                     >
-                      <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                      <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                     </TouchableOpacity>
                   )}
                 </View>
@@ -2236,7 +2243,7 @@ export default function ChefDashboard() {
             ))
           ) : (
             <View style={{ padding: 32, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
             </View>
           )}
         </View>
@@ -2291,7 +2298,7 @@ export default function ChefDashboard() {
           </ScrollView>
         ) : (
           <View style={{ padding: 32, alignItems: 'center' }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Your top dishes will appear once you get orders</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Your top dishes will appear once you get orders</Text>
           </View>
         )}
       </View>
@@ -2301,20 +2308,21 @@ export default function ChefDashboard() {
   const MenuTab = (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120 }}>
       {msg && (
-        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
+        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
+          <Image source={require('../../assets/success.png')} style={{ width: 24, height: 24 }} tintColor={PRIMARY_COLOR} />
+          <Text style={{ color: TEXT_DARK, fontWeight: '700', flex: 1, fontFamily: theme.typography.fontFamily.body }}>{msg}</Text>
         </View>
       )}
       {err && (
         <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
+          <Text style={{ color: '#ef4444', fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{err}</Text>
         </View>
       )}
       <NewDishForm onCreate={createDish} saving={saving} />
 
       <View style={{ gap: 24 }}>
         {dishes.length === 0 ? (
-          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No dishes yet. Add your first dish above.</Text>
         ) : (
           <>
             {(() => {
@@ -2341,11 +2349,11 @@ export default function ChefDashboard() {
                           opacity: menuPage === 1 ? 0.5 : 1,
                         }}
                       >
-                        <Text style={{ color: menuPage === 1 ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Previous</Text>
+                        <Text style={{ color: menuPage === 1 ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Previous</Text>
                       </TouchableOpacity>
                       
                       <View style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                        <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>
+                        <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>
                           Page {menuPage} of {totalMenuPages}
                         </Text>
                       </View>
@@ -2361,7 +2369,7 @@ export default function ChefDashboard() {
                           opacity: menuPage === totalMenuPages ? 0.5 : 1,
                         }}
                       >
-                        <Text style={{ color: menuPage === totalMenuPages ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Next</Text>
+                        <Text style={{ color: menuPage === totalMenuPages ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Next</Text>
                       </TouchableOpacity>
                     </View>
                   )}
@@ -2401,10 +2409,10 @@ export default function ChefDashboard() {
             <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
             <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
           </View>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_email || 'Unknown'}</Text>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-          <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>Placed: {formatLocal(order.created_at)}</Text>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_email || 'Unknown'}</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
             Items: {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
           </Text>
           <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -2441,7 +2449,7 @@ export default function ChefDashboard() {
                         opacity: canAccept ? 1 : 0.5,
                       }}
                     >
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                     </TouchableOpacity>
                   );
                 })()}
@@ -2456,7 +2464,7 @@ export default function ChefDashboard() {
                   }}
                   style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                 >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                 </TouchableOpacity>
               </>
             ) : order.status === 'pending' ? (
@@ -2472,26 +2480,26 @@ export default function ChefDashboard() {
                   }}
                 style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                 >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Mark as Ready</Text>
                 </TouchableOpacity>
                       <TouchableOpacity
                         onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                         style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                 </TouchableOpacity>
-                <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
               </View>
             ) : order.status === 'ready' ? (
             <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
               </View>
             ) : null}
           </View>
         </View>
       ))}
       {filteredOrders.length === 0 && (
-        <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', padding: 32 }}>No {orderStatusFilter} orders</Text>
+        <Text style={{ color: TEXT_MUTED, fontSize: 14, textAlign: 'center', padding: 32, fontFamily: theme.typography.fontFamily.body }}>No {orderStatusFilter} orders</Text>
       )}
     </ScrollView>
   );
@@ -2503,12 +2511,12 @@ export default function ChefDashboard() {
         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Reviews summary</Text>
         <View>
           <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={{ fontSize: 24, color: PRIMARY_COLOR }}>☆</Text>
+            <Text style={{ fontSize: 24, color: PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}>☆</Text>
             <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
               {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
             </Text>
           </View>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4, fontFamily: theme.typography.fontFamily.body }}>
               Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
             </Text>
         </View>
@@ -2517,17 +2525,17 @@ export default function ChefDashboard() {
       {/* Search and Sort */}
       <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, justifyContent: 'space-between', alignItems: Platform.OS === 'web' ? 'center' : 'stretch' }}>
         <View style={{ flex: Platform.OS === 'web' ? 1 : 1, position: 'relative', maxWidth: Platform.OS === 'web' ? 400 : '100%' }}>
-          <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>🔍</Text>
+          <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1, fontFamily: theme.typography.fontFamily.body }}>🔍</Text>
           <TextInput
             value={reviewSearch}
             onChangeText={setReviewSearch}
             placeholder="Search reviews..."
             placeholderTextColor={TEXT_MUTED}
-            style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Sort by:</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Sort by:</Text>
           <View style={{ backgroundColor: BG_LIGHT, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 4 }}>
             <View style={{ flexDirection: 'row', gap: 4 }}>
               {(['newest', 'oldest', 'highest', 'lowest'] as const).map(sort => (
@@ -2541,7 +2549,7 @@ export default function ChefDashboard() {
                     backgroundColor: reviewSort === sort ? PRIMARY_COLOR + '20' : 'transparent',
                   }}
                 >
-                  <Text style={{ color: reviewSort === sort ? PRIMARY_COLOR : TEXT_MUTED, fontSize: 12, fontWeight: reviewSort === sort ? '700' : '500' }}>
+                  <Text style={{ color: reviewSort === sort ? PRIMARY_COLOR : TEXT_MUTED, fontSize: 12, fontWeight: reviewSort === sort ? '700' : '500', fontFamily: theme.typography.fontFamily.body }}>
                     {sort === 'newest' ? 'Newest' : sort === 'oldest' ? 'Oldest' : sort === 'highest' ? 'Highest' : 'Lowest'}
                   </Text>
                 </TouchableOpacity>
@@ -2555,11 +2563,11 @@ export default function ChefDashboard() {
       {reviewsLoading ? (
         <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
           <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={{ color: TEXT_MUTED, marginTop: 16 }}>Loading reviews...</Text>
+          <Text style={{ color: TEXT_MUTED, marginTop: 16, fontFamily: theme.typography.fontFamily.body }}>Loading reviews...</Text>
         </View>
       ) : filteredAndSortedReviews.length === 0 ? (
         <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 32, alignItems: 'center' }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 16 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>
             {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
           </Text>
         </View>
@@ -2578,7 +2586,7 @@ export default function ChefDashboard() {
                   
                   {/* Comment */}
                   {review.comment && (
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>"{review.comment}"</Text>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>"{review.comment}"</Text>
                   )}
                   
                   {/* Review images if any */}
@@ -2605,14 +2613,14 @@ export default function ChefDashboard() {
                         setShowReviewReplyModal(true);
                       }}
                     >
-                      <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700' }}>Reply</Text>
+                      <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reply</Text>
                     </TouchableOpacity>
                   </View>
                   
                   {/* Name and date at bottom */}
                   <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>{review.user_name || review.user_email || 'Anonymous'}</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 12 }}>{formatReviewDate(review.created_at)}</Text>
+                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>{review.user_name || review.user_email || 'Anonymous'}</Text>
+                    <Text style={{ color: TEXT_MUTED, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>{formatReviewDate(review.created_at)}</Text>
                   </View>
                 </View>
               </View>
@@ -2644,24 +2652,14 @@ export default function ChefDashboard() {
       <View style={[styles.page, isMobile && styles.pageMobile]}>
         {Sidebar}
         <View style={styles.content}>
-          {/* Render TabBar once at the top level to prevent reloading */}
-          <View style={{ backgroundColor: BG_PAGE, paddingTop: 32, paddingHorizontal: 32, paddingBottom: 0 }}>
+          {/* Render TabBar once at the top level to prevent reloading - use literal hex so web never shows white */}
+          <View style={{ backgroundColor: '#F2F0EF', paddingTop: 12, paddingHorizontal: 32, paddingBottom: 0, borderTopWidth: 0, borderTopColor: 'transparent' }} data-testid="chef-dashboard-header-area">
             {WelcomeHeader}
             {TabBar}
           </View>
           {/* Tab content without WelcomeHeader and TabBar */}
           {activeTab === 'dashboard' && (
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
-      {msg && (
-        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
-        </View>
-      )}
-      {err && (
-        <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
-        </View>
-      )}
               <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
                 {/* Financial Metrics Card */}
                 <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
@@ -2832,7 +2830,7 @@ export default function ChefDashboard() {
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
                           <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
                           </View>
                         </TouchableOpacity>
                       </View>
@@ -2851,7 +2849,7 @@ export default function ChefDashboard() {
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
                           <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
                           </View>
                         </TouchableOpacity>
                       </View>
@@ -2870,7 +2868,7 @@ export default function ChefDashboard() {
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
                           <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14 }}>i</Text>
+                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
                           </View>
                         </TouchableOpacity>
                       </View>
@@ -2905,7 +2903,7 @@ export default function ChefDashboard() {
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '700', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           {statusLabel}
                           {count > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {count}</Text>
                           )}
                         </Text>
                       </TouchableOpacity>
@@ -2945,12 +2943,12 @@ export default function ChefDashboard() {
                           <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                         </View>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                          {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+<Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Placed: {formatLocal(order.created_at)}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {order.status === 'requested' ? (
                             <>
@@ -2985,7 +2983,7 @@ export default function ChefDashboard() {
                                       opacity: canAccept ? 1 : 0.5,
                                     }}
                                   >
-                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                                   </TouchableOpacity>
                                 );
                               })()}
@@ -3000,7 +2998,7 @@ export default function ChefDashboard() {
                                 }}
                                 style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                               </TouchableOpacity>
                             </>
                           ) : order.status === 'pending' ? (
@@ -3016,19 +3014,19 @@ export default function ChefDashboard() {
                                 }}
                                 style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Mark as Ready</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
                                 onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                                 style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                               </TouchableOpacity>
-                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
                             </View>
                           ) : order.status === 'ready' ? (
                             <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
                             </View>
                           ) : null}
                           {order.status !== 'pending' && (
@@ -3036,7 +3034,7 @@ export default function ChefDashboard() {
                               onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                               style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                             >
-                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -3044,7 +3042,7 @@ export default function ChefDashboard() {
                     ))
                   ) : (
                     <View style={{ padding: 32, alignItems: 'center' }}>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
                     </View>
                   )}
                 </View>
@@ -3092,20 +3090,10 @@ export default function ChefDashboard() {
           )}
           {activeTab === 'menu' && (
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120, paddingTop: 0 }}>
-              {msg && (
-                <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8 }}>
-                  <Text style={{ color: TEXT_DARK, fontWeight: '700' }}>{msg}</Text>
-                </View>
-              )}
-              {err && (
-                <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-                  <Text style={{ color: '#ef4444', fontWeight: '700' }}>{err}</Text>
-                </View>
-              )}
               <NewDishForm onCreate={createDish} saving={saving} />
               <View style={{ gap: 24 }}>
                 {dishes.length === 0 ? (
-                  <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No dishes yet. Add your first dish above.</Text>
                 ) : (
                   dishes.map(d => (
                     <DishEditor key={d.id} dish={d} onSave={updateDish} onDeactivate={deactivateDish} onActivate={activateDish} saving={saving} />
@@ -3139,7 +3127,7 @@ export default function ChefDashboard() {
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           {statusLabel}
                           {count > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {count}</Text>
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {count}</Text>
                           )}
                         </Text>
                       </TouchableOpacity>
@@ -3163,7 +3151,7 @@ export default function ChefDashboard() {
                         <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
                           Declined
                           {declinedCount > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR }}> {declinedCount}</Text>
+                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {declinedCount}</Text>
                           )}
                         </Text>
                       </TouchableOpacity>
@@ -3179,12 +3167,12 @@ export default function ChefDashboard() {
                           <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                         </View>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                          {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+<Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>Placed: {formatLocal(order.created_at)}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
                           {order.status === 'requested' ? (
                             <>
@@ -3219,7 +3207,7 @@ export default function ChefDashboard() {
                                       opacity: canAccept ? 1 : 0.5,
                                     }}
                                   >
-                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
+                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
                                   </TouchableOpacity>
                                 );
                               })()}
@@ -3234,7 +3222,7 @@ export default function ChefDashboard() {
                                 }}
                                 style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Reject</Text>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                               </TouchableOpacity>
                             </>
                           ) : order.status === 'pending' ? (
@@ -3250,19 +3238,19 @@ export default function ChefDashboard() {
                                 }}
                                 style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800' }}>Mark as Ready</Text>
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Mark as Ready</Text>
                               </TouchableOpacity>
                               <TouchableOpacity
                                 onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                                 style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                               </TouchableOpacity>
-                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700' }}>In the kitchen</Text>
+                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
                             </View>
                           ) : order.status === 'ready' ? (
                             <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700' }}>Ready</Text>
+                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
                             </View>
                           ) : null}
                           {order.status !== 'pending' && (
@@ -3270,7 +3258,7 @@ export default function ChefDashboard() {
                               onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
                               style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                             >
-                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800' }}>Messages</Text>
+                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -3278,7 +3266,7 @@ export default function ChefDashboard() {
                     ))
                   ) : (
                     <View style={{ padding: 32, alignItems: 'center' }}>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
                     </View>
                   )}
                 </View>
@@ -3293,7 +3281,7 @@ export default function ChefDashboard() {
                 <View>
                   <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Text style={{ fontSize: 24, color: PRIMARY_COLOR }}>☆</Text>
+                      <Text style={{ fontSize: 24, color: PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}>☆</Text>
                       <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
                         {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
                       </Text>
@@ -3329,7 +3317,7 @@ export default function ChefDashboard() {
                     onChangeText={setReviewSearch}
                     placeholder="Search reviews..."
                     placeholderTextColor={TEXT_MUTED}
-                    style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }}
+                    style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }, INPUT_NO_FOCUS_OUTLINE]}
                   />
                 </View>
               </View>
@@ -3338,11 +3326,11 @@ export default function ChefDashboard() {
               {(reviewsLoading || dishRatingsLoading) ? (
                 <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
                   <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-                  <Text style={{ color: TEXT_MUTED, marginTop: 16 }}>Loading reviews...</Text>
+                  <Text style={{ color: TEXT_MUTED, marginTop: 16, fontFamily: theme.typography.fontFamily.body }}>Loading reviews...</Text>
                 </View>
               ) : filteredAndSortedReviews.length === 0 ? (
                 <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 32, alignItems: 'center' }}>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 16 }}>
+                  <Text style={{ color: TEXT_MUTED, fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>
                     {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
                   </Text>
                 </View>
@@ -3400,7 +3388,7 @@ export default function ChefDashboard() {
                                   setShowReviewReplyModal(true);
                                 }}
                               >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700' }}>Reply</Text>
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reply</Text>
                               </TouchableOpacity>
                             )}
                           </View>
@@ -3465,6 +3453,26 @@ export default function ChefDashboard() {
                 }}
               />
             </View>
+          )}
+          {/* Toast in Modal so it always shows on top (works on mobile); blocks scroll for ~3s then auto-dismisses */}
+          {(msg || err) && (
+            <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => { setMsg(null); setErr(null); }}>
+              <View style={styles.toastModalOverlay} pointerEvents="box-none">
+                <View style={styles.floatingToast}>
+                  {msg && (
+                    <View style={[styles.floatingToastBanner, { backgroundColor: '#FFFFFF', borderLeftColor: PRIMARY_COLOR }]}>
+                      <Image source={require('../../assets/success.png')} style={{ width: 24, height: 24 }} tintColor={PRIMARY_COLOR} />
+                      <Text style={[styles.floatingToastText, { color: TEXT_DARK }]}>{msg}</Text>
+                    </View>
+                  )}
+                  {err && (
+                    <View style={[styles.floatingToastBanner, { backgroundColor: '#FFFFFF', borderLeftColor: '#ef4444' }]}>
+                      <Text style={[styles.floatingToastText, { color: '#ef4444' }]}>{err}</Text>
+                    </View>
+                  )}
+                </View>
+              </View>
+            </Modal>
           )}
         </View>
         </View>
@@ -3732,7 +3740,7 @@ const styles = StyleSheet.create({
   page: {
     flex: 1,
     flexDirection: 'row',
-    backgroundColor: BG_LIGHT,
+    backgroundColor: '#F2F0EF',
     minHeight: '100%',
   },
   sidebar: {
@@ -3761,6 +3769,7 @@ const styles = StyleSheet.create({
   },
   sidebarIcon: {
     fontSize: 24,
+    fontFamily: theme.typography.fontFamily.body,
   },
   sidebarAvatar: {
     width: 40,
@@ -3867,7 +3876,39 @@ const styles = StyleSheet.create({
   },
   content: {
     flex: 1,
-    backgroundColor: BG_PAGE,
+    backgroundColor: '#F2F0EF',
+    position: 'relative',
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
+  },
+  toastModalOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 48,
+    paddingHorizontal: 16,
+    alignItems: 'stretch',
+  },
+  floatingToast: {
+    gap: 8,
+  },
+  floatingToastBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    padding: 12,
+    borderRadius: 8,
+    borderLeftWidth: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  floatingToastText: {
+    flex: 1,
+    fontWeight: '700',
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   // Mobile Styles
   pageMobile: {
@@ -3881,6 +3922,7 @@ const styles = StyleSheet.create({
     borderBottomColor: BORDER_LIGHT,
     paddingVertical: 12,
     paddingHorizontal: 12,
+    backgroundColor: '#F2F0EF',
   },
   tableContainer: {
     position: 'relative',
@@ -3991,6 +4033,7 @@ const messageModalStyles = StyleSheet.create({
     fontSize: 24,
     color: TEXT_DARK,
     fontWeight: '300',
+    fontFamily: theme.typography.fontFamily.body,
   },
   modalBody: {
     flex: 1,
@@ -4097,6 +4140,10 @@ const messageModalStyles = StyleSheet.create({
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     textAlignVertical: 'top',
+    ...Platform.select({
+      web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any },
+      default: {},
+    }),
   },
   messageInputActions: {
     flexDirection: 'row',
@@ -4134,6 +4181,7 @@ const messageModalStyles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 20,
     fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
   },
 });
 
@@ -4161,20 +4209,20 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               onChangeText={setName}
               placeholder="Chicken Biryani"
               placeholderTextColor={TEXT_MUTED}
-              style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+              style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
             />
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
             <View style={{ position: 'relative' }}>
-              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
+              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>CAD $</Text>
               <TextInput
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="numeric"
                 placeholder="19.99"
                 placeholderTextColor={TEXT_MUTED}
-                style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 28, minHeight: 40 }}
+                style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 52, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
               />
             </View>
           </View>
@@ -4214,7 +4262,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             placeholderTextColor={TEXT_MUTED}
             multiline
             numberOfLines={3}
-            style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ gap: 8 }}>
@@ -4226,7 +4274,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             placeholderTextColor={TEXT_MUTED}
             multiline
             numberOfLines={2}
-            style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
@@ -4267,96 +4315,109 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
   const [file, setFile] = useState<File | null>(null);
   const [preview, setPreview] = useState<string | null>(dish.image || dish.thumbnail || '');
 
+  const imageSize = isMobile ? '100%' : 192;
+  const imageStyle = { width: imageSize, height: 192, borderRadius: 8, backgroundColor: '#EEE', maxWidth: isMobile ? '100%' : 192 };
+
   return (
     <View style={{ backgroundColor: dish.is_active === false ? '#F8FAFC' : BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
-      {dish.is_active === false && (
-        <View style={{ marginBottom: 12, paddingVertical: 6, paddingHorizontal: 12, backgroundColor: '#FEF3C7', borderRadius: 6, alignSelf: 'flex-start' }}>
-          <Text style={{ color: '#92400E', fontSize: 12, fontWeight: '500' }}>Deactivated — hidden from homepage, search & explore</Text>
-        </View>
-      )}
       <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 24 }}>
-        <Image 
-          source={{ uri: preview || 'https://placehold.co/192x192?text=Dish' }} 
-          style={{ 
-            width: isMobile ? '100%' : 192, 
-            height: 192, 
-            borderRadius: 8, 
-            backgroundColor: '#EEE',
-            maxWidth: isMobile ? '100%' : 192
-          }} 
-        />
-        <View style={{ flex: 1, gap: 16 }}>
-          <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
-            <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Name</Text>
-              <TextInput
-                value={name}
-                onChangeText={setName}
-                placeholder="Dish name"
-                placeholderTextColor={TEXT_MUTED}
-                style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
-              />
-            </View>
-            <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
-              <View style={{ position: 'relative' }}>
-                <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
-                <TextInput
-                  value={price}
-                  onChangeText={setPrice}
-                  keyboardType="numeric"
-                  placeholder="0.00"
-                  placeholderTextColor={TEXT_MUTED}
-                  style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 28, minHeight: 40 }}
-                />
+        <View style={{ width: imageSize, maxWidth: isMobile ? '100%' : 192 }}>
+          <View style={{ position: 'relative' }}>
+            <Image 
+              source={{ uri: preview || 'https://placehold.co/192x192?text=Dish' }} 
+              style={imageStyle} 
+            />
+            {dish.is_active === false && (
+              <View
+                style={[
+                  {
+                    position: 'absolute',
+                    left: 0,
+                    top: 0,
+                    right: 0,
+                    bottom: 0,
+                    borderRadius: 8,
+                    justifyContent: 'center',
+                    alignItems: 'center',
+                  },
+                  Platform.select({
+                    web: {
+                      background: 'linear-gradient(to bottom, rgba(0,0,0,0.25), rgba(0,0,0,0.65))',
+                    } as any,
+                    default: { backgroundColor: 'rgba(0,0,0,0.5)' },
+                  }),
+                ]}
+              >
+                <Text style={{ color: '#FFFFFF', fontSize: 18, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Deactivated</Text>
               </View>
-            </View>
+            )}
           </View>
-          <View style={{ gap: 8 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Description</Text>
-            <TextInput
-              value={description}
-              onChangeText={setDescription}
-              placeholder="Describe the dish"
-              placeholderTextColor={TEXT_MUTED}
-              multiline
-              numberOfLines={2}
-              style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+          <View style={{ marginTop: 12 }}>
+            <FilePicker 
+              label="Replace Photo" 
+              onFile={(f) => { 
+                if (preview && preview.startsWith('blob:')) {
+                  URL.revokeObjectURL(preview);
+                }
+                setFile(f); 
+                setPreview(URL.createObjectURL(f)); 
+              }} 
+              accept="image/*" 
             />
           </View>
-          <View style={{ gap: 8 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Ingredients & Allergens</Text>
+        </View>
+        <View style={{ flex: 1, gap: 16 }}>
+        <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
+          <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Name</Text>
             <TextInput
-              value={ingredients}
-              onChangeText={setIngredients}
-              placeholder="List ingredients and allergens"
+              value={name}
+              onChangeText={setName}
+              placeholder="Dish name"
               placeholderTextColor={TEXT_MUTED}
-              multiline
-              numberOfLines={2}
-              style={{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+              style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
             />
           </View>
-          <View style={{ 
-            flexDirection: isMobile ? 'column' : 'row', 
-            gap: 16, 
-            alignItems: isMobile ? 'stretch' : 'center',
-            width: '100%'
-          }}>
-            <View>
-              <FilePicker 
-                label="Replace Photo" 
-                onFile={(f) => { 
-                  if (preview && preview.startsWith('blob:')) {
-                    URL.revokeObjectURL(preview);
-                  }
-                  setFile(f); 
-                  setPreview(URL.createObjectURL(f)); 
-                }} 
-                accept="image/*" 
+          <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
+            <View style={{ position: 'relative' }}>
+              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>CAD $</Text>
+              <TextInput
+                value={price}
+                onChangeText={setPrice}
+                keyboardType="numeric"
+                placeholder="0.00"
+                placeholderTextColor={TEXT_MUTED}
+                style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 52, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
               />
             </View>
-            {!isMobile && <View style={{ flex: 1 }} />}
-            <View style={{ 
+          </View>
+        </View>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Description</Text>
+          <TextInput
+            value={description}
+            onChangeText={setDescription}
+            placeholder="Describe the dish"
+            placeholderTextColor={TEXT_MUTED}
+            multiline
+            numberOfLines={2}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
+          />
+        </View>
+        <View style={{ gap: 8 }}>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Ingredients & Allergens</Text>
+          <TextInput
+            value={ingredients}
+            onChangeText={setIngredients}
+            placeholder="List ingredients and allergens"
+            placeholderTextColor={TEXT_MUTED}
+            multiline
+            numberOfLines={2}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
+          />
+        </View>
+        <View style={{ 
               flexDirection: 'row', 
               gap: 8
             }}>
@@ -4387,7 +4448,6 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
                 <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{dish.is_active !== false ? 'Deactivate' : 'Activate'}</Text>
               </TouchableOpacity>
             </View>
-          </View>
         </View>
       </View>
     </View>

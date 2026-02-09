@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Modal, Platform, StyleSheet, useWindowDimensions } from "react-native";
 import { useRouter, Link } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -47,6 +47,7 @@ export default function ChefProfilePage() {
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsType, setTermsType] = useState<'agreement' | 'fee' | 'payout' | null>(null);
+  const [profileSaveMsg, setProfileSaveMsg] = useState<string | null>(null);
   
   // Profile tabs
   const [activeNavTab, setActiveNavTab] = useState<'orders' | 'settings'>('settings');
@@ -64,7 +65,8 @@ export default function ChefProfilePage() {
     total_quantity?: number;
   }>>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
-  
+  const loadedUserIdRef = useRef<string | null>(null);
+
   const cuisineTypes = [
     'Italian', 'Mexican', 'Chinese', 'Japanese', 'Thai', 'Indian', 'Bengali',
     'French', 'Mediterranean', 'American', 'Asian Fusion', 'Vegan', 'Vegetarian',
@@ -86,7 +88,10 @@ export default function ChefProfilePage() {
       return;
     }
 
-    if (user) {
+    // Only load profile when user is set and we haven't loaded for this user yet (or user id changed).
+    // This avoids refetching on every auth state change (e.g. TOKEN_REFRESHED when tab gains focus).
+    if (user && loadedUserIdRef.current !== user.id) {
+      loadedUserIdRef.current = user.id;
       loadProfile();
     }
   }, [user, roleLoading, isChef]);
@@ -406,7 +411,8 @@ export default function ChefProfilePage() {
         throw chefError;
       }
 
-      Alert.alert("Success", "Profile updated successfully");
+      setProfileSaveMsg('Profile updated');
+      setTimeout(() => setProfileSaveMsg(null), 3000);
       await loadProfile();
     } catch (e: any) {
       Alert.alert("Error", e?.message || "Failed to update profile");
@@ -575,7 +581,7 @@ export default function ChefProfilePage() {
     return (
       <Screen>
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
-        <Text style={{ color: theme.colors.text, fontSize: 18 }}>Chef access required</Text>
+        <Text style={{ color: theme.colors.text, fontSize: 18, fontFamily: theme.typography.fontFamily.body }}>Chef access required</Text>
       </View>
       </Screen>
     );
@@ -754,7 +760,7 @@ export default function ChefProfilePage() {
                   {saving ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
                   ) : (
-                    <Text style={profileStyles.saveButtonText}>Save Changes</Text>
+                    <Text style={profileStyles.saveButtonText}>Save</Text>
                   )}
                 </TouchableOpacity>
           </View>
@@ -806,17 +812,17 @@ export default function ChefProfilePage() {
                       onPress={() => setShowCuisineModal(true)}
                       style={[profileStyles.settingsInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
                     >
-                      <Text style={{ color: cuisineType.length > 0 ? '#101828' : '#94a3b8' }}>
+                      <Text style={{ color: cuisineType.length > 0 ? '#101828' : '#94a3b8', fontFamily: theme.typography.fontFamily.body }}>
                         {cuisineType.length > 0 ? cuisineType.join(', ') : 'Select cuisine types...'}
                       </Text>
-                      <Text style={{ color: '#94a3b8' }}>▼</Text>
+                      <Text style={{ color: '#94a3b8', fontFamily: theme.typography.fontFamily.body }}>▼</Text>
                     </TouchableOpacity>
                     {cuisineType.length > 0 && (
                       <TouchableOpacity
                         onPress={() => setCuisineType([])}
                         style={{ marginTop: 8, alignSelf: 'flex-start' }}
                       >
-                        <Text style={{ color: theme.colors.primary, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body, textDecorationLine: 'underline' }}>
+                        <Text style={{ color: theme.colors.primary, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
                           Clear selection
                         </Text>
                       </TouchableOpacity>
@@ -892,7 +898,7 @@ export default function ChefProfilePage() {
                     onPress={() => setShowPickupModal(true)}
                     style={[profileStyles.settingsInput, { marginBottom: 8 }]}
                   >
-                    <Text style={{ color: theme.colors.primary }}>+ Add pickup slot</Text>
+                    <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>+ Add pickup slot</Text>
                   </TouchableOpacity>
                   {pickupAvailability.length > 0 && (
                     <View style={{ gap: 8 }}>
@@ -906,11 +912,11 @@ export default function ChefProfilePage() {
                         });
                         return Object.entries(slotsByDay).map(([day, timeWindows]) => (
                           <View key={day} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: '#F9FAFB', borderRadius: 6 }}>
-                            <Text style={{ color: '#101828', fontSize: 14, flex: 1 }}>
+                            <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>
                               {day}: {timeWindows.join(', ')}
                             </Text>
                             <TouchableOpacity onPress={() => handleRemovePickupSlot(day)}>
-                              <Text style={{ color: '#B91C1C', fontSize: 12 }}>Remove</Text>
+                              <Text style={{ color: '#B91C1C', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Remove</Text>
                             </TouchableOpacity>
                           </View>
                         ));
@@ -933,7 +939,7 @@ export default function ChefProfilePage() {
                 {/* Terms and Agreements Section */}
                 <View style={[profileStyles.settingsSection, { paddingTop: theme.spacing.xl, borderTopWidth: 1, borderTopColor: '#EAECF0' }]}>
                   <Text style={[profileStyles.settingsSectionTitle, { fontSize: 18, marginBottom: 12 }]}>Food safety & payout acknowledgement</Text>
-                  <Text style={{ color: '#667085', fontSize: 14, marginBottom: 12 }}>
+                  <Text style={{ color: '#667085', fontSize: 14, marginBottom: 12, fontFamily: theme.typography.fontFamily.body }}>
                     You're responsible for preparation.{"\n"}
                     We securely handle payments.
                   </Text>
@@ -943,40 +949,40 @@ export default function ChefProfilePage() {
                       setTermsType('agreement');
                       setShowTermsModal(true);
                     }}>
-                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Chef Participation Agreement</Text>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Chef Participation Agreement</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => {
                       setTermsType('fee');
                       setShowTermsModal(true);
                     }}>
-                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Fee Schedule</Text>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Fee Schedule</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => {
                       setTermsType('payout');
                       setShowTermsModal(true);
                     }}>
-                      <Text style={{ color: theme.colors.primary, fontSize: 14, textDecorationLine: 'underline' }}>Payouts & Payments</Text>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Payouts & Payments</Text>
                     </TouchableOpacity>
                   </View>
 
                   <View style={{ gap: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 12 }}>✓</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                       </View>
-                      <Text style={{ color: '#101828', fontSize: 14 }}>I'm responsible for food preparation and safety</Text>
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'm responsible for food preparation and safety</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 12 }}>✓</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                       </View>
-                      <Text style={{ color: '#101828', fontSize: 14 }}>I'll accurately disclose allergens & ingredients</Text>
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'll accurately disclose allergens & ingredients</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 12 }}>✓</Text>
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                       </View>
-                      <Text style={{ color: '#101828', fontSize: 14 }}>I understand the platform does not inspect food</Text>
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I understand the platform does not inspect food</Text>
                     </View>
                   </View>
                 </View>
@@ -1025,7 +1031,7 @@ export default function ChefProfilePage() {
               maxHeight: '80%',
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#101828' }}>Select cuisine types</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>Select cuisine types</Text>
             <ScrollView style={{ maxHeight: 400 }}>
               {cuisineTypes.map((cuisine) => (
                 <TouchableOpacity
@@ -1058,10 +1064,10 @@ export default function ChefProfilePage() {
                     marginRight: 12,
                   }}>
                     {cuisineType.includes(cuisine) && (
-                      <Text style={{ color: '#FFFFFF', fontSize: 12 }}>✓</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                     )}
                   </View>
-                  <Text style={{ color: '#101828', fontSize: 16 }}>{cuisine}</Text>
+                  <Text style={{ color: '#101828', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>{cuisine}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -1075,7 +1081,7 @@ export default function ChefProfilePage() {
                 alignItems: 'center',
               }}
             >
-              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}>Done</Text>
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Done</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>
@@ -1105,9 +1111,9 @@ export default function ChefProfilePage() {
               maxHeight: '80%',
             }}
           >
-            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#101828' }}>Add pickup slot</Text>
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>Add pickup slot</Text>
             
-            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8 }}>Day</Text>
+            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Day</Text>
             <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
               <View style={{ flexDirection: 'row', gap: 8 }}>
                 {daysOfWeek.map((day) => (
@@ -1127,13 +1133,14 @@ export default function ChefProfilePage() {
                       color: selectedDay === day ? theme.colors.primary : '#101828', 
                       fontSize: 14, 
                       fontWeight: selectedDay === day ? '700' : '400',
+                      fontFamily: theme.typography.fontFamily.body,
                     }}>{day.slice(0, 3)}</Text>
                   </TouchableOpacity>
                 ))}
           </View>
             </ScrollView>
 
-            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8 }}>Time windows</Text>
+            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Time windows</Text>
             <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
               {timeWindows.map((tw) => (
                 <TouchableOpacity
@@ -1166,10 +1173,10 @@ export default function ChefProfilePage() {
                     marginRight: 12,
                   }}>
                     {selectedTimeWindows.includes(tw) && (
-                      <Text style={{ color: '#FFFFFF', fontSize: 12 }}>✓</Text>
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                     )}
                   </View>
-                  <Text style={{ color: '#101828', fontSize: 14 }}>{tw}</Text>
+                  <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{tw}</Text>
                 </TouchableOpacity>
               ))}
             </ScrollView>
@@ -1187,7 +1194,7 @@ export default function ChefProfilePage() {
                   borderColor: '#E5E7EB',
                 }}
               >
-                <Text style={{ color: '#101828', fontWeight: '700', fontSize: 16 }}>Cancel</Text>
+                <Text style={{ color: '#101828', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Cancel</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={handleAddPickupSlot}
@@ -1199,7 +1206,7 @@ export default function ChefProfilePage() {
                   alignItems: 'center',
               }}
             >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}>Add</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Add</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
@@ -1237,7 +1244,7 @@ export default function ChefProfilePage() {
             }}
           >
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-              <Text style={{ fontSize: 18, fontWeight: '700', color: '#101828' }}>
+              <Text style={{ fontSize: 18, fontWeight: '700', color: '#101828', fontFamily: theme.typography.fontFamily.body }}>
                 {termsType === 'agreement' && 'Chef Participation Agreement'}
                 {termsType === 'fee' && 'Fee Schedule'}
                 {termsType === 'payout' && 'Payouts & Payments'}
@@ -1246,11 +1253,11 @@ export default function ChefProfilePage() {
                 setShowTermsModal(false);
                 setTermsType(null);
               }}>
-                <Text style={{ fontSize: 24, color: '#667085' }}>✕</Text>
+                <Text style={{ fontSize: 24, color: '#667085', fontFamily: theme.typography.fontFamily.body }}>✕</Text>
           </TouchableOpacity>
         </View>
             <ScrollView style={{ maxHeight: Platform.OS === 'web' ? 500 : 400 }}>
-              <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22 }}>
+              <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>
                 {termsType === 'agreement' && `
 PARTICIPATION AGREEMENT
 (Marketplace Platform – Ontario, Canada)
@@ -1546,12 +1553,23 @@ No subscriptions. No commitments. You control your menu.
                   alignItems: 'center',
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16 }}>Close</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Okay</Text>
               </TouchableOpacity>
             </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
+
+      {profileSaveMsg && (
+        <Modal visible transparent animationType="fade" onRequestClose={() => setProfileSaveMsg(null)}>
+          <View style={profileStyles.floatingToastOverlay} pointerEvents="box-none">
+            <View style={profileStyles.profileSaveBanner}>
+              <Image source={require('../../../assets/success.png')} style={{ width: 24, height: 24 }} tintColor={theme.colors.primary} />
+              <Text style={profileStyles.profileSaveBannerText}>{profileSaveMsg}</Text>
+            </View>
+          </View>
+        </Modal>
+      )}
     </Screen>
   );
 }
@@ -1612,6 +1630,7 @@ const profileStyles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: 16,
     fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
   },
   profileInfo: {
     flex: 1,
@@ -1622,12 +1641,14 @@ const profileStyles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.base * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   profileEmail: {
     color: '#3E6A55',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   navMenu: {
     gap: theme.spacing.xs,
@@ -1647,8 +1668,9 @@ const profileStyles = StyleSheet.create({
   navText: {
     color: '#101828',
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   navTextActive: {
     color: '#FFFFFF',
@@ -1671,6 +1693,7 @@ const profileStyles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   mainContent: {
     flex: 1,
@@ -1683,6 +1706,32 @@ const profileStyles = StyleSheet.create({
     justifyContent: 'flex-end',
     alignItems: 'center',
   },
+  floatingToastOverlay: {
+    flex: 1,
+    justifyContent: 'flex-start',
+    paddingTop: 48,
+    paddingHorizontal: 16,
+    alignItems: 'stretch',
+  },
+  profileSaveBanner: {
+    backgroundColor: '#FFFFFF',
+    padding: 12,
+    borderRadius: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 4,
+    elevation: 4,
+  },
+  profileSaveBannerText: {
+    color: theme.colors.primary,
+    fontWeight: '700',
+    flex: 1,
+    fontFamily: theme.typography.fontFamily.body,
+  },
   tabs: {
     flexDirection: "row",
     borderBottomWidth: 1,
@@ -1691,22 +1740,23 @@ const profileStyles = StyleSheet.create({
     gap: theme.spacing['2xl'],
   },
   tab: {
-    paddingBottom: 13,
-    paddingTop: theme.spacing.md,
-    borderBottomWidth: 3,
-    borderBottomColor: 'transparent',
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    borderBottomWidth: 0,
   },
   tabActive: {
-    borderBottomColor: theme.colors.primary,
+    backgroundColor: theme.colors.primary,
   },
   tabText: {
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.normal,
     letterSpacing: 0.015,
+    fontFamily: theme.typography.fontFamily.body,
   },
   tabTextActive: {
-    color: '#101828',
+    color: '#FFFFFF',
   },
   ordersList: {
     flex: 1,
@@ -1732,10 +1782,12 @@ const profileStyles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold,
     marginBottom: theme.spacing.xs,
+    fontFamily: theme.typography.fontFamily.body,
   },
   emptySubtext: {
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderCard: {
     flexDirection: Platform.select({
@@ -1762,30 +1814,35 @@ const profileStyles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderDishInfo: {
     color: '#101828',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderLocation: {
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderDishName: {
     color: '#101828',
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.fontSize.lg * 1.2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderChef: {
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
     lineHeight: theme.typography.fontSize.sm * 1.5,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderStatus: {
     flexDirection: "row",
@@ -1799,6 +1856,7 @@ const profileStyles = StyleSheet.create({
   statusText: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderButtonPrimary: {
     backgroundColor: theme.colors.primary,
@@ -1810,12 +1868,14 @@ const profileStyles = StyleSheet.create({
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderTotal: {
     color: '#101828',
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold,
     lineHeight: theme.typography.fontSize.lg * 1.2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   settingsContent: {
     flex: 1,
@@ -1862,6 +1922,7 @@ const profileStyles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     color: '#101828',
     backgroundColor: '#FFFFFF',
+    fontFamily: theme.typography.fontFamily.body,
   },
   settingsInputReadOnly: {
     backgroundColor: '#F9FAFB',
@@ -1874,6 +1935,7 @@ const profileStyles = StyleSheet.create({
     color: '#667085',
     fontSize: theme.typography.fontSize.sm,
     marginTop: theme.spacing.xs / 2,
+    fontFamily: theme.typography.fontFamily.body,
   },
   nameRow: {
     flexDirection: 'row',
@@ -1896,7 +1958,8 @@ const profileStyles = StyleSheet.create({
   saveButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.normal,
+    fontFamily: theme.typography.fontFamily.body,
   },
   actionButtons: {
     flexDirection: 'row',
@@ -1915,7 +1978,8 @@ const profileStyles = StyleSheet.create({
   logoutButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.normal,
+    fontFamily: theme.typography.fontFamily.body,
   },
   deleteButton: {
     flex: 1,
@@ -1929,7 +1993,8 @@ const profileStyles = StyleSheet.create({
   deleteButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontWeight: theme.typography.fontWeight.normal,
+    fontFamily: theme.typography.fontFamily.body,
   },
   containerMobile: {
     flexDirection: 'column',

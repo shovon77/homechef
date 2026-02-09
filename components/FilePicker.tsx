@@ -2,6 +2,7 @@
 'use client'
 import React, { useRef, useEffect } from 'react'
 import { Platform, Text, TouchableOpacity, View, StyleSheet } from 'react-native'
+import { theme } from '../lib/theme'
 
 const PRIMARY_COLOR = '#FE734C'; // Talo green from design
 
@@ -51,7 +52,8 @@ export default function FilePicker({ label = 'Choose image', accept = 'image/*',
             borderRadius: 8,
             backgroundColor: PRIMARY_COLOR + '1A', // 10% opacity
             color: PRIMARY_COLOR,
-            fontWeight: 700,
+            fontWeight: 400,
+            fontFamily: theme.typography.fontFamily.body,
             fontSize: 14,
             border: 'none',
             cursor: 'pointer',
@@ -66,7 +68,7 @@ export default function FilePicker({ label = 'Choose image', accept = 'image/*',
           onMouseLeave: (e: any) => {
             e.currentTarget.style.backgroundColor = PRIMARY_COLOR + '1A'; // Back to 10%
           },
-        }, label)}
+        }, React.createElement('span', { style: { fontWeight: 400, fontFamily: theme.typography.fontFamily.body } as any }, label))}
       </View>
     )
   }
@@ -119,7 +121,8 @@ const styles = StyleSheet.create({
   },
   nativeButtonText: {
     color: PRIMARY_COLOR,
-    fontWeight: '700',
+    fontWeight: '400' as const,
     fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
 })

@@ -1533,7 +1533,7 @@ export default function ChefSignup() {
                           setTermsScrolledToBottom(false);
                           setTermsAccepted(false);
                         }}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base }}>
                             Chef Participation Agreement
                           </Text>
                         </TouchableOpacity>
@@ -1546,7 +1546,7 @@ export default function ChefSignup() {
                           setTermsScrolledToBottom(false);
                           setTermsAccepted(false);
                         }}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base }}>
                             Fee Schedule
                           </Text>
                         </TouchableOpacity>
@@ -1559,7 +1559,7 @@ export default function ChefSignup() {
                           setTermsScrolledToBottom(false);
                           setTermsAccepted(false);
                         }}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base }}>
                             Payouts & Payments
                           </Text>
                         </TouchableOpacity>
@@ -2002,7 +2002,7 @@ No subscriptions. No commitments. You control your menu.
                           Chef profile basics
                         </Text>
                         <TouchableOpacity onPress={() => setStep(1)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2041,7 +2041,7 @@ No subscriptions. No commitments. You control your menu.
                           Availability & pickup
                         </Text>
                         <TouchableOpacity onPress={() => setStep(2)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2173,7 +2173,7 @@ No subscriptions. No commitments. You control your menu.
                           Dishes
                         </Text>
                         <TouchableOpacity onPress={() => setStep(3)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2222,7 +2222,7 @@ No subscriptions. No commitments. You control your menu.
                           Food safety acknowledgement
                         </Text>
                         <TouchableOpacity onPress={() => setStep(4)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, textDecorationLine: 'underline' }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2913,7 +2913,6 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold as any,
-    textDecorationLine: 'underline',
   },
   checkboxContainer: {
     flexDirection: 'row',
@@ -2951,7 +2950,6 @@ const styles = StyleSheet.create({
     color: PRIMARY_COLOR,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontFamily: theme.typography.fontFamily.display,
-    textDecorationLine: 'underline',
   },
   hint: {
     color: TEXT_MUTED,
