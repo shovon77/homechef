@@ -69,7 +69,9 @@ export default function Screen({
       };
 
   const scrollBg = isChefDashboard ? BG_LIGHT : (baseStyle.backgroundColor || '#ffffff');
-  const scrollWrapStyle = isChefDashboard ? { flex: 1, backgroundColor: BG_LIGHT, overflow: 'hidden' as const, borderTopWidth: 0, borderTopColor: 'transparent' } : undefined;
+  const scrollWrapStyle = isChefDashboard
+    ? { flex: 1, backgroundColor: BG_LIGHT, overflow: 'hidden' as const, borderTopWidth: 0, borderTopColor: 'transparent' }
+    : { flex: 1 };
   return (
     <View style={baseStyle}>
       {!noHeader && (
