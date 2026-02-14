@@ -11,7 +11,6 @@ import { theme, elev } from '../../lib/theme';
 import { useLocationModal } from '../../context/LocationModalContext';
 
 const PER_PAGE = 25; // chefs/cuisines
-const DISHES_GRID_COLUMNS = 2;
 const DISHES_FETCH_LIMIT = 9999; // fetch all dishes in one page (no pagination)
 const GRID_COLUMNS = 5;
 const PRIMARY_COLOR = '#FE734C';
@@ -105,8 +104,11 @@ export default function BrowsePage() {
   const { setShowLocationModal } = useLocationModal();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
-  
+  const isDesktop = width >= 1024;
+
   const gridColumns = isMobile ? 1 : isTablet ? 3 : 5;
+  const dishGridColumns = isMobile ? 2 : isTablet ? 3 : 4;
+  const cuisineColumns = isMobile ? 2 : isTablet ? 3 : 4;
   
   const { q, tab: paramTab, sort: paramSort } = useLocalSearchParams<{ q?: string, tab?: string, sort?: string }>();
   const [tab, setTab] = useState<'dishes' | 'chefs' | 'cuisines'>('dishes');
@@ -762,9 +764,10 @@ export default function BrowsePage() {
           default: 80,
         })}
       >
+        <View style={!isMobile ? { maxWidth: 1280, width: '100%', alignSelf: 'center' } : undefined}>
         <View style={styles.headerBlock}>
           <View style={styles.headerTextBlock}>
-            <Text style={[styles.title, isMobile && styles.titleMobile]}>Pickup homemade meals near you</Text>
+            <Text style={[styles.title, isMobile && styles.titleMobile, !isMobile && styles.titleDesktop]}>Pickup homemade meals near you</Text>
             <Text style={styles.subtitle}>For a taste of home today</Text>
           </View>
           <View style={styles.subtitleDivider} />
@@ -909,7 +912,7 @@ export default function BrowsePage() {
         ) : tab === 'dishes' ? (
           <View style={styles.grid}>
             {dishes.map((dish) => (
-              <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / DISHES_GRID_COLUMNS}%` }]}>
+              <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
                 <DishCard 
                   dish={dish} 
                   variant="explore"
@@ -926,6 +929,7 @@ export default function BrowsePage() {
                   chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                   ratingColor="#FE734C"
+                  compact={!isMobile}
                 />
               </View>
             ))}
@@ -933,7 +937,7 @@ export default function BrowsePage() {
         ) : (
           <View style={styles.grid}>
             {cuisines.map((cuisine) => (
-              <View key={cuisine} style={styles.cuisineCardWrapper}>
+              <View key={cuisine} style={[styles.cuisineCardWrapper, !isMobile && { width: `${100 / cuisineColumns}%` }]}>
                 <TouchableOpacity 
                   style={styles.cuisineCard}
                   onPress={() => {
@@ -951,6 +955,7 @@ export default function BrowsePage() {
         )}
 
         {showPagination && !loading && list.length > 0 && renderPagination()}
+        </View>
       </Screen>
 
       {/* Floating Search Bar */}
@@ -1052,6 +1057,9 @@ const styles = StyleSheet.create({
   },
   titleMobile: {
     fontSize: 18,
+  },
+  titleDesktop: {
+    fontSize: 28,
   },
   subtitle: {
     color: '#33393A',

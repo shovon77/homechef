@@ -71,9 +71,11 @@ type Props = {
   distanceKm?: number | null;
   hideBio?: boolean;
   metaVariant?: 'default' | 'homepage';
+  /** Compact layout for grid (e.g. explore page desktop/tablet). Smaller avatar and typography. */
+  compact?: boolean;
 };
 
-export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default' }: Props) {
+export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default', compact = false }: Props) {
   const avatar =
     chef?.photo ||
     chef?.avatar ||
@@ -93,16 +95,22 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
   const locationText = chef.location ? formatLocationCityState(chef.location) : '';
   const showLocation = !!locationText;
 
+  // Flatten style arrays so DOM (e.g. Link > Pressable on web) never receives numeric keys
+  const cardStyle = StyleSheet.flatten([styles.card, style]);
+  const pressableStyle = StyleSheet.flatten([styles.pressable, compact && styles.pressableCompact]);
+  const avatarStyle = StyleSheet.flatten([styles.avatar, compact && styles.avatarCompact]);
+  const infoStyle = StyleSheet.flatten([styles.info, compact && styles.infoCompact]);
+
   return (
-    <View style={[styles.card, style]}>
+    <View style={cardStyle}>
       <Link href={`/chef/${chef.id}`} asChild>
-        <Pressable style={styles.pressable} activeOpacity={0.9}>
-          <Image source={{ uri: avatar }} style={styles.avatar} />
-          <View style={styles.info}>
-            <Text style={[styles.name, nameColor ? { color: nameColor } : undefined]} numberOfLines={1}>{chef.name}</Text>
-            <Text style={styles.cuisine} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
+        <Pressable style={pressableStyle} activeOpacity={0.9}>
+          <Image source={{ uri: avatar }} style={avatarStyle} />
+          <View style={infoStyle}>
+            <Text style={StyleSheet.flatten([styles.name, compact && styles.nameCompact, nameColor ? { color: nameColor } : undefined])} numberOfLines={1}>{chef.name}</Text>
+            <Text style={StyleSheet.flatten([styles.cuisine, compact && styles.cuisineCompact])} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
             {chef.bio && !hideBio && (
-              <Text style={styles.bio} numberOfLines={2}>{chef.bio}</Text>
+              <Text style={StyleSheet.flatten([styles.bio, compact && styles.bioCompact])} numberOfLines={2}>{chef.bio}</Text>
             )}
             {metaVariant === 'homepage' ? (
               <>
@@ -110,33 +118,33 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.rating}>
                     <Image 
                       source={require('../../assets/star.png')} 
-                      style={styles.starIconImage}
+                      style={[styles.starIconImage, compact && styles.starIconImageCompact]}
                       tintColor={starTint}
                       resizeMode="contain" 
                     />
-                    <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
+                    <Text style={[styles.ratingText, compact && styles.ratingTextCompact]}>{safeToFixed(ratingVal)}</Text>
                   </View>
                 )}
                 {showDistance && (
                   <View style={styles.distanceRow}>
                     <Image
                       source={require('../../assets/map.png')}
-                      style={styles.metaIconImage}
+                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
                       tintColor={metaTint}
                       resizeMode="contain"
                     />
-                    <Text style={styles.distanceText}>{distanceText}</Text>
+                    <Text style={[styles.distanceText, compact && styles.ratingTextCompact]}>{distanceText}</Text>
                   </View>
                 )}
                 {showLocation && (
                   <View style={styles.locationRow}>
                     <Image 
                       source={require('../../assets/locationnewicon.png')} 
-                      style={styles.metaIconImage}
+                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
                       tintColor={metaTint}
                       resizeMode="contain" 
                     />
-                    <Text style={styles.location} numberOfLines={1}>
+                    <Text style={[styles.location, compact && styles.locationCompact]} numberOfLines={1}>
                       {locationText}
                     </Text>
                   </View>
@@ -148,11 +156,11 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.locationRow}>
                     <Image 
                       source={require('../../assets/locationnewicon.png')} 
-                      style={styles.metaIconImage}
+                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
                       tintColor={metaTint}
                       resizeMode="contain" 
                     />
-                    <Text style={styles.location} numberOfLines={1}>
+                    <Text style={[styles.location, compact && styles.locationCompact]} numberOfLines={1}>
                       {locationText}
                     </Text>
                   </View>
@@ -161,22 +169,22 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                   <View style={styles.rating}>
                     <Image 
                       source={require('../../assets/star.png')} 
-                      style={styles.starIconImage}
+                      style={[styles.starIconImage, compact && styles.starIconImageCompact]}
                       tintColor={starTint}
                       resizeMode="contain" 
                     />
-                    <Text style={styles.ratingText}>{safeToFixed(ratingVal)}</Text>
+                    <Text style={[styles.ratingText, compact && styles.ratingTextCompact]}>{safeToFixed(ratingVal)}</Text>
                   </View>
                 )}
                 {showDistance && (
                   <View style={styles.distanceRow}>
                     <Image
                       source={require('../../assets/map.png')}
-                      style={styles.metaIconImage}
+                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
                       tintColor={metaTint}
                       resizeMode="contain"
                     />
-                    <Text style={styles.distanceText}>{distanceText}</Text>
+                    <Text style={[styles.distanceText, compact && styles.ratingTextCompact]}>{distanceText}</Text>
                   </View>
                 )}
               </>
@@ -283,5 +291,43 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
+  },
+  // Compact variant (explore grid desktop/tablet)
+  pressableCompact: {
+    paddingRight: theme.spacing.sm,
+  },
+  avatarCompact: {
+    width: 88,
+    borderTopLeftRadius: theme.radius.lg,
+    borderBottomLeftRadius: theme.radius.lg,
+  },
+  infoCompact: {
+    gap: 2,
+    paddingVertical: theme.spacing.sm,
+    paddingLeft: theme.spacing.sm,
+  },
+  nameCompact: {
+    fontSize: theme.typography.fontSize.sm,
+  },
+  cuisineCompact: {
+    fontSize: theme.typography.fontSize.xs,
+  },
+  bioCompact: {
+    fontSize: 11,
+    lineHeight: 14,
+  },
+  locationCompact: {
+    fontSize: theme.typography.fontSize.xs,
+  },
+  starIconImageCompact: {
+    width: 14,
+    height: 14,
+  },
+  metaIconImageCompact: {
+    width: 14,
+    height: 14,
+  },
+  ratingTextCompact: {
+    fontSize: theme.typography.fontSize.xs,
   },
 });

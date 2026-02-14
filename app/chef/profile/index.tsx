@@ -1262,30 +1262,30 @@ export default function ChefProfilePage() {
 PARTICIPATION AGREEMENT
 (Marketplace Platform – Ontario, Canada)
 
-This Home Chef Participation Agreement ("Agreement") is entered into as of [DATE], by and between: Your Home Chef Inc., a corporation incorporated under the laws of [Province/Federal], with its principal place of business at [Address] ("Platform"), and [CHEF LEGAL NAME], residing at [Address] ("Chef").
-Together, the "Parties."
+This Home Chef Participation Agreement ("Agreement") governs your access to and use of the YourHomeChef marketplace platform. By creating a chef account, listing meals, or accepting orders on the Platform, you agree to be bound by this Agreement.
 
 1. Purpose & Relationship of the Parties
 
 1.1 The Platform operates an online marketplace that facilitates connections between independent food preparers ("Chefs") and customers seeking prepared meals.
-1.2 The Chef is an independent contractor and not an employee, partner, joint venturer, agent, or representative of the Platform.
+1.2 The Chef acts solely as an independent contractor and is not an employee, partner, joint venturer, agent, or representative of the Platform.
 1.3 The Platform does not prepare, cook, package, or handle food, and does not control the methods, ingredients, or preparation of food beyond general marketplace requirements for safety and compliance.
 
 2. Compliance With Laws & Food Safety
 
-2.1 The Chef represents and warrants that they will comply at all times with all applicable federal, provincial, and municipal laws, regulations, and guidelines.
+2.1 The Chef acknowledges and agrees that they are solely responsible for complying at all times with all applicable federal, provincial, and municipal laws, regulations, and guidelines.
 2.2 The Platform does not inspect, verify, or approve kitchens or food preparation methods. The Chef is solely responsible for the location, equipment, and preparation of food.
 2.3 The Platform may suspend or terminate the Chef's access immediately if it believes the Chef is operating in violation of any applicable law.
 
 3. Food Handler Certification
 
-3.1 Chefs may or may not hold food safety certifications. The Platform does not verify or require certifications for listing meals.
+3.1 Food safety certifications may or may not be held by Chefs. The Platform does not verify or require certifications for listing meals.
 3.2 The Chef acknowledges that compliance with local laws and safety practices is their responsibility.
 3.3 Failure to follow applicable laws or unsafe practices may result in suspension or removal from the Platform.
 
 4. Kitchen & Preparation Requirements
 
-4.1 The Chef is solely responsible for:
+4.1 By listing meals on the Platform, the Chef confirms responsibility for:
+
 • Kitchen cleanliness
 • Ingredient sourcing
 • Allergen disclosure
@@ -1295,18 +1295,20 @@ Together, the "Parties."
 
 5. Quality, Safety & Incident Reporting
 
-5.1 The Chef must immediately notify the Platform of:
+5.1 The Chef agrees to promptly notify the Platform of:
+
 • Any customer complaint related to food safety, illness, contamination, or allergens
 • Any incident that may pose a risk to customer health or platform reputation
 
 5.2 The Platform reserves the right to:
+
 • Temporarily suspend listings
 • Remove the Chef from the Platform
 • Require corrective action prior to reinstatement
 
 6. Indemnification & Liability Allocation
 
-6.1 Chef Indemnification.
+6.1 Indemnification by Chef.
 To the fullest extent permitted by law, the Chef agrees to indemnify, defend, and hold harmless the Platform, its directors, officers, employees, contractors, and affiliates from and against any and all claims, demands, damages, losses, liabilities, costs, or expenses (including reasonable legal fees) arising out of or related to (1) Foodborne illness, contamination, or injury caused by food prepared by the Chef (2) The Chef's negligence, recklessness, or misconduct (3) The Chef's failure to comply with applicable food safety or health regulations (4) Misrepresentation of ingredients, allergens, or preparation methods
 6.2 The Chef acknowledges that this indemnification obligation survives termination of this Agreement.
 6.3 The Platform does not waive any consumer rights under applicable law and does not limit liability where such limitation would be unlawful.
@@ -1315,18 +1317,18 @@ To the fullest extent permitted by law, the Chef agrees to indemnify, defend, an
 
 7.1 The Platform may recommend that the Chef maintain product liability or commercial general liability insurance.
 7.2 Proof of insurance may be requested at the Platform's discretion.
-7.3 Failure to maintain insurance will not automatically restrict access but may be considered in suspension or removal decisions.
+7.3 Failure to maintain insurance will not automatically restrict access, but may be considered as part of broader risk or compliance reviews.
 
 8. Payments & Fees
 
-8.1 The Platform facilitates payment collection on behalf of the Chef through a third-party payment processor, currently Stripe Payments Canada, Ltd. ("Payment Processor"). By using the Platform, the Chef agrees to be bound by the Payment Processor's applicable terms, policies, and requirements, as amended from time to time.
+8.1 By using the Platform, the Chef authorizes the Platform to facilitate payment collection on the Chef's behalf through a third-party payment processor, currently Stripe Payments Canada, Ltd. ("Payment Processor"). By using the Platform, the Chef agrees to be bound by the Payment Processor's applicable terms, policies, and requirements, as amended from time to time.
 8.2 Platform Commission & Fees
 The Platform charges the Chef a commission on each completed order processed through the Platform.
 
 • The current commission rate is 10% of the order subtotal, exclusive of applicable taxes, delivery fees, or payment processor fees.
 • Payment processing fees charged by the Payment Processor may be deducted separately.
 • The Platform may update commission rates or fees upon reasonable notice through the Platform interface or a published Fee Schedule.
-• Continued use of the Platform after notice constitutes acceptance of updated fees.
+• Continued use of the Platform after notice of updated fees constitutes acceptance of those changes.
 
 8.3 Payout Methodology
 Subject to this Agreement and Payment Processor requirements:
@@ -1346,6 +1348,7 @@ The Platform may apply short holding periods on funds to manage:
 • Food safety or regulatory investigations
 
 Funds may be withheld, offset, or adjusted until the matter is resolved.
+
 8.5 Refunds, Disputes & Chargebacks
 
 • The Platform may issue refunds to customers at its discretion in cases of:
@@ -1359,7 +1362,7 @@ Funds may be withheld, offset, or adjusted until the matter is resolved.
 • Account review or termination in repeated cases
 
 8.6 Taxes
-The Chef is solely responsible for:
+The Chef acknowledges and agrees that they are solely responsible for:
 
 • Reporting and remitting all applicable taxes, including HST/GST, income tax, and any local levies
 • Determining whether tax registration is required under applicable law
@@ -1368,7 +1371,7 @@ The Platform does not provide tax advice and does not assume tax liability on be
 
 9. Termination
 
-9.1 Either Party may terminate this Agreement with [X] days' written notice.
+9.1 Either the Platform or the Chef may terminate participation with 90 days' notice through the Platform or in writing.
 9.2 The Platform may terminate or suspend the Chef immediately, without notice, in cases of:
 
 • Suspected food safety violations
@@ -1384,7 +1387,7 @@ The Platform does not provide tax advice and does not assume tax liability on be
 
 11. Governing Law
 
-11.1 This Agreement shall be governed by and construed in accordance with the laws of the Province of Ontario, without regard to conflict of laws principles.
+11.1 This Agreement is governed by the laws of the Province of Ontario, Canada, without regard to conflict of laws principles.
 
 12. Payment Processor Limitation of Liability
 
@@ -1393,7 +1396,9 @@ The Platform is not responsible for the acts, omissions, errors, service interru
 13. Entire Agreement & Amendments
 
 13.1 This Agreement constitutes the entire agreement between the Parties.
-13.2 The Platform may update this Agreement upon written notice; continued use of the Platform constitutes acceptance.
+13.2 The Platform may update this Agreement from time to time. Continued use of the Platform after notice of updates constitutes acceptance.
+
+By clicking "I Agree," creating a chef account, listing meals, or accepting orders on the Platform, you confirm that you have read, understood, and agreed to this Agreement.
 
 APPENDIX A — Regulatory Compliance & Platform Adaptability
 
@@ -1434,7 +1439,8 @@ Failure to comply may result in:
 
 A4. No Retroactive Liability
 Updates or new requirements do not create retroactive liability for past activity that was compliant at the time.
-A5. Continued Use = Acceptance
+
+A5. Acceptance Through Continued Use
 Continued use of the Platform after notice of compliance updates constitutes acceptance of those changes.
                 `}
                 {termsType === 'fee' && `
@@ -1442,30 +1448,30 @@ Fee Schedule - YourHomeChef
 
 Last Updated: December 20, 2025
 
-YourHomeChef is committed to transparent pricing. There are no sign-up fees, no monthly subscriptions, and no hidden charges.
+This Fee Schedule explains how fees and payouts work on the YourHomeChef platform. By using the Platform as a Chef, you agree to this Fee Schedule.
 
-Platform Commission
+Platform Commission (Accepted by Use)
 
-• 10% commission per completed order
+• A 10% platform commission is charged on each completed order
 • Calculated on the order subtotal (before taxes and delivery fees)
 
 Payment Processing Fees
 
-Payments are securely processed via Stripe.
+Payments are processed through a third-party payment processor, currently Stripe.
 
 • Stripe charges standard processing fees
-• These fees may be deducted before payout
+• Applicable processing fees may be deducted prior to payout
 • Rates are set by Stripe and may change independently
 
-What You Keep
+Net Earnings
 
 You receive:
 
-• Order subtotal – platform commission – refunds (if any)
+• Order subtotal minus platform commission, refunds, and applicable adjustments
 
-Payout Timing
+Payout Timing (Estimated)
 
-• Payouts are typically issued weekly
+• Payouts are typically issued instantly upon order completion.
 • Timing depends on:
   • Stripe settlement timelines
   • Bank processing
@@ -1473,47 +1479,47 @@ Payout Timing
 
 Refunds & Adjustments
 
-If a refund is issued due to:
+If a refund or adjustment is issued due to:
 
 • Food safety concerns
 • Order issues
 • Misrepresentation (ingredients, allergens, availability)
 
-The refunded amount (and related fees) may be deducted from current or future payouts.
+The refunded amount (and related fees) may be deducted from pending or future payouts.
 
 No Guarantees
 
-YourHomeChef does not guarantee sales volume, income, or order frequency.
+YourHomeChef makes no guarantees regarding sales volume, income, or order frequency.
 
 Fee Updates
 
-We may update fees with reasonable notice. Continued use of the platform means you accept the updated schedule.
+Fees may be updated from time to time with reasonable notice. Continued use of the Platform after such notice constitutes acceptance of the updated Fee Schedule.
 
 Questions?
 
-Contact support at support@yourhomechef.com
+For questions, contact support at thereforyou.yhc@gmail.com
                 `}
                 {termsType === 'payout' && `
-How payouts work?
+How payouts work (Accepted by using the Platform)
 
-Simple. Transparent. Weekly.
+This section explains how payouts are calculated and processed.
 
-1. Customer places an order
+Customer places an order
 
 • Customer pays through the app
-• Payment is securely processed
+• You receive an order notification
 
-2. You prepare the meal
+You prepare the meal
 
 • You fulfill the order as listed
-• Accurate ingredients & allergens matter
+• You are responsible for accurate ingredient and allergen disclosures
 
-3. The payment is processed
+The payment is processed
 
 • Platform commission (10%) is applied
 • Payment processing fees are deducted
 
-4. Short review period
+A short review or holding period may apply
 
 Funds may be temporarily held for:
 
@@ -1521,21 +1527,21 @@ Funds may be temporarily held for:
 • Disputes
 • Safety or compliance checks
 
-(This helps protect both chefs and customers.)
+(This helps manage disputes, refunds, and compliance risks.)
 
-5. Weekly payout processed
+Payouts are typically initiated daily, subject to processor and bank timelines
 
-• Net earnings are sent to your bank account
+• Net earnings (after fees, refunds, and adjustments) are sent to your designated bank account.
 • You'll see a full payout breakdown in your dashboard
 
-Your dashboard shows
+Your dashboard will show
 
-✔ Order totals
-✔ Fees & deductions
-✔ Refunds (if any)
-✔ Payout status
+✅ Order totals
+✅ Fees & deductions
+✅ Refunds (if any)
+✅ Payout status
 
-No subscriptions. No commitments. You control your menu.
+No subscriptions. No long-term commitments. Continued use of the Platform confirms acceptance of this payout process.
                 `}
               </Text>
     </ScrollView>
