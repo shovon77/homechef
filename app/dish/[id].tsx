@@ -713,21 +713,35 @@ const styles = StyleSheet.create({
   },
   imageColumn: {
     flex: 1,
+    ...Platform.select({
+      web: {
+        maxWidth: 480,
+        alignSelf: 'stretch',
+      },
+      default: {},
+    }),
   },
   mainImageContainer: {
     width: '100%',
     maxWidth: 480, // Limit width to be smaller
-    aspectRatio: 1,
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
-    alignSelf: 'flex-start', // Or center
-    // Avoid overlapping the title on mobile/web.
     marginBottom: 0,
-    // No shadow for the dish image container (web + native)
     ...Platform.select({
-      web: { boxShadow: 'none' as any },
-      default: { elevation: 0, shadowOpacity: 0 } as any,
+      web: {
+        boxShadow: 'none' as any,
+        // Match height of dish details column on desktop
+        alignSelf: 'stretch',
+        height: '100%',
+        minHeight: 320,
+      },
+      default: {
+        elevation: 0,
+        shadowOpacity: 0,
+        aspectRatio: 1,
+        alignSelf: 'flex-start',
+      } as any,
     }),
   },
   mainImage: {
