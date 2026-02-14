@@ -54,6 +54,8 @@ export default function ChefDetailView() {
   const { id, name, photo, location: locParam, rating: ratingParam, rating_count: rcParam, cuisine } = useLocalSearchParams();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+  const isDesktop = width >= 1024;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
   
   const chefId = useMemo(() => {
@@ -326,9 +328,10 @@ export default function ChefDetailView() {
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
       <View style={styles.container}>
-          <View style={[styles.layout, isMobile && styles.layoutMobile]}>
-            {/* Left Sidebar - Sticky */}
-            <View style={[styles.sidebar, isMobile && styles.sidebarMobile]}>
+          {/* Column layout: chef card on top, then tabs + content, then disclaimer at bottom */}
+          <View style={[styles.layout, styles.layoutColumn]}>
+            {/* Chef card - full width on top */}
+            <View style={[styles.sidebar, styles.sidebarFullWidth]}>
             <View style={styles.sidebarCard}>
               {/* First widget: same as explore ChefCard (image left, info right) */}
               <View style={styles.chefCardLayout}>
@@ -351,7 +354,7 @@ export default function ChefDetailView() {
                 <View style={styles.chefCardInfo}>
                   <Text style={styles.chefCardName} numberOfLines={1}>{title}</Text>
                   <Text style={styles.chefCardCuisine} numberOfLines={1}>{formatCuisine(chef?.cuisine)}</Text>
-                  {bio ? <Text style={styles.chefCardBio} numberOfLines={2}>{bio}</Text> : null}
+                  {bio ? <Text style={styles.chefCardBio} numberOfLines={isMobile ? 2 : 5}>{bio}</Text> : null}
                   {location && formatLocationCityState(location) ? (
                     <View style={styles.chefCardLocationRow}>
                       <Image source={require('../../assets/locationnewicon.png')} style={styles.chefCardLocationIcon} tintColor={PRIMARY_COLOR} resizeMode="contain" />
@@ -369,8 +372,8 @@ export default function ChefDetailView() {
             </View>
           </View>
 
-          {/* Main Content Area */}
-          <View style={[styles.mainContent, isMobile && styles.mainContentMobile]}>
+          {/* Tabs + content - full width below chef card */}
+          <View style={[styles.mainContent, styles.mainContentFullWidth]}>
             {/* Tab Navigation */}
             <View style={styles.tabContainer}>
                 <TouchableOpacity
@@ -566,29 +569,20 @@ const styles = StyleSheet.create({
     paddingBottom: 80,
   },
   layout: {
-    flexDirection: Platform.select({
-      web: 'row',
-      default: 'column',
-    }),
+    flexDirection: 'column',
     gap: theme.spacing['2xl'],
-    alignItems: 'flex-start',
+    alignItems: 'stretch',
   },
+  layoutColumn: {},
   sidebar: {
-    width: Platform.select({
-      web: '33.333%',
-      default: '100%',
-    }),
-    maxWidth: Platform.select({
-      web: 384,
-      default: '100%',
-    }),
-    ...Platform.select({
-      web: {
-        position: 'sticky',
-        top: theme.spacing['2xl'],
-        alignSelf: 'flex-start',
-      },
-    }),
+    width: '100%',
+    maxWidth: '100%',
+  },
+  sidebarFullWidth: {
+    width: '100%',
+    maxWidth: '100%',
+    position: 'relative',
+    top: 0,
   },
   sidebarCard: {
     flex: 1,
@@ -626,6 +620,14 @@ const styles = StyleSheet.create({
     alignSelf: 'stretch',
     minHeight: 140,
     position: 'relative',
+    ...Platform.select({
+      web: {
+        maxWidth: 280,
+        flex: 0,
+        minWidth: 160,
+      },
+      default: {},
+    }),
   },
   chefCardAvatar: {
     ...StyleSheet.absoluteFillObject,
@@ -653,22 +655,45 @@ const styles = StyleSheet.create({
   },
   chefCardInfo: {
     flex: 1,
+    minWidth: 0,
     gap: 4,
     justifyContent: 'center',
     paddingVertical: theme.spacing.md,
     paddingLeft: theme.spacing.md,
-    paddingRight: 0,
+    paddingRight: theme.spacing.lg,
+    ...Platform.select({
+      web: {
+        paddingRight: theme.spacing['2xl'],
+        paddingVertical: theme.spacing.lg,
+        gap: 8,
+      },
+      default: {},
+    }),
   },
   chefCardName: {
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
+    ...Platform.select({
+      web: {
+        fontSize: 20,
+        lineHeight: 26,
+      },
+      default: {},
+    }),
   },
   chefCardCuisine: {
     color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
+    ...Platform.select({
+      web: {
+        fontSize: theme.typography.fontSize.base,
+        lineHeight: 22,
+      },
+      default: {},
+    }),
   },
   chefCardBio: {
     color: BRAND_BLACK,
@@ -676,37 +701,75 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xs,
     lineHeight: 16,
     marginTop: 2,
+    ...Platform.select({
+      web: {
+        fontSize: theme.typography.fontSize.sm,
+        lineHeight: 22,
+        marginTop: 6,
+      },
+      default: {},
+    }),
   },
   chefCardLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
     marginTop: 4,
     gap: 4,
+    ...Platform.select({
+      web: { marginTop: 8, gap: 6 },
+      default: {},
+    }),
   },
   chefCardLocationIcon: {
     width: 16,
     height: 16,
+    ...Platform.select({
+      web: { width: 18, height: 18 },
+      default: {},
+    }),
   },
   chefCardLocation: {
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+    ...Platform.select({
+      web: {
+        fontSize: theme.typography.fontSize.base,
+        lineHeight: 22,
+      },
+      default: {},
+    }),
   },
   chefCardRating: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 4,
     marginTop: 4,
+    ...Platform.select({
+      web: { marginTop: 8, gap: 6 },
+      default: {},
+    }),
   },
   chefCardStarIcon: {
     width: 16,
     height: 16,
+    ...Platform.select({
+      web: { width: 18, height: 18 },
+      default: {},
+    }),
   },
   chefCardRatingText: {
     color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
+    ...Platform.select({
+      web: {
+        fontSize: theme.typography.fontSize.base,
+        lineHeight: 22,
+      },
+      default: {},
+    }),
   },
   statsContainer: {
     flexDirection: 'row',
@@ -768,10 +831,10 @@ const styles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
-    width: Platform.select({
-      web: '66.666%',
-      default: '100%',
-    }),
+    width: '100%',
+  },
+  mainContentFullWidth: {
+    width: '100%',
   },
   tabContainer: {
     flexDirection: 'row',
@@ -804,8 +867,10 @@ const styles = StyleSheet.create({
   },
   sectionBlock: {
     marginBottom: theme.spacing['2xl'],
+    width: '100%',
   },
   sectionTitle: {
+    width: '100%',
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
@@ -830,6 +895,17 @@ const styles = StyleSheet.create({
   dishCardHorizontal: {
     width: 180,
     flexShrink: 0,
+  },
+  dishGridDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.md,
+    width: '100%',
+  },
+  dishCardGridWrapper: {
+    flex: 1,
+    minWidth: 200,
+    maxWidth: 280,
   },
   filterContainer: {
     paddingVertical: theme.spacing['2xl'],
@@ -874,6 +950,8 @@ const styles = StyleSheet.create({
   },
   contentScroll: {
     flex: 1,
+    width: '100%',
+    minWidth: 0,
     paddingTop: theme.spacing['2xl'],
     paddingBottom: theme.spacing['4xl'],
   },
@@ -1229,11 +1307,13 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   disclaimerBlock: {
-    marginTop: theme.spacing.sm,
+    marginTop: theme.spacing['2xl'],
     marginBottom: theme.spacing.md,
     paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.sm,
+    paddingVertical: theme.spacing.lg,
     width: '100%',
+    alignSelf: 'stretch',
+    flexShrink: 0,
   },
   disclaimerText: {
     color: BRAND_BLACK,
