@@ -393,10 +393,14 @@ function HomeDishCard({ dish }: { dish: Dish }) {
   );
 }
 
+const CONTENT_MAX_WIDTH = 1280;
+
 export default function HomePage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isTablet = width >= 768 && width < 1024;
+  const isDesktop = width >= 1024;
   const { isChef, isAdmin, profile } = useRole();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -820,10 +824,10 @@ export default function HomePage() {
         default: 80,
       })}
     >
-        <View style={[styles.container, isMobile && styles.containerMobile]}>
+        <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
           {/* Hero section - matches HTML design */}
           <Link href="/browse?tab=chefs" asChild>
-            <TouchableOpacity activeOpacity={0.95} style={StyleSheet.flatten([styles.hero, isMobile && styles.heroMobile])}>
+            <TouchableOpacity activeOpacity={0.95} style={StyleSheet.flatten([styles.hero, isMobile && styles.heroMobile, !isMobile && styles.heroDesktop])}>
               <Image
                 source={{ uri: bannerUrl }}
                 style={[
@@ -900,41 +904,65 @@ export default function HomePage() {
           {/* Featured Chefs section - matches HTML design */}
           <View style={styles.section}>
             <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Popular near you</Text>
-            <ScrollView 
-              horizontal 
-              showsHorizontalScrollIndicator={false}
-              nestedScrollEnabled
-              contentContainerStyle={styles.horizontalScrollContent}
-            >
-              {chefs.map((chef, i) => (
-                <View
-                  key={`${normalizeId(chef.id)}-${i}`}
-                  style={[
-                    styles.homepageChefCardWrapper,
-                    isMobile && styles.homepageChefCardWrapperMobile,
-                  ]}
-                >
-                  <ChefCard
-                    chef={{
-                      ...chef,
-                      id: normalizeId(chef.id),
-                      rating: typeof chef.rating === "number" ? chef.rating : null,
-                    }}
-                    style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
-                    ratingColor="#FE734C"
-                    distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
-                    hideBio
-                    metaVariant="homepage"
-                  />
-                </View>
-              ))}
-            </ScrollView>
+            {isMobile ? (
+              <ScrollView 
+                horizontal 
+                showsHorizontalScrollIndicator={false}
+                nestedScrollEnabled
+                contentContainerStyle={styles.horizontalScrollContent}
+              >
+                {chefs.map((chef, i) => (
+                  <View
+                    key={`${normalizeId(chef.id)}-${i}`}
+                    style={[
+                      styles.homepageChefCardWrapper,
+                      isMobile && styles.homepageChefCardWrapperMobile,
+                    ]}
+                  >
+                    <ChefCard
+                      chef={{
+                        ...chef,
+                        id: normalizeId(chef.id),
+                        rating: typeof chef.rating === "number" ? chef.rating : null,
+                      }}
+                      style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
+                      ratingColor="#FE734C"
+                      distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
+                      hideBio
+                      metaVariant="homepage"
+                    />
+                  </View>
+                ))}
+              </ScrollView>
+            ) : (
+              <View style={styles.chefsGridDesktop}>
+                {chefs.map((chef, i) => (
+                  <View
+                    key={`${normalizeId(chef.id)}-${i}`}
+                    style={styles.homepageChefCardWrapperDesktop}
+                  >
+                    <ChefCard
+                      chef={{
+                        ...chef,
+                        id: normalizeId(chef.id),
+                        rating: typeof chef.rating === "number" ? chef.rating : null,
+                      }}
+                      style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
+                      ratingColor="#FE734C"
+                      distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
+                      hideBio
+                      metaVariant="homepage"
+                    />
+                  </View>
+                ))}
+              </View>
+            )}
           </View>
 
           {/* How It Works section */}
           <View style={[styles.section, styles.howItWorksSection]}>
             <Text style={[styles.sectionTitle, styles.howItWorksTitle, isMobile && styles.sectionTitleMobile]}>How it works?</Text>
-            <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile]}>
+            <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile, !isMobile && styles.howItWorksGridDesktop]}>
               <View style={styles.howItWorksCard}>
                 <View style={styles.howItWorksIconContainer}>
                   <Image 
@@ -1073,6 +1101,11 @@ const styles = StyleSheet.create({
     paddingBottom: 0,
     backgroundColor: '#F2F0EF',
   },
+  containerDesktop: {
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center' as const,
+    paddingHorizontal: theme.spacing.xl,
+  },
   // Hero section
   hero: {
     ...Platform.select({
@@ -1089,6 +1122,9 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: theme.spacing.xl,
     position: "relative",
+  },
+  heroDesktop: {
+    maxHeight: 420,
   },
   heroBackgroundImage: {
     position: "absolute",
@@ -1438,6 +1474,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.md,
     paddingBottom: theme.spacing.md,
   },
+  howItWorksGridDesktop: {
+    flexDirection: 'row',
+    gap: theme.spacing.lg,
+  },
   howItWorksCard: {
     flex: 1,
     flexDirection: 'row',
@@ -1474,9 +1514,9 @@ const styles = StyleSheet.create({
   howItWorksTitle: {
     fontFamily: theme.typography.fontFamily.display,
     color: '#333333',
-    fontSize: 18,
     fontWeight: theme.typography.fontWeight.bold,
     textAlign: 'left',
+    // No fontSize here so sectionTitle's size (30 web / 22 default) applies on all breakpoints
   },
   howItWorksText: {
     fontFamily: theme.typography.fontFamily.body,
@@ -1499,6 +1539,16 @@ const styles = StyleSheet.create({
   },
   homepageChefCardWrapperMobile: {
     width: 360,
+  },
+  chefsGridDesktop: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  homepageChefCardWrapperDesktop: {
+    flex: 1,
+    minWidth: 320,
   },
   featuredChefCardMobile: {
     padding: theme.spacing.md,
