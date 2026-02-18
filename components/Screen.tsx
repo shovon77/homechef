@@ -70,8 +70,15 @@ export default function Screen({
 
   const scrollBg = isChefDashboard ? BG_LIGHT : (baseStyle.backgroundColor || '#ffffff');
   const scrollWrapStyle = isChefDashboard
-    ? { flex: 1, backgroundColor: BG_LIGHT, overflow: 'hidden' as const, borderTopWidth: 0, borderTopColor: 'transparent' }
-    : { flex: 1 };
+    ? {
+        flex: 1,
+        backgroundColor: BG_LIGHT,
+        overflow: 'hidden' as const,
+        borderTopWidth: 0,
+        borderTopColor: 'transparent',
+        ...(Platform.OS === 'web' ? { overflowX: 'hidden' as const } : {}),
+      }
+    : { flex: 1, ...(Platform.OS === 'web' ? { overflowX: 'hidden' as const } : {}) };
   return (
     <View style={baseStyle}>
       {!noHeader && (
@@ -94,7 +101,7 @@ export default function Screen({
             {children}
           </View>
           {!noFooter && (
-            <View style={{ 
+            <View style={{
               marginTop: -60,
               marginLeft: contentStyle?.paddingLeft ? -contentStyle.paddingLeft : 
                 (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
@@ -109,16 +116,7 @@ export default function Screen({
               ...(Platform.OS === 'web' ? {
                 width: '100vw',
                 maxWidth: '100vw',
-                marginLeft: contentStyle?.paddingLeft ? -contentStyle.paddingLeft : 
-                  (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
-                  (contentPadding != null && contentPadding > 0 ? -contentPadding : 
-                  (scrollViewContentStyle?.paddingLeft ? -scrollViewContentStyle.paddingLeft :
-                  (scrollViewContentStyle?.paddingHorizontal ? -scrollViewContentStyle.paddingHorizontal : -24)))),
-                marginRight: contentStyle?.paddingRight ? -contentStyle.paddingRight : 
-                  (contentStyle?.paddingHorizontal ? -contentStyle.paddingHorizontal : 
-                  (contentPadding != null && contentPadding > 0 ? -contentPadding :
-                  (scrollViewContentStyle?.paddingRight ? -scrollViewContentStyle.paddingRight :
-                  (scrollViewContentStyle?.paddingHorizontal ? -scrollViewContentStyle.paddingHorizontal : -24)))),
+                marginLeft: 'calc(-50vw + 50%)',
               } : {}),
             } as any}>
               <Footer />

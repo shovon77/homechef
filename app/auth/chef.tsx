@@ -1636,7 +1636,7 @@ export default function ChefSignup() {
                           <Image source={require('../../assets/success.png')} style={{ width: 22, height: 22, tintColor: platformInspectionUnderstood ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
                         </View>
                         <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
-                          I understand the platform doesn't inspect food
+                          The platform doesn't inspect food
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -2322,7 +2322,7 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
                             <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: platformInspectionUnderstood ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>I understand the platform doesn't inspect food</Text>
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>The platform doesn't inspect food</Text>
                           </View>
                         </View>
                       </View>

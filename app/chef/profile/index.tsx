@@ -750,7 +750,15 @@ export default function ChefProfilePage() {
               </View>
             </>
           ) : (
-            <ScrollView contentContainerStyle={profileStyles.settingsContent}>
+            <ScrollView
+              contentContainerStyle={profileStyles.settingsContent}
+              style={Platform.OS === 'web' ? {
+                flex: 1,
+                minWidth: 0,
+                backgroundColor: '#F2F0EF',
+                overflowX: 'hidden',
+              } : undefined}
+            >
               <View style={profileStyles.header}>
                 <TouchableOpacity
                   style={[profileStyles.saveButton, saving && profileStyles.saveButtonDisabled]}
@@ -967,22 +975,16 @@ export default function ChefProfilePage() {
 
                   <View style={{ gap: 12 }}>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
-                      </View>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
                       <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'll clearly list ingredients & allergens</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
-                      </View>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
                       <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'll prepare food safely and responsibly</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
-                      </View>
-                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I understand the platform doesn't inspect food</Text>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>The platform doesn't inspect food</Text>
                     </View>
                   </View>
                 </View>
@@ -1616,6 +1618,7 @@ const profileStyles = StyleSheet.create({
     maxWidth: 1280,
     alignSelf: "center",
     width: "100%",
+    ...(Platform.OS === 'web' ? { minWidth: 0, overflow: 'hidden' as const } : {}),
   },
   sidebar: {
     width: Platform.select({
@@ -1626,6 +1629,7 @@ const profileStyles = StyleSheet.create({
       web: 700,
       default: "auto",
     }),
+    flexShrink: 0,
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
     padding: theme.spacing.md,
@@ -1723,7 +1727,9 @@ const profileStyles = StyleSheet.create({
   },
   mainContent: {
     flex: 1,
+    minWidth: 0,
     backgroundColor: '#F2F0EF',
+    ...(Platform.OS === 'web' ? { overflow: 'hidden' as const } : {}),
   },
   header: {
     padding: theme.spacing.md,
@@ -1907,12 +1913,14 @@ const profileStyles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#FFFFFF',
     padding: theme.spacing.md,
+    ...(Platform.OS === 'web' ? { width: '100%', maxWidth: '100%', minWidth: 0 } : {}),
   },
   settingsCard: {
     backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
     padding: theme.spacing.xl,
     gap: theme.spacing['2xl'],
+    ...(Platform.OS === 'web' ? { width: '100%', maxWidth: '100%', minWidth: 0 } : {}),
   },
   settingsSection: {
     gap: theme.spacing.md,
