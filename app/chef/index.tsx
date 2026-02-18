@@ -4290,14 +4290,16 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             }}
             disabled={!valid || saving}
             style={{ 
-              backgroundColor: (!valid || saving) ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
+              backgroundColor: '#FFFFFF', 
               paddingVertical: 10, 
               paddingHorizontal: 24, 
               borderRadius: 8,
+              borderWidth: 2,
+              borderColor: PRIMARY_COLOR,
               opacity: (!valid || saving) ? 0.6 : 1
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+            <Text style={{ color: PRIMARY_COLOR, fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
           </TouchableOpacity>
         </View>
       </View>

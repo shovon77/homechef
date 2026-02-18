@@ -50,12 +50,12 @@ export default function FilePicker({ label = 'Choose image', accept = 'image/*',
             paddingLeft: 16,
             paddingRight: 16,
             borderRadius: 8,
-            backgroundColor: PRIMARY_COLOR + '1A', // 10% opacity
+            backgroundColor: '#FFFFFF',
             color: PRIMARY_COLOR,
             fontWeight: 400,
             fontFamily: theme.typography.fontFamily.body,
             fontSize: 14,
-            border: 'none',
+            border: `2px solid ${PRIMARY_COLOR}`,
             cursor: 'pointer',
             display: 'inline-flex',
             justifyContent: 'center',
@@ -63,10 +63,10 @@ export default function FilePicker({ label = 'Choose image', accept = 'image/*',
             transition: 'background-color 0.2s',
           } as any,
           onMouseEnter: (e: any) => {
-            e.currentTarget.style.backgroundColor = PRIMARY_COLOR + '33'; // 20% opacity on hover
+            e.currentTarget.style.backgroundColor = PRIMARY_COLOR + '0D'; // very light orange on hover
           },
           onMouseLeave: (e: any) => {
-            e.currentTarget.style.backgroundColor = PRIMARY_COLOR + '1A'; // Back to 10%
+            e.currentTarget.style.backgroundColor = '#FFFFFF';
           },
         }, React.createElement('span', { style: { fontWeight: 400, fontFamily: theme.typography.fontFamily.body } as any }, label))}
       </View>
@@ -116,7 +116,9 @@ const styles = StyleSheet.create({
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
-    backgroundColor: PRIMARY_COLOR + '1A', // 10% opacity
+    backgroundColor: '#FFFFFF',
+    borderWidth: 2,
+    borderColor: PRIMARY_COLOR,
     alignSelf: 'flex-start',
   },
   nativeButtonText: {

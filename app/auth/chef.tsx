@@ -907,21 +907,17 @@ export default function ChefSignup() {
 
   const step5Ratio = step === 5 ? 1 : 0;
 
-  const progress = Math.round((step1Ratio + step2Ratio + step3Ratio + step4Ratio + step5Ratio) * 20);
+  // Step-based progress: each step contributes 20%, final step shows 100%
+  const progress =
+    step === 5
+      ? 100
+      : Math.round(
+          ((step - 1) * 20) +
+          (step === 1 ? step1Ratio * 20 : step === 2 ? step2Ratio * 20 : step === 3 ? step3Ratio * 20 : step4Ratio * 20)
+        );
 
   const stepTitles = ['Personal Info', 'Availability & Pickup', 'Menu', 'Agreement', 'Review'];
   const stepTitle = stepTitles[step - 1] || '';
-
-  const progressDetail =
-    step === 1
-      ? `${stepTitle} • ${step1Done}/${step1Total} complete`
-      : step === 2
-        ? `${stepTitle} • ${Math.min(pickupSlots.length, 3)}/3 pickup slots set`
-        : step === 3
-          ? `${stepTitle} • ${Math.min(dishes.length, 3)}/3 dishes added`
-          : step === 4
-            ? `${stepTitle} • ${step4Done}/${step4Total} acknowledgements`
-            : `${stepTitle} • ready to submit`;
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
@@ -984,7 +980,6 @@ export default function ChefSignup() {
               <View style={styles.progressBar}>
                 <View style={[styles.progressFill, { width: `${progress}%` }]} />
               </View>
-              <Text style={styles.progressSubtext}>{progressDetail}</Text>
             </View>
 
             <View style={styles.form}>
@@ -1519,7 +1514,7 @@ export default function ChefSignup() {
                   {/* Food Safety & Payout Acknowledgement Section */}
                   <View style={[styles.field, styles.fieldFull, { marginTop: theme.spacing['2xl'] }]}>
                     <Text style={[styles.sectionTitle, { borderBottomColor: '#FFFFFF' }]}>Food safety & payout acknowledgement</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.md }}>
+                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.xs }}>
                       You're responsible for preparation.
                     </Text>
                     <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.lg }}>
@@ -2262,19 +2257,16 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                         </Text>
                         <View style={{ gap: theme.spacing.xs }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                              {agreementAccepted ? '✓' : '✗'} Chef Participation Agreement
-                            </Text>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: agreementAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>Chef Participation Agreement</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                              {feeAccepted ? '✓' : '✗'} Fee Schedule
-                            </Text>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: feeAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>Fee Schedule</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                              {payoutAccepted ? '✓' : '✗'} Payouts & Payments
-                            </Text>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: payoutAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>Payouts & Payments</Text>
                           </View>
                         </View>
                       </View>
@@ -2285,15 +2277,18 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                           Acknowledgements:
                         </Text>
                         <View style={{ gap: theme.spacing.xs }}>
-                          <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            {allergensDisclosed ? '✓' : '✗'} I'll clearly list ingredients & allergens
-                          </Text>
-                          <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            {foodSafetyAcknowledged ? '✓' : '✗'} I'll prepare food safely and responsibly
-                          </Text>
-                          <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            {platformInspectionUnderstood ? '✓' : '✗'} I understand the platform doesn't inspect food
-                          </Text>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: allergensDisclosed ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>I'll clearly list ingredients & allergens</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: foodSafetyAcknowledged ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>I'll prepare food safely and responsibly</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: platformInspectionUnderstood ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>I understand the platform doesn't inspect food</Text>
+                          </View>
                         </View>
                       </View>
                     </View>
@@ -2449,14 +2444,16 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             }}
             disabled={!valid || saving}
             style={{ 
-              backgroundColor: (!valid || saving) ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
+              backgroundColor: '#FFFFFF', 
               paddingVertical: 10, 
               paddingHorizontal: 24, 
               borderRadius: 8,
+              borderWidth: 2,
+              borderColor: PRIMARY_COLOR,
               opacity: (!valid || saving) ? 0.6 : 1
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+            <Text style={{ color: PRIMARY_COLOR, fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2641,6 +2638,8 @@ const styles = StyleSheet.create({
     height: Platform.select({ web: 200, default: 150 }),
     marginBottom: theme.spacing.lg,
     alignSelf: 'center',
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   title: {
     color: TEXT_LIGHT,
@@ -2898,8 +2897,8 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
   },
   message: {
     marginTop: theme.spacing.md,
