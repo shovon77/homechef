@@ -1448,7 +1448,6 @@ Continued use of the Platform after notice of compliance updates constitutes acc
               {termsType === 'fee' && (
                 <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>{`
 Fee Schedule - YourHomeChef
-
 Last Updated: February 14, 2026
 
 This Fee Schedule explains how fees and payouts work on the YourHomeChef platform. By using the Platform as a Chef, you agree to this Fee Schedule.
@@ -1567,23 +1566,6 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                 </>
               )}
     </ScrollView>
-            <View style={{ marginTop: 16, flexDirection: 'row', justifyContent: 'flex-end' }}>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowTermsModal(false);
-                  setTermsType(null);
-                }}
-                style={{
-                  paddingVertical: 12,
-                  paddingHorizontal: 24,
-                  backgroundColor: theme.colors.primary,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Okay</Text>
-              </TouchableOpacity>
-            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>

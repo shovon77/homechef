@@ -1871,7 +1871,6 @@ Continued use of the Platform after notice of compliance updates constitutes acc
                           {termsType === 'fee' && (
                             <Text style={styles.termsModalText}>{`
 Fee Schedule - YourHomeChef
-
 Last Updated: February 14, 2026
 
 This Fee Schedule explains how fees and payouts work on the YourHomeChef platform. By using the Platform as a Chef, you agree to this Fee Schedule.
