@@ -1056,10 +1056,10 @@ const styles = StyleSheet.create({
     textAlign: 'left',
   },
   titleMobile: {
-    fontSize: 18,
+    fontSize: 24,
   },
   titleDesktop: {
-    fontSize: 28,
+    fontSize: 24,
   },
   subtitle: {
     color: '#33393A',
