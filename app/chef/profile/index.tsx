@@ -944,7 +944,7 @@ export default function ChefProfilePage() {
                     We securely handle payments.
                   </Text>
                   
-                  <View style={{ gap: 12, marginBottom: 16 }}>
+                  <View style={{ gap: 12, marginBottom: 16, alignItems: 'flex-start' }}>
                     <TouchableOpacity onPress={() => {
                       setTermsType('agreement');
                       setShowTermsModal(true);
@@ -952,16 +952,16 @@ export default function ChefProfilePage() {
                       <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Chef Participation Agreement</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => {
-                      setTermsType('fee');
-                      setShowTermsModal(true);
-                    }}>
-                      <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Fee Schedule</Text>
-                    </TouchableOpacity>
-                    <TouchableOpacity onPress={() => {
                       setTermsType('payout');
                       setShowTermsModal(true);
                     }}>
                       <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Payouts & Payments</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => {
+                      setTermsType('fee');
+                      setShowTermsModal(true);
+                    }}>
+                      <Text style={{ color: theme.colors.primary, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Fee Schedule</Text>
                     </TouchableOpacity>
                   </View>
 

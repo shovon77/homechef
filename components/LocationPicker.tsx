@@ -8,6 +8,7 @@ type LocationPickerProps = {
   onPlaceSelect?: (placeId: string, description: string) => void;
   placeholder?: string;
   style?: any;
+  inputStyle?: any;
   onFocus?: () => void;
   onBlur?: () => void;
 };
@@ -21,7 +22,7 @@ type PlacePrediction = {
   };
 };
 
-export default function LocationPicker({ value, onChange, onPlaceSelect, placeholder = "Search for a location...", style, onFocus, onBlur }: LocationPickerProps) {
+export default function LocationPicker({ value, onChange, onPlaceSelect, placeholder = "Search for a location...", style, inputStyle, onFocus, onBlur }: LocationPickerProps) {
   const [query, setQuery] = useState(value || '');
   const [predictions, setPredictions] = useState<PlacePrediction[]>([]);
   const [loading, setLoading] = useState(false);
@@ -170,7 +171,7 @@ export default function LocationPicker({ value, onChange, onPlaceSelect, placeho
     <View style={[styles.container, showSuggestions && predictions.length > 0 && styles.containerWithSuggestions, style]} pointerEvents="box-none">
       <View style={styles.inputContainer}>
         <TextInput
-          style={styles.input}
+          style={[styles.input, inputStyle]}
           value={query}
           onChangeText={handleInputChange}
           placeholder={placeholder}

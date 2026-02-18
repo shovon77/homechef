@@ -80,34 +80,34 @@ export default function ChefSignup() {
   const [cuisineType, setCuisineType] = useState<string[]>([]);
   const [showCuisineDropdown, setShowCuisineDropdown] = useState(false);
 
-  // Cuisine types list
+  // Cuisine types list (alphabetically sorted)
   const cuisineTypes = [
-    'Italian',
-    'Mexican',
-    'Chinese',
-    'Japanese',
-    'Thai',
-    'Indian',
-    'Bengali',
-    'French',
-    'Mediterranean',
     'American',
     'Asian Fusion',
+    'Bakery',
+    'BBQ',
+    'Bengali',
+    'Cajun',
+    'Caribbean',
+    'Chinese',
+    'Desserts',
+    'French',
+    'Greek',
+    'Indian',
+    'Italian',
+    'Japanese',
+    'Korean',
+    'Mediterranean',
+    'Mexican',
+    'Middle Eastern',
+    'Other',
+    'Seafood',
+    'Soul Food',
+    'Spanish',
+    'Thai',
     'Vegan',
     'Vegetarian',
-    'BBQ',
-    'Seafood',
-    'Desserts',
-    'Bakery',
-    'Middle Eastern',
-    'Korean',
     'Vietnamese',
-    'Greek',
-    'Spanish',
-    'Caribbean',
-    'Soul Food',
-    'Cajun',
-    'Other'
   ];
   const [phone, setPhone] = useState('');
   const [phoneTouched, setPhoneTouched] = useState(false);
@@ -119,6 +119,7 @@ export default function ChefSignup() {
   const [address, setAddress] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [passwordFocused, setPasswordFocused] = useState(false);
   
   // Step 2 fields - Availability & Pickup
   const [pickupSlots, setPickupSlots] = useState<Array<{ day: string; timeWindow: string }>>([]);
@@ -218,6 +219,34 @@ export default function ChefSignup() {
     const existsOk = emailCheckUnavailable ? true : !emailExists;
     return emailIsValid && existsOk && !emailChecking;
   }, [isLoggedIn, emailIsValid, emailExists, emailChecking, emailCheckUnavailable]);
+
+  // Password policy (same as user signup: 8+ chars, upper, lower, number, symbol)
+  const getPasswordPolicy = (pwd: string) => {
+    const p = String(pwd || '');
+    const hasLower = /[a-z]/.test(p);
+    const hasUpper = /[A-Z]/.test(p);
+    const hasNumber = /\d/.test(p);
+    const hasSymbol = /[^A-Za-z0-9]/.test(p);
+    const len = p.length;
+    const minLenOk = len >= 8;
+    const meets = minLenOk && hasLower && hasUpper && hasNumber && hasSymbol;
+    return { len, minLenOk, hasLower, hasUpper, hasNumber, hasSymbol, meets };
+  };
+  const passwordPolicy = useMemo(() => getPasswordPolicy(password), [password]);
+  const passwordStrength = useMemo(() => {
+    const count =
+      (passwordPolicy.minLenOk ? 1 : 0) +
+      (passwordPolicy.hasLower ? 1 : 0) +
+      (passwordPolicy.hasUpper ? 1 : 0) +
+      (passwordPolicy.hasNumber ? 1 : 0) +
+      (passwordPolicy.hasSymbol ? 1 : 0);
+    const pct = (count / 5) * 100;
+    const label =
+      count === 5 ? 'Strong' : count === 4 ? 'Good' : count === 3 ? 'Fair' : count === 2 ? 'Weak' : count === 1 ? 'Very weak' : '';
+    const color =
+      count === 5 ? '#16A34A' : count >= 4 ? '#22C55E' : count >= 3 ? '#F59E0B' : '#EF4444';
+    return { count, pct, label, color };
+  }, [passwordPolicy]);
 
   // When logged out, check if an account already exists for the provided email.
   // Best-effort: if the query is blocked by RLS, we fall back to signup-time checks.
@@ -339,7 +368,7 @@ export default function ChefSignup() {
           // Only load email from storage if user is not logged in (email from auth takes precedence)
           if (data.email && !user?.email) setEmail(data.email);
           if (data.address) setAddress(data.address);
-          if (data.password) setPassword(data.password);
+          // Password is not restored from storage (security)
           if (data.pickupSlots) setPickupSlots(data.pickupSlots);
           if (data.dishes) setDishes(data.dishes);
           if (data.bio) setBio(data.bio);
@@ -376,7 +405,6 @@ export default function ChefSignup() {
           phone,
           email,
           address,
-          password,
           pickupSlots,
           dishes: dishes.map(d => ({ ...d, file: null })), // Don't save File objects
           bio,
@@ -396,13 +424,15 @@ export default function ChefSignup() {
       }
     };
     saveData();
-  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, password, pickupSlots, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
+  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, pickupSlots, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
 
   const canProceedToStep2 = fullName && brandName && briefDescription && cuisineType.length > 0 && phoneIsValid && emailOk && address;
   const canProceedToStep3 = pickupSlots.length > 0;
   const canProceedToStep4 = dishes.length > 0; // At least one dish required
   const canProceedToStep5 = foodSafetyAcknowledged && allergensDisclosed && platformInspectionUnderstood && agreementAccepted && feeAccepted && payoutAccepted;
-  const canSubmit = true; // All validations are done in previous steps
+  const canSubmit = isLoggedIn
+    ? true
+    : passwordPolicy.meets;
 
   function handleNext() {
     if (step === 1 && canProceedToStep2) {
@@ -599,23 +629,29 @@ export default function ChefSignup() {
       
       // 2) If not logged in, try to sign up or sign in
       if (!session) {
-        // Generate a random password for signup (user will reset it via email)
-        const tempPassword = Math.random().toString(36).slice(-12) + Math.random().toString(36).slice(-12) + 'A1!';
-        
-        // Try to sign up
-        const su = await supabase.auth.signUp({ 
-          email: emailForAuth, 
-          password: tempPassword,
+        // Use the password provided on step 5 (must meet policy; canSubmit enforces this)
+        if (!password || !getPasswordPolicy(password).meets) {
+          Alert.alert(
+            'Password required',
+            'Please set a password that meets the requirements (at least 8 characters, including uppercase, lowercase, number, and symbol).'
+          );
+          return;
+        }
+
+        // Try to sign up with the user-provided password
+        const su = await supabase.auth.signUp({
+          email: emailForAuth,
+          password,
           options: {
             emailRedirectTo: `${window.location.origin}/auth?mode=reset`
           }
         });
-        
+
         // If user already exists (422 error), prompt them to sign in first
         if (su.error) {
           const errorCode = su.error.status || 0;
           const errorMessage = su.error.message || '';
-          
+
           if (errorCode === 422 || /user.*already.*registered|email.*already.*exists/i.test(errorMessage)) {
             Alert.alert(
               'Account Already Exists',
@@ -626,15 +662,13 @@ export default function ChefSignup() {
             );
             return;
           }
-          
-          // For other errors, show the error
-        throw su.error;
-      }
-      
+
+          throw su.error;
+        }
+
         // If signup succeeded, try to establish session
         if (su.data?.user && !su.data.session) {
-          // User created but no session - try to sign in with password
-          const sessionResult = await ensureSession(supabase, emailForAuth, tempPassword);
+          const sessionResult = await ensureSession(supabase, emailForAuth, password);
           if (sessionResult) {
             session = {
               access_token: sessionResult.access_token,
@@ -1099,7 +1133,7 @@ export default function ChefSignup() {
                                       {cuisine}
                                     </Text>
                                     {isSelected && (
-                                      <Text style={styles.dropdownCheckmark}>✓</Text>
+                                      <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />
                                     )}
                                   </TouchableOpacity>
                                 );
@@ -1197,6 +1231,7 @@ export default function ChefSignup() {
                           value={address}
                           onChange={setAddress}
                           placeholder="Search for your address"
+                          inputStyle={{ backgroundColor: BACKGROUND_LIGHT }}
                         />
                   </View>
                       <Text style={styles.hint}>Share a detailed address for order pickups.</Text>
@@ -1476,7 +1511,7 @@ export default function ChefSignup() {
                   {msg && (
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8, marginBottom: 16 }}>
                       <Image source={require('../../assets/success.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
-                      <Text style={{ color: TEXT_LIGHT, fontWeight: '700', flex: 1 }}>{msg}</Text>
+                      <Text style={{ color: TEXT_LIGHT, fontWeight: '700', flex: 1, fontFamily: theme.typography.fontFamily.display }}>{msg}</Text>
                     </View>
                   )}
 
@@ -1484,7 +1519,7 @@ export default function ChefSignup() {
 
                   <View style={{ gap: 24, marginTop: 24 }}>
                     {dishes.length === 0 ? (
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No dishes yet. Add your first dish above.</Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No dishes yet. Add your first dish above.</Text>
                     ) : (
                       dishes.map(d => <DishEditor key={d.id} dish={d} onSave={(p) => updateDish(d.id, p)} onDelete={() => deleteDish(d.id)} saving={savingDish} />)
                     )}
@@ -1514,10 +1549,10 @@ export default function ChefSignup() {
                   {/* Food Safety & Payout Acknowledgement Section */}
                   <View style={[styles.field, styles.fieldFull, { marginTop: theme.spacing['2xl'] }]}>
                     <Text style={[styles.sectionTitle, { borderBottomColor: '#FFFFFF' }]}>Food safety & payout acknowledgement</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.xs }}>
+                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.xs, fontFamily: theme.typography.fontFamily.body }}>
                       You're responsible for preparation.
                     </Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.lg }}>
+                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.lg, fontFamily: theme.typography.fontFamily.body }}>
                       We securely handle payments.
                     </Text>
 
@@ -1530,11 +1565,24 @@ export default function ChefSignup() {
                           setTermsScrolledToBottom(false);
                           setTermsAccepted(false);
                         }}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
                             Chef Participation Agreement
                           </Text>
                         </TouchableOpacity>
                         {agreementAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
+                      </View>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                        <TouchableOpacity onPress={() => {
+                          setTermsType('payout');
+                          setShowTermsModal(true);
+                          setTermsScrolledToBottom(false);
+                          setTermsAccepted(false);
+                        }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                            Payouts & Payments
+                          </Text>
+                        </TouchableOpacity>
+                        {payoutAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
                         <TouchableOpacity onPress={() => {
@@ -1543,24 +1591,11 @@ export default function ChefSignup() {
                           setTermsScrolledToBottom(false);
                           setTermsAccepted(false);
                         }}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
                             Fee Schedule
                           </Text>
                         </TouchableOpacity>
                         {feeAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
-                      </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, alignSelf: 'center' }}>
-                        <TouchableOpacity onPress={() => {
-                          setTermsType('payout');
-                          setShowTermsModal(true);
-                          setTermsScrolledToBottom(false);
-                          setTermsAccepted(false);
-                        }}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base }}>
-                            Payouts & Payments
-                          </Text>
-                        </TouchableOpacity>
-                        {payoutAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
                       </View>
                     </View>
 
@@ -2020,38 +2055,38 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                     {/* Chef profile basics */}
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
-                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT }}>
+                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
                           Chef profile basics
                         </Text>
                         <TouchableOpacity onPress={() => setStep(1)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
                       </View>
                       <View style={{ gap: theme.spacing.xs }}>
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Full name:</Text> {fullName || 'Not set'}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Full name:</Text> {fullName || 'Not set'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Brand name:</Text> {brandName || 'Not set'}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Brand name:</Text> {brandName || 'Not set'}
                         </Text>
                         {briefDescription && (
-                          <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Brief description:</Text> {briefDescription}
+                          <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Brief description:</Text> {briefDescription}
                           </Text>
                         )}
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Cuisine type:</Text> {cuisineType.length > 0 ? cuisineType.join(', ') : 'Not set'}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Cuisine type:</Text> {cuisineType.length > 0 ? cuisineType.join(', ') : 'Not set'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Phone:</Text> {phone || 'Not set'}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Phone:</Text> {phone || 'Not set'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Email:</Text> {email || 'Not set'}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Email:</Text> {email || 'Not set'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any }}>Address:</Text> {address || 'Not set'}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Address:</Text> {address || 'Not set'}
                         </Text>
                       </View>
                     </View>
@@ -2059,11 +2094,11 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                     {/* Availability & pickup */}
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
-                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT }}>
+                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
                           Availability & pickup
                         </Text>
                         <TouchableOpacity onPress={() => setStep(2)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2172,7 +2207,7 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                                 
                                 return (
                                   <View key={`${day}-${rangeIdx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
+                                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
                                       {day} • {timeLabel}
                                     </Text>
                                   </View>
@@ -2182,7 +2217,7 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                           })()}
                         </View>
                       ) : (
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
                           No time slots selected
                         </Text>
                       )}
@@ -2191,11 +2226,11 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                     {/* Dishes */}
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
-                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT }}>
+                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
                           Dishes
                         </Text>
                         <TouchableOpacity onPress={() => setStep(3)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2205,25 +2240,25 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                           {dishes.map((dish, index) => (
                             <View key={dish.id} style={{ padding: theme.spacing.md, backgroundColor: BACKGROUND_LIGHT, borderRadius: theme.radius.md, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'flex-start', marginBottom: theme.spacing.xs }}>
-                                <Text style={{ fontSize: theme.typography.fontSize.base, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, flex: 1 }}>
+                                <Text style={{ fontSize: theme.typography.fontSize.base, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, flex: 1, fontFamily: theme.typography.fontFamily.display }}>
                                   {dish.name}
                                 </Text>
-                                <Text style={{ fontSize: theme.typography.fontSize.base, fontWeight: theme.typography.fontWeight.bold as any, color: PRIMARY_COLOR }}>
+                                <Text style={{ fontSize: theme.typography.fontSize.base, fontWeight: theme.typography.fontWeight.bold as any, color: PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.display }}>
                                   ${dish.price.toFixed(2)}
                                 </Text>
                               </View>
                               {dish.portion && (
-                                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, marginBottom: theme.spacing.xs }}>
+                                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, marginBottom: theme.spacing.xs, fontFamily: theme.typography.fontFamily.body }}>
                                   Portion: {dish.portion}
                                 </Text>
                               )}
                               {dish.description && (
-                                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, marginBottom: theme.spacing.xs }}>
+                                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, marginBottom: theme.spacing.xs, fontFamily: theme.typography.fontFamily.body }}>
                                   {dish.description}
                                 </Text>
                               )}
                               {dish.ingredients && (
-                                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm }}>
+                                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
                                   Ingredients: {dish.ingredients}
                                 </Text>
                               )}
@@ -2231,7 +2266,7 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                           ))}
                         </View>
                       ) : (
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
                           No dishes added
                         </Text>
                       )}
@@ -2240,11 +2275,11 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                     {/* Food safety acknowledgement */}
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
-                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT }}>
+                        <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
                           Food safety acknowledgement
                         </Text>
                         <TouchableOpacity onPress={() => setStep(4)}>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm }}>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
                             Edit details
                           </Text>
                         </TouchableOpacity>
@@ -2252,47 +2287,84 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                       
                       {/* Agreements */}
                       <View style={{ marginBottom: theme.spacing.md }}>
-                        <Text style={{ fontSize: theme.typography.fontSize.sm, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, marginBottom: theme.spacing.xs }}>
+                        <Text style={{ fontSize: theme.typography.fontSize.sm, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, marginBottom: theme.spacing.xs, fontFamily: theme.typography.fontFamily.display }}>
                           Agreements:
                         </Text>
-                        <View style={{ gap: theme.spacing.xs }}>
+                        <View style={{ gap: theme.spacing.xs, alignItems: 'flex-start' }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
                             <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: agreementAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>Chef Participation Agreement</Text>
-                          </View>
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: feeAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>Fee Schedule</Text>
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>Chef Participation Agreement</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
                             <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: payoutAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>Payouts & Payments</Text>
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>Payouts & Payments</Text>
+                          </View>
+                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+                            <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: feeAccepted ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>Fee Schedule</Text>
                           </View>
                         </View>
                       </View>
 
                       {/* Checkboxes */}
                       <View>
-                        <Text style={{ fontSize: theme.typography.fontSize.sm, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, marginBottom: theme.spacing.xs }}>
+                        <Text style={{ fontSize: theme.typography.fontSize.sm, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, marginBottom: theme.spacing.xs, fontFamily: theme.typography.fontFamily.display }}>
                           Acknowledgements:
                         </Text>
                         <View style={{ gap: theme.spacing.xs }}>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
                             <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: allergensDisclosed ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>I'll clearly list ingredients & allergens</Text>
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>I'll clearly list ingredients & allergens</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
                             <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: foodSafetyAcknowledged ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>I'll prepare food safely and responsibly</Text>
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>I'll prepare food safely and responsibly</Text>
                           </View>
                           <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
                             <Image source={require('../../assets/success.png')} style={{ width: 18, height: 18, tintColor: platformInspectionUnderstood ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
-                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>I understand the platform doesn't inspect food</Text>
+                            <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>I understand the platform doesn't inspect food</Text>
                           </View>
                         </View>
                       </View>
                     </View>
                   </View>
+
+                  {/* Password (only when not signed in) */}
+                  {!isLoggedIn && (
+                    <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
+                      <Text style={{ fontSize: theme.typography.fontSize.lg, color: TEXT_LIGHT, marginBottom: theme.spacing.sm, fontFamily: theme.typography.fontFamily.display }}>
+                        Create your account password
+                      </Text>
+                      <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, marginBottom: theme.spacing.md, fontFamily: theme.typography.fontFamily.body }}>
+                        This password will be used to sign in to your account.
+                      </Text>
+                      <TextInput
+                        value={password}
+                        onChangeText={setPassword}
+                        onFocus={() => setPasswordFocused(true)}
+                        onBlur={() => setPasswordFocused(false)}
+                        placeholder=""
+                        secureTextEntry
+                        style={[styles.input, styles.inputNoFocusOutline]}
+                      />
+                      <View style={{ gap: 6, marginTop: theme.spacing.sm }}>
+                        <Text style={{ color: TEXT_MUTED, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                          Use at least 8 characters, including an uppercase letter, lowercase letter, number, and symbol.
+                        </Text>
+                        <View style={{ height: 8, borderRadius: 999, backgroundColor: '#E5E7EB', overflow: 'hidden' }}>
+                          <View style={{ height: '100%', width: `${passwordStrength.pct}%`, backgroundColor: passwordStrength.color }} />
+                        </View>
+                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                          <Text style={{ color: passwordStrength.color, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                            {passwordStrength.label ? `Strength: ${passwordStrength.label}` : ' '}
+                          </Text>
+                          <Text style={{ color: TEXT_MUTED, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                            {passwordPolicy.len > 0 ? `${passwordStrength.count}/5` : ' '}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  )}
 
                   {/* Action Buttons */}
                   <View style={styles.actions}>
@@ -2342,45 +2414,47 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
 
   return (
     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, marginBottom: 16 }}>
-      <Text style={{ color: TEXT_LIGHT, fontSize: 20, fontWeight: '700', marginBottom: 16 }}>Add a new dish</Text>
+      <Text style={{ color: TEXT_LIGHT, fontSize: 20, fontWeight: '700', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Add a new dish</Text>
       <View style={{ gap: 16 }}>
         <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
           <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Name</Text>
             <TextInput
               value={name}
               onChangeText={setName}
               placeholder="Chicken Biryani"
               placeholderTextColor={TEXT_MUTED}
-              style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+              style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, styles.inputNoFocusOutline]}
             />
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
-            <View style={{ position: 'relative' }}>
-              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', backgroundColor: CARD_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, minHeight: 40 }}>
+              <View style={{ flexShrink: 0 }}>
+                <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
+              </View>
               <TextInput
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="numeric"
                 placeholder="19.99"
                 placeholderTextColor={TEXT_MUTED}
-                style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 28, minHeight: 40 }}
+                style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_LIGHT, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16 }, styles.inputNoFocusOutline]}
               />
             </View>
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Portion</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Portion</Text>
             <TextInput
               value={portion}
               onChangeText={setPortion}
               placeholder="e.g., 2 servings, 500g"
               placeholderTextColor={TEXT_MUTED}
-              style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+              style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, styles.inputNoFocusOutline]}
             />
           </View>
           <View style={{ minWidth: isMobile ? undefined : 200, alignItems: isMobile ? 'stretch' : 'flex-start' }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Photo</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Photo</Text>
             {preview ? (
               <View style={{ gap: 8 }}>
                 <Image 
@@ -2407,7 +2481,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           </View>
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Description</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Description</Text>
           <TextInput
             value={description}
             onChangeText={setDescription}
@@ -2415,11 +2489,11 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             placeholderTextColor={TEXT_MUTED}
             multiline
             numberOfLines={3}
-            style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }}
+            style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }, styles.inputNoFocusOutline]}
           />
         </View>
         <View style={{ gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Ingredients & allergens</Text>
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Ingredients & allergens</Text>
           <TextInput
             value={ingredients}
             onChangeText={setIngredients}
@@ -2427,7 +2501,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             placeholderTextColor={TEXT_MUTED}
             multiline
             numberOfLines={2}
-            style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+            style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, styles.inputNoFocusOutline]}
           />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
@@ -2489,42 +2563,44 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
         <View style={{ flex: 1, gap: 16 }}>
           <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
             <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Name</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Name</Text>
               <TextInput
                 value={name}
                 onChangeText={setName}
                 placeholder="Dish name"
                 placeholderTextColor={TEXT_MUTED}
-                style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+                style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, styles.inputNoFocusOutline]}
               />
             </View>
             <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Price</Text>
-              <View style={{ position: 'relative' }}>
-                <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>$</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
+              <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', backgroundColor: CARD_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, minHeight: 40 }}>
+                <View style={{ flexShrink: 0 }}>
+                  <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
+                </View>
                 <TextInput
                   value={price}
                   onChangeText={setPrice}
                   keyboardType="numeric"
                   placeholder="0.00"
                   placeholderTextColor={TEXT_MUTED}
-                  style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 28, minHeight: 40 }}
+                  style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_LIGHT, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16 }, styles.inputNoFocusOutline]}
                 />
               </View>
             </View>
             <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8 }}>Portion</Text>
+              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Portion</Text>
               <TextInput
                 value={portion}
                 onChangeText={setPortion}
                 placeholder="e.g., 2 servings, 500g"
                 placeholderTextColor={TEXT_MUTED}
-                style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }}
+                style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, styles.inputNoFocusOutline]}
               />
             </View>
           </View>
           <View style={{ gap: 8 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Description</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Description</Text>
             <TextInput
               value={description}
               onChangeText={setDescription}
@@ -2532,11 +2608,11 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
               placeholderTextColor={TEXT_MUTED}
               multiline
               numberOfLines={2}
-              style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+              style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, styles.inputNoFocusOutline]}
             />
           </View>
           <View style={{ gap: 8 }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600' }}>Ingredients & allergens</Text>
+            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Ingredients & allergens</Text>
             <TextInput
               value={ingredients}
               onChangeText={setIngredients}
@@ -2544,7 +2620,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
               placeholderTextColor={TEXT_MUTED}
               multiline
               numberOfLines={2}
-              style={{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }}
+              style={[{ backgroundColor: CARD_LIGHT, color: TEXT_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, styles.inputNoFocusOutline]}
             />
           </View>
           <View style={{ 
@@ -2762,10 +2838,18 @@ const styles = StyleSheet.create({
     color: TEXT_LIGHT,
     fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body,
     fontStyle: 'normal',
+    ...Platform.select({
+      web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any },
+      default: {},
+    }),
   },
   inputFocused: {
-    borderColor: PRIMARY_COLOR,
+    borderColor: BORDER_LIGHT,
   },
+  inputNoFocusOutline: Platform.select({
+    web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any },
+    default: {},
+  }),
   inputReadOnly: {
     backgroundColor: '#F9FAFB',
     color: TEXT_MUTED,
@@ -2995,6 +3079,7 @@ const styles = StyleSheet.create({
   dropdownArrow: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
   },
   modalOverlay: {
     flex: 1,
@@ -3036,17 +3121,19 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.xl,
     color: TEXT_MUTED,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   dropdownList: {
     maxHeight: 400,
   },
   dropdownItem: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
     alignItems: 'center',
+    justifyContent: 'center',
     padding: theme.spacing.md,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
+    gap: theme.spacing.sm,
   },
   dropdownItemSelected: {
     backgroundColor: '#fff5f2',
@@ -3059,11 +3146,7 @@ const styles = StyleSheet.create({
   dropdownItemTextSelected: {
     color: PRIMARY_COLOR,
     fontWeight: theme.typography.fontWeight.bold as any,
-  },
-  dropdownCheckmark: {
-    color: PRIMARY_COLOR,
-    fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   dropdownDoneButton: {
     backgroundColor: PRIMARY_COLOR,
@@ -3113,6 +3196,7 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   selectedPickupTimeText: {
     fontSize: theme.typography.fontSize.sm,
@@ -3213,6 +3297,7 @@ const styles = StyleSheet.create({
     color: PRIMARY_COLOR,
     fontSize: theme.typography.fontSize.lg,
     fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   addPickupTimeButton: {
     backgroundColor: PRIMARY_COLOR,
@@ -3266,6 +3351,7 @@ const styles = StyleSheet.create({
     fontSize: 24,
     color: TEXT_MUTED,
     fontWeight: 'bold',
+    fontFamily: theme.typography.fontFamily.body,
   },
   termsModalBody: {
     padding: theme.spacing.lg,

@@ -4214,15 +4214,17 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
-            <View style={{ position: 'relative' }}>
-              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>CAD $</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', backgroundColor: BG_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, minHeight: 40 }}>
+              <View style={{ flexShrink: 0 }}>
+                <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
+              </View>
               <TextInput
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="numeric"
                 placeholder="19.99"
                 placeholderTextColor={TEXT_MUTED}
-                style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 52, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
+                style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
               />
             </View>
           </View>
@@ -4382,15 +4384,17 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Price</Text>
-            <View style={{ position: 'relative' }}>
-              <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1 }}>CAD $</Text>
+            <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', backgroundColor: BG_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, minHeight: 40 }}>
+              <View style={{ flexShrink: 0 }}>
+                <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
+              </View>
               <TextInput
                 value={price}
                 onChangeText={setPrice}
                 keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor={TEXT_MUTED}
-                style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 52, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
+                style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
               />
             </View>
           </View>
