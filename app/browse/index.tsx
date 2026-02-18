@@ -767,8 +767,8 @@ export default function BrowsePage() {
         <View style={!isMobile ? { maxWidth: 1280, width: '100%', alignSelf: 'center' } : undefined}>
         <View style={styles.headerBlock}>
           <View style={styles.headerTextBlock}>
-            <Text style={[styles.title, isMobile && styles.titleMobile, !isMobile && styles.titleDesktop]}>Pickup homemade meals near you</Text>
-            <Text style={styles.subtitle}>For a taste of home today</Text>
+            <Text style={[styles.title, isMobile && styles.titleMobile, !isMobile && styles.titleDesktop]}>Pickup homemade meals</Text>
+            <Text style={styles.subtitle}>From home chefs near you</Text>
           </View>
           <View style={styles.subtitleDivider} />
         </View>

@@ -28,16 +28,13 @@ export default function Footer() {
         <View style={styles.inner}>
           <View style={styles.brandContainer}>
             <Image 
-              source={require('../assets/AppLogoWordFinal2026.png')}
-              style={[
-                styles.brandLogo,
-                { 
-                  width: isMobile ? Math.min(400, width - 40) : 560,
-                  height: isMobile ? (Math.min(400, width - 40) / 5) : 112 
-                }
-              ]}
+              source={require('../assets/YHC-Logo2.png')}
+              style={[styles.brandLogo, { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74 }]}
               resizeMode="contain"
             />
+            <Text style={styles.brandName}>
+              <Text style={styles.brandNameYour}>Your</Text><Text style={styles.brandNameHomeChef}>HomeChef</Text>
+            </Text>
           </View>
           <Text style={styles.copy}>YourHomeChef is a marketplace connecting independent home chefs with local customers. All food is prepared by the chefs.</Text>
         </View>
@@ -90,18 +87,31 @@ const styles = StyleSheet.create({
   },
   brandContainer: {
     flexDirection: 'row',
-    alignItems: 'flex-start',
+    alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 0,
-    marginLeft: -100,
+    marginLeft: 0,
     paddingLeft: 0,
     alignSelf: 'flex-start',
     width: 'auto',
   },
   brandLogo: {
     backgroundColor: 'transparent',
-    alignSelf: 'flex-start',
-    marginLeft: 0,
+    alignSelf: 'center',
+    marginLeft: -12,
+  },
+  brandName: {
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontSize: 24,
+    lineHeight: 32,
+    marginLeft: -6,
+  },
+  brandNameYour: {
+    color: '#33393A',
+  },
+  brandNameHomeChef: {
+    color: '#FE734C',
   },
   copy: {
     color: '#33393A',
@@ -118,7 +128,7 @@ const styles = StyleSheet.create({
   link: {
     color: '#FE734C',
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: 'bold',
+    fontWeight: theme.typography.fontWeight.normal as any,
     fontSize: 14,
   },
   legal: {

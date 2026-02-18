@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, ScrollView, Alert, Modal, Image, useWindowDimensions, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
@@ -165,6 +165,7 @@ export default function ChefSignup() {
   
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
+  const hasLoadedFromStorage = useRef(false);
   const [existingApplication, setExistingApplication] = useState<{ id: string; status: string } | null>(null);
   const [isAlreadyChef, setIsAlreadyChef] = useState(false);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -354,13 +355,16 @@ export default function ChefSignup() {
         }
       } catch (e) {
         console.warn('Error loading saved form data:', e);
+      } finally {
+        hasLoadedFromStorage.current = true;
       }
     };
     loadSavedData();
   }, []);
 
-  // Save form data whenever it changes
+  // Save form data whenever it changes (only after we've loaded from storage so we don't overwrite on refresh)
   useEffect(() => {
+    if (!hasLoadedFromStorage.current) return;
     const saveData = async () => {
       try {
         const dataToSave = {
@@ -441,7 +445,7 @@ export default function ChefSignup() {
         file: d.file || null,
       };
       setDishes(prev => [...prev, newDish]);
-      setMsg('Dish added ✓');
+      setMsg('Dish added');
       setTimeout(() => setMsg(null), 3000);
     } catch (e: any) {
       Alert.alert('Error', 'Failed to add dish: ' + (e.message || String(e)));
@@ -474,7 +478,7 @@ export default function ChefSignup() {
         )
       );
 
-      setMsg('Dish updated ✓');
+      setMsg('Dish updated');
       setTimeout(() => setMsg(null), 3000);
     } catch (e: any) {
       Alert.alert('Error', 'Failed to update dish: ' + (e.message || String(e)));
@@ -487,7 +491,7 @@ export default function ChefSignup() {
     if (Platform.OS === 'web') {
       if (window.confirm('Are you sure you want to delete this dish?')) {
         setDishes(prev => prev.filter(d => d.id !== id));
-        setMsg('Dish deleted ✓');
+        setMsg('Dish deleted');
         setTimeout(() => setMsg(null), 3000);
       }
       return;
@@ -500,7 +504,7 @@ export default function ChefSignup() {
         style: 'destructive',
         onPress: () => {
           setDishes(prev => prev.filter(d => d.id !== id));
-          setMsg('Dish deleted ✓');
+          setMsg('Dish deleted');
           setTimeout(() => setMsg(null), 3000);
         }
       }
@@ -1211,8 +1215,7 @@ export default function ChefSignup() {
                       onPress={handleNext}
                       disabled={!canProceedToStep2 || busy}
                     >
-                      <Text style={styles.nextButtonText}>Next Step</Text>
-                      <Text style={styles.nextButtonIcon}>→</Text>
+                      <Text style={styles.nextButtonText}>Continue</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -1458,15 +1461,14 @@ export default function ChefSignup() {
                       onPress={handleBack}
                       disabled={busy}
                     >
-                      <Text style={styles.backButtonText}>← Back</Text>
+                      <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.nextButton, (!canProceedToStep3 || busy) && styles.nextButtonDisabled]}
                       onPress={handleNext}
                       disabled={!canProceedToStep3 || busy}
                     >
-                      <Text style={styles.nextButtonText}>Next Step</Text>
-                      <Text style={styles.nextButtonIcon}>→</Text>
+                      <Text style={styles.nextButtonText}>Continue</Text>
                     </TouchableOpacity>
                   </View>
                 </>
@@ -1477,8 +1479,9 @@ export default function ChefSignup() {
                   <Text style={styles.sectionSubtitle}>Draft it first — nothing goes live yet.</Text>
                   
                   {msg && (
-                    <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8, marginBottom: 16 }}>
-                      <Text style={{ color: TEXT_LIGHT, fontWeight: '700' }}>{msg}</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8, marginBottom: 16 }}>
+                      <Image source={require('../../assets/success.png')} style={{ width: 22, height: 22 }} resizeMode="contain" />
+                      <Text style={{ color: TEXT_LIGHT, fontWeight: '700', flex: 1 }}>{msg}</Text>
                     </View>
                   )}
 
@@ -1499,15 +1502,14 @@ export default function ChefSignup() {
                       onPress={handleBack}
                       disabled={busy}
                     >
-                      <Text style={styles.backButtonText}>← Back</Text>
+                      <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.nextButton, (!canProceedToStep4 || busy) && styles.nextButtonDisabled]}
                       onPress={handleNext}
                       disabled={!canProceedToStep4 || busy}
                     >
-                      <Text style={styles.nextButtonText}>Next Step</Text>
-                      <Text style={styles.nextButtonIcon}>→</Text>
+                      <Text style={styles.nextButtonText}>Continue</Text>
                     </TouchableOpacity>
                       </View>
                 </>
@@ -1516,7 +1518,7 @@ export default function ChefSignup() {
                   {/* Step 4: Food Safety & Payout Acknowledgement */}
                   {/* Food Safety & Payout Acknowledgement Section */}
                   <View style={[styles.field, styles.fieldFull, { marginTop: theme.spacing['2xl'] }]}>
-                    <Text style={styles.sectionTitle}>Food safety & payout acknowledgement</Text>
+                    <Text style={[styles.sectionTitle, { borderBottomColor: '#FFFFFF' }]}>Food safety & payout acknowledgement</Text>
                     <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, marginBottom: theme.spacing.md }}>
                       You're responsible for preparation.
                     </Text>
@@ -1525,7 +1527,7 @@ export default function ChefSignup() {
                     </Text>
 
                     {/* Links */}
-                    <View style={{ gap: theme.spacing.sm, marginBottom: theme.spacing.lg }}>
+                    <View style={{ gap: theme.spacing.sm, marginBottom: theme.spacing.lg, alignItems: 'flex-start' }}>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
                         <TouchableOpacity onPress={() => {
                           setTermsType('agreement');
@@ -1537,7 +1539,7 @@ export default function ChefSignup() {
                             Chef Participation Agreement
                           </Text>
                         </TouchableOpacity>
-                        {agreementAccepted && <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontWeight: 'bold' }}>✓</Text>}
+                        {agreementAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
                         <TouchableOpacity onPress={() => {
@@ -1550,9 +1552,9 @@ export default function ChefSignup() {
                             Fee Schedule
                           </Text>
                         </TouchableOpacity>
-                        {feeAccepted && <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontWeight: 'bold' }}>✓</Text>}
+                        {feeAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
                       </View>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm }}>
+                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, alignSelf: 'center' }}>
                         <TouchableOpacity onPress={() => {
                           setTermsType('payout');
                           setShowTermsModal(true);
@@ -1563,35 +1565,35 @@ export default function ChefSignup() {
                             Payouts & Payments
                           </Text>
                         </TouchableOpacity>
-                        {payoutAccepted && <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontWeight: 'bold' }}>✓</Text>}
+                        {payoutAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
                       </View>
                     </View>
 
                     {/* Checkboxes */}
-                    <View style={{ gap: theme.spacing.md }}>
-                  <TouchableOpacity 
-                    style={styles.checkboxContainer} 
-                        onPress={() => setFoodSafetyAcknowledged(!foodSafetyAcknowledged)}
-                    activeOpacity={0.8}
-                  >
-                        <View style={[styles.checkbox, foodSafetyAcknowledged && styles.checkboxChecked]}>
-                          {foodSafetyAcknowledged && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                    <Text style={styles.checkboxLabel}>
-                          I'm responsible for food preparation and safety
-                    </Text>
-                  </TouchableOpacity>
-
+                    <View style={{ gap: theme.spacing.xs, marginTop: theme.spacing.lg }}>
                       <TouchableOpacity 
                         style={styles.checkboxContainer} 
                         onPress={() => setAllergensDisclosed(!allergensDisclosed)}
                         activeOpacity={0.8}
                       >
                         <View style={[styles.checkbox, allergensDisclosed && styles.checkboxChecked]}>
-                          {allergensDisclosed && <Text style={styles.checkmark}>✓</Text>}
-                    </View>
-                        <Text style={styles.checkboxLabel}>
-                          I'll accurately disclose allergens & ingredients
+                          <Image source={require('../../assets/success.png')} style={{ width: 22, height: 22, tintColor: allergensDisclosed ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                        </View>
+                        <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
+                          I'll clearly list ingredients & allergens
+                        </Text>
+                      </TouchableOpacity>
+
+                      <TouchableOpacity 
+                        style={styles.checkboxContainer} 
+                        onPress={() => setFoodSafetyAcknowledged(!foodSafetyAcknowledged)}
+                        activeOpacity={0.8}
+                      >
+                        <View style={[styles.checkbox, foodSafetyAcknowledged && styles.checkboxChecked]}>
+                          <Image source={require('../../assets/success.png')} style={{ width: 22, height: 22, tintColor: foodSafetyAcknowledged ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                        </View>
+                        <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
+                          I'll prepare food safely and responsibly
                         </Text>
                       </TouchableOpacity>
 
@@ -1601,10 +1603,10 @@ export default function ChefSignup() {
                         activeOpacity={0.8}
                       >
                         <View style={[styles.checkbox, platformInspectionUnderstood && styles.checkboxChecked]}>
-                          {platformInspectionUnderstood && <Text style={styles.checkmark}>✓</Text>}
-                      </View>
-                        <Text style={styles.checkboxLabel}>
-                          I understand the platform does not inspect food
+                          <Image source={require('../../assets/success.png')} style={{ width: 22, height: 22, tintColor: platformInspectionUnderstood ? PRIMARY_COLOR : TEXT_LIGHT }} resizeMode="contain" />
+                        </View>
+                        <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
+                          I understand the platform doesn't inspect food
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -1650,8 +1652,8 @@ export default function ChefSignup() {
                           }}
                           scrollEventThrottle={16}
                         >
-                          <Text style={styles.termsModalText}>
-                            {termsType === 'agreement' && `
+                          {termsType === 'agreement' && (
+                            <Text style={styles.termsModalText}>{`
 PARTICIPATION AGREEMENT
 (Marketplace Platform – Ontario, Canada)
 
@@ -1835,11 +1837,12 @@ Updates or new requirements do not create retroactive liability for past activit
 
 A5. Acceptance Through Continued Use
 Continued use of the Platform after notice of compliance updates constitutes acceptance of those changes.
-                            `}
-                            {termsType === 'fee' && `
+                            `}</Text>)}
+                          {termsType === 'fee' && (
+                            <Text style={styles.termsModalText}>{`
 Fee Schedule - YourHomeChef
 
-Last Updated: December 20, 2025
+Last Updated: February 14, 2026
 
 This Fee Schedule explains how fees and payouts work on the YourHomeChef platform. By using the Platform as a Chef, you agree to this Fee Schedule.
 
@@ -1891,9 +1894,12 @@ Fees may be updated from time to time with reasonable notice. Continued use of t
 Questions?
 
 For questions, contact support at thereforyou.yhc@gmail.com
-                            `}
-                            {termsType === 'payout' && `
-How payouts work (Accepted by using the Platform)
+                            `}</Text>)}
+                          {termsType === 'payout' && (
+                            <>
+                              <Text style={styles.termsModalText}>{`
+How payouts work
+(Accepted by using the Platform)
 
 This section explains how payouts are calculated and processed.
 
@@ -1928,15 +1934,31 @@ Payouts are typically initiated daily, subject to processor and bank timelines
 • You'll see a full payout breakdown in your dashboard
 
 Your dashboard will show
-
-✅ Order totals
-✅ Fees & deductions
-✅ Refunds (if any)
-✅ Payout status
+`}</Text>
+                              <View style={{ marginTop: 8, gap: 6 }}>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />
+                                  <Text style={styles.termsModalText}>Order totals</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />
+                                  <Text style={styles.termsModalText}>Fees & deductions</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />
+                                  <Text style={styles.termsModalText}>Refunds (if any)</Text>
+                                </View>
+                                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                                  <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />
+                                  <Text style={styles.termsModalText}>Payout status</Text>
+                                </View>
+                              </View>
+                              <Text style={styles.termsModalText}>{`
 
 No subscriptions. No long-term commitments. Continued use of the Platform confirms acceptance of this payout process.
-                            `}
-                          </Text>
+`}</Text>
+                            </>
+                          )}
                         </ScrollView>
                         <View style={styles.termsModalFooter}>
                           <TouchableOpacity
@@ -1981,17 +2003,16 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                       onPress={handleBack}
                       disabled={busy}
                     >
-                      <Text style={styles.backButtonText}>← Back</Text>
+                      <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.nextButton, (!canProceedToStep5 || busy) && styles.nextButtonDisabled]}
                       onPress={handleNext}
                       disabled={!canProceedToStep5 || busy}
                     >
-                      <Text style={styles.nextButtonText}>Next Step</Text>
-                      <Text style={styles.nextButtonIcon}>→</Text>
+                      <Text style={[styles.nextButtonText, { fontWeight: '400', fontFamily: theme.typography.fontFamily.body }]} numberOfLines={1}>Agree & continue</Text>
                     </TouchableOpacity>
-                      </View>
+                  </View>
                 </>
               ) : step === 5 ? (
                 <>
@@ -2265,13 +2286,13 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                         </Text>
                         <View style={{ gap: theme.spacing.xs }}>
                           <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            {foodSafetyAcknowledged ? '✓' : '✗'} Food preparation responsibility
+                            {allergensDisclosed ? '✓' : '✗'} I'll clearly list ingredients & allergens
                           </Text>
                           <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            {allergensDisclosed ? '✓' : '✗'} Allergen disclosure
+                            {foodSafetyAcknowledged ? '✓' : '✗'} I'll prepare food safely and responsibly
                           </Text>
                           <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base }}>
-                            {platformInspectionUnderstood ? '✓' : '✗'} Platform inspection understanding
+                            {platformInspectionUnderstood ? '✓' : '✗'} I understand the platform doesn't inspect food
                           </Text>
                         </View>
                       </View>
@@ -2285,7 +2306,7 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                       onPress={handleBack}
                       disabled={busy}
                     >
-                      <Text style={styles.backButtonText}>← Back</Text>
+                      <Text style={styles.backButtonText}>Back</Text>
                     </TouchableOpacity>
                     <TouchableOpacity
                       style={[styles.submitButton, (!canSubmit || busy) && styles.submitButtonDisabled]}
@@ -2435,7 +2456,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               opacity: (!valid || saving) ? 0.6 : 1
             }}
           >
-            <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -2564,7 +2585,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Save</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Save</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => onDelete()}
@@ -2577,7 +2598,7 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 14 }}>Delete</Text>
+                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -2857,8 +2878,8 @@ const styles = StyleSheet.create({
   nextButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
   },
   submitButton: {
     flexDirection: 'row',
@@ -2877,12 +2898,6 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.base,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
-  },
-  nextButtonIcon: {
-    color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold as any,
   },
@@ -2923,29 +2938,18 @@ const styles = StyleSheet.create({
   checkboxContainer: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginTop: theme.spacing.lg,
-    marginBottom: theme.spacing.md,
+    marginTop: 0,
+    marginBottom: 0,
+    backgroundColor: 'rgba(0,0,0,0)',
   },
   checkbox: {
     width: 24,
     height: 24,
-    borderRadius: 6,
-    borderWidth: 2,
-    borderColor: BORDER_LIGHT,
-    backgroundColor: BACKGROUND_LIGHT,
     marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  checkboxChecked: {
-    backgroundColor: PRIMARY_COLOR,
-    borderColor: PRIMARY_COLOR,
-  },
-  checkmark: {
-    color: '#FFFFFF',
-    fontWeight: 'bold',
-    fontSize: 14,
-  },
+  checkboxChecked: {},
   checkboxLabel: {
     flex: 1,
     color: TEXT_LIGHT,
@@ -3246,9 +3250,11 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
-    padding: theme.spacing.lg,
+    paddingHorizontal: theme.spacing.lg,
+    paddingTop: theme.spacing.lg,
+    paddingBottom: theme.spacing.sm,
     borderBottomWidth: 1,
-    borderBottomColor: BORDER_LIGHT,
+    borderBottomColor: '#FFFFFF',
   },
   termsModalTitle: {
     fontSize: theme.typography.fontSize.xl,
@@ -3264,6 +3270,7 @@ const styles = StyleSheet.create({
   },
   termsModalBody: {
     padding: theme.spacing.lg,
+    paddingTop: 0,
     maxHeight: 400,
   },
   termsModalText: {

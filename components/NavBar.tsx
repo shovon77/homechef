@@ -813,7 +813,7 @@ export default function NavBar() {
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
           >
             <Image 
-              source={require('../assets/AppLogoFinal2026.png')}
+              source={require('../assets/YHC-Logo2.png')}
               style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile]) as any}
               resizeMode="contain"
             />

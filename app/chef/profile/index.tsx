@@ -970,19 +970,19 @@ export default function ChefProfilePage() {
                       <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                       </View>
-                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'm responsible for food preparation and safety</Text>
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'll clearly list ingredients & allergens</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                       </View>
-                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'll accurately disclose allergens & ingredients</Text>
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I'll prepare food safely and responsibly</Text>
                     </View>
                     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
                       <View style={{ width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: theme.colors.primary, backgroundColor: theme.colors.primary, alignItems: 'center', justifyContent: 'center' }}>
                         <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
                       </View>
-                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I understand the platform does not inspect food</Text>
+                      <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>I understand the platform doesn't inspect food</Text>
                     </View>
                   </View>
                 </View>
@@ -1243,7 +1243,7 @@ export default function ChefProfilePage() {
               maxHeight: '80%',
             }}
           >
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 0 }}>
               <Text style={{ fontSize: 18, fontWeight: '700', color: '#101828', fontFamily: theme.typography.fontFamily.body }}>
                 {termsType === 'agreement' && 'Chef Participation Agreement'}
                 {termsType === 'fee' && 'Fee Schedule'}
@@ -1257,8 +1257,8 @@ export default function ChefProfilePage() {
           </TouchableOpacity>
         </View>
             <ScrollView style={{ maxHeight: Platform.OS === 'web' ? 500 : 400 }}>
-              <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>
-                {termsType === 'agreement' && `
+              {termsType === 'agreement' && (
+                <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>{`
 PARTICIPATION AGREEMENT
 (Marketplace Platform – Ontario, Canada)
 
@@ -1442,11 +1442,12 @@ Updates or new requirements do not create retroactive liability for past activit
 
 A5. Acceptance Through Continued Use
 Continued use of the Platform after notice of compliance updates constitutes acceptance of those changes.
-                `}
-                {termsType === 'fee' && `
+                `}</Text>)}
+              {termsType === 'fee' && (
+                <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>{`
 Fee Schedule - YourHomeChef
 
-Last Updated: December 20, 2025
+Last Updated: February 14, 2026
 
 This Fee Schedule explains how fees and payouts work on the YourHomeChef platform. By using the Platform as a Chef, you agree to this Fee Schedule.
 
@@ -1498,9 +1499,12 @@ Fees may be updated from time to time with reasonable notice. Continued use of t
 Questions?
 
 For questions, contact support at thereforyou.yhc@gmail.com
-                `}
-                {termsType === 'payout' && `
-How payouts work (Accepted by using the Platform)
+                `}</Text>)}
+              {termsType === 'payout' && (
+                <>
+                  <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>{`
+How payouts work
+(Accepted by using the Platform)
 
 This section explains how payouts are calculated and processed.
 
@@ -1535,15 +1539,31 @@ Payouts are typically initiated daily, subject to processor and bank timelines
 • You'll see a full payout breakdown in your dashboard
 
 Your dashboard will show
-
-✅ Order totals
-✅ Fees & deductions
-✅ Refunds (if any)
-✅ Payout status
+`}</Text>
+                  <View style={{ marginTop: 8, gap: 6 }}>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
+                      <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>Order totals</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
+                      <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>Fees & deductions</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
+                      <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>Refunds (if any)</Text>
+                    </View>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <Image source={require('../../../assets/success.png')} style={{ width: 20, height: 20, tintColor: theme.colors.primary }} resizeMode="contain" />
+                      <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>Payout status</Text>
+                    </View>
+                  </View>
+                  <Text style={{ color: '#101828', fontSize: 14, lineHeight: 22, fontFamily: theme.typography.fontFamily.body }}>{`
 
 No subscriptions. No long-term commitments. Continued use of the Platform confirms acceptance of this payout process.
-                `}
-              </Text>
+`}</Text>
+                </>
+              )}
     </ScrollView>
             <View style={{ marginTop: 16, flexDirection: 'row', justifyContent: 'flex-end' }}>
               <TouchableOpacity
