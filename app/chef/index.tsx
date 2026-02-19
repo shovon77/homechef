@@ -2158,7 +2158,6 @@ export default function ChefDashboard() {
                         const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
                         return (
                           <TouchableOpacity
-                            disabled={!canAccept}
                             onPress={async () => {
                               if (!canAccept) {
                                 if (!chargesEnabled || !stripeAccountId) {
@@ -2423,7 +2422,6 @@ export default function ChefDashboard() {
                   const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
                   return (
                     <TouchableOpacity
-                      disabled={!canAccept}
                       onPress={async () => {
                         if (!canAccept) {
                           if (!chargesEnabled || !stripeAccountId) {
@@ -2957,7 +2955,6 @@ export default function ChefDashboard() {
                                 const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
                                 return (
                                   <TouchableOpacity
-                                    disabled={!canAccept}
                                     onPress={async () => {
                                       if (!canAccept) {
                                         if (!chargesEnabled || !stripeAccountId) {
@@ -3181,7 +3178,6 @@ export default function ChefDashboard() {
                                 const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
                                 return (
                                   <TouchableOpacity
-                                    disabled={!canAccept}
                                     onPress={async () => {
                                       if (!canAccept) {
                                         if (!chargesEnabled || !stripeAccountId) {

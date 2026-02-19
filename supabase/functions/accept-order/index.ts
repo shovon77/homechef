@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
 
     const { data: chef, error: chefError } = await adminClient
       .from('chefs')
-      .select('id, email')
+      .select('id, email, user_id')
       .eq('id', order.chef_id)
       .maybeSingle();
 
@@ -136,17 +136,28 @@ Deno.serve(async (req) => {
       return errorResponse(403, 'Forbidden');
     }
 
-    // Get stripe_account_id from profiles table using chef's email
+    // Get stripe_account_id from profiles table - prefer user_id (reliable), fallback to email
     let stripeAccountId: string | null = null;
     let chargesEnabled = false;
-    if (chef.email) {
+    if (chef.user_id) {
       const { data: chefProfile } = await adminClient
         .from('profiles')
         .select('stripe_account_id, charges_enabled')
-        .eq('email', chef.email)
+        .eq('id', chef.user_id)
         .maybeSingle();
       stripeAccountId = chefProfile?.stripe_account_id ?? null;
       chargesEnabled = chefProfile?.charges_enabled === true;
+    }
+    if ((!stripeAccountId || !chargesEnabled) && chef.email) {
+      const { data: chefProfile } = await adminClient
+        .from('profiles')
+        .select('stripe_account_id, charges_enabled')
+        .ilike('email', chef.email)
+        .maybeSingle();
+      if (chefProfile) {
+        stripeAccountId = stripeAccountId ?? chefProfile.stripe_account_id ?? null;
+        chargesEnabled = chargesEnabled || chefProfile.charges_enabled === true;
+      }
     }
 
     if (!stripeAccountId) {
@@ -162,14 +173,18 @@ Deno.serve(async (req) => {
       return errorResponse(400, 'Order already accepted');
     }
 
-    // With destination charges (application_fee_amount), the PaymentIntent was created with
-    // transfer_data.destination, so capturing it will automatically transfer funds to the chef
-    // and the platform fee is already collected as application_fee_amount
-    const paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
+    // Retrieve PaymentIntent to check status - checkout uses capture_method: 'automatic',
+    // so payment is usually already captured when customer completes checkout
+    let paymentIntent = await stripe.paymentIntents.retrieve(paymentIntentId);
 
-    // Update order status to pending and record the capture
-    // Note: With destination charges, the transfer happens automatically on capture
-    // The platform fee was already collected as application_fee_amount during checkout
+    if (paymentIntent.status === 'requires_capture') {
+      paymentIntent = await stripe.paymentIntents.capture(paymentIntentId);
+    } else if (paymentIntent.status !== 'succeeded') {
+      return errorResponse(400, `Payment is not ready (status: ${paymentIntent.status}). Please ensure payment was completed.`);
+    }
+
+    // Update order status to pending and record acceptance
+    // With destination charges (transfer_data), the transfer happened automatically when the payment was captured
     const { error: updateError } = await adminClient
       .from('orders')
       .update({
