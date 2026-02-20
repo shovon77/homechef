@@ -1,12 +1,13 @@
 import React from 'react'
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, Image, useWindowDimensions } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, usePathname } from 'expo-router'
 import { theme } from '../lib/theme'
 
 export const FOOTER_HEIGHT = 62
 
 export default function Footer() {
   const router = useRouter()
+  const pathname = usePathname?.() || ''
   const { width } = useWindowDimensions()
   const isMobile = width < 768
 
@@ -26,10 +27,11 @@ export default function Footer() {
     <View style={styles.container}>
       <View style={styles.contentWrapper}>
         <View style={styles.inner}>
-          <View style={styles.brandContainer}>
+          <View style={styles.brandContainer} collapsable={false}>
             <Image 
+              key={pathname || 'footer-logo'}
               source={require('../assets/YHC-Logo2.png')}
-              style={[styles.brandLogo, { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74 }]}
+              style={[styles.brandLogo, { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74, minWidth: 40, minHeight: 28 }]}
               resizeMode="contain"
             />
             <Text style={styles.brandName}>

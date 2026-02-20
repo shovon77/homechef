@@ -1,11 +1,93 @@
 import { serve } from 'https://deno.land/std@0.200.0/http/server.ts';
+import Stripe from 'https://esm.sh/stripe@12?target=deno&deno-std=0.224.0';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
-const webhookSecret = Deno.env.get('STRIPE_WEBHOOK_SECRET');
+const webhookSecret = (Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '').trim();
+// Required for Deno: Web Crypto API differs from Node.js
+const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
 function respond(status: number, body: string) {
   return new Response(body, { status, headers: { 'Content-Type': 'text/plain' } });
+}
+
+/** Create new order request notification for the chef when payment succeeds. Idempotent. */
+async function notifyChefOfNewOrder(orderId: number): Promise<void> {
+  console.log('[stripe-webhook] notifyChefOfNewOrder called', { orderId });
+  try {
+    const { data: existing } = await adminClient
+      .from('notifications')
+      .select('id')
+      .eq('related_id', orderId)
+      .eq('related_type', 'order')
+      .eq('type', 'new_order_request')
+      .maybeSingle();
+    if (existing) {
+      return; // Already notified (e.g. from checkout.session.completed and payment_intent.succeeded)
+    }
+    const { data: order, error: orderErr } = await adminClient
+      .from('orders')
+      .select('chef_id')
+      .eq('id', orderId)
+      .maybeSingle();
+    if (orderErr || !order?.chef_id) {
+      console.warn('[stripe-webhook] Could not fetch order for chef notification', { orderId, error: orderErr });
+      return;
+    }
+    const { data: chef, error: chefErr } = await adminClient
+      .from('chefs')
+      .select('user_id, email')
+      .eq('id', order.chef_id)
+      .maybeSingle();
+    if (chefErr || !chef) {
+      console.warn('[stripe-webhook] Could not fetch chef for notification', { chefId: order.chef_id, error: chefErr });
+      return;
+    }
+    let chefUserId: string | null = chef.user_id ?? null;
+    if (!chefUserId && chef.email) {
+      const { data: profile } = await adminClient
+        .from('profiles')
+        .select('id')
+        .ilike('email', chef.email)
+        .maybeSingle();
+      chefUserId = profile?.id ?? null;
+    }
+    if (!chefUserId && chef.email) {
+      // Fallback: resolve via auth.users (admin API)
+      try {
+        const { data: { users } } = await adminClient.auth.admin.listUsers({ perPage: 1000 });
+        const match = users?.find((u: { email?: string }) =>
+          u.email?.toLowerCase() === chef.email?.toLowerCase()
+        );
+        if (match?.id) chefUserId = match.id;
+      } catch (authErr) {
+        console.warn('[stripe-webhook] Auth admin lookup failed', { chefId: order.chef_id, error: authErr });
+      }
+    }
+    if (!chefUserId) {
+      console.warn('[stripe-webhook] Chef has no user_id and could not resolve from email/auth', {
+        chefId: order.chef_id,
+        chefEmail: chef.email,
+      });
+      return;
+    }
+    const { error: insertErr } = await adminClient.from('notifications').insert({
+      user_id: chefUserId,
+      type: 'new_order_request',
+      title: 'New Order Request',
+      message: 'You have received a new order request. Please review and respond.',
+      related_id: orderId,
+      related_type: 'order',
+      read: false,
+    });
+    if (insertErr) {
+      console.error('[stripe-webhook] Notification insert failed', { orderId, chefId: order.chef_id, error: insertErr });
+      return;
+    }
+    console.log('[stripe-webhook] Chef notified of new order', { orderId, chefId: order.chef_id });
+  } catch (err) {
+    console.error('[stripe-webhook] Failed to create chef notification', { orderId, error: err });
+  }
 }
 
 serve(async (req) => {
@@ -22,11 +104,19 @@ serve(async (req) => {
 
   let event: Stripe.Event;
   try {
-    event = stripe.webhooks.constructEvent(rawBody, signature, webhookSecret);
+    event = await stripe.webhooks.constructEventAsync(
+      rawBody,
+      signature,
+      webhookSecret,
+      undefined,
+      cryptoProvider,
+    );
   } catch (err) {
     console.error('Webhook signature verification failed', err);
     return respond(400, 'Invalid signature');
   }
+
+  console.log('[stripe-webhook] Received event', event.type, 'id=', event.id);
 
   try {
     switch (event.type) {
@@ -94,6 +184,8 @@ serve(async (req) => {
           const { error: updateError } = await adminClient.from('orders').update(updates).eq('id', orderId);
           if (updateError) {
             console.error('Error updating order in checkout.session.completed', { orderId, error: updateError });
+          } else if (isPaymentSucceeded) {
+            await notifyChefOfNewOrder(orderId);
           }
         } else {
           console.warn('No updates to apply for checkout.session.completed', { orderId });
@@ -144,12 +236,19 @@ serve(async (req) => {
             orderIds: orders.map(o => o.id),
             updated: orders.length,
           });
+          for (const o of orders) {
+            await notifyChefOfNewOrder(o.id);
+          }
         } else {
-          // Try to find by checkout session metadata
+          // Order not found by payment intent ID - try metadata (e.g. payment_intent.succeeded fired before checkout.session.completed)
+          console.log('[stripe-webhook] payment_intent.succeeded: No order by PI id, trying metadata', {
+            paymentIntentId: pi.id,
+            metadata: pi.metadata,
+          });
           if (pi.metadata?.order_id) {
             const orderId = Number(pi.metadata.order_id);
             if (Number.isFinite(orderId)) {
-              await adminClient
+              const { error: metaUpdateErr } = await adminClient
                 .from('orders')
                 .update({ 
                   payment_status: 'succeeded',
@@ -157,6 +256,9 @@ serve(async (req) => {
                   stripe_payment_intent_id: pi.id,
                 })
                 .eq('id', orderId);
+              if (!metaUpdateErr) {
+                await notifyChefOfNewOrder(orderId);
+              }
               console.log('Updated order from payment intent metadata', { orderId, paymentIntentId: pi.id });
             }
           } else {

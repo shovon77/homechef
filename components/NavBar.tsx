@@ -806,13 +806,15 @@ export default function NavBar() {
   return (
     <View style={StyleSheet.flatten([styles.header, isChefDashboard && styles.headerNoBorder])} data-testid={isChefDashboard ? 'chef-dashboard-navbar' : undefined}>
       <View style={StyleSheet.flatten([styles.container, isMobile && styles.containerMobile])}>
-        {/* Left Section: Logo */}
+        {/* Left Section: Logo - key forces remount on route change to fix disappearing logo after chef→other nav */}
         <Link href="/" asChild>
           <TouchableOpacity 
             style={StyleSheet.flatten([styles.logoContainer, isMobile && styles.logoContainerMobile])}
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
+            collapsable={false}
           >
             <Image 
+              key={pathname || 'nav-logo'}
               source={require('../assets/YHC-Logo2.png')}
               style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile]) as any}
               resizeMode="contain"
@@ -1397,6 +1399,13 @@ export default function NavBar() {
                         return;
                       }
 
+                      // New order request: chefs go to chef dashboard
+                      if (notification.type === 'new_order_request' && isChef) {
+                        setIsNotificationsOpen(false);
+                        router.push('/chef');
+                        return;
+                      }
+
                       // Handle navigation based on notification type
                       if (notification.related_id && notification.related_type === 'order') {
                         router.push(`/orders/track?id=${notification.related_id}`);
@@ -1577,6 +1586,7 @@ const styles = StyleSheet.create({
       web: {
         zIndex: 1000,
         backgroundColor: BG_LIGHT,
+        overflow: 'visible' as const,
       },
       default: {
         backgroundColor: BG_LIGHT,
@@ -1622,6 +1632,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     paddingRight: 16,
     paddingLeft: 0,
+    ...Platform.select({ web: { overflow: 'visible' as const }, default: {} }),
   },
   logoContainer: {
     flexDirection: 'row',
@@ -1632,10 +1643,13 @@ const styles = StyleSheet.create({
     paddingLeft: 0,
     paddingTop: 0,
     marginTop: 0,
+    ...Platform.select({ web: { overflow: 'visible' as const }, default: {} }),
   },
   logoImage: {
     width: 364,
     height: 73,
+    minWidth: 100,
+    minHeight: 20,
     backgroundColor: 'transparent',
   },
   navCenter: {

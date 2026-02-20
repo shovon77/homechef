@@ -217,15 +217,18 @@ export default function CheckoutPage() {
     setSubmitting(true);
     setError(null);
     try {
-      // Get base URL: prefer env var, then detect from window.location (for production), fallback to production domain
-      let baseUrl = ENV.WEB_BASE_URL;
-      if (!baseUrl || baseUrl === 'http://localhost:8081') {
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          // Use current origin in production
-          baseUrl = window.location.origin;
+      // Get base URL for success/cancel redirects
+      let baseUrl: string;
+      if (Platform.OS === 'web' && typeof window !== 'undefined') {
+        const origin = window.location.origin;
+        // When running locally, always redirect back to local app
+        if (origin.includes('localhost') || origin.includes('127.0.0.1')) {
+          baseUrl = origin;
         } else {
-          baseUrl = 'https://yourhomechef.ca';
+          baseUrl = ENV.WEB_BASE_URL || origin;
         }
+      } else {
+        baseUrl = ENV.WEB_BASE_URL || 'https://yourhomechef.ca';
       }
       baseUrl = baseUrl.replace(/\/$/, '');
 

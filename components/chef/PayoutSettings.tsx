@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Platform, Linking, ScrollView } from 'react-native';
+import { View, Text, StyleSheet, Pressable, ActivityIndicator, Alert, Platform, Linking, ScrollView, Image } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { callFn } from '../../lib/fn';
+import { theme } from '../../lib/theme';
 
 interface ConnectStatus {
   hasAccount: boolean;
@@ -114,8 +115,8 @@ export default function PayoutSettings({ onStatusChange }: Props) {
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.wrap}>
-      <Text style={styles.title}>Payout Settings</Text>
-      <Text style={styles.subtitle}>Connect your Stripe account to receive payouts from HomeChef.</Text>
+      <Text style={styles.title}>Payout settings</Text>
+      <Text style={styles.subtitle}>Connect your Stripe account to receive payouts.</Text>
 
       {!hasAccount && (
         <View style={styles.card}>
@@ -142,14 +143,14 @@ export default function PayoutSettings({ onStatusChange }: Props) {
               <Text style={styles.primaryBtnText}>Continue onboarding</Text>
             </Pressable>
             <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
-              <Text style={styles.secondaryBtnText}>Refresh status</Text>
+              <Text style={styles.secondaryBtnText}>Refresh</Text>
             </Pressable>
             {status?.loginLink && (
               <Pressable
                 style={styles.secondaryBtn}
                 onPress={() => openExternal(status.loginLink!)}
               >
-                <Text style={styles.secondaryBtnText}>Open Stripe Dashboard</Text>
+                <Text style={styles.secondaryBtnText}>Open Stripe</Text>
               </Pressable>
             )}
           </View>
@@ -158,7 +159,14 @@ export default function PayoutSettings({ onStatusChange }: Props) {
 
       {hasAccount && !needsMoreInfo && (
         <View style={styles.cardSuccess}>
-          <Text style={styles.cardTitle}>Payouts enabled ✅</Text>
+          <View style={styles.cardTitleRow}>
+            <Text style={styles.cardTitle}>Payouts enabled</Text>
+            <Image
+              source={require('../../assets/success.png')}
+              style={[styles.checkmarkIcon, { tintColor: theme.colors.primary }]}
+              resizeMode="contain"
+            />
+          </View>
           <Text style={styles.cardBody}>You can accept orders and receive payouts.</Text>
           {accountId && (
             <View style={styles.detailRow}>
@@ -194,11 +202,11 @@ export default function PayoutSettings({ onStatusChange }: Props) {
           </View>
           <View style={styles.buttonRow}>
             <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
-              <Text style={styles.secondaryBtnText}>Refresh status</Text>
+              <Text style={styles.secondaryBtnText}>Refresh</Text>
             </Pressable>
             {status?.loginLink && (
               <Pressable style={styles.primaryBtn} onPress={() => openExternal(status.loginLink!)}>
-                <Text style={styles.primaryBtnText}>Open Stripe Dashboard</Text>
+                <Text style={styles.primaryBtnText}>Open Stripe</Text>
               </Pressable>
             )}
           </View>
@@ -206,7 +214,7 @@ export default function PayoutSettings({ onStatusChange }: Props) {
       )}
 
       <View style={styles.infoBox}>
-        <Text style={styles.infoText}>Orders can only be accepted when payouts are enabled. Complete onboarding to proceed.</Text>
+        <Text style={styles.infoText}>Orders can only be accepted when payouts are enabled. Complete onboarding to proceed with the next steps.</Text>
       </View>
     </ScrollView>
   );
@@ -276,10 +284,19 @@ const styles = StyleSheet.create({
     padding: 16,
     marginBottom: 16,
   },
+  cardTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    marginBottom: 8,
+  },
+  checkmarkIcon: {
+    width: 22,
+    height: 22,
+  },
   cardTitle: {
     fontSize: 18,
     fontWeight: '700',
-    marginBottom: 8,
     color: '#1F2937',
   },
   cardBody: {
@@ -323,6 +340,7 @@ const styles = StyleSheet.create({
   primaryBtnText: {
     color: '#FFFFFF',
     fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
   },
   secondaryBtn: {
     paddingHorizontal: 16,
@@ -335,6 +353,7 @@ const styles = StyleSheet.create({
   secondaryBtnText: {
     color: '#1F2937',
     fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
   },
   infoBox: {
     borderRadius: 12,

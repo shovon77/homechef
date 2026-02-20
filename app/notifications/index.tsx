@@ -177,6 +177,12 @@ export default function NotificationsPage() {
       }
       return;
     }
+
+    // New order request: chefs go to chef dashboard
+    if (notification.type === 'new_order_request' && isChef) {
+      router.push('/chef');
+      return;
+    }
     
     // Handle navigation based on notification type
     if (notification.related_id && notification.related_type === 'order') {
