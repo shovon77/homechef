@@ -782,13 +782,27 @@ export default function ChefDashboard() {
     }
   }
 
-  async function handleOrderStatus(id: number, status: 'pending' | 'rejected' | 'ready') {
+  async function handleOrderStatus(id: number, status: 'pending' | 'rejected' | 'ready', customerUserId?: string | null) {
     if (!chef) return;
     try {
       const response = await updateOrderStatus(id, status);
       if (response && 'error' in response && response.error) {
         Alert.alert('Update failed', response.error.message);
         return;
+      }
+      if (status === 'ready' && customerUserId) {
+        try {
+          await createNotification(
+            customerUserId,
+            'order_ready',
+            'Order Ready for Pickup',
+            'Your order is ready for pickup! Please collect it from the chef.',
+            id,
+            'order'
+          );
+        } catch (notifErr) {
+          console.error('Error creating order ready notification:', notifErr);
+        }
       }
     } catch (err: any) {
       Alert.alert('Update failed', err?.message || 'Unable to update order status');
@@ -2199,7 +2213,7 @@ export default function ChefDashboard() {
                         <TouchableOpacity
                           onPress={async () => {
                             try {
-                              await handleOrderStatus(order.id, 'ready');
+                              await handleOrderStatus(order.id, 'ready', order.user_id);
                               Alert.alert('Success', 'Order marked as ready!');
                             } catch (err: any) {
                               Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
@@ -2877,7 +2891,7 @@ export default function ChefDashboard() {
                                 <TouchableOpacity
                                   onPress={async () => {
                                     try {
-                                      await handleOrderStatus(order.id, 'ready');
+                                      await handleOrderStatus(order.id, 'ready', order.user_id);
                                       Alert.alert('Success', 'Order marked as ready!');
                                     } catch (err: any) {
                                       Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
@@ -3102,7 +3116,7 @@ export default function ChefDashboard() {
                                 <TouchableOpacity
                                   onPress={async () => {
                                     try {
-                                      await handleOrderStatus(order.id, 'ready');
+                                      await handleOrderStatus(order.id, 'ready', order.user_id);
                                       Alert.alert('Success', 'Order marked as ready!');
                                     } catch (err: any) {
                                       Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');

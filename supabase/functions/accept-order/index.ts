@@ -199,24 +199,27 @@ Deno.serve(async (req) => {
       return errorResponse(500, 'Failed to update order status', updateError);
     }
 
-    // Notify customer that the chef accepted their order
+    // Notify customer that the chef accepted their order (use RPC to bypass RLS)
     if (order.user_id) {
       try {
-        const { error: notifErr } = await adminClient.from('notifications').insert({
-          user_id: order.user_id,
-          type: 'order_placed',
-          title: 'Order Confirmed',
-          message: 'The chef has accepted your order and will start preparing it soon.',
-          related_id: orderId,
-          related_type: 'order',
-          read: false,
+        const { data: notifId, error: notifErr } = await adminClient.rpc('create_notification_for_user', {
+          p_user_id: order.user_id,
+          p_type: 'order_placed',
+          p_title: 'Order Confirmed',
+          p_message: 'The chef has accepted your order and will start preparing it soon.',
+          p_related_id: orderId,
+          p_related_type: 'order',
         });
         if (notifErr) {
-          console.warn('[accept-order] failed to create order confirmation notification', { orderId, error: notifErr });
+          console.error('[accept-order] failed to create order confirmation notification', { orderId, userId: order.user_id, error: notifErr });
+        } else {
+          console.log('[accept-order] order confirmation notification created', { orderId, notificationId: notifId });
         }
       } catch (notifErr) {
-        console.warn('[accept-order] notification error', { orderId, error: notifErr });
+        console.error('[accept-order] notification exception', { orderId, userId: order.user_id, error: notifErr });
       }
+    } else {
+      console.warn('[accept-order] order has no user_id, skipping notification', { orderId });
     }
 
     console.log('[accept-order] order accepted', {
