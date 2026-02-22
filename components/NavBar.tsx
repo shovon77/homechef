@@ -852,8 +852,8 @@ export default function NavBar() {
               isActive={isDashboardActive} 
             />
           )}
-            {/* Location button - only show for regular users, not admin/chef */}
-            {loggedIn && !isAdmin && !isChef && (
+            {/* Location button - show in navbar for regular users when no active orders */}
+            {loggedIn && !isAdmin && !isChef && !hasActiveOrder && (
             <TouchableOpacity 
                 onPress={() => setShowLocationModal(true)}
                 style={styles.locationNavButton}
@@ -1127,8 +1127,8 @@ export default function NavBar() {
                 <Text style={styles.mobileMenuText}>Profile</Text>
               </TouchableOpacity>
               
-              {/* Location option for admin/chef in menu */}
-              {(isAdmin || isChef) && (
+              {/* Location option - show for all logged-in users (when has active orders, location is only in menu) */}
+              {loggedIn && (
                 <TouchableOpacity
                   onPress={() => {
                     setIsMenuOpen(false);

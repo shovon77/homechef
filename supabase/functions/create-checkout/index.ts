@@ -7,8 +7,7 @@ import { stripe } from '../_shared/stripe.ts';
 const PLATFORM_FEE_CENTS = 150;
 // Platform commission: 10% of subtotal
 const PLATFORM_COMMISSION_RATE = 0.10;
-// Tax rate: 13% HST (Ontario rate) - applied to subtotal only
-const TAX_RATE = 0.13;
+// Tax is no longer charged (previously 13% HST)
 
 // CORS headers - must match what the client sends
 const corsHeaders = {
@@ -172,11 +171,11 @@ export const handler = async (req: Request) => {
     // Calculate 10% platform commission on subtotal
     const platformCommissionCents = Math.round(total_cents * PLATFORM_COMMISSION_RATE);
 
-    // Calculate 13% tax on subtotal only
-    const taxCents = Math.round(total_cents * TAX_RATE);
+    // No tax charged on orders
+    const taxCents = 0;
     
-    // Customer pays: subtotal + platform service fee + tax (commission is NOT paid by customer)
-    const grandTotalCents = total_cents + platformFeeCents + taxCents;
+    // Customer pays: subtotal + platform service fee (commission is NOT paid by customer)
+    const grandTotalCents = total_cents + platformFeeCents;
     
     // Amount chef receives: subtotal minus platform commission
     // (Stripe processing fees are deducted separately by Stripe)
@@ -221,11 +220,11 @@ export const handler = async (req: Request) => {
         chef_id: body.chef_id,
         status: 'requested',
         payment_status: 'awaiting_payment', // Order is created before payment
-        total_cents: grandTotalCents, // Total customer pays: subtotal + service fee + tax (commission deducted from chef)
+        total_cents: grandTotalCents, // Total customer pays: subtotal + service fee (commission deducted from chef)
         subtotal_cents: total_cents, // Subtotal (dish prices only)
         platform_commission_cents: platformCommissionCents, // 10% of subtotal
         platform_fee_cents: platformFeeCents, // Flat $1.50 service fee
-        tax_cents: taxCents, // 13% HST on subtotal
+        tax_cents: 0, // No tax charged
         pickup_at: pickupDate.toISOString(),
         expires_at: expiresAt.toISOString(),
       })
@@ -288,9 +287,8 @@ export const handler = async (req: Request) => {
         chefAmountCents, // What chef receives (subtotal - commission)
         platformCommissionCents, // Commission deducted from chef
         platformFeeCents, // Service fee
-        taxCents, // Tax
-        grandTotalCents, // Total customer pays (subtotal + service fee + tax)
-        platformTotal: grandTotalCents - chefAmountCents, // Total platform receives (commission + service fee + tax)
+        grandTotalCents, // Total customer pays (subtotal + service fee)
+        platformTotal: grandTotalCents - chefAmountCents, // Total platform receives (commission + service fee)
       });
     }
 
@@ -322,17 +320,6 @@ export const handler = async (req: Request) => {
                 name: 'Service Fee',
               },
               unit_amount: platformFeeCents,
-            },
-            quantity: 1,
-          },
-          // 13% HST Tax
-          {
-            price_data: {
-              currency: 'cad',
-              product_data: {
-                name: 'Tax (13% HST)',
-              },
-              unit_amount: taxCents,
             },
             quantity: 1,
           },

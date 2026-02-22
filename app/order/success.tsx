@@ -224,8 +224,7 @@ export default function OrderSuccessPage() {
     [items]
   );
   const platformFeeCents = 150; // $1.50 flat fee
-  const taxesCents = useMemo(() => Math.round(subtotalCents * 0.13), [subtotalCents]); // 13% HST
-  const calculatedTotalCents = subtotalCents + platformFeeCents + taxesCents;
+  const calculatedTotalCents = subtotalCents + platformFeeCents;
   const totalCents = orderTotalCents !== null ? orderTotalCents : calculatedTotalCents;
 
   // Voice input handlers for messaging
@@ -676,10 +675,6 @@ export default function OrderSuccessPage() {
                       </View>
                       <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                      <Text style={styles.summaryLabel}>Taxes</Text>
-                      <Text style={styles.summaryValue}>{cents(taxesCents)}</Text>
-                    </View>
                     <View style={[styles.summaryRow, { marginTop: 8 }]}>
                       <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>Total</Text>
                       <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>
@@ -706,7 +701,7 @@ export default function OrderSuccessPage() {
             
             <Link href="/browse?tab=dishes" asChild>
               <TouchableOpacity style={styles.primaryButton}>
-                <Text style={styles.primaryButtonText}>Explore, as you wait!</Text>
+                <Text style={[styles.primaryButtonText, { fontWeight: '400' }]}>Explore, as you wait!</Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -1165,7 +1160,7 @@ const styles = StyleSheet.create({
   },
   pickupDateTime: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '400',
   },
@@ -1201,7 +1196,7 @@ const styles = StyleSheet.create({
   pickupLocation: {
     flex: 1,
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   pickupReminder: {
@@ -1266,7 +1261,7 @@ const styles = StyleSheet.create({
   },
   orderItemName: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   orderItemQuantityPrice: {
@@ -1277,14 +1272,14 @@ const styles = StyleSheet.create({
   },
   orderItemQuantity: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 20,
     textAlign: 'right',
   },
   orderItemPrice: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 80,
@@ -1303,7 +1298,7 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   summaryLabelWithIcon: {
@@ -1317,7 +1312,7 @@ const styles = StyleSheet.create({
   },
   summaryValue: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '600',
     minWidth: 80,
@@ -1326,33 +1321,36 @@ const styles = StyleSheet.create({
   summaryTotalLabel: {
     fontWeight: '800',
     color: TEXT_DARK,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   summaryTotalValue: {
     fontWeight: '800',
     color: TEXT_DARK,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   platformFeeInfo: {
     color: TEXT_MUTED,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
   },
   reminderText: {
     color: TEXT_DARK,
-    fontSize: 18,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '400',
     textAlign: 'center',
     width: '100%',
-    marginTop: 16,
-    marginBottom: 8,
+    marginTop: 8,
+    marginBottom: 4,
   },
   footerNoteContainer: {
     width: '100%',
     marginTop: 24,
     marginBottom: 0,
+    paddingBottom: 40,
     paddingHorizontal: 24,
     alignItems: 'center',
   },
@@ -1370,7 +1368,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     width: '100%',
     backgroundColor: 'transparent',
-    marginTop: 8,
+    marginTop: 4,
   },
   helpButtonText: {
     color: PRIMARY,

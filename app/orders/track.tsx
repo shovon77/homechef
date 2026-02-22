@@ -299,8 +299,6 @@ export default function TrackOrderPage() {
   
   // Platform service fee: flat $1.50 (150 cents)
   const platformFeeCents = 150;
-  // Taxes: 13% HST on subtotal only (Ontario rate)
-  const taxesCents = useMemo(() => Math.round(subtotalCents * 0.13), [subtotalCents]);
   // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not shown to customer
 
   // Send message function
@@ -799,7 +797,7 @@ export default function TrackOrderPage() {
     );
   }
 
-  const calculatedTotalCents = subtotalCents + platformFeeCents + taxesCents;
+  const calculatedTotalCents = subtotalCents + platformFeeCents;
   const totalCents = Number.isFinite(order.total_cents) ? order.total_cents : calculatedTotalCents;
   const visualStatus = order.status === 'completed' ? 'completed' : order.status;
   const stepMeta = STEP_META[visualStatus] ?? { label: 'Issue reported - under review', icon: '' };
@@ -1060,10 +1058,6 @@ export default function TrackOrderPage() {
                 </View>
                 <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
               </View>
-              <View style={styles.summaryRow}>
-                <Text style={styles.summaryLabel}>Taxes</Text>
-                <Text style={styles.summaryValue}>{cents(taxesCents)}</Text>
-          </View>
           <View style={[styles.summaryRow, { marginTop: 8 }]}>
                 <Text style={[styles.summaryLabel, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>Total</Text>
                 <Text style={[styles.summaryValue, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>{cents(calculatedTotalCents)}</Text>
@@ -1924,7 +1918,7 @@ const styles = StyleSheet.create({
   },
   pickupReminder: {
     color: TEXT_MUTED,
-    fontSize: 12,
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: 18,
     marginTop: 4,
