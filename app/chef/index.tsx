@@ -2188,9 +2188,9 @@ export default function ChefDashboard() {
                             Alert.alert('Reject failed', err?.message || 'Unable to reject order');
                           }
                         }}
-                        style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E84343', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                       >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                        <Text style={{ color: '#E84343', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                       </TouchableOpacity>
                     </>
                   ) : order.status === 'pending' ? (
@@ -2866,9 +2866,9 @@ export default function ChefDashboard() {
                                     Alert.alert('Reject failed', err?.message || 'Unable to reject order');
                                   }
                                 }}
-                                style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E84343', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                                <Text style={{ color: '#E84343', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                               </TouchableOpacity>
                             </>
                           ) : order.status === 'pending' ? (
@@ -3091,9 +3091,9 @@ export default function ChefDashboard() {
                                     Alert.alert('Reject failed', err?.message || 'Unable to reject order');
                                   }
                                 }}
-                                style={{ backgroundColor: '#F97316', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E84343', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
                               >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
+                                <Text style={{ color: '#E84343', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
                               </TouchableOpacity>
                             </>
                           ) : order.status === 'pending' ? (
@@ -4317,14 +4317,16 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
                 onPress={() => (dish.is_active !== false ? onDeactivate(dish.id) : onActivate(dish.id))}
                 disabled={saving}
                 style={{ 
-                  backgroundColor: dish.is_active !== false ? '#DC2626' : '#16a34a', 
+                  backgroundColor: dish.is_active !== false ? 'transparent' : '#16a34a', 
+                  borderWidth: dish.is_active !== false ? 1 : 0,
+                  borderColor: dish.is_active !== false ? '#E84343' : 'transparent',
                   paddingVertical: 10, 
                   paddingHorizontal: 16, 
                   borderRadius: 8,
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{dish.is_active !== false ? 'Deactivate' : 'Activate'}</Text>
+                <Text style={{ color: dish.is_active !== false ? '#E84343' : '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{dish.is_active !== false ? 'Deactivate' : 'Activate'}</Text>
               </TouchableOpacity>
             </View>
         </View>

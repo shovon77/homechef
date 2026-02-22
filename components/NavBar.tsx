@@ -2,7 +2,7 @@
 'use client'
 import React, { useEffect, useState, useMemo } from 'react'
 import { View, Text, TouchableOpacity, Platform, StyleSheet, Image, useWindowDimensions, Modal, ActivityIndicator, Alert, ScrollView, TextInput, Pressable, TouchableWithoutFeedback } from 'react-native'
-import { Link, useRouter, usePathname, useLocalSearchParams } from 'expo-router'
+import { Link, useRouter, usePathname } from 'expo-router'
 import { supabase } from '../lib/supabase'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useRole } from '../hooks/useRole'
@@ -121,14 +121,11 @@ export default function NavBar() {
   const { isAdmin, isChef, user, profile, refreshRole, hasProfileLocation } = useRole()
   const { items } = useCart()
   const { showLocationModal, setShowLocationModal } = useLocationModal()
-  const params = useLocalSearchParams<{ id?: string; type?: string }>()
   const loggedIn = !!user
   const cartQty = items.reduce((sum, item) => sum + item.quantity, 0)
   const pathname = usePathname?.() || '';
   const isExploreActive = pathname.startsWith('/browse') || pathname.startsWith('/explore');
   const isOrderActive = pathname.startsWith('/orders') && !pathname.includes('/thank-you');
-  // Hide Order button on tracking page EXCEPT when viewing history (rejected/cancelled) orders
-  const isOnOrderTrackingPage = pathname.startsWith('/orders/track') && params.type !== 'history';
   const isDashboardActive = pathname.startsWith('/admin') || pathname === '/chef' || pathname === '/chef/' || pathname === '/chef/index';
   const isChefDashboard = pathname.startsWith('/chef');
   const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
@@ -142,6 +139,7 @@ export default function NavBar() {
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
+  const [ordersChecked, setOrdersChecked] = useState(false)
   const [isMenuOpen, setIsMenuOpen] = useState(false)
   const [isNotificationsOpen, setIsNotificationsOpen] = useState(false)
   const [notifications, setNotifications] = useState<Array<{
@@ -272,6 +270,7 @@ export default function NavBar() {
         if (mounted) {
           setHasActiveOrder(false)
           setHasReadyOrder(false)
+          setOrdersChecked(true)
         }
         return
       }
@@ -286,14 +285,17 @@ export default function NavBar() {
           const statuses = (data ?? []).map((row: any) => row.status)
           setHasActiveOrder(statuses.length > 0)
           setHasReadyOrder(statuses.includes('ready'))
+          setOrdersChecked(true)
         } else if (mounted) {
           setHasActiveOrder(false)
           setHasReadyOrder(false)
+          setOrdersChecked(true)
         }
       } catch (err) {
         if (mounted) {
           setHasActiveOrder(false)
           setHasReadyOrder(false)
+          setOrdersChecked(true)
         }
       }
     }
@@ -323,6 +325,7 @@ export default function NavBar() {
 
     return () => {
       mounted = false
+      setOrdersChecked(false)
       if (channel) {
         supabase.removeChannel(channel)
       }
@@ -829,12 +832,12 @@ export default function NavBar() {
             {!loggedIn && (
               <NavButton href="/auth" label="Sign-up" isActive={false} />
             )}
-            {hasActiveOrder && !isOnOrderTrackingPage ? (
-            <Link href="/orders/track" asChild>
+            {hasActiveOrder ? (
+            <Link href="/orders/track" asChild style={Platform.OS === 'web' ? { textDecoration: 'none', outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' } as any : undefined}>
                 <TouchableOpacity style={StyleSheet.flatten([
                   styles.navLink, 
                   { flexDirection: 'row', alignItems: 'center', gap: 6 },
-                  isOrderActive && { borderBottomWidth: 2, borderBottomColor: PRIMARY_COLOR }
+                  Platform.OS === 'web' && { outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' }
                 ])}>
                   <Text style={StyleSheet.flatten([
                     styles.navLinkText, 
@@ -852,8 +855,8 @@ export default function NavBar() {
               isActive={isDashboardActive} 
             />
           )}
-            {/* Location button - show in navbar for regular users when no active orders */}
-            {loggedIn && !isAdmin && !isChef && !hasActiveOrder && (
+            {/* Location button - show in navbar for regular users when no active orders (wait for ordersChecked to avoid flash) */}
+            {loggedIn && !isAdmin && !isChef && ordersChecked && !hasActiveOrder && (
             <TouchableOpacity 
                 onPress={() => setShowLocationModal(true)}
                 style={styles.locationNavButton}
@@ -1424,7 +1427,7 @@ export default function NavBar() {
                             } - Update!`}
                           </Text>
                           <Text style={styles.notificationItemMessage}>
-                            You have a new message from a customer.
+                            {isChef ? 'You have a new message from a customer.' : 'You have a new message from chef.'}
                           </Text>
                         </>
                       ) : notification.type === 'welcome' ? (

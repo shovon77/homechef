@@ -468,23 +468,19 @@ export default function ProfilePage() {
           onPress: async () => {
             if (!user) return;
             try {
-              // Deactivate account by setting is_active to false (if field exists)
-              // If the field doesn't exist, we'll just sign out without deleting records
+              // Deactivate account by setting role to 'deactivated' (no records deleted)
               const { error: profileError } = await supabase
                 .from("profiles")
-                .update({ 
-                  is_active: false,
-                  deactivated_at: new Date().toISOString()
-                })
+                .update({ role: 'deactivated' })
                 .eq("id", user.id);
               
               if (profileError) {
-                // If is_active/deactivated_at fields don't exist, that's okay
-                // We'll just sign out without updating - records are preserved
-                console.log("Profile update error (fields may not exist, which is fine):", profileError);
+                console.error("Profile update error:", profileError);
+                Alert.alert("Error", "Failed to deactivate account. Please try again.");
+                return;
               }
               
-              // Sign out the user (this doesn't delete any database records)
+              // Sign out the user (account is deactivated, no records deleted)
               await supabase.auth.signOut();
               router.replace("/auth");
               Alert.alert("Success", "Account deactivated successfully");
@@ -856,7 +852,7 @@ export default function ProfilePage() {
                     style={styles.deleteButton}
                     onPress={handleDeleteAccount}
                   >
-                    <Text style={styles.deleteButtonText}>Delete</Text>
+                    <Text style={styles.deleteButtonText}>Deactivate</Text>
                   </TouchableOpacity>
                 </View>
               </View>
@@ -1311,7 +1307,9 @@ const styles = StyleSheet.create({
   },
   deleteButton: {
     maxWidth: 120,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#E84343',
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
@@ -1319,7 +1317,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   deleteButtonText: {
-    color: '#FFFFFF',
+    color: '#E84343',
     fontSize: theme.typography.fontSize.base,
     fontWeight: '300',
     fontFamily: theme.typography.fontFamily.body,

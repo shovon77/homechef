@@ -230,7 +230,7 @@ export default function TrackOrderPage() {
             .from('order_messages')
             .select('*')
             .eq('order_id', selectedOrder.id)
-            .order('created_at', { ascending: false }); // Latest (newest) first, oldest last
+            .order('created_at', { ascending: true }); // Oldest first for correct chat order, reversed in display
           
           console.log('Order tracking - Messages fetched:', {
             orderId: selectedOrder.id,
@@ -240,7 +240,7 @@ export default function TrackOrderPage() {
           });
           
           if (!messagesRes.error && messagesRes.data && mounted) {
-            setMessages(messagesRes.data as MessageRow[]);
+            setMessages((messagesRes.data || []).slice().reverse() as MessageRow[]);
           } else if (messagesRes.error && mounted) {
             console.error('Error fetching messages:', messagesRes.error);
           }
@@ -524,10 +524,10 @@ export default function TrackOrderPage() {
       .from('order_messages')
       .select('*')
       .eq('order_id', selectedOrder.id)
-      .order('created_at', { ascending: false });
+      .order('created_at', { ascending: true });
     
     if (!messagesRes.error && messagesRes.data) {
-      setMessages(messagesRes.data as MessageRow[]);
+      setMessages((messagesRes.data || []).slice().reverse() as MessageRow[]);
     }
 
     // Load reported issue
@@ -1142,22 +1142,6 @@ export default function TrackOrderPage() {
           )}
         </View>
 
-        {showReadyAction ? (
-          <TouchableOpacity
-            style={styles.readyAction}
-            onPress={async () => {
-              const { error } = await updateOrderStatus(order.id, 'completed');
-              if (error) {
-                console.error('complete order error', error);
-                return;
-              }
-              router.replace(`/orders/thank-you?id=${order.id}`);
-            }}
-          >
-            <Text style={styles.readyActionText}>I picked up my order</Text>
-          </TouchableOpacity>
-        ) : null}
-
         {/* Reported Issue Section */}
         {reportedIssue && (
           <View style={styles.card}>
@@ -1274,6 +1258,22 @@ export default function TrackOrderPage() {
             )}
           </View>
         )}
+
+        {showReadyAction ? (
+          <TouchableOpacity
+            style={styles.readyAction}
+            onPress={async () => {
+              const { error } = await updateOrderStatus(order.id, 'completed');
+              if (error) {
+                console.error('complete order error', error);
+                return;
+              }
+              router.replace(`/orders/thank-you?id=${order.id}`);
+            }}
+          >
+            <Text style={styles.readyActionText}>I picked up my order</Text>
+          </TouchableOpacity>
+        ) : null}
 
         <View style={styles.actionButtonsContainer}>
           <View style={styles.messageChefContainer}>
@@ -2226,7 +2226,7 @@ const styles = StyleSheet.create({
     width: 44,
     height: 44,
     borderRadius: 22,
-    backgroundColor: '#F3F4F6',
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },

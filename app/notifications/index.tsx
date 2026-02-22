@@ -130,7 +130,7 @@ export default function NotificationsPage() {
       const oid = getOrderIdFromNotification(notification);
       return {
         title: oid ? `Order #${oid} - Update!` : 'Order - Update!',
-        message: 'You have a new message from a customer.',
+        message: isChef ? 'You have a new message from a customer.' : 'You have a new message from chef.',
       };
     }
     if (notification.type === 'welcome') {

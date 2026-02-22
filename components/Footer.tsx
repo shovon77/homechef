@@ -92,7 +92,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'flex-start',
     gap: 0,
-    marginLeft: 0,
+    marginLeft: -4,
     paddingLeft: 0,
     alignSelf: 'flex-start',
     width: 'auto',
@@ -107,7 +107,7 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.bold as any,
     fontSize: 24,
     lineHeight: 32,
-    marginLeft: -6,
+    marginLeft: -4,
   },
   brandNameYour: {
     color: '#33393A',

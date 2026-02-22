@@ -60,7 +60,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const [profileResult, chefResult] = await Promise.all([
         supabase
           .from('profiles')
-          .select('id, email, is_admin, is_chef, name, location, latitude, longitude')
+          .select('id, email, is_admin, is_chef, name, role, location, latitude, longitude')
           .eq('id', sessionUser.id)
           .maybeSingle(),
         sessionUser.email 
@@ -73,6 +73,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       ]);
 
       const profile = profileResult.data as Profile | null;
+      const profileRole = (profileResult.data as any)?.role;
+
+      // If user has deactivated their account but is logging in again, reactivate
+      if (profileRole === 'deactivated') {
+        await supabase.from('profiles').update({ role: 'user' }).eq('id', sessionUser.id);
+        if (profile) (profile as any).role = 'user';
+      }
+
       const chefData = chefResult.data;
       const profileLocationFromDb = (profileResult.data as any)?.location ?? '';
       const hasProfileLocation = !!String(profileLocationFromDb).trim();

@@ -1999,7 +1999,9 @@ const profileStyles = StyleSheet.create({
   },
   deleteButton: {
     flex: 1,
-    backgroundColor: theme.colors.primary,
+    backgroundColor: 'transparent',
+    borderWidth: 1,
+    borderColor: '#E84343',
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.xl,
     borderRadius: theme.radius.lg,
@@ -2007,7 +2009,7 @@ const profileStyles = StyleSheet.create({
     justifyContent: 'center',
   },
   deleteButtonText: {
-    color: '#FFFFFF',
+    color: '#E84343',
     fontSize: theme.typography.fontSize.base,
     fontWeight: theme.typography.fontWeight.normal,
     fontFamily: theme.typography.fontFamily.body,
