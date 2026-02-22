@@ -52,7 +52,7 @@ Deno.serve(async (req) => {
 
     const { data: order, error: orderError } = await adminClient
       .from('orders')
-      .select('id, chef_id, total_cents, status, transfer_group, stripe_payment_intent_id, payment_intent_id, checkout_session_id, stripe_transfer_id, platform_fee_cents')
+      .select('id, user_id, chef_id, total_cents, status, transfer_group, stripe_payment_intent_id, payment_intent_id, checkout_session_id, stripe_transfer_id, platform_fee_cents')
       .eq('id', orderId)
       .maybeSingle();
 
@@ -197,6 +197,26 @@ Deno.serve(async (req) => {
     if (updateError) {
       console.error('[accept-order] failed to update order', updateError);
       return errorResponse(500, 'Failed to update order status', updateError);
+    }
+
+    // Notify customer that the chef accepted their order
+    if (order.user_id) {
+      try {
+        const { error: notifErr } = await adminClient.from('notifications').insert({
+          user_id: order.user_id,
+          type: 'order_placed',
+          title: 'Order Confirmed',
+          message: 'The chef has accepted your order and will start preparing it soon.',
+          related_id: orderId,
+          related_type: 'order',
+          read: false,
+        });
+        if (notifErr) {
+          console.warn('[accept-order] failed to create order confirmation notification', { orderId, error: notifErr });
+        }
+      } catch (notifErr) {
+        console.warn('[accept-order] notification error', { orderId, error: notifErr });
+      }
     }
 
     console.log('[accept-order] order accepted', {

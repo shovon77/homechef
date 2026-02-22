@@ -3406,7 +3406,7 @@ export default function AdminPage() {
       {(() => {
         const notificationItems = [
           { type: 'welcome', title: 'Welcome', recipient: 'New user', scenario: 'When a user signs up or completes profile creation. Shown as a welcome message with platform intro.' },
-          { type: 'order_placed', title: 'Order placed', recipient: 'Customer', scenario: 'When a customer completes checkout and payment succeeds. Confirms the order was placed and the chef will start preparing.' },
+          { type: 'order_placed', title: 'Order confirmed', recipient: 'Customer', scenario: 'When the chef accepts the order. Notifies the customer that the chef will start preparing.' },
           { type: 'order_ready', title: 'Order ready for pickup', recipient: 'Customer', scenario: 'When the chef marks an order as "ready". Tells the customer to collect the order from the chef.' },
           { type: 'order_message', title: 'New message in order', recipient: 'Customer or chef', scenario: 'When a customer sends a message about an order (from order success or track page), the chef is notified. When a chef sends a message from the chef dashboard, the customer is notified.' },
           { type: 'order_issue_updated', title: 'Order issue updated', recipient: 'Customer', scenario: 'When an admin updates the status of a reported issue (e.g. refunded, in review). Notifies the customer of the update.' },
