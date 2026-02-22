@@ -1000,16 +1000,15 @@ export default function TrackOrderPage() {
               <Text style={styles.statusInfoValue}>{formatPickupDateTime(order.pickup_at)}</Text>
             </View>
             <View style={styles.infoRow}>
-              <Text style={styles.statusInfoLabel}>Pick up location</Text>
+              <Text style={styles.statusInfoLabel}>Pickup location</Text>
               <View style={styles.locationValueContainer}>
                 {(() => {
                   const { street, city, country } = formatLocationAddress(chef?.location);
+                  const oneLine = [street, city, country].filter(Boolean).join(', ');
                   return (
-                    <>
-                      <Text style={styles.locationAddressLine}>{street}</Text>
-                      {city && <Text style={styles.locationAddressLine}>{city}</Text>}
-                      {country && <Text style={styles.locationAddressLine}>{country}</Text>}
-                    </>
+                    <Text style={styles.locationAddressLine} numberOfLines={1} ellipsizeMode="tail">
+                      {oneLine}
+                    </Text>
                   );
                 })()}
               </View>
@@ -1023,7 +1022,7 @@ export default function TrackOrderPage() {
             onPress={() => setIsOrderSummaryExpanded(!isOrderSummaryExpanded)}
           >
             <View style={styles.orderSummaryTitleRow}>
-              <Text style={styles.sectionTitle}>Order Summary</Text>
+              <Text style={styles.sectionTitle}>Order summary</Text>
               <Text style={styles.orderNumber}>#{String(order.id).padStart(5, '0')}</Text>
             </View>
             <Text style={styles.expandIcon}>{isOrderSummaryExpanded ? '−' : '+'}</Text>
@@ -1059,8 +1058,8 @@ export default function TrackOrderPage() {
                 <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
               </View>
           <View style={[styles.summaryRow, { marginTop: 8 }]}>
-                <Text style={[styles.summaryLabel, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>Total</Text>
-                <Text style={[styles.summaryValue, { fontWeight: '800', color: TEXT_DARK, fontFamily: theme.typography.fontFamily.body }]}>{cents(calculatedTotalCents)}</Text>
+                <Text style={styles.summaryLabel}>Total</Text>
+                <Text style={styles.summaryValue}>{cents(calculatedTotalCents)}</Text>
           </View>
               
               <Text style={styles.platformFeeInfo}>
@@ -1132,7 +1131,7 @@ export default function TrackOrderPage() {
                     tintColor={PRIMARY}
                     resizeMode="contain"
                   />
-                  <Text style={styles.pickupLocation}>{chef.location}</Text>
+                  <Text style={styles.pickupLocation} numberOfLines={1} ellipsizeMode="tail">{chef.location}</Text>
                 </TouchableOpacity>
               )}
               
@@ -1295,10 +1294,10 @@ export default function TrackOrderPage() {
         </Link>
             {!reportedIssue && (
               <TouchableOpacity 
-                style={styles.messageChefButton}
+                style={styles.reportIssueTextCTA}
                 onPress={() => setShowReportIssueModal(true)}
               >
-                <Text style={styles.messageChefButtonText}>Report an issue?</Text>
+                <Text style={styles.reportIssueTextCTAText}>Report an issue?</Text>
               </TouchableOpacity>
             )}
       </View>
@@ -1771,7 +1770,7 @@ const styles = StyleSheet.create({
   },
   statusValue: {
     color: TEXT_DARK,
-    fontSize: 24,
+    fontSize: 16,
     fontWeight: '800',
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
@@ -1799,7 +1798,8 @@ const styles = StyleSheet.create({
   locationValueContainer: {
     flex: 2,
     alignItems: 'flex-end',
-    gap: 2,
+    flexShrink: 1,
+    minWidth: 0,
   },
   locationAddressLine: {
     color: TEXT_DARK,
@@ -1821,7 +1821,7 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   orderNumber: {
-    color: TEXT_MUTED,
+    color: TEXT_DARK,
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -1876,19 +1876,19 @@ const styles = StyleSheet.create({
   },
   summaryLabelWithIcon: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 4,
   },
   infoIcon: {
     color: TEXT_MUTED,
     fontSize: 14,
+    lineHeight: 20,
   },
   platformFeeInfo: {
-    color: TEXT_MUTED,
-    fontSize: 12,
+    color: TEXT_DARK,
+    fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
-    fontStyle: 'italic',
   },
   pickupInfoContent: {
     marginTop: 8,
@@ -1915,6 +1915,8 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
+    flexShrink: 1,
+    minWidth: 0,
   },
   pickupReminder: {
     color: TEXT_MUTED,
@@ -1946,18 +1948,19 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: TEXT_DARK,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   summaryValue: {
     color: TEXT_DARK,
-    fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
   },
   readyAction: {
     backgroundColor: ACCENT,
     borderRadius: 16,
     paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: 'center',
+    alignSelf: 'center',
   },
   readyActionText: {
     color: '#FFFFFF',
@@ -1972,12 +1975,27 @@ const styles = StyleSheet.create({
   messageChefContainer: {
     gap: 8,
   },
+  reportIssueTextCTA: {
+    backgroundColor: 'transparent',
+    paddingVertical: 4,
+    marginTop: -4,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  reportIssueTextCTAText: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
+  },
   messageChefButton: {
     backgroundColor: PRIMARY,
     borderRadius: 16,
     paddingVertical: 14,
+    paddingHorizontal: 24,
     alignItems: 'center',
     justifyContent: 'center',
+    alignSelf: 'center',
   },
   messageChefButtonText: {
     color: '#FFFFFF',
@@ -1993,7 +2011,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   browseContainer: {
-    gap: 12,
+    gap: 4,
   },
   actionButton: {
     backgroundColor: CARD_BG,

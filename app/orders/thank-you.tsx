@@ -156,7 +156,7 @@ export default function OrderThankYouPage() {
               onPress={() => setIsSummaryExpanded(!isSummaryExpanded)}
               activeOpacity={0.7}
             >
-              <Text style={styles.summaryTitle}>Order Summary</Text>
+              <Text style={styles.summaryTitle}>Order summary</Text>
               <View style={styles.toggleIcon}>
                 <Text style={styles.toggleIconText}>{isSummaryExpanded ? '−' : '+'}</Text>
               </View>

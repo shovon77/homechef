@@ -701,7 +701,7 @@ export default function OrderSuccessPage() {
             
             <Link href="/browse?tab=dishes" asChild>
               <TouchableOpacity style={styles.primaryButton}>
-                <Text style={[styles.primaryButtonText, { fontWeight: '400' }]}>Explore, as you wait!</Text>
+                <Text style={styles.primaryButtonText}>Explore, as you wait!</Text>
               </TouchableOpacity>
             </Link>
           </View>
@@ -1084,7 +1084,7 @@ const styles = StyleSheet.create({
   },
   primaryButtonText: {
     color: '#FFFFFF',
-    fontWeight: '700',
+    fontWeight: '400',
     fontSize: 16,
   },
   secondaryButton: {
@@ -1098,7 +1098,7 @@ const styles = StyleSheet.create({
   },
   secondaryButtonText: {
     color: TEXT_MUTED,
-    fontWeight: '700',
+    fontWeight: '400',
   },
   pickupInfoContainer: {
     width: '100%',
@@ -1236,7 +1236,7 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.display,
   },
   orderNumber: {
-    color: TEXT_MUTED,
+    color: TEXT_DARK,
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -1299,39 +1299,37 @@ const styles = StyleSheet.create({
   summaryLabel: {
     color: TEXT_DARK,
     fontSize: 16,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   summaryLabelWithIcon: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 4,
   },
   infoIcon: {
     color: TEXT_MUTED,
-    fontSize: 14,
+    fontSize: 16,
+    lineHeight: 20,
   },
   summaryValue: {
     color: TEXT_DARK,
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
-    fontWeight: '600',
     minWidth: 80,
     textAlign: 'right',
   },
   summaryTotalLabel: {
-    fontWeight: '800',
     color: TEXT_DARK,
     fontSize: 16,
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: theme.typography.fontFamily.display,
   },
   summaryTotalValue: {
-    fontWeight: '800',
     color: TEXT_DARK,
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   platformFeeInfo: {
-    color: TEXT_MUTED,
+    color: TEXT_DARK,
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
@@ -1514,7 +1512,7 @@ const styles = StyleSheet.create({
   },
   reportIssueOptionTextSelected: {
     color: PRIMARY,
-    fontWeight: '700',
+    fontWeight: '400',
   },
   reportIssueTextInputWrapper: {
     flexDirection: 'row',
@@ -1566,7 +1564,7 @@ const styles = StyleSheet.create({
   reportIssueUploadButtonText: {
     color: PRIMARY,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   reportIssueImagesContainer: {
@@ -1601,7 +1599,7 @@ const styles = StyleSheet.create({
   reportIssueRemoveImageText: {
     color: '#FFFFFF',
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
   },
   reportIssueSubmitButton: {
     paddingVertical: 14,
@@ -1618,7 +1616,7 @@ const styles = StyleSheet.create({
   reportIssueSubmitButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   // Message Modal Styles
@@ -1754,6 +1752,6 @@ const styles = StyleSheet.create({
   sendButtonIcon: {
     color: '#FFFFFF',
     fontSize: 20,
-    fontWeight: '700',
+    fontWeight: '400',
   },
 });

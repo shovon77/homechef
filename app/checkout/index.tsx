@@ -730,7 +730,7 @@ const styles = StyleSheet.create({
   },
   orderSummaryLabelWithIcon: {
     flexDirection: 'row',
-    alignItems: 'center',
+    alignItems: 'baseline',
     gap: 4,
   },
   infoIcon: {
