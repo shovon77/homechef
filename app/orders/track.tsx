@@ -1004,10 +1004,45 @@ export default function TrackOrderPage() {
                 {(() => {
                   const { street, city, country } = formatLocationAddress(chef?.location);
                   const oneLine = [street, city, country].filter(Boolean).join(', ');
+                  const addressForMaps = chef?.location || oneLine;
                   return (
-                    <Text style={styles.locationAddressLine} numberOfLines={1} ellipsizeMode="tail">
-                      {oneLine}
-                    </Text>
+                    <TouchableOpacity
+                      style={styles.pickupLocationLink}
+                      onPress={async () => {
+                        if (addressForMaps) {
+                          const encodedAddress = encodeURIComponent(addressForMaps);
+                          const mapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                          if (Platform.OS === 'web') {
+                            Linking.openURL(mapsWebUrl);
+                            return;
+                          }
+                          const mapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
+                          try {
+                            const canOpen = await Linking.canOpenURL(mapsAppUrl);
+                            if (canOpen) {
+                              await Linking.openURL(mapsAppUrl);
+                            } else {
+                              await Linking.openURL(mapsWebUrl);
+                            }
+                          } catch {
+                            await Linking.openURL(mapsWebUrl);
+                          }
+                        }
+                      }}
+                      disabled={!addressForMaps}
+                    >
+                      <Text style={styles.locationAddressLine} numberOfLines={1} ellipsizeMode="tail">
+                        {oneLine}
+                      </Text>
+                      {addressForMaps ? (
+                        <Image
+                          source={require('../../assets/locationnewicon.png')}
+                          style={styles.pickupLocationIcon}
+                          tintColor={PRIMARY}
+                          resizeMode="contain"
+                        />
+                      ) : null}
+                    </TouchableOpacity>
                   );
                 })()}
               </View>
@@ -1733,6 +1768,19 @@ const styles = StyleSheet.create({
     fontWeight: '700',
     textAlign: 'right',
     fontFamily: theme.typography.fontFamily.body,
+  },
+  pickupLocationLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+    gap: 6,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  pickupLocationIcon: {
+    width: 16,
+    height: 16,
+    flexShrink: 0,
   },
   orderSummaryHeader: {
     flexDirection: 'row',
