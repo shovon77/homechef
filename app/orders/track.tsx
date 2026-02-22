@@ -97,7 +97,6 @@ export default function TrackOrderPage() {
   const [chef, setChef] = useState<ChefRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(false);
-  const [isPickupInfoExpanded, setIsPickupInfoExpanded] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messages, setMessages] = useState<MessageRow[]>([]);
   const [messageText, setMessageText] = useState('');
@@ -1066,79 +1065,6 @@ export default function TrackOrderPage() {
                 ⓘ It helps support the platform and secure payments.
               </Text>
             </View>
-          )}
-        </View>
-
-          <View style={styles.card}>
-          <TouchableOpacity 
-            style={styles.orderSummaryHeader}
-            onPress={() => setIsPickupInfoExpanded(!isPickupInfoExpanded)}
-          >
-            <Text style={styles.sectionTitle}>Pickup info</Text>
-            <Text style={styles.expandIcon}>{isPickupInfoExpanded ? '−' : '+'}</Text>
-          </TouchableOpacity>
-          
-          {isPickupInfoExpanded && (
-            <View style={styles.pickupInfoContent}>
-              <Text style={styles.pickupDateTime}>
-                {order.pickup_at ? (() => {
-                  try {
-                    const date = new Date(order.pickup_at);
-                    if (Number.isNaN(date.getTime())) return 'Not available';
-                    
-                    // Format date as "January 1, 2025"
-                    const dateStr = date.toLocaleDateString('en-US', { 
-                      month: 'long', 
-                      day: 'numeric', 
-                      year: 'numeric' 
-                    });
-                    
-                    // Format start time as "08:30" (24-hour format)
-                    const hour = date.getHours();
-                    const minute = date.getMinutes();
-                    const hourStr = hour.toString().padStart(2, '0');
-                    const minuteStr = minute.toString().padStart(2, '0');
-                    const startTimeStr = `${hourStr}:${minuteStr}`;
-                    
-                    // Calculate end time (1 hour later) and format as "9:30PM"
-                    const endDate = new Date(date);
-                    endDate.setHours(endDate.getHours() + 1);
-                    const endHour = endDate.getHours();
-                    const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
-                    const endAmpm = endHour >= 12 ? 'PM' : 'AM';
-                    const endMinuteStr = endDate.getMinutes().toString().padStart(2, '0');
-                    const endTimeStr = `${endHour12}:${endMinuteStr}${endAmpm}`;
-                    
-                    return `${dateStr} - ${startTimeStr} - ${endTimeStr}`;
-                  } catch {
-                    return 'Not available';
-                  }
-                })() : 'Not available'}
-              </Text>
-              
-              {chef?.location && (
-                <TouchableOpacity 
-                  style={styles.pickupLocationRow}
-                  onPress={() => {
-                    const encodedAddress = encodeURIComponent(chef.location || '');
-                    const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                    Linking.openURL(mapsUrl);
-                  }}
-                >
-                  <Image 
-                    source={require('../../assets/locationnewicon.png')} 
-                    style={styles.locationIcon}
-                    tintColor={PRIMARY}
-                    resizeMode="contain"
-                  />
-                  <Text style={styles.pickupLocation} numberOfLines={1} ellipsizeMode="tail">{chef.location}</Text>
-                </TouchableOpacity>
-              )}
-              
-              <Text style={styles.pickupReminder}>
-                We'll remind you before pickup time. The food's prepared by an independent home chef.
-              </Text>
-          </View>
           )}
         </View>
 
