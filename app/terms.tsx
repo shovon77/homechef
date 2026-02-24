@@ -12,7 +12,7 @@ export default function TermsPage() {
     >
       <View style={styles.container}>
         <Text style={styles.title}>Customer Terms of Service & Marketplace Disclosure</Text>
-        <Text style={styles.lastUpdated}>Last Updated: February 2, 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: February 23, 2026</Text>
 
         <View style={styles.section}>
           <Text style={styles.paragraph}>
@@ -262,6 +262,18 @@ export default function TermsPage() {
           <Text style={styles.subHeading}>13.3 Entire Agreement</Text>
           <Text style={styles.paragraph}>
             These Terms constitute the entire agreement between the Customer and the Platform regarding use of the Platform.
+          </Text>
+        </View>
+
+        <View style={styles.section}>
+          <Text style={styles.heading}>14. Intellectual Property & Credits</Text>
+          <Text style={styles.subHeading}>14.1 Platform Content</Text>
+          <Text style={styles.paragraph}>
+            All text, branding, logos, and design elements on the Platform are the property of YourHomeChef unless otherwise stated.
+          </Text>
+          <Text style={styles.subHeading}>14.2 Icon Attribution</Text>
+          <Text style={styles.paragraph}>
+            Certain icons used on the Platform are created by Smashicons and sourced from Flaticon (https://www.flaticon.com/authors/smashicons). These icons are used in accordance with Flaticon's applicable license terms.
           </Text>
         </View>
       </View>

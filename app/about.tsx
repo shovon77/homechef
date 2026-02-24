@@ -52,25 +52,26 @@ export default function AboutPage() {
               isMobile && styles.heroImageMobile,
               {
                 backgroundImage: `url(${bannerUrl})`,
-                backgroundSize: 'cover',
+                backgroundSize: 'contain',
                 backgroundPosition: 'center',
+                backgroundColor: 'transparent',
               } as any,
             ]}
           />
         ) : bannerUrl ? (
-          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile]}>
+          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile, styles.heroImageContainer]}>
             <Image
               source={{ uri: bannerUrl }}
-              style={[styles.heroImage, Platform.OS === 'web' && { objectPosition: 'center center' } as any]}
-              resizeMode="cover"
+              style={[styles.heroImage, Platform.OS === 'web' && { objectFit: 'contain', objectPosition: 'center center' } as any]}
+              resizeMode="contain"
             />
           </View>
         ) : (
-          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile]}>
+          <View style={[styles.heroWrapper, isMobile && styles.heroImageMobile, styles.heroImageContainer]}>
             <Image
               source={require('../assets/About us.png')}
               style={styles.heroImage}
-              resizeMode="cover"
+              resizeMode="contain"
             />
           </View>
         )}
@@ -181,6 +182,11 @@ const styles = StyleSheet.create({
     borderRadius: 24,
     overflow: 'hidden',
     position: 'relative' as const,
+    backgroundColor: 'transparent',
+  },
+  heroImageContainer: {
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   heroImage: {
     position: 'absolute' as const,

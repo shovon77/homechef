@@ -407,6 +407,8 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
   const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
+  const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
+  const [heroLayout, setHeroLayout] = useState<{ width: number; height: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const featuredScrollRef = React.useRef<ScrollView>(null);
@@ -458,6 +460,16 @@ export default function HomePage() {
 
     return () => clearInterval(interval);
   }, [PLACEHOLDERS.length]);
+
+  // Load image dimensions for native fill-height-fit-width behavior
+  useEffect(() => {
+    if (Platform.OS === 'web' || !bannerUrl) return;
+    Image.getSize(
+      bannerUrl,
+      (w, h) => setImageSize({ width: w, height: h }),
+      () => setImageSize(null)
+    );
+  }, [bannerUrl]);
 
   const CARD_WIDTH = isMobile ? 200 : 240;
   const GAP = 24;
@@ -827,16 +839,41 @@ export default function HomePage() {
         <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
           {/* Hero section - matches HTML design */}
           <Link href="/browse?tab=chefs" asChild>
-            <TouchableOpacity activeOpacity={0.95} style={StyleSheet.flatten([styles.hero, isMobile && styles.heroMobile, !isMobile && styles.heroDesktop])}>
-              <Image
-                source={{ uri: bannerUrl }}
-                style={[
-                  styles.heroBackgroundImage,
-                  Platform.OS === 'web' && { objectPosition: 'center center' } as any,
-                  isMobile && { width: '140%', left: -15 }
-                ]}
-                resizeMode="cover"
-              />
+            <TouchableOpacity
+              activeOpacity={0.95}
+              style={StyleSheet.flatten([styles.hero, isMobile && styles.heroMobile, !isMobile && styles.heroDesktop])}
+              onLayout={(e) => Platform.OS !== 'web' && setHeroLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
+            >
+              {Platform.OS === 'web' ? (
+                <View
+                  style={[
+                    styles.heroBackgroundImage,
+                    {
+                      backgroundImage: `url(${bannerUrl})`,
+                      backgroundSize: isMobile ? 'auto 100%' : 'cover',
+                      backgroundPosition: isMobile ? 'left center' : 'center',
+                      backgroundRepeat: 'no-repeat',
+                    } as any,
+                  ]}
+                />
+              ) : imageSize && heroLayout ? (
+                <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper, isMobile && styles.heroImageFillHeightWrapperMobile]}>
+                  <Image
+                    source={{ uri: bannerUrl }}
+                    style={{
+                      height: heroLayout.height,
+                      width: heroLayout.height * (imageSize.width / imageSize.height),
+                    }}
+                    resizeMode="cover"
+                  />
+                </View>
+              ) : (
+                <Image
+                  source={{ uri: bannerUrl }}
+                  style={styles.heroBackgroundImage}
+                  resizeMode="cover"
+                />
+              )}
             </TouchableOpacity>
           </Link>
 
@@ -998,7 +1035,7 @@ export default function HomePage() {
               <View style={styles.howItWorksCard}>
                 <View style={styles.howItWorksIconContainer}>
                   <Image 
-                    source={require('../assets/add.png')} 
+                    source={require('../assets/dinner.png')} 
                     style={styles.howItWorksIconImage} 
                     tintColor="#FFFFFF"
                     resizeMode="contain"
@@ -1122,6 +1159,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: theme.spacing.xl,
     position: "relative",
+    backgroundColor: 'transparent',
   },
   heroDesktop: {
     maxHeight: 420,
@@ -1134,6 +1172,15 @@ const styles = StyleSheet.create({
     bottom: 0,
     width: "100%",
     height: "100%",
+    borderRadius: theme.radius.xl,
+  },
+  heroImageFillHeightWrapper: {
+    justifyContent: "center",
+    alignItems: "center",
+    overflow: "hidden",
+  },
+  heroImageFillHeightWrapperMobile: {
+    alignItems: "flex-start",
   },
   heroOverlay: {
     position: "absolute",

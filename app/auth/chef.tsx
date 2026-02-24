@@ -960,21 +960,25 @@ export default function ChefSignup() {
           {/* Page Heading */}
           <View style={styles.heading}>
             {loadingBanner ? (
-              <View style={[styles.headerImage, { justifyContent: 'center', alignItems: 'center', backgroundColor: '#E2E8F0' }]}>
+              <View style={[styles.headerImageContainer]}>
                 <ActivityIndicator size="large" color={theme.colors.primary} />
               </View>
             ) : bannerUrl ? (
-              <Image 
-                source={{ uri: bannerUrl }} 
-                style={styles.headerImage}
-                resizeMode="cover"
-              />
+              <View style={styles.headerImageContainer}>
+                <Image 
+                  source={{ uri: bannerUrl }} 
+                  style={styles.headerImage}
+                  resizeMode="contain"
+                />
+              </View>
             ) : (
-              <Image 
-                source={require('../../assets/Gemini_Generated_Image_4t6si4t6si4t6si4.png')} 
-                style={styles.headerImage}
-                resizeMode="contain"
-              />
+              <View style={styles.headerImageContainer}>
+                <Image 
+                  source={require('../../assets/Gemini_Generated_Image_4t6si4t6si4t6si4.png')} 
+                  style={styles.headerImage}
+                  resizeMode="contain"
+                />
+              </View>
             )}
             <Text style={[styles.title, { fontSize: isMobile ? 30 : 48 }]}>Chef profile basics</Text>
             <Text style={styles.subtitle}>
@@ -2707,7 +2711,7 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing['2xl'],
     width: '100%',
   },
-  headerImage: {
+  headerImageContainer: {
     width: '100%',
     maxWidth: 600,
     height: Platform.select({ web: 200, default: 150 }),
@@ -2715,6 +2719,14 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     borderRadius: 12,
     overflow: 'hidden',
+    backgroundColor: 'transparent',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  headerImage: {
+    width: '100%',
+    height: '100%',
+    borderRadius: 12,
   },
   title: {
     color: TEXT_LIGHT,

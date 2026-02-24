@@ -13,6 +13,7 @@ import ENV from '@/lib/env';
 import { formatCad } from '../../lib/money';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
+import { formatLocationDisplay } from '../../lib/formatAddress';
 
 const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
@@ -391,28 +392,7 @@ export default function CheckoutPage() {
             <Text style={styles.pickupLocationLabel}>Pickup location</Text>
             <View style={styles.pickupLocationValueContainer}>
               {chefLocation ? (
-                (() => {
-                  // Parse location string - format: "Street Address, City, Province/Postal Code"
-                  const parts = chefLocation.split(',').map(p => p.trim());
-                  const streetAddress = parts[0] || '';
-                  const city = parts[1] || '';
-                  const remaining = parts.slice(2).join(', ') || '';
-                  
-                  // First line: Street Address, City
-                  // Second line: Remaining (province/postal code)
-                  const firstLine = [streetAddress, city].filter(Boolean).join(', ');
-                  const secondLine = remaining;
-                  
-                  return (
-                    <>
-                      {firstLine && <Text style={styles.pickupLocationValue}>{firstLine}</Text>}
-                      {secondLine && <Text style={styles.pickupLocationValue}>{secondLine}</Text>}
-                      {!firstLine && !secondLine && (
-                        <Text style={styles.pickupLocationValue}>{chefLocation}</Text>
-                      )}
-                    </>
-                  );
-                })()
+                <Text style={styles.pickupLocationValue}>{formatLocationDisplay(chefLocation)}</Text>
               ) : (
                 <Text style={styles.pickupLocationValue}>Location not available</Text>
               )}
@@ -757,8 +737,8 @@ const styles = StyleSheet.create({
   orderSummaryTotalValue: {
     color: TEXT_DARK,
     fontSize: theme.typography.fontSize.lg,
-    fontWeight: theme.typography.fontWeight.bold as any,
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: theme.typography.fontWeight.normal as any,
+    fontFamily: 'OpenSans_400Regular',
   },
   platformFeeNote: {
     color: TEXT_MUTED,

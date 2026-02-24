@@ -19,6 +19,7 @@ import { updateOrderStatus } from '../../lib/orders';
 import { theme } from '../../lib/theme';
 import { uploadToBucket } from '../../lib/upload';
 import { createNotification } from '../../lib/notifications';
+import { formatLocationAddress } from '../../lib/formatAddress';
 
 const BG = '#f6f8f8';
 const CARD_BG = '#FFFFFF';
@@ -223,13 +224,13 @@ export default function TrackOrderPage() {
           setChef(null);
         }
 
-        // Fetch messages for this order - sorted latest to oldest (newest first)
+        // Fetch messages for this order - oldest first (displayed top to bottom)
         if (selectedOrder.id && mounted) {
           const messagesRes = await supabase
             .from('order_messages')
             .select('*')
             .eq('order_id', selectedOrder.id)
-            .order('created_at', { ascending: true }); // Oldest first for correct chat order, reversed in display
+            .order('created_at', { ascending: true });
           
           console.log('Order tracking - Messages fetched:', {
             orderId: selectedOrder.id,
@@ -239,7 +240,7 @@ export default function TrackOrderPage() {
           });
           
           if (!messagesRes.error && messagesRes.data && mounted) {
-            setMessages((messagesRes.data || []).slice().reverse() as MessageRow[]);
+            setMessages((messagesRes.data || []) as MessageRow[]);
           } else if (messagesRes.error && mounted) {
             console.error('Error fetching messages:', messagesRes.error);
           }
@@ -526,7 +527,7 @@ export default function TrackOrderPage() {
       .order('created_at', { ascending: true });
     
     if (!messagesRes.error && messagesRes.data) {
-      setMessages((messagesRes.data || []).slice().reverse() as MessageRow[]);
+      setMessages((messagesRes.data || []) as MessageRow[]);
     }
 
     // Load reported issue
@@ -822,48 +823,6 @@ export default function TrackOrderPage() {
       statusMessage = 'Your order status is being updated';
   }
 
-  // Format location address to display street, city, country
-  const formatLocationAddress = (location: string | null | undefined): { street: string; city: string; country: string } => {
-    if (!location) {
-      return { street: 'Not available', city: '', country: '' };
-    }
-    
-    try {
-      // Split by comma to parse address components
-      const parts = location.split(',').map(p => p.trim());
-      
-      // Street address is typically the first part
-      const street = parts[0] || 'Not available';
-      
-      // City is typically the second part (or first if only one part)
-      let city = parts.length > 1 ? parts[1] : '';
-      
-      // If there's a third part, it might contain province/state and postal code
-      // Extract city from the remaining parts (remove postal codes and province codes)
-      if (parts.length > 2) {
-        // City might be in the second part, third part could be province/postal
-        // Try to extract just the city name (remove postal codes)
-        const cityPart = parts[1];
-        // Remove postal code patterns (e.g., "ON M4C 1M6" or "M4C 1M6")
-        city = cityPart.replace(/\s*[A-Z]\d[A-Z]\s?\d[A-Z]\d\s*/i, '').replace(/\s*[A-Z]{2}\s+[A-Z]\d[A-Z]\s?\d[A-Z]\d\s*/i, '').trim();
-        if (!city) city = cityPart; // Fallback to original if parsing failed
-      }
-      
-      // Determine country - default to Canada for Canadian addresses, or try to extract
-      let country = 'Canada';
-      // If we see US state codes or patterns, it might be USA
-      if (location.match(/\b(AL|AK|AZ|AR|CA|CO|CT|DE|FL|GA|HI|ID|IL|IN|IA|KS|KY|LA|ME|MD|MA|MI|MN|MS|MO|MT|NE|NV|NH|NJ|NM|NY|NC|ND|OH|OK|OR|PA|RI|SC|SD|TN|TX|UT|VT|VA|WA|WV|WI|WY)\b/)) {
-        country = 'United States';
-      } else if (location.match(/\b(AB|BC|MB|NB|NL|NS|NT|NU|ON|PE|QC|SK|YT)\b/)) {
-        country = 'Canada';
-      }
-      
-      return { street, city, country };
-    } catch {
-      return { street: location, city: '', country: 'Canada' };
-    }
-  };
-
   // Format pickup date/time in the format "Jan 1, 2025 • 08:30PM-09:30PM"
   const formatPickupDateTime = (pickupAt: string | null): string => {
     if (!pickupAt) return 'Not available';
@@ -958,7 +917,12 @@ export default function TrackOrderPage() {
               onPress={handleNextOrder}
               disabled={currentOrderIndex <= 0}
             >
-              <Text style={[styles.navArrowText, currentOrderIndex <= 0 && styles.navArrowTextDisabled]}>←</Text>
+              <Image
+                source={require('../../assets/previous.png')}
+                style={[styles.navArrowIcon, currentOrderIndex <= 0 && styles.navArrowIconDisabled]}
+                tintColor={currentOrderIndex <= 0 ? '#9CA3AF' : PRIMARY}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
             <View style={styles.orderNavInfo}>
               <Text style={styles.orderNavText}>
@@ -973,7 +937,12 @@ export default function TrackOrderPage() {
               onPress={handlePreviousOrder}
               disabled={currentOrderIndex >= allOrders.length - 1}
             >
-              <Text style={[styles.navArrowText, currentOrderIndex >= allOrders.length - 1 && styles.navArrowTextDisabled]}>→</Text>
+              <Image
+                source={require('../../assets/next.png')}
+                style={[styles.navArrowIcon, currentOrderIndex >= allOrders.length - 1 && styles.navArrowIconDisabled]}
+                tintColor={currentOrderIndex >= allOrders.length - 1 ? '#9CA3AF' : PRIMARY}
+                resizeMode="contain"
+              />
             </TouchableOpacity>
           </View>
         )}
@@ -1002,8 +971,8 @@ export default function TrackOrderPage() {
               <Text style={styles.statusInfoLabel}>Pickup location</Text>
               <View style={styles.locationValueContainer}>
                 {(() => {
-                  const { street, city, country } = formatLocationAddress(chef?.location);
-                  const oneLine = [street, city, country].filter(Boolean).join(', ');
+                  const { street, city, province } = formatLocationAddress(chef?.location);
+                  const oneLine = [street, city, province].filter(Boolean).join(', ');
                   const addressForMaps = chef?.location || oneLine;
                   return (
                     <TouchableOpacity
@@ -1248,11 +1217,6 @@ export default function TrackOrderPage() {
           </View>
           
           <View style={styles.browseContainer}>
-            <Link href="/browse?tab=chefs" asChild>
-              <TouchableOpacity style={styles.messageChefButton}>
-                <Text style={styles.messageChefButtonText}>Browse chefs, as you wait!</Text>
-          </TouchableOpacity>
-        </Link>
             {!reportedIssue && (
               <TouchableOpacity 
                 style={styles.reportIssueTextCTA}
@@ -1567,7 +1531,7 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
     paddingHorizontal: 20,
     paddingTop: 16,
-    paddingBottom: 20,
+    paddingBottom: 100,
     gap: 20,
   },
   orderNavigation: {
@@ -1584,20 +1548,19 @@ const styles = StyleSheet.create({
     width: 40,
     height: 40,
     borderRadius: 20,
-    backgroundColor: PRIMARY,
+    backgroundColor: 'transparent',
     alignItems: 'center',
     justifyContent: 'center',
   },
   navArrowButtonDisabled: {
-    backgroundColor: '#E5E7EB',
+    backgroundColor: 'transparent',
   },
-  navArrowText: {
-    color: '#FFFFFF',
-    fontSize: 20,
-    fontWeight: '700',
+  navArrowIcon: {
+    width: 24,
+    height: 24,
   },
-  navArrowTextDisabled: {
-    color: '#9CA3AF',
+  navArrowIconDisabled: {
+    opacity: 0.5,
   },
   orderNavInfo: {
     alignItems: 'center',
@@ -1732,7 +1695,7 @@ const styles = StyleSheet.create({
   statusValue: {
     color: TEXT_DARK,
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
     marginBottom: 16,
@@ -1744,14 +1707,14 @@ const styles = StyleSheet.create({
   statusInfoLabel: {
     color: TEXT_DARK,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     flex: 1,
     fontFamily: theme.typography.fontFamily.body,
   },
   statusInfoValue: {
     color: TEXT_DARK,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     flex: 2,
     textAlign: 'right',
     fontFamily: theme.typography.fontFamily.body,
@@ -1765,7 +1728,7 @@ const styles = StyleSheet.create({
   locationAddressLine: {
     color: TEXT_DARK,
     fontSize: 14,
-    fontWeight: '700',
+    fontWeight: '400',
     textAlign: 'right',
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -1797,12 +1760,13 @@ const styles = StyleSheet.create({
   orderNumber: {
     color: TEXT_DARK,
     fontSize: 14,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   expandIcon: {
     color: PRIMARY,
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '400',
   },
   orderSummaryContent: {
     marginTop: 8,
@@ -1820,6 +1784,7 @@ const styles = StyleSheet.create({
   orderItemName: {
     color: TEXT_DARK,
     fontSize: 14,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   orderItemQuantityPrice: {
@@ -1831,6 +1796,7 @@ const styles = StyleSheet.create({
   orderItemQuantity: {
     color: TEXT_DARK,
     fontSize: 14,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 20,
     textAlign: 'right',
@@ -1838,7 +1804,7 @@ const styles = StyleSheet.create({
   orderItemPrice: {
     color: TEXT_DARK,
     fontSize: 14,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 80,
     textAlign: 'right',
@@ -1860,7 +1826,8 @@ const styles = StyleSheet.create({
   },
   platformFeeInfo: {
     color: TEXT_DARK,
-    fontSize: 14,
+    fontSize: 12,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     marginTop: 8,
   },
@@ -1911,7 +1878,7 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     color: TEXT_DARK,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   summaryRow: {
@@ -1922,10 +1889,12 @@ const styles = StyleSheet.create({
   },
   summaryLabel: {
     color: TEXT_DARK,
+    fontWeight: '700',
     fontFamily: theme.typography.fontFamily.display,
   },
   summaryValue: {
     color: TEXT_DARK,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   readyAction: {
@@ -1939,15 +1908,15 @@ const styles = StyleSheet.create({
   readyActionText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   actionButtonsContainer: {
-    gap: 12,
-    marginTop: 8,
+    gap: 4,
+    marginTop: 4,
   },
   messageChefContainer: {
-    gap: 8,
+    gap: 4,
   },
   reportIssueTextCTA: {
     backgroundColor: 'transparent',
@@ -1963,7 +1932,9 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
   },
   messageChefButton: {
-    backgroundColor: PRIMARY,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: PRIMARY,
     borderRadius: 16,
     paddingVertical: 14,
     paddingHorizontal: 24,
@@ -1972,9 +1943,9 @@ const styles = StyleSheet.create({
     alignSelf: 'center',
   },
   messageChefButtonText: {
-    color: '#FFFFFF',
+    color: PRIMARY,
     fontSize: 16,
-    fontWeight: '800',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
   },

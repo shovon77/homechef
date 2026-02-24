@@ -10,6 +10,7 @@ import { theme } from '../../lib/theme';
 import { cents } from '../../lib/money';
 import { uploadToBucket } from '../../lib/upload';
 import { createNotification } from '../../lib/notifications';
+import { formatLocationDisplay } from '../../lib/formatAddress';
 
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
@@ -593,10 +594,10 @@ export default function OrderSuccessPage() {
                     {isPickupAddressExpanded && (
                       <View style={styles.pickupLocationContainer}>
                         <View style={styles.pickupLocationRow}>
-                          <Text style={styles.pickupLocation}>{chefLocation}</Text>
+                          <Text style={styles.pickupLocation}>{formatLocationDisplay(chefLocation)}</Text>
                           <TouchableOpacity 
                             onPress={() => {
-                              const encodedAddress = encodeURIComponent(chefLocation);
+                              const encodedAddress = encodeURIComponent(chefLocation || '');
                               const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
                               Linking.openURL(mapsUrl);
                             }}
@@ -1280,7 +1281,7 @@ const styles = StyleSheet.create({
   orderItemPrice: {
     color: TEXT_DARK,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 80,
     textAlign: 'right',
@@ -1314,6 +1315,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     color: TEXT_DARK,
     fontSize: 16,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
     minWidth: 80,
     textAlign: 'right',
@@ -1326,6 +1328,7 @@ const styles = StyleSheet.create({
   summaryTotalValue: {
     color: TEXT_DARK,
     fontSize: 16,
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   platformFeeInfo: {

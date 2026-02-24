@@ -3235,7 +3235,7 @@ export default function AdminPage() {
           {bannerUrl ? (
             <View style={styles.bannerPreviewContainer}>
               <Text style={styles.sectionLabel}>Preview</Text>
-              <Image source={{ uri: bannerUrl }} style={styles.bannerPreview} resizeMode="cover" />
+              <Image source={{ uri: bannerUrl }} style={styles.bannerPreview} resizeMode="contain" />
             </View>
           ) : null}
           
@@ -3275,7 +3275,7 @@ export default function AdminPage() {
               <Image 
                 source={{ uri: aboutUsBannerUrl || originalAboutUsBannerUrl }} 
                 style={styles.bannerPreview} 
-                resizeMode="cover" 
+                resizeMode="contain" 
               />
             </View>
           ) : (
@@ -3323,7 +3323,7 @@ export default function AdminPage() {
               <Image 
                 source={{ uri: chefOnboardingBannerUrl || originalChefOnboardingBannerUrl }} 
                 style={styles.bannerPreview} 
-                resizeMode="cover" 
+                resizeMode="contain" 
               />
             </View>
           ) : (
@@ -5554,7 +5554,7 @@ const styles = StyleSheet.create({
   orderItemPrice: {
     fontSize: 15,
     color: palette.text,
-    fontWeight: '600',
+    fontWeight: '400',
     minWidth: 80,
     textAlign: 'right',
     fontFamily: theme.typography.fontFamily.body,
@@ -5578,7 +5578,7 @@ const styles = StyleSheet.create({
   summaryValue: {
     fontSize: 15,
     color: palette.text,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   summaryTotalLabel: {
@@ -5588,8 +5588,8 @@ const styles = StyleSheet.create({
   },
   summaryTotalValue: {
     fontSize: 16,
-    fontWeight: '700',
-    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
   },
   expandIcon: {
     fontSize: 18,
@@ -5715,7 +5715,7 @@ const styles = StyleSheet.create({
   },
   itemPrice: {
     color: palette.text,
-    fontWeight: '800',
+    fontWeight: '400',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -6399,6 +6399,8 @@ const styles = StyleSheet.create({
   },
   bannerPreviewContainer: {
     marginBottom: 16,
+    borderRadius: 12,
+    overflow: 'hidden',
   },
   bannerPreview: {
     width: '100%',

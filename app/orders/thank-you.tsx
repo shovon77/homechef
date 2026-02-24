@@ -363,8 +363,8 @@ const styles = StyleSheet.create({
   totalValue: {
     color: PRIMARY,
     fontSize: 16,
-    fontWeight: '800',
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '400',
+    fontFamily: 'OpenSans_400Regular',
   },
   actions: {
     width: '100%',
