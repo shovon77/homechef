@@ -3418,6 +3418,10 @@ export default function AdminPage() {
           { type: 'new_order_request', title: 'New order request', recipient: 'Chef', scenario: 'When a customer places an order and payment succeeds. The chef is notified to review and respond to the order.' },
           { type: 'new_user_signup', title: 'New user signup', recipient: 'Admins', scenario: 'When a new user creates an account (database trigger on profiles insert). All admins are notified.' },
           { type: 'review_reply', title: 'Chef replied to your review', recipient: 'Customer', scenario: 'When a chef replies to a customer review on the chef dashboard. The reviewer is notified of the reply.' },
+          { type: 'chef_pickup_reminder', title: 'Pickup reminder (3h)', recipient: 'Chef', scenario: 'Scheduled: 3 hours before pickup. Reminds chef that a pickup is scheduled for today.' },
+          { type: 'chef_pickup_reminder_1h', title: 'Pickup reminder (1h)', recipient: 'Chef', scenario: 'Scheduled: 1 hour before pickup. Second reminder for chef.' },
+          { type: 'user_pickup_reminder_2h', title: 'Pickup reminder (2h)', recipient: 'Customer', scenario: 'Scheduled: 2 hours before pickup. Reminds customer of pickup - Order # shown.' },
+          { type: 'user_pickup_reminder_1h', title: 'Pickup reminder (1h)', recipient: 'Customer', scenario: 'Scheduled: 1 hour before pickup. Second reminder for customer.' },
         ];
         const recipientOrder = [...new Set(notificationItems.map((i) => i.recipient))].sort((a, b) => a.localeCompare(b));
         const grouped = recipientOrder.reduce<{ [key: string]: typeof notificationItems }>((acc, r) => {

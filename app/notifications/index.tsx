@@ -73,7 +73,11 @@ export default function NotificationsPage() {
         'order_placed',
         'order_ready',
         'order_issue_updated',
-        'order_message'
+        'order_message',
+        'chef_pickup_reminder',
+        'chef_pickup_reminder_1h',
+        'user_pickup_reminder_2h',
+        'user_pickup_reminder_1h'
       ];
 
       if (isAdmin) {
@@ -181,6 +185,18 @@ export default function NotificationsPage() {
     // New order request: chefs go to chef dashboard
     if (notification.type === 'new_order_request' && isChef) {
       router.push('/chef');
+      return;
+    }
+
+    // Chef pickup reminders: go to chef dashboard
+    if (notification.type === 'chef_pickup_reminder' || notification.type === 'chef_pickup_reminder_1h') {
+      router.push('/chef');
+      return;
+    }
+
+    // User pickup reminders: go to order tracking
+    if ((notification.type === 'user_pickup_reminder_2h' || notification.type === 'user_pickup_reminder_1h') && notification.related_id) {
+      router.push(`/orders/track?id=${notification.related_id}`);
       return;
     }
     

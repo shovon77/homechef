@@ -17,7 +17,11 @@ export type NotificationType =
   | 'chef_application_rejected'
   | 'new_order_request'
   | 'new_user_signup'
-  | 'review_reply';
+  | 'review_reply'
+  | 'chef_pickup_reminder'
+  | 'chef_pickup_reminder_1h'
+  | 'user_pickup_reminder_2h'
+  | 'user_pickup_reminder_1h';
 
 export interface Notification {
   id: string;
@@ -289,6 +293,59 @@ export async function createChefApplicationRejectedNotification(
     'chef_application_rejected',
     'Chef Application Status',
     reason || 'Your chef application has been reviewed. Please contact support for more information.'
+  );
+}
+
+/**
+ * Create chef pickup reminder (3h before pickup)
+ */
+export async function createChefPickupReminderNotification(
+  chefUserId: string,
+  orderId: number
+): Promise<Notification | null> {
+  return createNotification(
+    chefUserId,
+    'chef_pickup_reminder',
+    'Pickup scheduled for today',
+    'Pickup scheduled for today',
+    orderId,
+    'order'
+  );
+}
+
+/**
+ * Create chef pickup reminder (1h before pickup)
+ */
+export async function createChefPickupReminder1hNotification(
+  chefUserId: string,
+  orderId: number
+): Promise<Notification | null> {
+  return createNotification(
+    chefUserId,
+    'chef_pickup_reminder_1h',
+    'Pickup scheduled for today',
+    'Pickup scheduled for today',
+    orderId,
+    'order'
+  );
+}
+
+/**
+ * Create user pickup reminder (2h or 1h before pickup)
+ */
+export async function createUserPickupReminderNotification(
+  userId: string,
+  orderId: number,
+  type: 'user_pickup_reminder_2h' | 'user_pickup_reminder_1h'
+): Promise<Notification | null> {
+  const orderNum = String(orderId).padStart(5, '0');
+  return createNotification(
+    userId,
+    type,
+    'Pickup scheduled for today',
+    `Pickup scheduled for today - Order #${orderNum}`,
+    orderId,
+    'order'
   );
 }
 

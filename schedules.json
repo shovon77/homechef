@@ -1,6 +1,4 @@
 [
-    {
-      "function": "auto-reject-expired",
-      "schedule": "*/5 * * * *"
-    }
-  ]
+  {"function":"auto-reject-expired","schedule":"*/5 * * * *"},
+  {"function":"pickup-reminders","schedule":"*/15 * * * *"}
+]
