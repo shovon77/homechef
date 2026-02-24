@@ -850,14 +850,14 @@ export default function HomePage() {
                     styles.heroBackgroundImage,
                     {
                       backgroundImage: `url(${bannerUrl})`,
-                      backgroundSize: isMobile ? 'auto 100%' : 'cover',
-                      backgroundPosition: isMobile ? 'left center' : 'center',
+                      backgroundSize: 'cover',
+                      backgroundPosition: 'center',
                       backgroundRepeat: 'no-repeat',
                     } as any,
                   ]}
                 />
-              ) : imageSize && heroLayout ? (
-                <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper, isMobile && styles.heroImageFillHeightWrapperMobile]}>
+              ) : imageSize && heroLayout && !isMobile ? (
+                <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper]}>
                   <Image
                     source={{ uri: bannerUrl }}
                     style={{
@@ -1178,9 +1178,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
-  },
-  heroImageFillHeightWrapperMobile: {
-    alignItems: "flex-start",
   },
   heroOverlay: {
     position: "absolute",
