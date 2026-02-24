@@ -851,13 +851,13 @@ export default function HomePage() {
                     {
                       backgroundImage: `url(${bannerUrl})`,
                       backgroundSize: 'cover',
-                      backgroundPosition: 'center',
+                      backgroundPosition: isMobile ? 'left center' : 'center',
                       backgroundRepeat: 'no-repeat',
                     } as any,
                   ]}
                 />
-              ) : imageSize && heroLayout && !isMobile ? (
-                <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper]}>
+              ) : imageSize && heroLayout ? (
+                <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper, isMobile && styles.heroImageFillHeightWrapperLeft]}>
                   <Image
                     source={{ uri: bannerUrl }}
                     style={{
@@ -1178,6 +1178,9 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     overflow: "hidden",
+  },
+  heroImageFillHeightWrapperLeft: {
+    alignItems: "flex-start",
   },
   heroOverlay: {
     position: "absolute",
