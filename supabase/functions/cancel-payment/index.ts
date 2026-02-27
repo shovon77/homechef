@@ -92,6 +92,17 @@ serve(async (req) => {
       if (reason === 'user_cancelled') {
         await stripe.paymentIntents.cancel(paymentIntentId);
       } else {
+        const pi = await stripe.paymentIntents.retrieve(paymentIntentId, {
+          expand: ['latest_charge'],
+        });
+        const charge = pi.latest_charge;
+        const transferId = typeof charge === 'object' && charge && 'transfer' in charge
+          ? (charge as { transfer?: string | null }).transfer
+          : null;
+
+        if (transferId && typeof transferId === 'string') {
+          await stripe.transfers.createReversal(transferId);
+        }
         await stripe.refunds.create({ payment_intent: paymentIntentId });
       }
     } catch (err) {
