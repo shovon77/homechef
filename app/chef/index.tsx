@@ -310,6 +310,122 @@ export default function ChefDashboard() {
   const [isRecordingReviewReply, setIsRecordingReviewReply] = useState(false);
   const reviewReplyRecognitionRef = useRef<any>(null);
 
+  // Update pickup date/time modal
+  const [showPickupUpdateModal, setShowPickupUpdateModal] = useState(false);
+  const [pickupUpdateOrderId, setPickupUpdateOrderId] = useState<number | null>(null);
+  const [pickupUpdateDate, setPickupUpdateDate] = useState<Date | null>(null);
+  const [pickupUpdateTime, setPickupUpdateTime] = useState<string>('');
+  const [updatingPickup, setUpdatingPickup] = useState(false);
+  // Min datetime: order's current pickup_at (or now if null) - chef cannot select earlier
+  const [pickupUpdateMinDatetime, setPickupUpdateMinDatetime] = useState<Date | null>(null);
+
+  const pickupUpdateAvailableDates = useMemo(() => {
+    const min = pickupUpdateMinDatetime;
+    if (!min) return [];
+    const start = new Date(min);
+    start.setHours(0, 0, 0, 0);
+    return Array.from({ length: 6 }, (_, i) => {
+      const d = new Date(start);
+      d.setDate(start.getDate() + i);
+      return d;
+    });
+  }, [pickupUpdateMinDatetime]);
+
+  const pickupUpdateTimeSlots = useMemo(() => {
+    const slots: Array<{ value: string; label: string }> = [];
+    const min = pickupUpdateMinDatetime;
+    let minHour = 8;
+    if (min) {
+      minHour = min.getHours();
+      if (min.getMinutes() > 0) minHour += 1;
+    }
+
+    for (let hour = 8; hour <= 20; hour++) {
+      const hour24 = hour.toString().padStart(2, '0');
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour < 12 ? 'AM' : 'PM';
+      slots.push({ value: `${hour24}:00`, label: `${hour12}:00 ${ampm}` });
+    }
+
+    if (!pickupUpdateDate || !min) return slots;
+
+    const selectedDayStart = new Date(pickupUpdateDate);
+    selectedDayStart.setHours(0, 0, 0, 0);
+    const minDayStart = new Date(min);
+    minDayStart.setHours(0, 0, 0, 0);
+
+    if (selectedDayStart.getTime() === minDayStart.getTime()) {
+      return slots.filter((slot) => {
+        const [h] = slot.value.split(':').map(Number);
+        return h >= minHour;
+      });
+    }
+    return slots;
+  }, [pickupUpdateMinDatetime, pickupUpdateDate]);
+
+  function handleOpenPickupUpdateModal(order: OrderRow) {
+    setPickupUpdateOrderId(order.id);
+    const now = new Date();
+
+    let minDt: Date;
+    if (order.pickup_at) {
+      minDt = new Date(order.pickup_at);
+    } else {
+      minDt = new Date(now);
+      if (minDt.getHours() >= 20 || (minDt.getHours() === 19 && minDt.getMinutes() > 0)) {
+        const tomorrow = new Date(now);
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        tomorrow.setHours(8, 0, 0, 0);
+        minDt = tomorrow;
+      }
+    }
+    setPickupUpdateMinDatetime(minDt);
+
+    const minDate = new Date(minDt);
+    minDate.setHours(0, 0, 0, 0);
+    setPickupUpdateDate(minDate);
+
+    const h = minDt.getMinutes() > 0 ? minDt.getHours() + 1 : minDt.getHours();
+    const hClamped = Math.min(20, Math.max(8, h));
+    setPickupUpdateTime(`${hClamped.toString().padStart(2, '0')}:00`);
+
+    setShowPickupUpdateModal(true);
+  }
+
+  async function handleUpdatePickup() {
+    if (!chef || !pickupUpdateOrderId || !pickupUpdateDate || !pickupUpdateTime || !pickupUpdateMinDatetime) return;
+    const [hour, minute] = pickupUpdateTime.split(':').map(Number);
+    const combined = new Date(pickupUpdateDate);
+    combined.setHours(hour, minute ?? 0, 0, 0);
+
+    if (combined.getTime() < pickupUpdateMinDatetime.getTime()) {
+      setErr('Pickup date/time cannot be earlier than the current pickup time.');
+      return;
+    }
+
+    setUpdatingPickup(true);
+    setErr(null);
+    try {
+      const { error } = await supabase
+        .from('orders')
+        .update({ pickup_at: combined.toISOString() })
+        .eq('id', pickupUpdateOrderId);
+      if (error) throw error;
+      setMsg('Pickup date/time updated ✓');
+      setTimeout(() => setMsg(null), 3000);
+      setShowPickupUpdateModal(false);
+      setPickupUpdateOrderId(null);
+      setPickupUpdateDate(null);
+      setPickupUpdateTime('');
+      setPickupUpdateMinDatetime(null);
+      await refreshOrdersForChef(chef.id);
+    } catch (e: any) {
+      setErr('Update failed: ' + (e.message || String(e)));
+    } finally {
+      setUpdatingPickup(false);
+    }
+  }
+
   const showInfo = (title: string, message: string) => {
     setInfoModalTitle(title);
     setInfoModalMessage(message);
@@ -2245,6 +2361,14 @@ export default function ChefDashboard() {
                       <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                     </TouchableOpacity>
                   )}
+                  {['requested', 'pending', 'ready'].includes(order.status) && (
+                    <TouchableOpacity
+                      onPress={() => handleOpenPickupUpdateModal(order)}
+                      style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
+                    >
+                      <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               </View>
             ))
@@ -2923,6 +3047,14 @@ export default function ChefDashboard() {
                               <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                             </TouchableOpacity>
                           )}
+                          {['requested', 'pending', 'ready'].includes(order.status) && (
+                            <TouchableOpacity
+                              onPress={() => handleOpenPickupUpdateModal(order)}
+                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
+                            >
+                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                            </TouchableOpacity>
+                          )}
                         </View>
                       </View>
                     ))
@@ -3146,6 +3278,14 @@ export default function ChefDashboard() {
                               style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
                             >
                               <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                            </TouchableOpacity>
+                          )}
+                          {['requested', 'pending', 'ready'].includes(order.status) && (
+                            <TouchableOpacity
+                              onPress={() => handleOpenPickupUpdateModal(order)}
+                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
+                            >
+                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
                             </TouchableOpacity>
                           )}
                         </View>
@@ -3557,6 +3697,119 @@ export default function ChefDashboard() {
                 </View>
               </View>
             </View>
+          </View>
+        </View>
+      </Modal>
+
+      {/* Update Pickup Date/Time Modal */}
+      <Modal
+        visible={showPickupUpdateModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setShowPickupUpdateModal(false);
+          setPickupUpdateMinDatetime(null);
+        }}
+      >
+        <View style={{
+          flex: 1,
+          backgroundColor: 'rgba(0, 0, 0, 0.1)',
+          justifyContent: 'flex-end',
+        }}>
+          <View style={{
+            backgroundColor: BG_LIGHT,
+            borderTopLeftRadius: 20,
+            borderTopRightRadius: 20,
+            paddingBottom: Platform.select({ ios: 34, default: 20 }),
+            maxHeight: '70%',
+          }}>
+            <View style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              padding: theme.spacing.lg,
+              borderBottomWidth: 1,
+              borderBottomColor: BORDER_LIGHT,
+            }}>
+              <TouchableOpacity onPress={() => {
+                setShowPickupUpdateModal(false);
+                setPickupUpdateMinDatetime(null);
+              }}>
+                <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>Cancel</Text>
+              </TouchableOpacity>
+              <Text style={{ color: TEXT_DARK, fontSize: theme.typography.fontSize.lg, fontFamily: theme.typography.fontFamily.display, fontWeight: theme.typography.fontWeight.bold as any }}>Update pickup date/time</Text>
+              <TouchableOpacity
+                onPress={handleUpdatePickup}
+                disabled={!pickupUpdateDate || !pickupUpdateTime || updatingPickup}
+              >
+                <Text style={{ color: (!pickupUpdateDate || !pickupUpdateTime || updatingPickup) ? TEXT_MUTED : PRIMARY_COLOR, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.display, fontWeight: theme.typography.fontWeight.bold as any }}>Update</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', gap: theme.spacing.md, alignItems: 'flex-start', paddingHorizontal: theme.spacing.lg, paddingTop: theme.spacing.lg }}>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ color: TEXT_DARK, fontSize: theme.typography.fontSize.lg, fontFamily: theme.typography.fontFamily.display, fontWeight: theme.typography.fontWeight.bold as any, marginBottom: 4, textAlign: 'center', width: '100%' }}>Date</Text>
+                <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
+                  {pickupUpdateAvailableDates.map((date, index) => {
+                    const isSelected = pickupUpdateDate?.toDateString() === date.toDateString();
+                    return (
+                      <TouchableOpacity
+                        key={index}
+                        onPress={() => {
+                          setPickupUpdateDate(date);
+                          if (pickupUpdateMinDatetime && date.toDateString() === new Date(pickupUpdateMinDatetime).toDateString()) {
+                            const minH = pickupUpdateMinDatetime.getHours();
+                            const [h] = (pickupUpdateTime || '08:00').split(':').map(Number);
+                            if (h < minH) setPickupUpdateTime(`${minH.toString().padStart(2, '0')}:00`);
+                          }
+                        }}
+                        style={{ paddingVertical: 12, alignItems: 'center' }}
+                      >
+                        <Text style={{ color: isSelected ? PRIMARY_COLOR : TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: isSelected ? theme.typography.fontFamily.display : theme.typography.fontFamily.body, fontWeight: isSelected ? (theme.typography.fontWeight.bold as any) : undefined }}>
+                          {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+              <View style={{ flex: 1, alignItems: 'center' }}>
+                <Text style={{ color: TEXT_DARK, fontSize: theme.typography.fontSize.lg, fontFamily: theme.typography.fontFamily.display, fontWeight: theme.typography.fontWeight.bold as any, marginBottom: 4, textAlign: 'center', width: '100%' }}>Time</Text>
+                <ScrollView style={{ maxHeight: 280 }} contentContainerStyle={{ paddingVertical: 12 }} showsVerticalScrollIndicator={false}>
+                  {pickupUpdateTimeSlots.map((slot) => {
+                    const isSelected = pickupUpdateTime === slot.value;
+                    return (
+                      <TouchableOpacity
+                        key={slot.value}
+                        onPress={() => setPickupUpdateTime(slot.value)}
+                        style={{ paddingVertical: 12, alignItems: 'center' }}
+                      >
+                        <Text style={{ color: isSelected ? PRIMARY_COLOR : TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: isSelected ? theme.typography.fontFamily.display : theme.typography.fontFamily.body, fontWeight: isSelected ? (theme.typography.fontWeight.bold as any) : undefined }}>
+                          {slot.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })}
+                </ScrollView>
+              </View>
+            </View>
+            <TouchableOpacity
+              style={{
+                backgroundColor: PRIMARY_COLOR,
+                padding: theme.spacing.md,
+                borderRadius: theme.radius.lg,
+                margin: theme.spacing.lg,
+                alignItems: 'center',
+                opacity: (!pickupUpdateDate || !pickupUpdateTime || updatingPickup) ? 0.6 : 1,
+              }}
+              onPress={handleUpdatePickup}
+              disabled={!pickupUpdateDate || !pickupUpdateTime || updatingPickup}
+            >
+              {updatingPickup ? (
+                <ActivityIndicator size="small" color="#FFFFFF" />
+              ) : (
+                <Text style={{ color: '#FFFFFF', fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.display, fontWeight: theme.typography.fontWeight.bold as any }}>Update pickup</Text>
+              )}
+            </TouchableOpacity>
           </View>
         </View>
       </Modal>
@@ -4312,21 +4565,9 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
         </View>
         <View style={{ 
               flexDirection: 'row', 
-              gap: 8
+              gap: 8,
+              justifyContent: 'space-between'
             }}>
-              <TouchableOpacity
-                onPress={() => onSave({ id: dish.id, name: name.trim(), price: price, description: description.trim(), ingredients: ingredients.trim(), file, preview })}
-                disabled={saving}
-                style={{ 
-                  backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
-                  paddingVertical: 10, 
-                  paddingHorizontal: 24, 
-                  borderRadius: 8,
-                  opacity: saving ? 0.6 : 1
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Save</Text>
-              </TouchableOpacity>
               <TouchableOpacity
                 onPress={() => (dish.is_active !== false ? onDeactivate(dish.id) : onActivate(dish.id))}
                 disabled={saving}
@@ -4340,7 +4581,20 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
                   opacity: saving ? 0.6 : 1
                 }}
               >
-                <Text style={{ color: dish.is_active !== false ? '#E84343' : '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{dish.is_active !== false ? 'Deactivate' : 'Activate'}</Text>
+                <Text style={{ color: dish.is_active !== false ? '#E84343' : '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{dish.is_active !== false ? 'Hide' : 'Show'}</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={() => onSave({ id: dish.id, name: name.trim(), price: price, description: description.trim(), ingredients: ingredients.trim(), file, preview })}
+                disabled={saving}
+                style={{ 
+                  backgroundColor: saving ? PRIMARY_COLOR + '80' : PRIMARY_COLOR, 
+                  paddingVertical: 10, 
+                  paddingHorizontal: 24, 
+                  borderRadius: 8,
+                  opacity: saving ? 0.6 : 1
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Save</Text>
               </TouchableOpacity>
             </View>
         </View>
