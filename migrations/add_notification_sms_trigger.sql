@@ -26,6 +26,7 @@ BEGIN
   v_body := jsonb_build_object(
     'record',
     jsonb_build_object(
+      'id', NEW.id,
       'user_id', NEW.user_id,
       'title', COALESCE(NEW.title, ''),
       'message', COALESCE(NEW.message, '')

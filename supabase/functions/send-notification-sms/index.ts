@@ -52,13 +52,15 @@ serve(async (req) => {
     const body = await req.json().catch(() => null);
     console.log('[send-notification-sms] received', JSON.stringify(body?.record || body));
 
+    let notificationId: string | undefined;
     let userId: string;
     let title: string;
     let message: string;
     // Support direct invoke: { user_id, title, message }
-    // Support Supabase Database Webhook: { type, table, record: { user_id, title, message } }
+    // Support Supabase Database Webhook: { type, table, record: { id, user_id, title, message } }
     if (body?.record) {
       const r = body.record;
+      notificationId = r.id;
       userId = r.user_id;
       title = r.title ?? '';
       message = r.message ?? '';
@@ -117,6 +119,9 @@ serve(async (req) => {
       return json(502, { error: twilioJson?.message || 'Twilio send failed' });
     }
 
+    if (notificationId) {
+      await adminClient.from('notifications').update({ sms_sent: true, sms_sid: twilioJson?.sid ?? null }).eq('id', notificationId).then(() => {});
+    }
     console.log('[send-notification-sms] sent ok sid=', twilioJson.sid);
     return json(200, { ok: true, sid: twilioJson.sid });
   } catch (err) {

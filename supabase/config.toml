@@ -1,6 +1,9 @@
 [functions.send-notification-sms]
 verify_jwt = false
 
+[functions.backfill-sms-sent]
+verify_jwt = false
+
 [functions.stripe-webhook]
 verify_jwt = false
 

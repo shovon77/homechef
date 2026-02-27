@@ -1,0 +1,13 @@
+-- ============================================
+-- Backfill sms_sent for existing notifications
+-- ============================================
+-- This migration is NO LONGER USED. Use the Edge Function instead:
+--
+--   supabase functions deploy backfill-sms-sent
+--   supabase functions invoke backfill-sms-sent --no-verify-jwt
+--
+-- The Edge Function fetches Twilio message history and matches it to
+-- notifications by body, recipient phone, and timestamp. Only notifications
+-- with a matching Twilio message are marked sms_sent = true.
+--
+-- Run add_notification_sms_sent_columns.sql first, then invoke the function.

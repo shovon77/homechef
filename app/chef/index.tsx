@@ -23,7 +23,7 @@ import { formatCad, cents } from '../../lib/money';
 import { useRole } from '../../hooks/useRole';
 import type { Profile, OrderStatus } from '../../lib/types';
 import FilePicker from '../../components/FilePicker';
-import { createNotification } from '../../lib/notifications';
+import { createNotification, createOrderRejectedNotification } from '../../lib/notifications';
 import { Stars } from '../../components/ui/Stars';
 
 // Colors matching homepage
@@ -2313,6 +2313,7 @@ export default function ChefDashboard() {
                         onPress={async () => {
                           try {
                             await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                            await createOrderRejectedNotification(order.user_id, order.id);
                             await refreshOrdersForChef(chef!.id);
                           } catch (err: any) {
                             Alert.alert('Reject failed', err?.message || 'Unable to reject order');
@@ -2999,6 +3000,7 @@ export default function ChefDashboard() {
                                 onPress={async () => {
                                   try {
                                     await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                    await createOrderRejectedNotification(order.user_id, order.id);
                                     await refreshOrdersForChef(chef!.id);
                                   } catch (err: any) {
                                     Alert.alert('Reject failed', err?.message || 'Unable to reject order');
@@ -3232,6 +3234,7 @@ export default function ChefDashboard() {
                                 onPress={async () => {
                                   try {
                                     await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
+                                    await createOrderRejectedNotification(order.user_id, order.id);
                                     await refreshOrdersForChef(chef!.id);
                                   } catch (err: any) {
                                     Alert.alert('Reject failed', err?.message || 'Unable to reject order');

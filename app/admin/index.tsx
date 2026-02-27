@@ -572,7 +572,7 @@ export default function AdminPage() {
       // Load all notifications for admin log (requires admin RLS policy)
       const { data: notificationsData } = await supabase
         .from('notifications')
-        .select('id, user_id, type, title, message, created_at')
+        .select('id, user_id, type, title, message, created_at, sms_sent, sms_sid')
         .order('created_at', { ascending: false })
         .limit(500);
       
@@ -3206,14 +3206,14 @@ export default function AdminPage() {
                   <Text style={[styles.tableCell, isMobile ? { width: 280, minWidth: 280 } : { flex: 2 }]}>
                     {n.title ? `${n.title}: ${n.message}` : n.message}
                   </Text>
-                  <Text style={[styles.tableCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }, { color: palette.muted }]}>
-                    —
+                  <Text style={[styles.tableCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }]}>
+                    {[n.title, n.message].filter(Boolean).join(' - ') || '—'}
                   </Text>
                   <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, { color: palette.muted }]}>
                     —
                   </Text>
-                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, { color: palette.muted }]}>
-                    —
+                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
+                    {n.sms_sid ? 'Yes' : '—'}
                   </Text>
                 </View>
               ))}
@@ -3409,6 +3409,7 @@ export default function AdminPage() {
           { type: 'order_placed', title: 'Order confirmed', recipient: 'Customer', scenario: 'When the chef accepts the order. Notifies the customer that the chef will start preparing.' },
           { type: 'order_ready', title: 'Order ready for pickup', recipient: 'Customer', scenario: 'When the chef marks an order as "ready". Tells the customer to collect the order from the chef.' },
           { type: 'order_message', title: 'New message in order', recipient: 'Customer or chef', scenario: 'When a customer sends a message about an order (from order success or track page), the chef is notified. When a chef sends a message from the chef dashboard, the customer is notified.' },
+          { type: 'order_rejected', title: 'Order rejected or expired', recipient: 'Customer', scenario: 'When a chef rejects an order, or when an order expires without chef acceptance. Notifies the customer that their order was rejected/expired and the refund will be processed immediately.' },
           { type: 'order_issue_updated', title: 'Order issue updated', recipient: 'Customer', scenario: 'When an admin updates the status of a reported issue (e.g. refunded, in review). Notifies the customer of the update.' },
           { type: 'issue_reported', title: 'Issue reported', recipient: 'Admins', scenario: 'When a customer reports an issue with an order from the order tracking page. All admins are notified to review.' },
           { type: 'chef_request', title: 'New chef request', recipient: 'Admins', scenario: 'When a user submits a chef application (becomes a chef). All admins are notified to review the application.' },

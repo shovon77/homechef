@@ -423,6 +423,7 @@ export default function NavBar() {
         'order_ready',
         'order_issue_updated',
         'order_message',
+        'order_rejected',
         'chef_pickup_reminder',
         'chef_pickup_reminder_1h',
         'user_pickup_reminder_2h',

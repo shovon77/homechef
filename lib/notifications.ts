@@ -10,6 +10,7 @@ export type NotificationType =
   | 'order_ready'
   | 'order_issue_updated'
   | 'order_message'
+  | 'order_rejected'
   | 'issue_reported'
   | 'chef_request'
   | 'chef_application_submitted'
@@ -197,6 +198,24 @@ export async function createOrderIssueUpdatedNotification(
     'order_issue_updated',
     'Order Issue Updated',
     'There has been an update regarding an issue with your order.',
+    orderId,
+    'order'
+  );
+}
+
+/**
+ * Create order rejected notification (when chef rejects order)
+ */
+export async function createOrderRejectedNotification(
+  userId: string,
+  orderId: number
+): Promise<Notification | null> {
+  const orderNum = String(orderId).padStart(5, '0');
+  return createNotification(
+    userId,
+    'order_rejected',
+    'Order Rejected',
+    `Your order #${orderNum} was rejected by the chef. Your refund will be processed immediately.`,
     orderId,
     'order'
   );

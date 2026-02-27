@@ -3,6 +3,8 @@ import { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, ScrollView, useWindowDimensions, Platform } from 'react-native';
 import { theme } from '../lib/theme';
 
+const BRAND_BLACK = '#33393A';
+
 type TabConfig = { key: string; title: string; content: JSX.Element }[];
 
 type TabsProps = {
@@ -123,16 +125,16 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   tabText: {
-    color: '#33393A',
+    color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: '600',
+    fontWeight: '400',
     letterSpacing: theme.typography.letterSpacing.wide,
     fontFamily: theme.typography.fontFamily.body,
   },
   tabTextActive: {
     color: '#FFFFFF',
-    fontWeight: '700',
-    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
   },
   content: {
     flex: 1,
