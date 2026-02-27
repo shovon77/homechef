@@ -2659,7 +2659,7 @@ export default function ChefDashboard() {
   return (
     <Screen style={{ backgroundColor: BG_PAGE }}>
       <View style={[styles.page, isMobile && styles.pageMobile]}>
-        {Sidebar}
+        {isMobile ? Sidebar : null}
         <View style={styles.content}>
           {/* Render TabBar once at the top level to prevent reloading - use literal hex so web never shows white */}
           <View style={{ backgroundColor: '#F2F0EF', paddingTop: 12, paddingHorizontal: 32, paddingBottom: 0, borderTopWidth: 0, borderTopColor: 'transparent' }} data-testid="chef-dashboard-header-area">

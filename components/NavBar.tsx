@@ -43,7 +43,7 @@ const BORDER_LIGHT = '#E5E7EB';
 const MAXW = 1280; // max-w-7xl
 
 // Generic NavButton component with animation support
-function NavButton({ href, label, isActive, icon: Icon }: { href: string, label: string, isActive: boolean, icon?: any }) {
+function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: string, label: string, isActive: boolean, icon?: any, iconSource?: any }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const activeColor = '#FE734C'; // Updated brand color
@@ -69,7 +69,7 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       flexWrap: 'nowrap',
     };
     const textStyle = {
-      fontWeight: theme.typography.fontWeight.normal,
+      fontWeight: '400',
       color: isActive ? '#FFFFFF' : TEXT_DARK,
       fontFamily: theme.typography.fontFamily.body,
       fontSize: '14px',
@@ -87,6 +87,9 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
           style={containerStyle}
         >
           {Icon && <Icon size={18} strokeWidth={2.2} color={isActive ? '#FFFFFF' : TEXT_DARK} />}
+          {iconSource && !Icon && (
+            <Image source={iconSource} style={styles.navActionIcon as any} tintColor={isActive ? '#FFFFFF' : PRIMARY_COLOR} resizeMode="contain" />
+          )}
           <span style={textStyle}>{label}</span>
         </MotionDiv>
       </Link>
@@ -99,13 +102,18 @@ function NavButton({ href, label, isActive, icon: Icon }: { href: string, label:
       <TouchableOpacity 
         style={StyleSheet.flatten([
           styles.navLink,
+          { flexDirection: 'row', alignItems: 'center', gap: 6 },
           isMobile && { paddingHorizontal: 8, paddingVertical: 8 },
           isActive && { backgroundColor: activeColor, borderRadius: 8, marginRight: 8 } // Add margin when active to prevent touching location icon
         ])}
       >
+        {Icon && <Icon size={18} strokeWidth={2.2} color={isActive ? '#FFFFFF' : TEXT_DARK} />}
+        {iconSource && !Icon && (
+          <Image source={iconSource} style={styles.navActionIcon as any} tintColor={isActive ? '#FFFFFF' : PRIMARY_COLOR} resizeMode="contain" />
+        )}
         <Text style={StyleSheet.flatten([
           styles.navLinkText, 
-          isActive && { color: '#FFFFFF' }
+          isActive && { color: '#FFFFFF', fontWeight: '400' }
         ])} numberOfLines={1}>
           {label}
         </Text>
@@ -136,6 +144,7 @@ export default function NavBar() {
   const isFaqPage = pathname.startsWith('/faq');
   const isAboutPage = pathname.startsWith('/about');
   const isTermsPage = pathname.startsWith('/terms');
+  const isProfilePage = pathname.startsWith('/profile') || pathname === '/chef/profile' || pathname.startsWith('/chef/profile');
   
   const [hasActiveOrder, setHasActiveOrder] = useState(false)
   const [hasReadyOrder, setHasReadyOrder] = useState(false)
@@ -943,8 +952,55 @@ export default function NavBar() {
             </>
           ) : (
             <>
+          <View style={styles.desktopNavLinksGroup}>
+            {/* About us button - show for all users */}
+            <NavButton href="/about" label="About Us" isActive={isAboutPage} iconSource={require('../assets/idea.png')} />
+            {/* FAQ button - only show in navbar if user is not logged in or is admin/chef, otherwise it's in menu */}
+            {(!loggedIn || isAdmin || isChef) && (
+              <NavButton href="/faq" label="FAQ" isActive={isFaqPage} iconSource={require('../assets/list.png')} />
+            )}
+            {/* Legal button - show for all users */}
+            <NavButton href="/terms" label="Legal" isActive={isTermsPage} iconSource={require('../assets/folder.png')} />
+          </View>
+          {loggedIn && (
+            <TouchableOpacity 
+              onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
+              style={styles.notificationsButton}
+            >
+              <Image 
+                source={require('../assets/alarm.png')} 
+                style={styles.notificationsIconImage as any}
+                tintColor={PRIMARY_COLOR}
+                resizeMode="contain"
+              />
+              {notifications.filter(n => !n.read).length > 0 && (
+                <View style={styles.notificationBadge}>
+                  <Text style={styles.notificationBadgeText}>
+                    {notifications.filter(n => !n.read).length > 9 ? '9+' : notifications.filter(n => !n.read).length}
+                  </Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          )}
+          {!isChefSignupPage && (
+          <Link href="/cart" asChild>
+            <TouchableOpacity style={styles.cartButton}>
+              <Image 
+                source={require('../assets/shopping-cart.png')} 
+                style={styles.cartIconImage as any}
+                tintColor={PRIMARY_COLOR}
+                resizeMode="contain"
+              />
+              {cartQty > 0 && (
+                <View style={styles.cartBadge}>
+                  <Text style={styles.cartBadgeText}>{cartQty}</Text>
+                </View>
+              )}
+            </TouchableOpacity>
+          </Link>
+          )}
           {loggedIn ? (
-            <>
+            <View style={styles.desktopNavLinksGroup}>
               <TouchableOpacity
                 onPress={() => {
                   // Role-aware profile routing
@@ -957,9 +1013,24 @@ export default function NavBar() {
                     router.push('/profile?tab=settings');
                   }
                 }}
-                    style={styles.primaryButton}
+                style={StyleSheet.flatten([
+                  styles.navLink,
+                  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+                  isProfilePage && { backgroundColor: PRIMARY_COLOR, marginRight: 8 },
+                  Platform.OS === 'web' && { outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' }
+                ])}
               >
-                  <Text style={[styles.primaryButtonText, { color: PRIMARY_COLOR }]}>Profile</Text>
+                <Image
+                  source={require('../assets/user.png')}
+                  style={styles.navActionIcon as any}
+                  tintColor={isProfilePage ? '#FFFFFF' : PRIMARY_COLOR}
+                  resizeMode="contain"
+                />
+                <Text style={StyleSheet.flatten([
+                  styles.navLinkText,
+                  { color: BRAND_BLACK, fontWeight: '400' },
+                  isProfilePage && { color: '#FFFFFF' }
+                ])}>Profile</Text>
               </TouchableOpacity>
               <TouchableOpacity
                 onPress={async () => { 
@@ -1039,63 +1110,27 @@ export default function NavBar() {
                     }
                   }, 300);
                 }}
-                    style={styles.secondaryButton}
+                style={StyleSheet.flatten([
+                  styles.navLink,
+                  { flexDirection: 'row', alignItems: 'center', gap: 6 },
+                  Platform.OS === 'web' && { outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' }
+                ])}
               >
-                  <Text style={styles.secondaryButtonText}>Logout</Text>
+                <Image
+                  source={require('../assets/exit.png')}
+                  style={styles.navActionIcon as any}
+                  tintColor={PRIMARY_COLOR}
+                  resizeMode="contain"
+                />
+                <Text style={[styles.navLinkText, { color: BRAND_BLACK, fontWeight: '400' }]}>Logout</Text>
               </TouchableOpacity>
-            </>
+            </View>
           ) : (
               <Link href="/auth" asChild>
                   <TouchableOpacity style={styles.secondaryButton}>
                   <Text style={styles.secondaryButtonText}>Login / Sign-up</Text>
                 </TouchableOpacity>
               </Link>
-          )}
-
-          {/* About us button - show for all users */}
-          <NavButton href="/about" label="About Us" isActive={isAboutPage} />
-          {/* FAQ button - only show in navbar if user is not logged in or is admin/chef, otherwise it's in menu */}
-          {(!loggedIn || isAdmin || isChef) && (
-            <NavButton href="/faq" label="FAQ" isActive={isFaqPage} />
-          )}
-          {/* Legal button - show for all users */}
-          <NavButton href="/terms" label="Legal" isActive={isTermsPage} />
-          {loggedIn && (
-            <TouchableOpacity 
-              onPress={() => setIsNotificationsOpen(!isNotificationsOpen)}
-              style={styles.notificationsButton}
-            >
-              <Image 
-                source={require('../assets/alarm.png')} 
-                style={styles.notificationsIconImage as any}
-                tintColor={PRIMARY_COLOR}
-                resizeMode="contain"
-              />
-              {notifications.filter(n => !n.read).length > 0 && (
-                <View style={styles.notificationBadge}>
-                  <Text style={styles.notificationBadgeText}>
-                    {notifications.filter(n => !n.read).length > 9 ? '9+' : notifications.filter(n => !n.read).length}
-                  </Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          )}
-          {!isChefSignupPage && (
-          <Link href="/cart" asChild>
-            <TouchableOpacity style={styles.cartButton}>
-              <Image 
-                source={require('../assets/shopping-cart.png')} 
-                style={styles.cartIconImage as any}
-                tintColor={PRIMARY_COLOR}
-                resizeMode="contain"
-              />
-              {cartQty > 0 && (
-                <View style={styles.cartBadge}>
-                  <Text style={styles.cartBadgeText}>{cartQty}</Text>
-                </View>
-              )}
-            </TouchableOpacity>
-          </Link>
           )}
             </>
           )}
@@ -1708,10 +1743,19 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     letterSpacing: 0.015,
   },
+  navActionIcon: {
+    width: 18,
+    height: 18,
+  },
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 0,
+    gap: 12,
+  },
+  desktopNavLinksGroup: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   locationNavButton: {
     flexDirection: 'row',
