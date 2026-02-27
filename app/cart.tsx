@@ -747,12 +747,14 @@ const styles = StyleSheet.create({
     gap: theme.spacing['2xl'],
   },
   desktopLayout: {
-    flexDirection: 'row',
+    flexDirection: 'column',
     gap: theme.spacing['2xl'],
-    alignItems: 'flex-start',
+    alignItems: 'center',
   },
   cartItemsColumn: {
-    width: Platform.select({ web: 400, default: '100%' }),
+    width: Platform.select({ web: 500, default: '100%' }),
+    maxWidth: '100%',
+    alignSelf: 'center',
   },
   cartItemsList: {
     backgroundColor: '#FFFFFF',
@@ -861,7 +863,9 @@ const styles = StyleSheet.create({
     fontSize: 20,
   },
   orderSummaryColumn: {
-    width: Platform.select({ web: 400, default: '100%' }),
+    width: Platform.select({ web: 500, default: '100%' }),
+    maxWidth: '100%',
+    alignSelf: 'center',
   },
   orderSummaryCard: {
     backgroundColor: '#FFFFFF',
@@ -870,12 +874,6 @@ const styles = StyleSheet.create({
     borderColor: BORDER_COLOR,
     padding: theme.spacing.xl,
     gap: theme.spacing.md,
-    ...Platform.select({
-      web: {
-        position: 'sticky',
-        top: 96,
-      },
-    }),
   },
   orderSummaryTitle: {
     color: TEXT_DARK,
