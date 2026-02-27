@@ -212,7 +212,7 @@ export const handler = async (req: Request) => {
     // 4) Create (or upsert) an order row in 'orders' with status 'requested'
     // We use 'requested' because it is a valid status in the DB constraint.
     // We will hide unpaid orders from the chef dashboard using payment_status.
-    const expiresAt = new Date(Date.now() + 60 * 60 * 1000);
+    const expiresAt = new Date(Date.now() + 30 * 60 * 1000);
     const { data: orderRow, error: orderError } = await adminClient
       .from('orders')
       .insert({
