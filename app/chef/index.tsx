@@ -2185,7 +2185,7 @@ export default function ChefDashboard() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
                 <TouchableOpacity
-                  onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales for service')}
+                  onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales as service fee')}
                   style={{ padding: 4 }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -2917,7 +2917,7 @@ export default function ChefDashboard() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
                         <TouchableOpacity
-                          onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales for service')}
+                          onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales as service fee')}
                           style={{ padding: 4 }}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
@@ -3954,7 +3954,7 @@ export default function ChefDashboard() {
               }}
             >
               <Text style={{ color: '#FFFFFF', fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>
-                OK
+                Okay
               </Text>
             </TouchableOpacity>
           </TouchableOpacity>
