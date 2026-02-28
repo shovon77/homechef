@@ -85,6 +85,26 @@ export const handler = async (req: Request) => {
       // Don't fail the request if update fails
     }
 
+    // Update chefs: stripe_connect_completed = true, status = 'paused' (chef must toggle to Active to list dishes)
+    if (account.charges_enabled) {
+      try {
+        const { error: chefByUserErr } = await supabase
+          .from('chefs')
+          .update({ stripe_connect_completed: true, status: 'paused' })
+          .eq('user_id', profile.id);
+        if (chefByUserErr) console.warn('get-connect-status chef update by user_id', chefByUserErr);
+        if (user.email) {
+          const { error: chefByEmailErr } = await supabase
+            .from('chefs')
+            .update({ stripe_connect_completed: true, status: 'paused' })
+            .eq('email', user.email);
+          if (chefByEmailErr) console.warn('get-connect-status chef update by email', chefByEmailErr);
+        }
+      } catch (err) {
+        console.warn('get-connect-status chef update error', err);
+      }
+    }
+
     return respond(200, {
       hasAccount: true,
       accountId: account.id,

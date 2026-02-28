@@ -44,7 +44,7 @@ const INPUT_NO_FOCUS_OUTLINE = Platform.select({
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
+type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -934,7 +934,7 @@ export default function ChefDashboard() {
       // Include: payment_status='succeeded' OR (payment_status IS NULL AND has stripe_payment_intent_id)
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
+        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,platform_commission_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
         .eq('chef_id', chefId)
         .in('status', ['requested', 'pending', 'ready', 'completed', 'cancelled', 'rejected'])
         .order('created_at', { ascending: false });
@@ -1038,6 +1038,7 @@ export default function ChefDashboard() {
         status: order.status,
         total_cents: order.total_cents ?? 0,
         subtotal_cents: order.subtotal_cents ?? null,
+        platform_commission_cents: order.platform_commission_cents ?? null,
         created_at: order.created_at,
         pickup_at: order.pickup_at ?? null,
         user_email: emailMap.get(order.user_id) ?? undefined,
@@ -1202,10 +1203,17 @@ export default function ChefDashboard() {
       return true;
     });
     
-    const grossSales = completedOrders.reduce((sum, order) => sum + (order.subtotal_cents ?? order.total_cents ?? 0), 0);
+    // Gross sales = food-only amount (subtotal). total_cents = subtotal + platform_fee, so fallback: total - fee
+    const grossSales = completedOrders.reduce((sum, order) => {
+      const subtotal = order.subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0));
+      return sum + subtotal;
+    }, 0);
+    // Platform commission = 10% of subtotal. Use stored platform_commission_cents when available
     const platformCommission = completedOrders.reduce((sum, order) => {
-      const subtotal = order.subtotal_cents ?? order.total_cents ?? 0;
-      return sum + Math.round(subtotal * 0.10); // 10% commission
+      const stored = order.platform_commission_cents;
+      if (typeof stored === 'number' && stored >= 0) return sum + stored;
+      const subtotal = order.subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0));
+      return sum + Math.round(subtotal * 0.10);
     }, 0);
     const netEarnings = grossSales - platformCommission;
     
@@ -1878,7 +1886,9 @@ export default function ChefDashboard() {
 
   const chefStatus = chef?.status ?? 'pending';
   const isChefActive = chefStatus === 'active';
-  const canToggleStatus = chefStatus === 'active' || chefStatus === 'paused' || chefStatus === 'pending';
+  const isApplicationPending = chefStatus === 'pending';
+  const isPendingStripeConnect = !isApplicationPending && (!chargesEnabled || !stripeAccountId);
+  const canToggleStatus = chefStatus === 'active' || chefStatus === 'paused';
 
   const handleToggleChefStatus = async () => {
     if (!chef || !canToggleStatus || saving) return;
@@ -1902,19 +1912,29 @@ export default function ChefDashboard() {
     <View style={styles.welcomeHeader}>
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
       <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
-      <View style={[styles.statusToggleRow, !canToggleStatus && styles.statusToggleDisabled]}>
-        <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused]}>
-          {isChefActive ? 'Active' : 'Paused'}
-        </Text>
-        <Switch
-          value={isChefActive}
-          onValueChange={() => handleToggleChefStatus()}
-          disabled={!canToggleStatus || saving}
-          trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
-          thumbColor="#FFFFFF"
-          {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
-        />
-      </View>
+      {isApplicationPending ? (
+        <View style={styles.statusToggleRow}>
+          <Text style={[styles.statusToggleText, styles.statusToggleTextPaused]}>Pending</Text>
+        </View>
+      ) : isPendingStripeConnect ? (
+        <View style={styles.statusToggleRow}>
+          <Text style={[styles.statusToggleText, styles.statusToggleTextPaused]}>Pending Stripe Connect setup</Text>
+        </View>
+      ) : (
+        <View style={[styles.statusToggleRow, !canToggleStatus && styles.statusToggleDisabled]}>
+          <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused]}>
+            {isChefActive ? 'Active' : 'Paused'}
+          </Text>
+          <Switch
+            value={isChefActive}
+            onValueChange={() => handleToggleChefStatus()}
+            disabled={!canToggleStatus || saving}
+            trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
+            thumbColor="#FFFFFF"
+            {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
+          />
+        </View>
+      )}
     </View>
   );
 
@@ -2146,7 +2166,7 @@ export default function ChefDashboard() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Gross sales</Text>
                 <TouchableOpacity
-                  onPress={() => showInfo('Gross sales', 'Gross sales = Sub-total sum (before taxes)')}
+                  onPress={() => showInfo('Gross sales', 'The full amount customers paid for your food')}
                   style={{ padding: 4 }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -2165,7 +2185,7 @@ export default function ChefDashboard() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
                 <TouchableOpacity
-                  onPress={() => showInfo('Platform commission', 'Platform commission=10% x (sub-total sum)')}
+                  onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales for service')}
                   style={{ padding: 4 }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -2184,7 +2204,7 @@ export default function ChefDashboard() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Your net earnings</Text>
                 <TouchableOpacity
-                  onPress={() => showInfo('Your net earnings', 'Net earnings = Sub-total sum - commission')}
+                  onPress={() => showInfo('Your net earnings', 'What you take home after the 10% fee is removed')}
                   style={{ padding: 4 }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -2301,6 +2321,12 @@ export default function ChefDashboard() {
                   <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
                   <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                 </View>
+                {order.status === 'pending' && (
+                  <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
+                )}
+                {order.status === 'ready' && (
+                  <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
+                )}
                 <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
                   {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
                 </Text>
@@ -2360,50 +2386,52 @@ export default function ChefDashboard() {
                       </TouchableOpacity>
                     </>
                   ) : order.status === 'pending' ? (
-                    <View style={{ gap: 8 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                        <TouchableOpacity
-                          onPress={async () => {
-                            try {
-                              await handleOrderStatus(order.id, 'ready', order.user_id);
-                              Alert.alert('Success', 'Order marked as ready!');
-                            } catch (err: any) {
-                              Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                            }
-                          }}
-                          style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                        >
-                          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
-                        </TouchableOpacity>
-                        <TouchableOpacity
-                          onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                          style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
-                        >
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                      <TouchableOpacity
+                        onPress={async () => {
+                          try {
+                            await handleOrderStatus(order.id, 'ready', order.user_id);
+                            Alert.alert('Success', 'Order marked as ready!');
+                          } catch (err: any) {
+                            Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                          }
+                        }}
+                        style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                      </TouchableOpacity>
                     </View>
                   ) : order.status === 'ready' ? (
-                    <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                      <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
+                    <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+                      <TouchableOpacity
+                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        onPress={() => handleOpenPickupUpdateModal(order)}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                      </TouchableOpacity>
                     </View>
                   ) : null}
-                  {order.status === 'ready' && (
-                    <TouchableOpacity
-                      onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                      style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
-                    >
-                      <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                    </TouchableOpacity>
-                  )}
-                  {['requested', 'pending', 'ready'].includes(order.status) && (
-                    <TouchableOpacity
-                      onPress={() => handleOpenPickupUpdateModal(order)}
-                      style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
-                    >
-                      <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                    </TouchableOpacity>
+                  {['requested', 'pending'].includes(order.status) && (
+                    <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+                      <TouchableOpacity
+                        onPress={() => handleOpenPickupUpdateModal(order)}
+                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                      >
+                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                      </TouchableOpacity>
+                    </View>
                   )}
                 </View>
               </View>
@@ -2870,7 +2898,7 @@ export default function ChefDashboard() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Gross sales</Text>
                         <TouchableOpacity
-                          onPress={() => showInfo('Gross sales', 'Gross sales = Sub-total sum (before taxes)')}
+                          onPress={() => showInfo('Gross sales', 'The full amount customers paid for your food')}
                           style={{ padding: 4 }}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
@@ -2889,7 +2917,7 @@ export default function ChefDashboard() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
                         <TouchableOpacity
-                          onPress={() => showInfo('Platform commission', 'Platform commission=10% x (sub-total sum)')}
+                          onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales for service')}
                           style={{ padding: 4 }}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
@@ -2908,7 +2936,7 @@ export default function ChefDashboard() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Your net earnings</Text>
                         <TouchableOpacity
-                          onPress={() => showInfo('Your net earnings', 'Net earnings = Sub-total sum - commission')}
+                          onPress={() => showInfo('Your net earnings', 'What you take home after the 10% fee is removed')}
                           style={{ padding: 4 }}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
@@ -2988,7 +3016,13 @@ export default function ChefDashboard() {
                           <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                         </View>
-<Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+                        {order.status === 'pending' && (
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
+                        )}
+                        {order.status === 'ready' && (
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
+                        )}
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
             {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
                         </Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
@@ -3047,50 +3081,52 @@ export default function ChefDashboard() {
                               </TouchableOpacity>
                             </>
                           ) : order.status === 'pending' ? (
-                            <View style={{ gap: 8 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <TouchableOpacity
-                                  onPress={async () => {
-                                    try {
-                                      await handleOrderStatus(order.id, 'ready', order.user_id);
-                                      Alert.alert('Success', 'Order marked as ready!');
-                                    } catch (err: any) {
-                                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                                    }
-                                  }}
-                                  style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                                >
-                                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                                  style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
-                                >
-                                  <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                                </TouchableOpacity>
-                              </View>
-                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await handleOrderStatus(order.id, 'ready', order.user_id);
+                                    Alert.alert('Success', 'Order marked as ready!');
+                                  } catch (err: any) {
+                                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                                  }
+                                }}
+                                style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                              </TouchableOpacity>
                             </View>
                           ) : order.status === 'ready' ? (
-                            <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
+                            <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleOpenPickupUpdateModal(order)}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                              </TouchableOpacity>
                             </View>
                           ) : null}
-                          {order.status === 'ready' && (
-                            <TouchableOpacity
-                              onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
-                            >
-                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                            </TouchableOpacity>
-                          )}
-                          {['requested', 'pending', 'ready'].includes(order.status) && (
-                            <TouchableOpacity
-                              onPress={() => handleOpenPickupUpdateModal(order)}
-                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
-                            >
-                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                            </TouchableOpacity>
+                          {['requested', 'pending'].includes(order.status) && (
+                            <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+                              <TouchableOpacity
+                                onPress={() => handleOpenPickupUpdateModal(order)}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                              </TouchableOpacity>
+                            </View>
                           )}
                         </View>
                       </View>
@@ -3222,7 +3258,13 @@ export default function ChefDashboard() {
                           <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
                         </View>
-<Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+                        {order.status === 'pending' && (
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
+                        )}
+                        {order.status === 'ready' && (
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
+                        )}
+                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
             {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
                         </Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
@@ -3281,50 +3323,52 @@ export default function ChefDashboard() {
                               </TouchableOpacity>
                             </>
                           ) : order.status === 'pending' ? (
-                            <View style={{ gap: 8 }}>
-                              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                                <TouchableOpacity
-                                  onPress={async () => {
-                                    try {
-                                      await handleOrderStatus(order.id, 'ready', order.user_id);
-                                      Alert.alert('Success', 'Order marked as ready!');
-                                    } catch (err: any) {
-                                      Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                                    }
-                                  }}
-                                  style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                                >
-                                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
-                                </TouchableOpacity>
-                                <TouchableOpacity
-                                  onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                                  style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
-                                >
-                                  <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                                </TouchableOpacity>
-                              </View>
-                              <Text style={{ color: PRIMARY_COLOR, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
+                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                              <TouchableOpacity
+                                onPress={async () => {
+                                  try {
+                                    await handleOrderStatus(order.id, 'ready', order.user_id);
+                                    Alert.alert('Success', 'Order marked as ready!');
+                                  } catch (err: any) {
+                                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
+                                  }
+                                }}
+                                style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                              </TouchableOpacity>
                             </View>
                           ) : order.status === 'ready' ? (
-                            <View style={{ backgroundColor: '#FE734C20', paddingVertical: 6, paddingHorizontal: 12, borderRadius: 999 }}>
-                              <Text style={{ color: '#FE734C', fontSize: 12, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Ready</Text>
+                            <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+                              <TouchableOpacity
+                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
+                              </TouchableOpacity>
+                              <TouchableOpacity
+                                onPress={() => handleOpenPickupUpdateModal(order)}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                              </TouchableOpacity>
                             </View>
                           ) : null}
-                          {order.status === 'ready' && (
-                            <TouchableOpacity
-                              onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
-                            >
-                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                            </TouchableOpacity>
-                          )}
-                          {['requested', 'pending', 'ready'].includes(order.status) && (
-                            <TouchableOpacity
-                              onPress={() => handleOpenPickupUpdateModal(order)}
-                              style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8 }}
-                            >
-                              <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                            </TouchableOpacity>
+                          {['requested', 'pending'].includes(order.status) && (
+                            <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
+                              <TouchableOpacity
+                                onPress={() => handleOpenPickupUpdateModal(order)}
+                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                              >
+                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                              </TouchableOpacity>
+                            </View>
                           )}
                         </View>
                       </View>
@@ -3505,18 +3549,24 @@ export default function ChefDashboard() {
             </ScrollView>
           )}
           {activeTab === 'payouts' && (
-            <View style={{ flex: 1, backgroundColor: BG_PAGE }}>
-              <PayoutSettings
-                onStatusChange={async (nextStatus) => {
-                  setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
-                  if (typeof nextStatus?.charges_enabled === 'boolean') {
-                    setChargesEnabled(nextStatus.charges_enabled);
-                  }
-                  if (nextStatus?.accountId) {
-                    setStripeAccountId(nextStatus.accountId);
-                  }
-                }}
-              />
+            <View style={isApplicationPending ? { backgroundColor: BG_PAGE, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 } : { flex: 1, backgroundColor: BG_PAGE }}>
+              {isApplicationPending ? (
+                <Text style={{ color: TEXT_DARK, fontSize: 16, fontFamily: theme.typography.fontFamily.body, lineHeight: 24 }}>
+                  Your application is pending to be approved. You will be able to set up your Stripe Connect account once your chef application has been approved.
+                </Text>
+              ) : (
+                <PayoutSettings
+                  onStatusChange={async (nextStatus) => {
+                    setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
+                    if (typeof nextStatus?.charges_enabled === 'boolean') {
+                      setChargesEnabled(nextStatus.charges_enabled);
+                    }
+                    if (nextStatus?.accountId) {
+                      setStripeAccountId(nextStatus.accountId);
+                    }
+                  }}
+                />
+              )}
             </View>
           )}
           {/* Toast in Modal so it always shows on top (works on mobile); blocks scroll for ~3s then auto-dismisses */}
@@ -3994,7 +4044,7 @@ const styles = StyleSheet.create({
   statusToggleText: {
     color: TEXT_DARK,
     fontSize: 16,
-    fontWeight: '600',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   statusToggleTextPaused: {

@@ -330,8 +330,9 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, name, location, cuisine, latitude, longitude)', { count: 'exact' })
+            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)', { count: 'exact' })
             .eq('chefs.status', 'active')
+            .eq('chefs.stripe_connect_completed', true)
             .or('is_active.eq.true,is_active.is.null');
           if (cuisineFilter?.trim()) {
             request = request.ilike('chefs.cuisine', `%${cuisineFilter.trim()}%`);
@@ -535,7 +536,8 @@ export default function BrowsePage() {
           let request = supabase
             .from('chefs')
             .select('id,name,location,photo,rating,cuisine,bio,created_at', { count: 'exact' })
-            .eq('status', 'active');
+            .eq('status', 'active')
+            .eq('stripe_connect_completed', true);
 
           let skipFetch = false;
           if (sortBy === 'newest') {
@@ -590,6 +592,7 @@ export default function BrowsePage() {
             .from('chefs')
             .select('cuisine')
             .eq('status', 'active')
+            .eq('stripe_connect_completed', true)
             .not('cuisine', 'is', null);
 
           if (debouncedQuery.trim()) {

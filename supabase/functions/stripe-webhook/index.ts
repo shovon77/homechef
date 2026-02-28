@@ -207,6 +207,20 @@ serve(async (req) => {
             .from('profiles')
             .update({ charges_enabled: account.charges_enabled ?? false })
             .eq('stripe_account_id', account.id);
+
+          if (account.charges_enabled) {
+            const { data: profileRow } = await adminClient
+              .from('profiles')
+              .select('id, email')
+              .eq('stripe_account_id', account.id)
+              .maybeSingle();
+            if (profileRow) {
+              await adminClient.from('chefs').update({ stripe_connect_completed: true, status: 'paused' }).eq('user_id', profileRow.id);
+              if (profileRow.email) {
+                await adminClient.from('chefs').update({ stripe_connect_completed: true, status: 'paused' }).eq('email', profileRow.email);
+              }
+            }
+          }
         }
         break;
       }

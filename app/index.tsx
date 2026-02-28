@@ -616,13 +616,14 @@ export default function HomePage() {
         });
 
       const [{ data: c }, { data: d }] = await Promise.all([
-        // Show only featured and active chefs on homepage
-        supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
-        // Show all dishes from featured and active chefs, sorted by price (least expensive first)
+        // Show only featured, active chefs who have completed Stripe Connect
+        supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
+        // Show all dishes from featured, active chefs with Stripe Connect completed, sorted by price
         supabase.from("dishes")
-          .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status)")
+          .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status, stripe_connect_completed)")
           .eq("chefs.featured", true)
           .eq("chefs.status", "active")
+          .eq("chefs.stripe_connect_completed", true)
           .or("is_active.eq.true,is_active.is.null")
           .order("price", { ascending: true }),
       ]);
@@ -650,6 +651,7 @@ export default function HomePage() {
                 .select("*")
                 .eq("featured", true)
                 .eq("status", "active")
+                .eq("stripe_connect_completed", true)
                 .order("rating", { ascending: false })
                 .limit(FEATURED_CHEFS_LIMIT);
               if (mounted && updatedChefs) {
