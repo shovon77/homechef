@@ -9,7 +9,7 @@ declare global {
 }
 
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions, Modal, Switch } from 'react-native';
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { uploadToBucket } from '../../lib/upload';
@@ -42,7 +42,7 @@ const INPUT_NO_FOCUS_OUTLINE = Platform.select({
   default: {},
 });
 
-type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null };
+type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
 
@@ -1876,10 +1876,45 @@ export default function ChefDashboard() {
     </View>
   );
 
+  const chefStatus = chef?.status ?? 'pending';
+  const isChefActive = chefStatus === 'active';
+  const canToggleStatus = chefStatus === 'active' || chefStatus === 'paused' || chefStatus === 'pending';
+
+  const handleToggleChefStatus = async () => {
+    if (!chef || !canToggleStatus || saving) return;
+    const newStatus = isChefActive ? 'paused' : 'active';
+    setSaving(true);
+    setErr(null);
+    try {
+      const { error } = await supabase.from('chefs').update({ status: newStatus }).eq('id', chef.id);
+      if (error) throw error;
+      setChef({ ...chef, status: newStatus });
+      setMsg(newStatus === 'active' ? 'Your listings are now visible to customers' : 'Your listings are now paused');
+      setTimeout(() => setMsg(null), 3000);
+    } catch (e: any) {
+      setErr('Failed to update status: ' + (e.message || String(e)));
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const WelcomeHeader = (
     <View style={styles.welcomeHeader}>
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
       <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
+      <View style={[styles.statusToggleRow, !canToggleStatus && styles.statusToggleDisabled]}>
+        <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused]}>
+          {isChefActive ? 'Active' : 'Paused'}
+        </Text>
+        <Switch
+          value={isChefActive}
+          onValueChange={() => handleToggleChefStatus()}
+          disabled={!canToggleStatus || saving}
+          trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
+          thumbColor="#FFFFFF"
+          {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
+        />
+      </View>
     </View>
   );
 
@@ -3945,6 +3980,25 @@ const styles = StyleSheet.create({
     fontSize: 16,
     marginTop: 4,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  statusToggleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 12,
+    alignSelf: 'flex-start',
+  },
+  statusToggleDisabled: {
+    opacity: 0.6,
+  },
+  statusToggleText: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  statusToggleTextPaused: {
+    color: PRIMARY_COLOR,
   },
   tabBarWrapper: {
     marginBottom: theme.spacing.lg,

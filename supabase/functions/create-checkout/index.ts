@@ -129,6 +129,9 @@ export const handler = async (req: Request) => {
     if (chef.status === 'suspended') {
       return j(400, { error: 'This chef is currently suspended and cannot accept orders' });
     }
+    if (chef.status === 'paused') {
+      return j(400, { error: 'This chef has paused their listings and cannot accept orders right now' });
+    }
 
     // 2) Validate pickup window: within next 7 days, between 08:00 and 20:00 (local)
     const pickupDate = new Date(body.pickup_at);

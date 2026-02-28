@@ -405,12 +405,10 @@ export default function ChefDetailView() {
                     </View>
                   ) : (
                     <>
-                      {/* Newly added meals - last 30 days */}
-                      <View style={styles.sectionBlock}>
-                        <Text style={styles.sectionTitle}>Newly added meals</Text>
-                        {newlyAddedDishes.length === 0 ? (
-                          <Text style={styles.sectionEmpty}>No new dishes in the last 30 days.</Text>
-                        ) : (
+                      {/* Newly added meals - last 30 days (only when there is data) */}
+                      {newlyAddedDishes.length > 0 && (
+                        <View style={styles.sectionBlock}>
+                          <Text style={styles.sectionTitle}>Newly added meals</Text>
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
                             {newlyAddedDishes.map(d => (
                               <View key={d.id} style={styles.dishCardHorizontal}>
@@ -418,15 +416,13 @@ export default function ChefDetailView() {
                               </View>
                             ))}
                           </ScrollView>
-                        )}
-                      </View>
+                        </View>
+                      )}
 
-                      {/* Best-sellers now - sold in last 90 days */}
-                      <View style={styles.sectionBlock}>
-                        <Text style={styles.sectionTitle}>Best-sellers now</Text>
-                        {bestSellerDishes.length === 0 ? (
-                          <Text style={[styles.sectionEmpty, { fontStyle: 'normal' }]}>No dishes sold in the last 90 days.</Text>
-                        ) : (
+                      {/* Best-sellers now - sold in last 90 days (only when there is data) */}
+                      {bestSellerDishes.length > 0 && (
+                        <View style={styles.sectionBlock}>
+                          <Text style={styles.sectionTitle}>Best-sellers now</Text>
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
                             {bestSellerDishes.map(d => (
                               <View key={d.id} style={styles.dishCardHorizontal}>
@@ -434,8 +430,8 @@ export default function ChefDetailView() {
                               </View>
                             ))}
                           </ScrollView>
-                        )}
-                      </View>
+                        </View>
+                      )}
 
                       {/* All dishes */}
                       <View style={styles.sectionBlock}>
