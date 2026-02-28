@@ -34,6 +34,7 @@ const BG_PAGE = '#F2F0EF';
 const BG_GRAY = '#F4F4F4';
 const TEXT_DARK = '#33393A';
 const TEXT_MUTED = '#555555';
+const PLACEHOLDER_GREY = '#9CA3AF'; // Lighter grey for placeholders (app grey)
 const BORDER_LIGHT = '#EAECF0';
 
 // Remove orange/default focus outline on web when typing in inputs
@@ -2013,8 +2014,8 @@ export default function ChefDashboard() {
                   borderColor: PRIMARY_COLOR,
                   borderRadius: 8,
                   paddingVertical: 8,
-                  paddingHorizontal: 12,
-                  minWidth: 120,
+                  paddingHorizontal: 10,
+                  minWidth: 90,
                   alignItems: 'center',
                   justifyContent: 'center',
                 }}
@@ -2080,7 +2081,7 @@ export default function ChefDashboard() {
                                 <Text style={{
                                   color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
                                   fontSize: 14,
-                                  fontWeight: financialDateFilter === option.value ? '700' : '400',
+                                  fontWeight: '400',
                                   fontFamily: theme.typography.fontFamily.body,
                                 }}>
                                   {option.label}
@@ -2146,7 +2147,7 @@ export default function ChefDashboard() {
                             <Text style={{
                               color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
                               fontSize: 14,
-                              fontWeight: financialDateFilter === option.value ? '700' : '400',
+                              fontWeight: '400',
                               fontFamily: theme.typography.fontFamily.body,
                             }}>
                               {option.label}
@@ -2185,7 +2186,7 @@ export default function ChefDashboard() {
               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                 <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
                 <TouchableOpacity
-                  onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales as service fee')}
+                  onPress={() => showInfo('Platform commission', 'We keep a 10% service fee per successful order')}
                   style={{ padding: 4 }}
                   hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                 >
@@ -2745,8 +2746,8 @@ export default function ChefDashboard() {
                           borderColor: PRIMARY_COLOR,
                           borderRadius: 8,
                           paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          minWidth: 120,
+                          paddingHorizontal: 10,
+                          minWidth: 90,
                           alignItems: 'center',
                           justifyContent: 'center',
                         }}
@@ -2812,7 +2813,7 @@ export default function ChefDashboard() {
                                         <Text style={{
                                           color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
                                           fontSize: 14,
-                                          fontWeight: financialDateFilter === option.value ? '700' : '400',
+                                          fontWeight: '400',
                                           fontFamily: theme.typography.fontFamily.body,
                                         }}>
                                           {option.label}
@@ -2878,7 +2879,7 @@ export default function ChefDashboard() {
                                     <Text style={{
                                       color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
                                       fontSize: 14,
-                                      fontWeight: financialDateFilter === option.value ? '700' : '400',
+                                      fontWeight: '400',
                                       fontFamily: theme.typography.fontFamily.body,
                                     }}>
                                       {option.label}
@@ -2917,7 +2918,7 @@ export default function ChefDashboard() {
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
                         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
                         <TouchableOpacity
-                          onPress={() => showInfo('Platform commission', 'We keep 10% of your total food sales as service fee')}
+                          onPress={() => showInfo('Platform commission', 'We keep a 10% service fee per successful order')}
                           style={{ padding: 4 }}
                           hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
                         >
@@ -4131,7 +4132,7 @@ const styles = StyleSheet.create({
   toastModalOverlay: {
     flex: 1,
     justifyContent: 'flex-start',
-    paddingTop: 48,
+    paddingTop: 80,
     paddingHorizontal: 16,
     alignItems: 'stretch',
   },
@@ -4145,15 +4146,10 @@ const styles = StyleSheet.create({
     padding: 12,
     borderRadius: 8,
     borderLeftWidth: 4,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.15,
-    shadowRadius: 4,
-    elevation: 4,
   },
   floatingToastText: {
     flex: 1,
-    fontWeight: '700',
+    fontWeight: '400',
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
   },
@@ -4455,8 +4451,8 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               value={name}
               onChangeText={setName}
               placeholder="Chicken Biryani"
-              placeholderTextColor={TEXT_MUTED}
-              style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
+              placeholderTextColor={PLACEHOLDER_GREY}
+              style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
             />
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
@@ -4470,7 +4466,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
                 onChangeText={setPrice}
                 keyboardType="numeric"
                 placeholder="19.99"
-                placeholderTextColor={TEXT_MUTED}
+                placeholderTextColor={PLACEHOLDER_GREY}
                 style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
               />
             </View>
@@ -4495,7 +4491,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
               </View>
             ) : (
               <FilePicker 
-                label="Choose Image" 
+                label="Upload photo" 
                 onFile={(f) => { setFile(f); setPreview(URL.createObjectURL(f)); }} 
                 accept="image/*" 
               />
@@ -4508,10 +4504,10 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             value={description}
             onChangeText={setDescription}
             placeholder="Aromatic rice with tender chicken…"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={PLACEHOLDER_GREY}
             multiline
             numberOfLines={3}
-            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 80, textAlignVertical: 'top', fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ gap: 8 }}>
@@ -4520,10 +4516,10 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             value={ingredients}
             onChangeText={setIngredients}
             placeholder="Contains peanuts, dairy, gluten..."
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={PLACEHOLDER_GREY}
             multiline
             numberOfLines={2}
-            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top', fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ flexDirection: 'row', justifyContent: 'flex-start' }}>
@@ -4539,16 +4535,14 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
             }}
             disabled={!valid || saving}
             style={{ 
-              backgroundColor: '#FFFFFF', 
+              backgroundColor: PRIMARY_COLOR, 
               paddingVertical: 10, 
               paddingHorizontal: 24, 
               borderRadius: 8,
-              borderWidth: 2,
-              borderColor: PRIMARY_COLOR,
               opacity: (!valid || saving) ? 0.6 : 1
             }}
           >
-            <Text style={{ color: PRIMARY_COLOR, fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add Dish'}</Text>
+            <Text style={{ color: '#FFFFFF', fontWeight: '400', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{saving ? 'Saving…' : 'Add dish'}</Text>
           </TouchableOpacity>
         </View>
       </View>
@@ -4605,7 +4599,7 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
           </View>
           <View style={{ marginTop: 12 }}>
             <FilePicker 
-              label="Replace Photo" 
+              label="Change photo" 
               onFile={(f) => { 
                 if (preview && preview.startsWith('blob:')) {
                   URL.revokeObjectURL(preview);
@@ -4625,8 +4619,8 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
               value={name}
               onChangeText={setName}
               placeholder="Dish name"
-              placeholderTextColor={TEXT_MUTED}
-              style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40 }, INPUT_NO_FOCUS_OUTLINE]}
+              placeholderTextColor={PLACEHOLDER_GREY}
+              style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
             />
           </View>
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
@@ -4640,7 +4634,7 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
                 onChangeText={setPrice}
                 keyboardType="numeric"
                 placeholder="0.00"
-                placeholderTextColor={TEXT_MUTED}
+                placeholderTextColor={PLACEHOLDER_GREY}
                 style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
               />
             </View>
@@ -4652,10 +4646,10 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
             value={description}
             onChangeText={setDescription}
             placeholder="Describe the dish"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={PLACEHOLDER_GREY}
             multiline
             numberOfLines={2}
-            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top', fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ gap: 8 }}>
@@ -4664,10 +4658,10 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
             value={ingredients}
             onChangeText={setIngredients}
             placeholder="List ingredients and allergens"
-            placeholderTextColor={TEXT_MUTED}
+            placeholderTextColor={PLACEHOLDER_GREY}
             multiline
             numberOfLines={2}
-            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top' }, INPUT_NO_FOCUS_OUTLINE]}
+            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, padding: 12, minHeight: 60, textAlignVertical: 'top', fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
           />
         </View>
         <View style={{ 
