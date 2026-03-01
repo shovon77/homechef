@@ -1755,17 +1755,18 @@ To the fullest extent permitted by law, the Chef agrees to indemnify, defend, an
 The Platform charges the Chef a commission on each completed order processed through the Platform.
 
 • The current commission rate is 10% of the order subtotal, exclusive of applicable taxes, delivery fees, or payment processor fees.
-• Payment processing fees charged by the Payment Processor may be deducted separately.
+• YourHomeChef absorbs all standard payment processing fees. No payment processing fees are deducted from the Chef's earnings.
 • The Platform may update commission rates or fees upon reasonable notice through the Platform interface or a published Fee Schedule.
 • Continued use of the Platform after notice of updated fees constitutes acceptance of those changes.
 
 8.3 Payout Methodology
 Subject to this Agreement and Payment Processor requirements:
 
-• Net payouts (order amount minus applicable commissions, fees, refunds, or adjustments) will be disbursed to the Chef's designated bank account.
-• Payouts are typically initiated on a weekly basis, subject to:
-  • Payment Processor settlement timelines
-  • Verification, dispute resolution, or compliance reviews
+• Net payouts (order amount minus applicable commissions, refunds, or adjustments) will be disbursed to the Chef's designated bank account (which may delay the first payout by up to 7–14 days)
+  • Verification, dispute resolution, or compliance reviews.
+  • Payouts are initiated on a weekly basis, subject to:
+    • Payment Processor settlement timelines
+    • Initial account verification and risk reviews
 • The Platform does not guarantee payout timing and is not responsible for delays caused by banking institutions or the Payment Processor.
 
 8.4 Holding Periods
@@ -1777,7 +1778,6 @@ The Platform may apply short holding periods on funds to manage:
 • Food safety or regulatory investigations
 
 Funds may be withheld, offset, or adjusted until the matter is resolved.
-
 8.5 Refunds, Disputes & Chargebacks
 
 • The Platform may issue refunds to customers at its discretion in cases of:
@@ -1875,7 +1875,7 @@ Continued use of the Platform after notice of compliance updates constitutes acc
                           {termsType === 'fee' && (
                             <Text style={styles.termsModalText}>{`
 Fee Schedule - YourHomeChef
-Last Updated: February 14, 2026
+Last Updated: February 28, 2026
 
 This Fee Schedule explains how fees and payouts work on the YourHomeChef platform. By using the Platform as a Chef, you agree to this Fee Schedule.
 
@@ -1888,8 +1888,8 @@ Payment Processing Fees
 
 Payments are processed through a third-party payment processor, currently Stripe.
 
-• Stripe charges standard processing fees
-• Applicable processing fees may be deducted prior to payout
+• YourHomeChef absorbs all standard payment processing fees.
+• No payment processing fees are deducted from your earnings.
 • Rates are set by Stripe and may change independently
 
 Net Earnings
@@ -1900,7 +1900,9 @@ You receive:
 
 Payout Timing (Estimated)
 
-• Payouts are typically issued instantly upon order completion.
+• Payouts are issued on a weekly schedule.
+• Your first payout may be delayed 7–14 days for account verification and risk review.
+• After funds are released, they typically arrive within 2–7 business days depending on bank processing times.
 • Timing depends on:
   • Stripe settlement timelines
   • Bank processing
@@ -1949,7 +1951,7 @@ You prepare the meal
 The payment is processed
 
 • Platform commission (10%) is applied
-• Payment processing fees are deducted
+• YourHomeChef absorbs all standard payment processing fees.
 
 A short review or holding period may apply
 
@@ -1961,9 +1963,11 @@ Funds may be temporarily held for:
 
 (This helps manage disputes, refunds, and compliance risks.)
 
-Payouts are typically initiated daily, subject to processor and bank timelines
+Payouts are initiated weekly
 
-• Net earnings (after fees, refunds, and adjustments) are sent to your designated bank account.
+• Payouts are initiated weekly, subject to processor and bank timelines.
+• Your first payout may be delayed 7–14 days due to account verification and risk review.
+• Net earnings (after platform commission, refunds, and adjustments) are sent to your designated bank account.
 • You'll see a full payout breakdown in your dashboard
 
 Your dashboard will show

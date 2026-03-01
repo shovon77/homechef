@@ -12,7 +12,7 @@ export default function TermsPage() {
     >
       <View style={styles.container}>
         <Text style={styles.title}>Customer Terms of Service & Marketplace Disclosure</Text>
-        <Text style={styles.lastUpdated}>Last Updated: February 23, 2026</Text>
+        <Text style={styles.lastUpdated}>Last Updated: February 28, 2026</Text>
 
         <View style={styles.section}>
           <Text style={styles.paragraph}>
@@ -130,7 +130,7 @@ export default function TermsPage() {
         <View style={styles.section}>
           <Text style={[styles.heading, styles.headingOrange]}>6. Payments, Fees & Refunds</Text>
           <Text style={styles.paragraph}>
-            6.1 Payments made through the Platform are processed by third-party payment processors. Transactions are subject to the processor's own terms, conditions, and privacy practices. The Platform does not store full payment card information.
+            6.1 Payments made through the Platform are processed securely by third-party payment processors. Transactions are subject to the processor's own terms, conditions, and privacy practices. The Platform does not store full payment card information and is not responsible for payment processor service interruptions or delays.
           </Text>
           <Text style={styles.paragraph}>
             6.2 In addition to the price set by the Chef for a meal, the Platform may charge Customers a platform service fee, which may be a fixed amount, a variable amount, or a combination of both, as disclosed at checkout prior to payment confirmation. Platform fees help support the operation, maintenance, and improvement of the Platform, including payment processing, customer support, and marketplace infrastructure.
