@@ -473,9 +473,18 @@ export default function ChefDashboard() {
         if (!profileRow.error) {
           setChargesEnabled(profileRow.data?.charges_enabled ?? false);
           setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
-          // For Stripe Connect, charges_enabled typically means payouts are also enabled
           setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
         }
+
+        // Fetch latest Stripe Connect status for accurate charges/payouts state
+        try {
+          const connectStatus = await callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string }>('get-connect-status', {});
+          if (connectStatus) {
+            if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
+            if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
+            if (connectStatus.accountId) setStripeAccountId(connectStatus.accountId);
+          }
+        } catch (_) { /* non-blocking */ }
 
         let me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
         if (!me) {
@@ -1888,7 +1897,7 @@ export default function ChefDashboard() {
   const chefStatus = chef?.status ?? 'pending';
   const isChefActive = chefStatus === 'active';
   const isApplicationPending = chefStatus === 'pending';
-  const isPendingStripeConnect = !isApplicationPending && (!chargesEnabled || !stripeAccountId);
+  const isPendingStripeConnect = !isApplicationPending && (!chargesEnabled || !stripeAccountId || !payoutsEnabled);
   const canToggleStatus = chefStatus === 'active' || chefStatus === 'paused';
 
   const handleToggleChefStatus = async () => {

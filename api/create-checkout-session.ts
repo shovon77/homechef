@@ -14,8 +14,11 @@ export default async function handler(req: { method: string; body: any; headers:
   }
 
   try {
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    
+    const isDev = process.env.NODE_ENV === 'development';
+    const stripeSecretKey =
+      (isDev ? process.env.STRIPE_SECRET_TEST_KEY : process.env.STRIPE_SECRET_PROD_KEY ?? process.env.STRIPE_SECRET_KEY) ??
+      '';
+
     if (!stripeSecretKey) {
       return {
         statusCode: 500,

@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { View, Text, Image, TouchableOpacity, StyleSheet, ViewStyle, StyleProp, Platform } from "react-native";
-import { Link } from "expo-router";
+import { View, Text, Image, TouchableOpacity, Pressable, StyleSheet, ViewStyle, StyleProp, Platform } from "react-native";
+import { Link, useRouter } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Button } from "../../components/ui/Button";
 import { getDishAvgRating } from "../../utils/ratings";
@@ -14,10 +14,11 @@ const BRAND_BLACK = '#33393A';
 type DishCardProps = {
   dish: any;
   style?: StyleProp<ViewStyle>;
-  variant?: 'default' | 'explore';
+  variant?: 'default' | 'explore' | 'homepage';
 };
 
 export default function DishCard({ dish, style, variant = 'default' }: DishCardProps) {
+  const router = useRouter();
   const [avg, setAvg] = useState(0);
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
   const [quantity, setQuantity] = useState(1);
@@ -132,6 +133,50 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
       </View>
     </View>
   );
+
+  if (variant === 'homepage') {
+    return (
+      <Pressable
+        onPress={() => router.push(`/dish/${dish.id}`)}
+        style={({ pressed }) => StyleSheet.flatten([styles.cardExplore, style, pressed && { opacity: 0.8 }])}
+      >
+        <View style={styles.imageContainerExplore}>
+            <Image
+              source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
+              style={styles.image}
+            />
+          </View>
+          <View style={[styles.exploreContent, styles.exploreContentHomepage]}>
+            <Text style={[styles.name, styles.nameExplore, styles.nameHomepage]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
+            <View style={styles.chefRatingPriceRowHomepage}>
+              <View style={styles.chefNameLeftHomepage}>
+                {chefDisplayName && (
+                  <Text style={[styles.chefName, styles.homepageMetaText]} numberOfLines={1}>
+                    {chefDisplayName}
+                  </Text>
+                )}
+              </View>
+              {avg > 0 ? (
+                <View style={[styles.ratingRow, styles.ratingRowExplore, styles.ratingCenterHomepage]}>
+                  <Image
+                    source={require('../../assets/star.png')}
+                    style={styles.homepageStarIcon}
+                    tintColor={PRIMARY_COLOR}
+                    resizeMode="contain"
+                  />
+                  <Text style={[styles.ratingText, styles.homepageMetaText]}>{safeToFixed(avg)}</Text>
+                </View>
+              ) : <View style={styles.ratingCenterHomepage} />}
+              <View style={styles.priceRightHomepage}>
+                <Text style={[styles.price, styles.homepageMetaText]} numberOfLines={1}>
+                  {formatCad(Number(dish.price) ?? 0)}
+                </Text>
+              </View>
+            </View>
+          </View>
+        </Pressable>
+    );
+  }
 
   if (variant === 'explore') {
     return (
@@ -269,7 +314,26 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.xs,
-    backgroundColor: '#FFFFFF',
+  },
+  exploreContentHomepage: {
+    alignItems: 'stretch',
+  },
+  nameHomepage: {
+    textAlign: 'left',
+  },
+  chefNameLeftHomepage: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  ratingCenterHomepage: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  priceRightHomepage: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   chefRatingRowExplore: {
     flexDirection: 'row',
@@ -290,6 +354,30 @@ const styles = StyleSheet.create({
     marginBottom: 0,
     minHeight: 20,
     flexShrink: 0,
+  },
+  ratingPriceRowHomepage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    width: '100%',
+    marginTop: 4,
+  },
+  chefRatingPriceRowHomepage: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    width: '100%',
+    marginTop: 4,
+  },
+  homepageMetaText: {
+    fontSize: 14,
+    lineHeight: 18,
+    color: BRAND_BLACK,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '400',
+  },
+  homepageStarIcon: {
+    width: 12,
+    height: 12,
   },
   priceAndQuantityRowExplore: {
     flexDirection: 'row',

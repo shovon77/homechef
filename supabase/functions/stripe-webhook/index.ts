@@ -3,7 +3,12 @@ import Stripe from 'https://esm.sh/stripe@12?target=deno&deno-std=0.224.0';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
-const webhookSecret = (Deno.env.get('STRIPE_WEBHOOK_SECRET') ?? '').trim();
+// Dev (APP_ENV=development): TEST secret only. Prod: PROD secret, then legacy STRIPE_WEBHOOK_SECRET
+const isDev = Deno.env.get('APP_ENV') === 'development';
+const rawSecret = isDev
+  ? Deno.env.get('STRIPE_WEBHOOK_TEST_SECRET')
+  : (Deno.env.get('STRIPE_WEBHOOK_PROD_SECRET') ?? Deno.env.get('STRIPE_WEBHOOK_SECRET'));
+const webhookSecret = (rawSecret ?? '').trim();
 // Required for Deno: Web Crypto API differs from Node.js
 const cryptoProvider = Stripe.createSubtleCryptoProvider();
 
@@ -208,17 +213,17 @@ serve(async (req) => {
             .update({ charges_enabled: account.charges_enabled ?? false })
             .eq('stripe_account_id', account.id);
 
-          if (account.charges_enabled) {
-            const { data: profileRow } = await adminClient
-              .from('profiles')
-              .select('id, email')
-              .eq('stripe_account_id', account.id)
-              .maybeSingle();
-            if (profileRow) {
-              await adminClient.from('chefs').update({ stripe_connect_completed: true, status: 'paused' }).eq('user_id', profileRow.id);
-              if (profileRow.email) {
-                await adminClient.from('chefs').update({ stripe_connect_completed: true, status: 'paused' }).eq('email', profileRow.email);
-              }
+          const canAcceptPayments = Boolean(account.charges_enabled && account.payouts_enabled);
+          const { data: profileRow } = await adminClient
+            .from('profiles')
+            .select('id, email')
+            .eq('stripe_account_id', account.id)
+            .maybeSingle();
+          if (profileRow) {
+            const chefUpdate = canAcceptPayments ? { stripe_connect_completed: true, status: 'paused' } : { stripe_connect_completed: false };
+            await adminClient.from('chefs').update(chefUpdate).eq('user_id', profileRow.id);
+            if (profileRow.email) {
+              await adminClient.from('chefs').update({ stripe_connect_completed: canAcceptPayments }).eq('email', profileRow.email);
             }
           }
         }

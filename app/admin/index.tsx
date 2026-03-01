@@ -1739,37 +1739,37 @@ export default function AdminPage() {
     let grossSalesCents = 0;
     let taxesCents = 0;
     let totalPlatformFeesCents = 0;
+    let totalPlatformCommissionCents = 0;
+    let totalChefPayoutsCents = 0;
     let totalStripeFeesCents = 0;
     const uniqueCustomerIds = new Set<string>();
 
+    // Order structure: total_cents = subtotal + platform_fee (no tax). subtotal = food only. platform_commission = 10% of subtotal.
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
       const createdAt = order.created_at ? new Date(order.created_at) : null;
+      const platformFee = (order as any).platform_fee_cents ?? 0;
+      const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
+      const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
+
       totalCents += order.total_cents ?? 0;
       orderCount += 1;
-      
-      // Gross sales: sum of all order totals (before fees)
+
+      // Gross sales: total customer payments (subtotal + platform fee)
       grossSalesCents += order.total_cents ?? 0;
-      
+
       // Track unique customers
       if (order.user_id) {
         uniqueCustomerIds.add(order.user_id);
       }
-      
-      // Calculate taxes (13% of subtotal)
-      // Use subtotal_cents directly if available, otherwise calculate from total_cents
-      // total_cents = subtotal + platform_fee + tax, where tax = subtotal * 0.13
-      // So: total_cents = subtotal + platform_fee + (subtotal * 0.13)
-      //     total_cents = subtotal * 1.13 + platform_fee
-      //     subtotal = (total_cents - platform_fee) / 1.13
-      const platformFee = order.platform_fee_cents ?? 0;
-      const subtotalCents = (order as any).subtotal_cents ?? 
-        Math.round(((order.total_cents ?? 0) - platformFee) / 1.13);
-      const orderTaxes = Math.round(subtotalCents * 0.13);
-      taxesCents += orderTaxes;
-      
-      // Platform fees: sum of all platform fees
+
+      // Taxes: use stored tax_cents (app charges 0 tax)
+      taxesCents += (order as any).tax_cents ?? 0;
+
+      // Platform flat fee and 10% commission
       totalPlatformFeesCents += platformFee;
+      totalPlatformCommissionCents += platformCommission;
+      totalChefPayoutsCents += subtotalCents - platformCommission;
       
       // Refunds will be calculated separately from order_issues table
       
@@ -1851,21 +1851,32 @@ export default function AdminPage() {
       });
     }
     
-    // Calculate refunds from filtered issues with refunded status
+    // Refunds: full amount refunded to customer. Platform's loss = platform_fee + platform_commission per refunded order.
     let totalRefundsCents = 0;
+    let platformRefundsCents = 0;
+    const ordersById = new Map((orders || []).map((o: any) => [o.id, o]));
     if (filteredIssues && Array.isArray(filteredIssues)) {
       filteredIssues.forEach((issue: any) => {
-        if (issue.status === 'refunded' && issue.orders?.total_cents) {
-          totalRefundsCents += issue.orders.total_cents;
+        if (issue.status !== 'refunded') return;
+        const orderId = issue.order_id ?? issue.orders?.id;
+        const order = orderId ? ordersById.get(orderId) : null;
+        const refundAmount = issue.orders?.total_cents ?? 0;
+        totalRefundsCents += refundAmount;
+        if (order) {
+          const pf = (order as any).platform_fee_cents ?? 0;
+          const subtotal = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - pf);
+          const pc = (order as any).platform_commission_cents ?? Math.round(subtotal * 0.10);
+          platformRefundsCents += pf + pc;
+        } else {
+          platformRefundsCents += refundAmount; // fallback if order not found
         }
       });
     }
-    
-    // Calculate snapshot metrics
-    const revenueCents = grossSalesCents;
-    const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
-    const expensesCents = totalRefundsCents + totalStripeFeesCents; // Expenses = refunds + stripe fees
-    const netProfitCents = revenueCents - expensesCents; // Net profit = revenue - expenses
+
+    // Platform revenue = flat fee + 10% commission. Net profit = platform revenue - stripe fees - platform's refund share
+    const platformRevenueCents = totalPlatformFeesCents + totalPlatformCommissionCents;
+    const expensesCents = platformRefundsCents + totalStripeFeesCents;
+    const netProfitCents = platformRevenueCents - expensesCents;
 
     return {
       weeklyCents,
@@ -1879,9 +1890,10 @@ export default function AdminPage() {
       activeChefs,
       activeCustomers,
       averageOrderValue,
-      revenueCents,
-      commissionsCents,
+      revenueCents: grossSalesCents,
+      commissionsCents: totalChefPayoutsCents,
       platformFeesCents: totalPlatformFeesCents,
+      platformCommissionCents: totalPlatformCommissionCents,
       expensesCents,
       stripeFeesCents: totalStripeFeesCents,
       refundsCents: totalRefundsCents,
@@ -1992,50 +2004,52 @@ export default function AdminPage() {
     }
 
     let grossSalesCents = 0;
-    let taxesCents = 0;
     let totalPlatformFeesCents = 0;
+    let totalPlatformCommissionCents = 0;
+    let totalChefPayoutsCents = 0;
     let totalStripeFeesCents = 0;
 
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
-      
-      // Gross sales: sum of all order totals (before fees)
+      const platformFee = (order as any).platform_fee_cents ?? 0;
+      const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
+      const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
+
       grossSalesCents += order.total_cents ?? 0;
-      
-      // Calculate taxes (13% of subtotal)
-      const platformFee = order.platform_fee_cents ?? 0;
-      const subtotalCents = (order as any).subtotal_cents ?? 
-        Math.round(((order.total_cents ?? 0) - platformFee) / 1.13);
-      const orderTaxes = Math.round(subtotalCents * 0.13);
-      taxesCents += orderTaxes;
-      
-      // Platform fees: sum of all platform fees
       totalPlatformFeesCents += platformFee;
-      
-      // Stripe fees: typically 2.9% + $0.30 per transaction
+      totalPlatformCommissionCents += platformCommission;
+      totalChefPayoutsCents += subtotalCents - platformCommission;
       if (order.stripe_payment_intent_id) {
-        const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
-        totalStripeFeesCents += stripeFee;
+        totalStripeFeesCents += Math.round((order.total_cents ?? 0) * 0.029) + 30;
       }
     });
-    
-    // Calculate refunds from filtered issues with refunded status
+
     let totalRefundsCents = 0;
+    let platformRefundsCents = 0;
+    const ordersById = new Map((orders || []).map((o: any) => [o.id, o]));
     filteredIssues.forEach((issue: any) => {
-      if (issue.status === 'refunded' && issue.orders?.total_cents) {
-        totalRefundsCents += issue.orders.total_cents;
+      if (issue.status !== 'refunded') return;
+      const orderId = issue.order_id ?? issue.orders?.id;
+      const order = orderId ? ordersById.get(orderId) : null;
+      const refundAmount = issue.orders?.total_cents ?? 0;
+      totalRefundsCents += refundAmount;
+      if (order) {
+        const pf = (order as any).platform_fee_cents ?? 0;
+        const subtotal = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - pf);
+        const pc = (order as any).platform_commission_cents ?? Math.round(subtotal * 0.10);
+        platformRefundsCents += pf + pc;
+      } else {
+        platformRefundsCents += refundAmount;
       }
     });
-    
-    // Calculate snapshot metrics
-    const revenueCents = grossSalesCents;
-    const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
-    const expensesCents = totalRefundsCents + totalStripeFeesCents; // Expenses = refunds + stripe fees
-    const netProfitCents = revenueCents - expensesCents; // Net profit = revenue - expenses
+
+    const platformRevenueCents = totalPlatformFeesCents + totalPlatformCommissionCents;
+    const expensesCents = platformRefundsCents + totalStripeFeesCents;
+    const netProfitCents = platformRevenueCents - expensesCents;
 
     return {
-      revenueCents,
-      commissionsCents,
+      revenueCents: grossSalesCents,
+      commissionsCents: totalChefPayoutsCents,
       platformFeesCents: totalPlatformFeesCents,
       expensesCents,
       stripeFeesCents: totalStripeFeesCents,
@@ -2148,41 +2162,50 @@ export default function AdminPage() {
 
     let grossSalesCents = 0;
     let totalPlatformFeesCents = 0;
+    let totalPlatformCommissionCents = 0;
+    let totalChefPayoutsCents = 0;
     let totalStripeFeesCents = 0;
 
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
-      
-      // Gross sales: sum of all order totals (before fees)
+      const platformFee = (order as any).platform_fee_cents ?? 0;
+      const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
+      const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
+
       grossSalesCents += order.total_cents ?? 0;
-      
-      // Platform fees: sum of all platform fees
-      const platformFee = order.platform_fee_cents ?? 0;
       totalPlatformFeesCents += platformFee;
-      
-      // Stripe fees: typically 2.9% + $0.30 per transaction
+      totalPlatformCommissionCents += platformCommission;
+      totalChefPayoutsCents += subtotalCents - platformCommission;
       if (order.stripe_payment_intent_id) {
-        const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
-        totalStripeFeesCents += stripeFee;
+        totalStripeFeesCents += Math.round((order.total_cents ?? 0) * 0.029) + 30;
       }
     });
-    
-    // Calculate refunds from filtered issues with refunded status
+
     let totalRefundsCents = 0;
+    let platformRefundsCents = 0;
+    const ordersById = new Map((orders || []).map((o: any) => [o.id, o]));
     filteredIssues.forEach((issue: any) => {
-      if (issue.status === 'refunded' && issue.orders?.total_cents) {
-        totalRefundsCents += issue.orders.total_cents;
+      if (issue.status !== 'refunded') return;
+      const orderId = issue.order_id ?? issue.orders?.id;
+      const order = orderId ? ordersById.get(orderId) : null;
+      const refundAmount = issue.orders?.total_cents ?? 0;
+      totalRefundsCents += refundAmount;
+      if (order) {
+        const pf = (order as any).platform_fee_cents ?? 0;
+        const subtotal = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - pf);
+        const pc = (order as any).platform_commission_cents ?? Math.round(subtotal * 0.10);
+        platformRefundsCents += pf + pc;
+      } else {
+        platformRefundsCents += refundAmount;
       }
     });
-    
-    // Calculate finance metrics
-    const commissionsCents = grossSalesCents - totalPlatformFeesCents; // Revenue minus platform fees = chef commissions
-    const expensesCents = totalRefundsCents + totalStripeFeesCents; // Expenses = refunds + stripe fees
-    const revenueCents = grossSalesCents;
-    const netProfitCents = revenueCents - expensesCents; // Net profit = revenue - expenses
+
+    const platformRevenueCents = totalPlatformFeesCents + totalPlatformCommissionCents;
+    const expensesCents = platformRefundsCents + totalStripeFeesCents;
+    const netProfitCents = platformRevenueCents - expensesCents;
 
     return {
-      commissionsCents,
+      commissionsCents: totalChefPayoutsCents,
       platformFeesCents: totalPlatformFeesCents,
       stripeFeesCents: totalStripeFeesCents,
       refundsCents: totalRefundsCents,

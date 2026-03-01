@@ -1,7 +1,14 @@
+const isDev = process.env.NODE_ENV === 'development';
+
 const ENV = {
   SUPABASE_URL: process.env.EXPO_PUBLIC_SUPABASE_URL ?? '',
   SUPABASE_ANON_KEY: process.env.EXPO_PUBLIC_SUPABASE_ANON_KEY ?? '',
-  STRIPE_PUBLISHABLE_KEY: process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ?? '',
+  // Dev: TEST keys only. Prod: PROD keys, then legacy (STRIPE_* without suffix)
+  STRIPE_PUBLISHABLE_KEY: isDev
+    ? (process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_TEST_KEY ?? '')
+    : (process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_PROD_KEY ??
+       process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ??
+       ''),
   WEB_BASE_URL: process.env.EXPO_PUBLIC_WEB_BASE_URL ?? 'https://yourhomechef.ca',
 };
 

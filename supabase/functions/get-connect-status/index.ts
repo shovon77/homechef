@@ -85,24 +85,35 @@ export const handler = async (req: Request) => {
       // Don't fail the request if update fails
     }
 
-    // Update chefs: stripe_connect_completed = true, status = 'paused' (chef must toggle to Active to list dishes)
-    if (account.charges_enabled) {
-      try {
-        const { error: chefByUserErr } = await supabase
-          .from('chefs')
-          .update({ stripe_connect_completed: true, status: 'paused' })
-          .eq('user_id', profile.id);
-        if (chefByUserErr) console.warn('get-connect-status chef update by user_id', chefByUserErr);
-        if (user.email) {
-          const { error: chefByEmailErr } = await supabase
-            .from('chefs')
-            .update({ stripe_connect_completed: true, status: 'paused' })
-            .eq('email', user.email);
-          if (chefByEmailErr) console.warn('get-connect-status chef update by email', chefByEmailErr);
-        }
-      } catch (err) {
-        console.warn('get-connect-status chef update error', err);
+    // Update chefs: stripe_connect_completed = true only when BOTH charges AND payouts enabled (else listings hidden)
+    const canAcceptPayments = Boolean(account.charges_enabled && account.payouts_enabled);
+    try {
+      const updatePayload: Record<string, unknown> = { stripe_connect_completed: canAcceptPayments };
+      // Only set status='paused' when first completing Connect (stripe_connect_completed false->true).
+      // Do NOT overwrite status on every load, or we'd reset Active to Paused.
+      const { data: existingChef } = await supabase
+        .from('chefs')
+        .select('stripe_connect_completed')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+      const wasAlreadyCompleted = existingChef?.stripe_connect_completed === true;
+      if (canAcceptPayments && !wasAlreadyCompleted) {
+        updatePayload.status = 'paused';
       }
+      const { error: chefByUserErr } = await supabase
+        .from('chefs')
+        .update(updatePayload)
+        .eq('user_id', profile.id);
+      if (chefByUserErr) console.warn('get-connect-status chef update by user_id', chefByUserErr);
+      if (user.email) {
+        const { error: chefByEmailErr } = await supabase
+          .from('chefs')
+          .update({ stripe_connect_completed: canAcceptPayments })
+          .eq('email', user.email);
+        if (chefByEmailErr) console.warn('get-connect-status chef update by email', chefByEmailErr);
+      }
+    } catch (err) {
+      console.warn('get-connect-status chef update error', err);
     }
 
     return respond(200, {

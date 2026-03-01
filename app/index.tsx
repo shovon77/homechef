@@ -6,6 +6,7 @@ import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
 import Screen from "../components/Screen";
 import ChefCard from "./components/ChefCard";
+import DishCard from "./components/DishCard";
 import { getDishRatings, getChefById } from "../lib/db";
 import { safeToFixed } from "../lib/number";
 import { toFiniteNumberOrNull } from "../lib/number";
@@ -271,69 +272,6 @@ const formatCuisine = (cuisine: any): string => {
 // Primary color from design: #2C4E4B
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
-
-// Circular dish card for featured section
-function CircularDishCard({ dish }: { dish: Dish }) {
-  const { width } = useWindowDimensions();
-  const isMobile = width < 768;
-  const [rating, setRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
-  const [chefInfo, setChefInfo] = useState<{ name?: string; photo?: string } | null>(null);
-
-  useEffect(() => {
-    let m = true;
-    getDishRatings(Number(dish.id)).then((stats) => {
-      if (m) setRating({ avg: stats.average, count: stats.count });
-    });
-    if (dish.chef_id) {
-      getChefById(Number(dish.chef_id)).then((chef) => {
-        if (m && chef) setChefInfo({ name: chef.name, photo: chef.photo || chef.avatar });
-      });
-    }
-    return () => { m = false; };
-  }, [dish.id, dish.chef_id]);
-
-  const chefName = chefInfo?.name || dish.chef || 'Chef';
-
-  return (
-    <Link href={`/dish/${dish.id}`} asChild>
-      <TouchableOpacity activeOpacity={0.9} style={styles.circularDishCard}>
-        <View style={[styles.circularDishImageContainer, isMobile && styles.circularDishImageContainerMobile]}>
-          <Image
-            source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
-            style={styles.circularDishImage}
-            resizeMode="cover"
-          />
-        </View>
-        <View style={styles.circularDishInfo}>
-          <Text style={styles.circularDishTitle} numberOfLines={2}>
-            {dish.name}
-          </Text>
-          <Text style={styles.circularDishChefName} numberOfLines={1}>
-            {chefName}
-          </Text>
-          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'center', flexWrap: 'wrap' }}>
-            <Text style={styles.circularDishSubtitle} numberOfLines={1}>
-              {formatCad(dish.price)}
-            </Text>
-            {rating?.count > 0 && (
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginLeft: 4 }}>
-                <Image 
-                  source={require('../assets/star.png')} 
-                  style={{ width: 14, height: 14 }} 
-                  tintColor="#FE734C"
-                  resizeMode="contain" 
-                />
-                <Text style={{ fontSize: 12, color: '#666', fontFamily: theme.typography.fontFamily.body }}>
-                  {safeToFixed(rating?.avg)}
-                </Text>
-              </View>
-            )}
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Link>
-  );
-}
 
 // Dish card matching HTML design
 function HomeDishCard({ dish }: { dish: Dish }) {
@@ -620,7 +558,7 @@ export default function HomePage() {
         supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
         // Show all dishes from featured, active chefs with Stripe Connect completed, sorted by price
         supabase.from("dishes")
-          .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status, stripe_connect_completed)")
+          .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status, stripe_connect_completed, name)")
           .eq("chefs.featured", true)
           .eq("chefs.status", "active")
           .eq("chefs.stripe_connect_completed", true)
@@ -934,7 +872,7 @@ export default function HomePage() {
             >
               {displayDishes.map((dish, index) => (
                 <View key={`${dish.id}-${index}`} style={{ width: CARD_WIDTH }}>
-                  <CircularDishCard dish={dish} />
+                  <DishCard dish={dish} variant="homepage" style={{ width: '100%' }} />
                 </View>
               ))}
             </ScrollView>
@@ -1703,54 +1641,5 @@ const styles = StyleSheet.create({
   howItWorksGridMobile: {
     flexDirection: "column",
     gap: theme.spacing.lg,
-  },
-  // Circular Dish Card
-  circularDishCard: {
-    alignItems: 'center',
-    gap: theme.spacing.xs,
-    padding: theme.spacing.md,
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.radius.xl,
-  },
-  circularDishImageContainer: {
-    width: 120,
-    height: 120,
-    borderRadius: 60,
-    overflow: 'hidden',
-    backgroundColor: '#fff',
-  },
-  circularDishImageContainerMobile: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  circularDishImage: {
-    width: '100%',
-    height: '100%',
-  },
-  circularDishInfo: {
-    alignItems: 'center',
-    gap: 4,
-    width: '100%',
-    paddingHorizontal: 8,
-  },
-  circularDishTitle: {
-    fontSize: 14,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: 'bold',
-    color: '#333',
-    textAlign: 'center',
-  },
-  circularDishChefName: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 12,
-    color: '#777',
-    textAlign: 'center',
-  },
-  circularDishSubtitle: {
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 12,
-    color: '#666',
-    textAlign: 'center',
   },
 });

@@ -4,8 +4,12 @@
 /// <reference types="node" />
 export async function POST(request: Request): Promise<Response> {
   try {
-    const stripeSecretKey = process.env.STRIPE_SECRET_KEY;
-    
+    // Dev: TEST key only. Prod: PROD key, then legacy STRIPE_SECRET_KEY
+    const isDev = process.env.NODE_ENV === 'development';
+    const stripeSecretKey =
+      (isDev ? process.env.STRIPE_SECRET_TEST_KEY : process.env.STRIPE_SECRET_PROD_KEY ?? process.env.STRIPE_SECRET_KEY) ??
+      '';
+
     if (!stripeSecretKey) {
       return new Response(
         JSON.stringify({ error: 'Stripe secret key not configured' }),

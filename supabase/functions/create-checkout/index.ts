@@ -76,7 +76,10 @@ export const handler = async (req: Request) => {
     const body: TCreateCheckoutBody = parsed.data;
 
     // Env guardrails (fail fast with readable messages)
-    const STRIPE_SECRET_KEY = Deno.env.get('STRIPE_SECRET_KEY');
+    const isDev = Deno.env.get('APP_ENV') === 'development';
+    const STRIPE_SECRET_KEY = isDev
+      ? Deno.env.get('STRIPE_SECRET_TEST_KEY')
+      : (Deno.env.get('STRIPE_SECRET_PROD_KEY') ?? Deno.env.get('STRIPE_SECRET_KEY'));
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
     const SERVICE_ROLE_KEY = Deno.env.get('SERVICE_ROLE_KEY');
     if (!STRIPE_SECRET_KEY || !SUPABASE_URL || !SERVICE_ROLE_KEY) {
