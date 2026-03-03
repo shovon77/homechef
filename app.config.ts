@@ -14,7 +14,7 @@ export default {
     icon: './assets/AppLogoFinal2026.png',
     web: { 
       bundler: 'metro',
-      favicon: './assets/tablogo.png',
+      favicon: './assets/YHC-New-Logo-Only.png',
       output: 'static',
     },
   },

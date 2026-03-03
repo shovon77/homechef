@@ -51,10 +51,10 @@ export default function RootLayout() {
       
       // Add new favicon link - try multiple paths for compatibility
       const faviconPaths = [
-        '/assets/tablogo.png',
-        './assets/tablogo.png',
+        '/assets/YHC-New-Logo-Only.png',
+        './assets/YHC-New-Logo-Only.png',
         '/favicon.png',
-        '/_expo/static/assets/tablogo.png',
+        '/_expo/static/assets/YHC-New-Logo-Only.png',
       ];
       
       faviconPaths.forEach((path, index) => {
@@ -68,7 +68,7 @@ export default function RootLayout() {
       // Also add apple-touch-icon for better mobile support
       const appleLink = document.createElement('link');
       appleLink.rel = 'apple-touch-icon';
-      appleLink.href = '/assets/tablogo.png';
+      appleLink.href = '/assets/YHC-New-Logo-Only.png';
       document.head.appendChild(appleLink);
     }
   }, []);

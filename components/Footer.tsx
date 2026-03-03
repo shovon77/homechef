@@ -30,7 +30,7 @@ export default function Footer() {
           <View style={styles.brandContainer} collapsable={false}>
             <Image 
               key={pathname || 'footer-logo'}
-              source={require('../assets/YHC-Logo2.png')}
+              source={require('../assets/YHC-New-Logo-Only.png')}
               style={[styles.brandLogo, { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74, minWidth: 40, minHeight: 28 }]}
               resizeMode="contain"
             />

@@ -832,7 +832,7 @@ export default function NavBar() {
           >
             <Image 
               key={pathname || 'nav-logo'}
-              source={require('../assets/YHC-Logo2.png')}
+              source={require('../assets/YHC-New-Logo-Only.png')}
               style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile]) as any}
               resizeMode="contain"
             />
