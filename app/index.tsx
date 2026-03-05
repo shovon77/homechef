@@ -1634,7 +1634,7 @@ const styles = StyleSheet.create({
   },
   sectionTitleMobile: {
     fontFamily: theme.typography.fontFamily.display,
-    fontSize: 20,
+    fontSize: 26,
     paddingHorizontal: 0,
     fontWeight: theme.typography.fontWeight.bold,
   },
