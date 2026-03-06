@@ -86,11 +86,9 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
   const metaTint = ratingColor ?? '#FE734C';
   const showDistance = typeof distanceKm === 'number' && Number.isFinite(distanceKm) && distanceKm >= 0;
   const distanceText = showDistance
-    ? (distanceKm > 10
-        ? '>10 km'
-        : distanceKm < 1
-          ? '<1 km'
-          : `${distanceKm.toFixed(1)} km`)
+    ? (metaVariant === 'homepage'
+        ? (distanceKm > 10 ? '>10 km' : distanceKm < 1 ? '<1 km' : `${Number(distanceKm).toFixed(1)} km`)
+        : `${Number(distanceKm).toFixed(1)} km`)
     : '';
   const locationText = chef.location ? formatLocationCityState(chef.location) : '';
   const showLocation = !!locationText;
@@ -165,26 +163,30 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                     </Text>
                   </View>
                 )}
-                {ratingVal > 0 && (
-                  <View style={styles.rating}>
-                    <Image 
-                      source={require('../../assets/star.png')} 
-                      style={[styles.starIconImage, compact && styles.starIconImageCompact]}
-                      tintColor={starTint}
-                      resizeMode="contain" 
-                    />
-                    <Text style={[styles.ratingText, compact && styles.ratingTextCompact]}>{safeToFixed(ratingVal)}</Text>
-                  </View>
-                )}
-                {showDistance && (
-                  <View style={styles.distanceRow}>
-                    <Image
-                      source={require('../../assets/map.png')}
-                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
-                      tintColor={metaTint}
-                      resizeMode="contain"
-                    />
-                    <Text style={[styles.distanceText, compact && styles.ratingTextCompact]}>{distanceText}</Text>
+                {(ratingVal > 0 || showDistance) && (
+                  <View style={styles.ratingAndDistanceRow}>
+                    {ratingVal > 0 && (
+                      <View style={styles.rating}>
+                        <Image 
+                          source={require('../../assets/star.png')} 
+                          style={[styles.starIconImage, compact && styles.starIconImageCompact]}
+                          tintColor={starTint}
+                          resizeMode="contain" 
+                        />
+                        <Text style={[styles.ratingText, compact && styles.ratingTextCompact]}>{safeToFixed(ratingVal)}</Text>
+                      </View>
+                    )}
+                    {showDistance && (
+                      <View style={styles.distanceInline}>
+                        <Image
+                          source={require('../../assets/map.png')}
+                          style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
+                          tintColor={metaTint}
+                          resizeMode="contain"
+                        />
+                        <Text style={[styles.distanceText, compact && styles.ratingTextCompact]}>{distanceText}</Text>
+                      </View>
+                    )}
                   </View>
                 )}
               </>
@@ -256,11 +258,22 @@ const styles = StyleSheet.create({
     marginTop: 2,
     gap: 4,
   },
+  ratingAndDistanceRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 4,
+    flexWrap: 'wrap',
+  },
   rating: {
     flexDirection: "row",
     alignItems: "center",
     gap: 4,
-    marginTop: 4,
+  },
+  distanceInline: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
   },
   starIcon: {
     fontSize: theme.typography.fontSize.lg,

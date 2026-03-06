@@ -95,7 +95,20 @@ type Chef = {
   photo: string | null;
   rating: number | null;
   cuisine: string | null;
+  latitude?: number | null;
+  longitude?: number | null;
 };
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
+}
 
 export default function BrowsePage() {
   const { width } = useWindowDimensions();
@@ -202,6 +215,7 @@ export default function BrowsePage() {
   const [loading, setLoading] = useState(false);
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [chefs, setChefs] = useState<Chef[]>([]);
+  const [chefDistances, setChefDistances] = useState<Record<number, number>>({});
   const [cuisines, setCuisines] = useState<string[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [query, setQuery] = useState('');
@@ -288,6 +302,7 @@ export default function BrowsePage() {
     setError(null);
     setDishes([]);
     setChefs([]);
+    setChefDistances({});
     setCuisines([]);
     if (tab !== 'dishes') setCuisineFilter(null);
   }, [tab, debouncedQuery, sortBy]);
@@ -535,7 +550,7 @@ export default function BrowsePage() {
 
           let request = supabase
             .from('chefs')
-            .select('id,name,location,photo,rating,cuisine,bio,created_at', { count: 'exact' })
+            .select('id,name,location,photo,rating,cuisine,bio,created_at,latitude,longitude', { count: 'exact' })
             .eq('status', 'active')
             .eq('stripe_connect_completed', true);
 
@@ -553,6 +568,7 @@ export default function BrowsePage() {
             const chefIds = [...new Set((orderData ?? []).map((o: any) => o.chef_id).filter(Boolean))];
             if (chefIds.length === 0) {
               setChefs([]);
+              setChefDistances({});
               setTotal(0);
               skipFetch = true;
             } else {
@@ -582,8 +598,64 @@ export default function BrowsePage() {
             const { data, error, count } = await request;
             if (cancelled) return;
             if (error) throw error;
-            setChefs(data ?? []);
-            setTotal(count ?? (data?.length ?? 0));
+            const chefsData = (data ?? []) as Chef[];
+            setChefs(chefsData);
+            setTotal(count ?? chefsData.length);
+
+            // Compute distances for chef cards when user location is available
+            const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
+            const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
+            const hasUserCoords = profileLat !== null && profileLon !== null;
+            const hasUserLocation = !!(profile?.location?.trim());
+            if ((hasUserCoords || hasUserLocation) && profile && chefsData.length > 0) {
+              let userLat: number;
+              let userLng: number;
+              if (hasUserCoords) {
+                userLat = profileLat as number;
+                userLng = profileLon as number;
+              } else {
+                try {
+                  const { data: userGeoData, error: userGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                    body: { address: profile!.location },
+                  });
+                  if (userGeoError || !userGeoData?.lat || !userGeoData?.lng) {
+                    setChefDistances({});
+                    return;
+                  }
+                  userLat = userGeoData.lat;
+                  userLng = userGeoData.lng;
+                } catch {
+                  setChefDistances({});
+                  return;
+                }
+              }
+              const distances: Record<number, number> = {};
+              for (const chef of chefsData) {
+                let chefLat = toFiniteNumberOrNull(chef.latitude);
+                let chefLon = toFiniteNumberOrNull(chef.longitude);
+                if (chefLat === null || chefLon === null) {
+                  if (chef.location?.trim()) {
+                    try {
+                      const { data: chefGeoData, error: chefGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                        body: { address: chef.location },
+                      });
+                      if (!chefGeoError && chefGeoData?.lat != null && chefGeoData?.lng != null) {
+                        chefLat = chefGeoData.lat;
+                        chefLon = chefGeoData.lng;
+                      }
+                    } catch {
+                      // skip this chef
+                    }
+                  }
+                }
+                if (chefLat !== null && chefLon !== null) {
+                  distances[chef.id] = haversineKm(userLat, userLng, chefLat, chefLon);
+                }
+              }
+              if (!cancelled) setChefDistances(distances);
+            } else {
+              setChefDistances({});
+            }
           }
         } else {
           // Cuisines tab
@@ -628,6 +700,7 @@ export default function BrowsePage() {
           setError(err?.message ?? 'Failed to load');
           setDishes([]);
           setChefs([]);
+          setChefDistances({});
           setCuisines([]);
           setTotal(0);
         }
@@ -639,7 +712,7 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, page, debouncedQuery, sortBy, cuisineFilter, profile?.location, authLoading]);
+  }, [tab, page, debouncedQuery, sortBy, cuisineFilter, profile?.location, profile?.latitude, profile?.longitude, authLoading]);
 
   const go = (next: number) => {
     setPage(Math.max(1, Math.min(totalPages, next)));
@@ -933,6 +1006,7 @@ export default function BrowsePage() {
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                   ratingColor="#FE734C"
                   compact={!isMobile}
+                  distanceKm={chefDistances[chef.id] != null ? chefDistances[chef.id] : undefined}
                 />
               </View>
             ))}
