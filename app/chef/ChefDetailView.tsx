@@ -6,7 +6,7 @@ import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
 import { getChefById } from '../../lib/db';
 import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../lib/reviews';
-import { useRole } from '../../hooks/useRole';
+import { useAuth } from '../../context/AuthContext';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
 import Screen from '../../components/Screen';
 import DishCard from '../components/DishCard';
@@ -31,6 +31,17 @@ function formatLocationCityState(location: string | null | undefined): string {
   if (parts.length === 1) return parts[0];
   if (parts.length >= 3 && parts[parts.length - 1].length > 2) return parts.slice(-3, -1).join(', ');
   return parts.slice(-2).join(', ');
+}
+
+function haversineKm(lat1: number, lng1: number, lat2: number, lng2: number): number {
+  const R = 6371;
+  const dLat = (lat2 - lat1) * Math.PI / 180;
+  const dLng = (lng2 - lng1) * Math.PI / 180;
+  const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+    Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) *
+    Math.sin(dLng / 2) * Math.sin(dLng / 2);
+  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  return R * c;
 }
 
 function formatCuisine(cuisine: unknown): string {
@@ -108,7 +119,10 @@ export default function ChefDetailView() {
   const [bestSellerDishes, setBestSellerDishes] = useState<Dish[]>([]);
 
   // Review Form State
-  const { user } = useRole();
+  const { user, profile } = useAuth();
+
+  // Distance (km) when user has location
+  const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const { addToCart } = useCart();
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -243,9 +257,61 @@ export default function ChefDetailView() {
     return () => { mounted = false; };
   }, [chefId, isMobile]); // Re-fetch if chefId changes
 
+  // Compute distance when profile and chef have coords (with geocode fallback)
+  useEffect(() => {
+    if (!chef || !profile) {
+      setDistanceKm(null);
+      return;
+    }
+    let cancelled = false;
+    const run = async () => {
+      let userLat: number | null = typeof (profile as any)?.latitude === 'number' ? (profile as any).latitude : null;
+      let userLon: number | null = typeof (profile as any)?.longitude === 'number' ? (profile as any).longitude : null;
+      let chefLat: number | null = typeof (chef as any)?.latitude === 'number' ? (chef as any).latitude : null;
+      let chefLon: number | null = typeof (chef as any)?.longitude === 'number' ? (chef as any).longitude : null;
+
+      // Geocode user if we have location but no coords
+      if ((userLat == null || userLon == null) && (profile as any)?.location?.trim()) {
+        try {
+          const { data } = await supabase.functions.invoke('google-geocode-forward', {
+            body: { address: (profile as any).location },
+          });
+          if (!cancelled && data?.lat != null && data?.lng != null) {
+            userLat = data.lat;
+            userLon = data.lng;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      // Geocode chef if we have location but no coords
+      if ((chefLat == null || chefLon == null) && chef?.location?.trim()) {
+        try {
+          const { data } = await supabase.functions.invoke('google-geocode-forward', {
+            body: { address: chef.location },
+          });
+          if (!cancelled && data?.lat != null && data?.lng != null) {
+            chefLat = data.lat;
+            chefLon = data.lng;
+          }
+        } catch {
+          // ignore
+        }
+      }
+
+      if (!cancelled && userLat != null && userLon != null && chefLat != null && chefLon != null) {
+        setDistanceKm(haversineKm(userLat, userLon, chefLat, chefLon));
+      } else {
+        setDistanceKm(null);
+      }
+    };
+    run();
+    return () => { cancelled = true; };
+  }, [chef, profile]);
 
   const avatar = chef?.photo || chef?.avatar || '';
-  const title = chef?.name || (chefId ? `Chef #${chefId}` : 'Chef');
+  const title = (chef as any)?.brand_name?.trim() || chef?.name?.trim() || (chefId ? `Chef #${chefId}` : 'Chef');
   const location = chef?.location || '';
   const bio = chef?.bio ?? chef?.description ?? '';
   const avgRating = Number(chef?.rating ?? 0);
@@ -353,22 +419,36 @@ export default function ChefDetailView() {
                 </View>
                 <View style={styles.chefCardInfo}>
                   <Text style={styles.chefCardName} numberOfLines={1}>{title}</Text>
-                  <Text style={styles.chefCardCuisine} numberOfLines={1}>{formatCuisine(chef?.cuisine)}</Text>
-                  {bio ? <Text style={styles.chefCardBio} numberOfLines={isMobile ? 2 : 5}>{bio}</Text> : null}
-                  {location && formatLocationCityState(location) ? (
-                    <View style={styles.chefCardLocationRow}>
-                      <Image source={require('../../assets/locationnewicon.png')} style={styles.chefCardLocationIcon} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                      <Text style={styles.chefCardLocation} numberOfLines={1}>{formatLocationCityState(location)}</Text>
+                  <View style={styles.chefCardMetaRow}>
+                    {avgRating > 0 ? (
+                      <View style={styles.chefCardMetaItem}>
+                        <Image source={require('../../assets/star.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={STAR_COLOR} resizeMode="contain" />
+                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{avgRating.toFixed(1)}</Text>
+                      </View>
+                    ) : null}
+                    {location && formatLocationCityState(location) ? (
+                      <View style={styles.chefCardMetaItem}>
+                        <Image source={require('../../assets/locationnewicon.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]} numberOfLines={1}>{formatLocationCityState(location)}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {distanceKm != null ? (
+                    <View style={[styles.chefCardMetaRow, styles.chefCardMetaRowDistance]}>
+                      <View style={[styles.chefCardMetaItem, styles.chefCardMetaItemDistance]}>
+                        <Image source={require('../../assets/map.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{`${distanceKm.toFixed(1)} km`}</Text>
+                      </View>
                     </View>
                   ) : null}
-                  {avgRating > 0 ? (
-                    <View style={styles.chefCardRating}>
-                      <Image source={require('../../assets/star.png')} style={styles.chefCardStarIcon} tintColor={STAR_COLOR} resizeMode="contain" />
-                      <Text style={styles.chefCardRatingText}>{avgRating.toFixed(1)}</Text>
-                    </View>
-                  ) : null}
+                  <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]} numberOfLines={isMobile ? undefined : 1}>{formatCuisine(chef?.cuisine)}</Text>
                 </View>
               </View>
+              {bio ? (
+                <View style={styles.chefCardBioWrap}>
+                  <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{bio}</Text>
+                </View>
+              ) : null}
             </View>
           </View>
 
@@ -559,7 +639,7 @@ const styles = StyleSheet.create({
     width: '100%',
     paddingHorizontal: Platform.select({
       web: theme.spacing['4xl'],
-      default: theme.spacing.md,
+      default: theme.spacing.sm,
     }),
     paddingVertical: theme.spacing['2xl'],
     paddingBottom: 80,
@@ -586,6 +666,10 @@ const styles = StyleSheet.create({
     gap: 0,
     padding: 0,
     overflow: 'hidden',
+    ...Platform.select({
+      default: { flexGrow: 0, flexShrink: 0, flex: 0 },
+      web: {},
+    }),
     borderWidth: 1,
     borderColor: BORDER_LIGHT,
     borderRadius: theme.radius.xl,
@@ -603,32 +687,30 @@ const styles = StyleSheet.create({
   },
   chefCardLayout: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'flex-start',
     flex: 1,
     width: '100%',
     minHeight: 140,
-    backgroundColor: '#F4F4F4',
+    backgroundColor: '#FFFFFF',
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
+    paddingLeft: Platform.select({ web: theme.spacing.md, default: theme.spacing.sm }),
   },
   chefCardImageWrap: {
-    flex: 1,
-    alignSelf: 'stretch',
-    minHeight: 140,
+    width: Platform.select({ web: 96, default: 80 }),
+    height: Platform.select({ web: 96, default: 80 }),
+    flexShrink: 0,
+    alignSelf: 'flex-start',
     position: 'relative',
+    marginTop: theme.spacing.md,
     ...Platform.select({
-      web: {
-        maxWidth: 280,
-        flex: 0,
-        minWidth: 160,
-      },
+      web: { marginTop: theme.spacing.lg },
       default: {},
     }),
   },
   chefCardAvatar: {
     ...StyleSheet.absoluteFillObject,
-    borderTopLeftRadius: theme.radius.xl,
-    borderBottomLeftRadius: theme.radius.xl,
+    borderRadius: Platform.select({ web: 48, default: 40 }),
     backgroundColor: BACKGROUND_LIGHT,
   },
   chefCardAvatarPlaceholder: {
@@ -637,8 +719,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    borderTopLeftRadius: theme.radius.xl,
-    borderBottomLeftRadius: theme.radius.xl,
+    borderRadius: Platform.select({ web: 48, default: 40 }),
     backgroundColor: PRIMARY_COLOR,
     alignItems: 'center',
     justifyContent: 'center',
@@ -653,15 +734,14 @@ const styles = StyleSheet.create({
     flex: 1,
     minWidth: 0,
     gap: 4,
-    justifyContent: 'center',
+    justifyContent: 'flex-start',
     paddingVertical: theme.spacing.md,
-    paddingLeft: theme.spacing.md,
-    paddingRight: theme.spacing.lg,
+    paddingLeft: Platform.select({ web: theme.spacing.md, default: theme.spacing.sm }),
+    paddingRight: Platform.select({ web: theme.spacing.lg, default: theme.spacing.sm }),
     ...Platform.select({
       web: {
         paddingRight: theme.spacing['2xl'],
         paddingVertical: theme.spacing.lg,
-        gap: 8,
       },
       default: {},
     }),
@@ -682,12 +762,21 @@ const styles = StyleSheet.create({
   chefCardCuisine: {
     color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.sm,
+    fontSize: theme.typography.fontSize.base,
     ...Platform.select({
       web: {
-        fontSize: theme.typography.fontSize.base,
         lineHeight: 22,
       },
+      default: { fontSize: 14 },
+    }),
+  },
+  chefCardBioWrap: {
+    width: '100%',
+    paddingHorizontal: theme.spacing.sm,
+    paddingBottom: theme.spacing.md,
+    paddingTop: Platform.select({ web: theme.spacing.xs, default: 2 }),
+    ...Platform.select({
+      web: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.lg },
       default: {},
     }),
   },
@@ -696,12 +785,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.xs,
     lineHeight: 16,
-    marginTop: 2,
     ...Platform.select({
       web: {
         fontSize: theme.typography.fontSize.sm,
         lineHeight: 22,
-        marginTop: 6,
       },
       default: {},
     }),
@@ -715,6 +802,40 @@ const styles = StyleSheet.create({
       web: { marginTop: 8, gap: 6 },
       default: {},
     }),
+  },
+  chefCardMetaRow: {
+    flexDirection: 'row',
+    flexWrap: 'nowrap',
+    alignItems: 'center',
+    justifyContent: 'flex-start',
+    gap: Platform.select({ web: 16, default: 6 }),
+  },
+  chefCardMetaRowDistance: {},
+  chefCardMetaItemDistance: {
+    gap: 6,
+  },
+  chefCardMetaItem: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+    flexShrink: 1,
+    minWidth: 0,
+  },
+  chefCardMetaIcon: {
+    width: 20,
+    height: 20,
+  },
+  chefCardMetaIconMobile: {
+    width: 18,
+    height: 18,
+  },
+  chefCardMetaText: {
+    color: BRAND_BLACK,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  chefCardMetaTextMobile: {
+    fontSize: 14,
   },
   chefCardLocationIcon: {
     width: 16,
