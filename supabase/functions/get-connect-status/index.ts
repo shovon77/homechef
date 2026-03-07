@@ -73,7 +73,16 @@ export const handler = async (req: Request) => {
           console.warn('get-connect-status test chef bypass (no account)', e);
         }
       }
-      return respond(200, { hasAccount: false });
+      let chefStatusNoAccount: string | null = null;
+      try {
+        const { data: r } = await supabase.from('chefs').select('status').eq('user_id', profile.id).maybeSingle();
+        chefStatusNoAccount = r?.status ?? null;
+        if (!chefStatusNoAccount && user?.email) {
+          const { data: re } = await supabase.from('chefs').select('status').eq('email', user.email).maybeSingle();
+          chefStatusNoAccount = re?.status ?? null;
+        }
+      } catch (_) { /* non-blocking */ }
+      return respond(200, { hasAccount: false, chef_status: chefStatusNoAccount });
     }
 
     const account = await stripe.accounts.retrieve(profile.stripe_account_id);
@@ -136,6 +145,25 @@ export const handler = async (req: Request) => {
       console.warn('get-connect-status chef update error', err);
     }
 
+    // Fetch updated chef status for client
+    let chefStatus: string | null = null;
+    try {
+      const { data: chefRow } = await supabase
+        .from('chefs')
+        .select('status')
+        .eq('user_id', profile.id)
+        .maybeSingle();
+      chefStatus = chefRow?.status ?? null;
+      if (!chefStatus && user.email) {
+        const { data: byEmail } = await supabase
+          .from('chefs')
+          .select('status')
+          .eq('email', user.email)
+          .maybeSingle();
+        chefStatus = byEmail?.status ?? null;
+      }
+    } catch (_) { /* non-blocking */ }
+
     return respond(200, {
       hasAccount: true,
       accountId: account.id,
@@ -147,6 +175,7 @@ export const handler = async (req: Request) => {
       requirements,
       capabilities,
       loginLink,
+      chef_status: chefStatus,
     });
   } catch (err: any) {
     console.error('get-connect-status error', err?.raw ?? err);

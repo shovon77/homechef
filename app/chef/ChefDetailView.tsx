@@ -399,54 +399,51 @@ export default function ChefDetailView() {
             {/* Chef card - full width on top */}
             <View style={[styles.sidebar, styles.sidebarFullWidth]}>
             <View style={styles.sidebarCard}>
-              {/* First widget: same as explore ChefCard (image left, info right) */}
-              <View style={styles.chefCardLayout}>
-                <View style={styles.chefCardImageWrap}>
-                  {avatar && !chefImageError ? (
-                    <Image
-                      source={{ uri: avatar }}
-                      style={styles.chefCardAvatar}
-                      resizeMode="cover"
-                      onError={() => setChefImageError(true)}
-                    />
-                  ) : (
-                    <View style={[styles.chefCardAvatar, styles.chefCardAvatarPlaceholder]}>
-                      <Text style={styles.chefCardInitials}>
-                        {title.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
-                      </Text>
-                    </View>
-                  )}
-                </View>
-                <View style={styles.chefCardInfo}>
-                  <Text style={styles.chefCardName} numberOfLines={1}>{title}</Text>
-                  <View style={styles.chefCardMetaRow}>
-                    {avgRating > 0 ? (
-                      <View style={styles.chefCardMetaItem}>
-                        <Image source={require('../../assets/star.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={STAR_COLOR} resizeMode="contain" />
-                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{avgRating.toFixed(1)}</Text>
-                      </View>
-                    ) : null}
-                    {location && formatLocationCityState(location) ? (
-                      <View style={styles.chefCardMetaItem}>
-                        <Image source={require('../../assets/locationnewicon.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]} numberOfLines={1}>{formatLocationCityState(location)}</Text>
-                      </View>
-                    ) : null}
+              {/* Image at top, center aligned */}
+              <View style={styles.chefCardImageWrap}>
+                {avatar && !chefImageError ? (
+                  <Image
+                    source={{ uri: avatar }}
+                    style={styles.chefCardAvatar}
+                    resizeMode="cover"
+                    onError={() => setChefImageError(true)}
+                  />
+                ) : (
+                  <View style={[styles.chefCardAvatar, styles.chefCardAvatarPlaceholder]}>
+                    <Text style={styles.chefCardInitials}>
+                      {title.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2)}
+                    </Text>
                   </View>
-                  {distanceKm != null ? (
-                    <View style={[styles.chefCardMetaRow, styles.chefCardMetaRowDistance]}>
-                      <View style={[styles.chefCardMetaItem, styles.chefCardMetaItemDistance]}>
-                        <Image source={require('../../assets/map.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{`${distanceKm.toFixed(1)} km`}</Text>
-                      </View>
-                    </View>
-                  ) : null}
-                  <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]} numberOfLines={isMobile ? undefined : 1}>{formatCuisine(chef?.cuisine)}</Text>
-                </View>
+                )}
+              </View>
+              {/* Name/brand name */}
+              <Text style={styles.chefCardName} numberOfLines={1}>{title}</Text>
+              {/* Cuisine types */}
+              <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile, styles.chefCardCuisineLine]} numberOfLines={isMobile ? undefined : 1}>{formatCuisine(chef?.cuisine)}</Text>
+              {/* Rating, location, distance on one line */}
+              <View style={styles.chefCardMetaRow}>
+                {avgRating > 0 ? (
+                  <View style={styles.chefCardMetaItem}>
+                    <Image source={require('../../assets/star.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={STAR_COLOR} resizeMode="contain" />
+                    <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{avgRating.toFixed(1)}</Text>
+                  </View>
+                ) : null}
+                {location && formatLocationCityState(location) ? (
+                  <View style={styles.chefCardMetaItem}>
+                    <Image source={require('../../assets/locationnewicon.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                    <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]} numberOfLines={1}>{formatLocationCityState(location)}</Text>
+                  </View>
+                ) : null}
+                {distanceKm != null ? (
+                  <View style={[styles.chefCardMetaItem, styles.chefCardMetaItemDistance]}>
+                    <Image source={require('../../assets/map.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                    <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{`${distanceKm.toFixed(1)} km`}</Text>
+                  </View>
+                ) : null}
               </View>
               {bio ? (
                 <View style={styles.chefCardBioWrap}>
-                  <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{bio}</Text>
+                  <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile, styles.chefCardBioText]}>{bio}</Text>
                 </View>
               ) : null}
             </View>
@@ -664,7 +661,9 @@ const styles = StyleSheet.create({
     flex: 1,
     minHeight: 200,
     gap: 0,
-    padding: 0,
+    paddingHorizontal: theme.spacing.sm,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.md,
     overflow: 'hidden',
     ...Platform.select({
       default: { flexGrow: 0, flexShrink: 0, flex: 0 },
@@ -685,28 +684,12 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  chefCardLayout: {
-    flexDirection: 'row',
-    alignItems: 'flex-start',
-    flex: 1,
-    width: '100%',
-    minHeight: 140,
-    backgroundColor: '#FFFFFF',
-    borderRadius: theme.radius.xl,
-    overflow: 'hidden',
-    paddingLeft: Platform.select({ web: theme.spacing.md, default: theme.spacing.sm }),
-  },
   chefCardImageWrap: {
     width: Platform.select({ web: 96, default: 80 }),
     height: Platform.select({ web: 96, default: 80 }),
     flexShrink: 0,
-    alignSelf: 'flex-start',
+    alignSelf: 'center',
     position: 'relative',
-    marginTop: theme.spacing.md,
-    ...Platform.select({
-      web: { marginTop: theme.spacing.lg },
-      default: {},
-    }),
   },
   chefCardAvatar: {
     ...StyleSheet.absoluteFillObject,
@@ -730,27 +713,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
-  chefCardInfo: {
-    flex: 1,
-    minWidth: 0,
-    gap: 4,
-    justifyContent: 'flex-start',
-    paddingVertical: theme.spacing.md,
-    paddingLeft: Platform.select({ web: theme.spacing.md, default: theme.spacing.sm }),
-    paddingRight: Platform.select({ web: theme.spacing.lg, default: theme.spacing.sm }),
-    ...Platform.select({
-      web: {
-        paddingRight: theme.spacing['2xl'],
-        paddingVertical: theme.spacing.lg,
-      },
-      default: {},
-    }),
-  },
   chefCardName: {
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
+    textAlign: 'center',
+    marginTop: theme.spacing.sm,
     ...Platform.select({
       web: {
         fontSize: 20,
@@ -758,6 +727,10 @@ const styles = StyleSheet.create({
       },
       default: {},
     }),
+  },
+  chefCardCuisineLine: {
+    textAlign: 'center',
+    marginTop: theme.spacing.xs,
   },
   chefCardCuisine: {
     color: BRAND_BLACK,
@@ -772,13 +745,10 @@ const styles = StyleSheet.create({
   },
   chefCardBioWrap: {
     width: '100%',
-    paddingHorizontal: theme.spacing.sm,
-    paddingBottom: theme.spacing.md,
-    paddingTop: Platform.select({ web: theme.spacing.xs, default: 2 }),
-    ...Platform.select({
-      web: { paddingHorizontal: theme.spacing.lg, paddingBottom: theme.spacing.lg },
-      default: {},
-    }),
+    paddingTop: Platform.select({ web: theme.spacing.sm, default: theme.spacing.xs }),
+  },
+  chefCardBioText: {
+    textAlign: 'center',
   },
   chefCardBio: {
     color: BRAND_BLACK,
@@ -807,10 +777,10 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     flexWrap: 'nowrap',
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    justifyContent: 'center',
+    marginTop: theme.spacing.xs,
     gap: Platform.select({ web: 16, default: 6 }),
   },
-  chefCardMetaRowDistance: {},
   chefCardMetaItemDistance: {
     gap: 6,
   },

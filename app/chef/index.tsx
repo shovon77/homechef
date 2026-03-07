@@ -476,9 +476,10 @@ export default function ChefDashboard() {
           setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
         }
 
-        // Fetch latest Stripe Connect status for accurate charges/payouts state
+        // Fetch latest Stripe Connect status for accurate charges/payouts state (may update chef in DB)
+        let connectStatus: { chef_status?: string | null; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string } | null = null;
         try {
-          const connectStatus = await callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string }>('get-connect-status', {});
+          connectStatus = await callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string; chef_status?: string | null }>('get-connect-status', {});
           if (connectStatus) {
             if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
             if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
@@ -493,6 +494,7 @@ export default function ChefDashboard() {
           if (ins.error) throw ins.error;
           me = ins.data as ChefRow;
         }
+        if (connectStatus?.chef_status != null) me = { ...me, status: connectStatus.chef_status };
         setChef(me);
         setName(me.name || '');
         setBio(me.bio || '');
@@ -527,6 +529,13 @@ export default function ChefDashboard() {
     }
   }, [activeTab, chef]);
 
+  const refetchChef = useCallback(async () => {
+    if (!chef) return;
+    try {
+      const { data } = await supabase.from('chefs').select('*').eq('id', chef.id).maybeSingle();
+      if (data) setChef(data as ChefRow);
+    } catch (_) { /* non-blocking */ }
+  }, [chef?.id]);
 
   async function saveProfile() {
     if (!chef) return;
@@ -1922,6 +1931,13 @@ export default function ChefDashboard() {
     <View style={styles.welcomeHeader}>
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
       <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
+      {chef ? (
+        <Link href={`/chef/${chef.id}`} asChild>
+          <TouchableOpacity style={styles.viewStoreButton}>
+            <Text style={styles.viewStoreButtonText}>View my store page</Text>
+          </TouchableOpacity>
+        </Link>
+      ) : null}
       {isApplicationPending ? (
         <View style={styles.statusToggleRow}>
           <Text style={[styles.statusToggleText, styles.statusToggleTextPaused]}>Pending</Text>
@@ -2717,13 +2733,18 @@ export default function ChefDashboard() {
   const PayoutsTab = (
     <View style={{ flex: 1, backgroundColor: BG_PAGE }}>
       <PayoutSettings
-        onStatusChange={async (nextStatus) => {
+        onStatusChange={async (nextStatus: { chef_status?: string | null } | null) => {
           setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
           if (typeof nextStatus?.charges_enabled === 'boolean') {
             setChargesEnabled(nextStatus.charges_enabled);
           }
           if (nextStatus?.accountId) {
             setStripeAccountId(nextStatus.accountId);
+          }
+          if (chef && nextStatus?.chef_status != null) {
+            setChef((prev) => prev ? { ...prev, status: nextStatus!.chef_status! } : prev);
+          } else {
+            await refetchChef();
           }
         }}
       />
@@ -3566,13 +3587,18 @@ export default function ChefDashboard() {
                 </Text>
               ) : (
                 <PayoutSettings
-                  onStatusChange={async (nextStatus) => {
+                  onStatusChange={async (nextStatus: { chef_status?: string | null } | null) => {
                     setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
                     if (typeof nextStatus?.charges_enabled === 'boolean') {
                       setChargesEnabled(nextStatus.charges_enabled);
                     }
                     if (nextStatus?.accountId) {
                       setStripeAccountId(nextStatus.accountId);
+                    }
+                    if (chef && nextStatus?.chef_status != null) {
+                      setChef((prev) => prev ? { ...prev, status: nextStatus!.chef_status! } : prev);
+                    } else {
+                      await refetchChef();
                     }
                   }}
                 />
@@ -4039,6 +4065,20 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: 16,
     marginTop: 4,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  viewStoreButton: {
+    paddingTop: 0,
+    paddingBottom: 12,
+    paddingRight: 16,
+    paddingLeft: 0,
+    alignSelf: 'flex-start',
+    marginTop: 4,
+  },
+  viewStoreButtonText: {
+    color: PRIMARY_COLOR,
+    fontWeight: '400',
+    fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
   },
   statusToggleRow: {

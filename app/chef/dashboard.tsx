@@ -2,7 +2,7 @@
 'use client'
 import React, { useEffect, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from 'react-native'
-import { useRouter } from 'expo-router'
+import { useRouter, Link } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { uploadToBucket } from '../../lib/upload'
 import FilePicker from '../../components/FilePicker'
@@ -155,6 +155,14 @@ export default function ChefDashboard() {
     <ScrollView style={{ flex:1, backgroundColor:C.bg }} contentContainerStyle={{ padding:16, gap:16 }}>
       <Text style={{ color:C.text, fontSize:24, fontWeight:'900', fontFamily: theme.typography.fontFamily.display }}>Chef Dashboard</Text>
       <View style={{ height:3, width:160, backgroundColor:C.accent, marginTop:6, borderRadius:3 }} />
+
+      {chef ? (
+        <Link href={`/chef/${chef.id}`} asChild>
+          <TouchableOpacity style={{ backgroundColor: C.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, alignSelf: 'flex-start', marginTop: 12 }}>
+            <Text style={{ color: C.btnTextDark, fontWeight: '900', fontFamily: theme.typography.fontFamily.body }}>View my store page</Text>
+          </TouchableOpacity>
+        </Link>
+      ) : null}
 
       {msg ? <Banner color={C.primary} text={msg} /> : null}
       {err ? <Banner color={C.danger} text={err} /> : null}
