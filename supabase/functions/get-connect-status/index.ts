@@ -14,6 +14,9 @@ const corsHeaders = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
+/** Test chef user ID – bypass Stripe Connect check so dishes stay visible in production */
+const TEST_CHEF_USER_ID = 'fb2f513f-fa0c-48d5-828a-086d2f241463';
+
 function respond(status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), {
     status,
@@ -56,6 +59,20 @@ export const handler = async (req: Request) => {
     }
 
     if (!profile?.stripe_account_id) {
+      // Test chef bypass: ensure stripe_connect_completed = true so dishes stay visible
+      if (profile?.id === TEST_CHEF_USER_ID) {
+        try {
+          await supabase
+            .from('chefs')
+            .update({ stripe_connect_completed: true })
+            .eq('user_id', profile.id);
+          if (user?.email) {
+            await supabase.from('chefs').update({ stripe_connect_completed: true }).eq('email', user.email);
+          }
+        } catch (e) {
+          console.warn('get-connect-status test chef bypass (no account)', e);
+        }
+      }
       return respond(200, { hasAccount: false });
     }
 
@@ -86,7 +103,10 @@ export const handler = async (req: Request) => {
     }
 
     // Update chefs: stripe_connect_completed = true only when BOTH charges AND payouts enabled (else listings hidden)
-    const canAcceptPayments = Boolean(account.charges_enabled && account.payouts_enabled);
+    // Test chef bypass: always treat as connected so dishes stay visible in production
+    const canAcceptPayments = profile.id === TEST_CHEF_USER_ID
+      ? true
+      : Boolean(account.charges_enabled && account.payouts_enabled);
     try {
       const updatePayload: Record<string, unknown> = { stripe_connect_completed: canAcceptPayments };
       // Only set status='paused' when first completing Connect (stripe_connect_completed false->true).

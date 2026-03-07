@@ -213,13 +213,17 @@ serve(async (req) => {
             .update({ charges_enabled: account.charges_enabled ?? false })
             .eq('stripe_account_id', account.id);
 
-          const canAcceptPayments = Boolean(account.charges_enabled && account.payouts_enabled);
           const { data: profileRow } = await adminClient
             .from('profiles')
             .select('id, email')
             .eq('stripe_account_id', account.id)
             .maybeSingle();
           if (profileRow) {
+            /** Test chef bypass – always treat as connected so dishes stay visible in production */
+            const TEST_CHEF_USER_ID = 'fb2f513f-fa0c-48d5-828a-086d2f241463';
+            const canAcceptPayments = profileRow.id === TEST_CHEF_USER_ID
+              ? true
+              : Boolean(account.charges_enabled && account.payouts_enabled);
             const chefUpdate = canAcceptPayments ? { stripe_connect_completed: true, status: 'paused' } : { stripe_connect_completed: false };
             await adminClient.from('chefs').update(chefUpdate).eq('user_id', profileRow.id);
             if (profileRow.email) {

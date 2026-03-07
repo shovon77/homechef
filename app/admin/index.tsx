@@ -379,11 +379,11 @@ export default function AdminPage() {
       const { data: userOrders } = userIds.length > 0
         ? await supabase
             .from('orders')
-            .select('user_id, total_cents')
+            .select('user_id, total_cents, status')
             .in('user_id', userIds)
         : { data: [] };
       
-      // Calculate order count and total spend per user
+      // Calculate order count and total spend per user (spend only from completed orders)
       const userStats = new Map();
       (userOrders || []).forEach((order: any) => {
         const userId = order.user_id;
@@ -392,7 +392,9 @@ export default function AdminPage() {
         }
         const stats = userStats.get(userId);
         stats.orderCount += 1;
-        stats.totalSpend += order.total_cents || 0;
+        if (order.status === 'completed') {
+          stats.totalSpend += order.total_cents || 0;
+        }
       });
       
       const usersWithStats = (userRows || []).map((u: any) => {
@@ -1737,7 +1739,6 @@ export default function AdminPage() {
     let totalCents = 0;
     let orderCount = 0;
     let grossSalesCents = 0;
-    let taxesCents = 0;
     let totalPlatformFeesCents = 0;
     let totalPlatformCommissionCents = 0;
     let totalChefPayoutsCents = 0;
@@ -1745,52 +1746,36 @@ export default function AdminPage() {
     const uniqueCustomerIds = new Set<string>();
 
     // Order structure: total_cents = subtotal + platform_fee (no tax). subtotal = food only. platform_commission = 10% of subtotal.
+    // Marketplace metrics (gross sales, order count, active chefs/customers) use only completed orders.
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
+      const isCompleted = (order as any).status === 'completed';
       const createdAt = order.created_at ? new Date(order.created_at) : null;
       const platformFee = (order as any).platform_fee_cents ?? 0;
       const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
       const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
 
       totalCents += order.total_cents ?? 0;
-      orderCount += 1;
 
-      // Gross sales: total customer payments (subtotal + platform fee)
-      grossSalesCents += order.total_cents ?? 0;
-
-      // Track unique customers
-      if (order.user_id) {
-        uniqueCustomerIds.add(order.user_id);
-      }
-
-      // Taxes: use stored tax_cents (app charges 0 tax)
-      taxesCents += (order as any).tax_cents ?? 0;
-
-      // Platform flat fee and 10% commission
-      totalPlatformFeesCents += platformFee;
-      totalPlatformCommissionCents += platformCommission;
-      totalChefPayoutsCents += subtotalCents - platformCommission;
-      
-      // Refunds will be calculated separately from order_issues table
-      
-      // Stripe fees: typically 2.9% + $0.30 per transaction
-      // For simplicity, calculate as 2.9% of total_cents + $0.30 per order
-      if (order.stripe_payment_intent_id) {
-        const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
-        totalStripeFeesCents += stripeFee;
-      }
-      
-      // Only count platform fees for orders where payment has been captured
-      // Platform fees are collected when payment is captured (indicated by stripe_transfer_id)
-      const hasTransfer = Boolean((order as any).stripe_transfer_id);
-      
-      // Count fees only if payment was captured (transfer exists) and fee is positive
-      if (createdAt && hasTransfer && platformFee > 0) {
-        if (createdAt >= monthAgo) {
-          monthlyCents += platformFee;
+      // Marketplace and platform fees: only completed orders
+      if (isCompleted) {
+        orderCount += 1;
+        grossSalesCents += order.total_cents ?? 0;
+        if (order.user_id) uniqueCustomerIds.add(order.user_id);
+        // Platform flat fee and 10% commission
+        totalPlatformFeesCents += platformFee;
+        totalPlatformCommissionCents += platformCommission;
+        totalChefPayoutsCents += subtotalCents - platformCommission;
+        // Stripe fees: typically 2.9% + $0.30 per transaction
+        if (order.stripe_payment_intent_id) {
+          const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
+          totalStripeFeesCents += stripeFee;
         }
-        if (createdAt >= weekAgo) {
-          weeklyCents += platformFee;
+        // Weekly/monthly platform fee counts
+        const hasTransfer = Boolean((order as any).stripe_transfer_id);
+        if (createdAt && hasTransfer && platformFee > 0) {
+          if (createdAt >= monthAgo) monthlyCents += platformFee;
+          if (createdAt >= weekAgo) weeklyCents += platformFee;
         }
       }
     });
@@ -1798,10 +1783,10 @@ export default function AdminPage() {
     const totalUsers = Array.isArray(users) ? users.length : 0;
     const totalChefs = Array.isArray(chefs) ? chefs.length : 0;
     
-    // Active chefs: count unique chefs who have orders in the filtered date range
+    // Active chefs: count unique chefs who have completed orders in the filtered date range
     const uniqueChefIds = new Set<string>();
     filteredOrders.forEach((order) => {
-      if (order.chef_id) {
+      if ((order as any).status === 'completed' && order.chef_id) {
         uniqueChefIds.add(String(order.chef_id));
       }
     });
@@ -1886,7 +1871,6 @@ export default function AdminPage() {
       totalUsers,
       totalChefs,
       grossSalesCents,
-      taxesCents,
       activeChefs,
       activeCustomers,
       averageOrderValue,
@@ -2011,6 +1995,7 @@ export default function AdminPage() {
 
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
+      if ((order as any).status !== 'completed') return;
       const platformFee = (order as any).platform_fee_cents ?? 0;
       const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
       const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
@@ -2168,6 +2153,7 @@ export default function AdminPage() {
 
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
+      if ((order as any).status !== 'completed') return;
       const platformFee = (order as any).platform_fee_cents ?? 0;
       const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
       const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
@@ -2531,10 +2517,8 @@ export default function AdminPage() {
         </View>
         <View style={styles.metricsList}>
           {[
-            // New metrics
             { label: 'Gross sales', value: overviewStats.grossSalesCents / 100, formatted: formatCad(overviewStats.grossSalesCents), isCurrency: true },
             { label: 'Total orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString(), isCurrency: false },
-            { label: 'Taxes', value: overviewStats.taxesCents / 100, formatted: formatCad(overviewStats.taxesCents), isCurrency: true },
             { label: 'Active chefs', value: overviewStats.activeChefs, formatted: overviewStats.activeChefs.toLocaleString(), isCurrency: false },
             { label: 'Active customers', value: overviewStats.activeCustomers, formatted: overviewStats.activeCustomers.toLocaleString(), isCurrency: false },
             { label: 'Average order value', value: overviewStats.averageOrderValue / 100, formatted: formatCad(Math.round(overviewStats.averageOrderValue)), isCurrency: true },
@@ -4185,142 +4169,6 @@ export default function AdminPage() {
               );
             })()}
 
-            {orderDetailModalId !== null && (() => {
-              if (loadingOrderDetails) {
-                return (
-                  <Modal visible transparent animationType="fade" onRequestClose={() => setOrderDetailModalId(null)}>
-                    <View style={styles.issueDetailOverlay}>
-                      <View style={styles.issueDetailContent}>
-                        <ActivityIndicator size="large" color={palette.primary} />
-                        <Text style={{ marginTop: 16, color: palette.text, fontFamily: theme.typography.fontFamily.body }}>Loading order details...</Text>
-                      </View>
-                    </View>
-                  </Modal>
-                );
-              }
-              
-              if (!orderDetails) return null;
-              
-              const subtotalCents = orderDetails.items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
-              const platformFeeCents = orderDetails.platformFeeCents !== null ? orderDetails.platformFeeCents : 150;
-              const taxesCents = Math.round(subtotalCents * 0.13);
-              const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents + taxesCents;
-              
-              return (
-                <Modal
-                  visible
-                  transparent
-                  animationType="fade"
-                  onRequestClose={() => setOrderDetailModalId(null)}
-                >
-                  <TouchableOpacity
-                    style={styles.issueDetailOverlay}
-                    activeOpacity={1}
-                    onPress={() => setOrderDetailModalId(null)}
-                  >
-                    <TouchableOpacity
-                      style={styles.issueDetailContent}
-                      activeOpacity={1}
-                      onPress={() => {}}
-                    >
-                      <View style={styles.issueDetailHeader}>
-                        <Text style={styles.issueDetailTitle}>Order #{String(orderDetailModalId).padStart(5, '0')}</Text>
-                        <TouchableOpacity
-                          style={styles.issueDetailClose}
-                          onPress={() => setOrderDetailModalId(null)}
-                        >
-                          <Text style={styles.issueDetailCloseText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                      <ScrollView
-                        style={styles.issueDetailBody}
-                        contentContainerStyle={styles.issueDetailBodyContent}
-                        showsVerticalScrollIndicator
-                      >
-                        {orderDetails.chefLocation && (
-                          <View style={styles.orderDetailSectionCard}>
-                            <TouchableOpacity
-                              style={styles.orderDetailSectionHeader}
-                              onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}
-                            >
-                              <Text style={styles.issueDetailLabel}>Pickup address</Text>
-                              <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
-                            </TouchableOpacity>
-                            {isPickupAddressExpanded && (
-                              <View style={styles.orderDetailSectionContent}>
-                                <Text style={styles.issueDetailValue}>{orderDetails.chefLocation}</Text>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                        {orderDetails.pickupAt && (
-                          <View style={styles.orderDetailSectionCard}>
-                            <TouchableOpacity
-                              style={styles.orderDetailSectionHeader}
-                              onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}
-                            >
-                              <Text style={styles.issueDetailLabel}>Pickup date & time</Text>
-                              <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
-                            </TouchableOpacity>
-                            {isPickupDateTimeExpanded && (
-                              <View style={styles.orderDetailSectionContent}>
-                                <Text style={styles.issueDetailValue}>{formatPickupDateTime(orderDetails.pickupAt)}</Text>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                        {orderDetails.items.length > 0 && (
-                          <View style={styles.orderDetailSectionCard}>
-                            <TouchableOpacity
-                              style={styles.orderDetailSectionHeader}
-                              onPress={() => setIsOrderSummaryExpanded(!isOrderSummaryExpanded)}
-                            >
-                              <Text style={styles.issueDetailLabel}>Order summary</Text>
-                              <Text style={styles.expandIcon}>{isOrderSummaryExpanded ? '−' : '+'}</Text>
-                            </TouchableOpacity>
-                            {isOrderSummaryExpanded && (
-                              <View style={styles.orderDetailSectionContent}>
-                                {orderDetails.items.map(item => (
-                                  <View key={item.id} style={styles.orderItemRow}>
-                                    <View style={styles.orderItemInfo}>
-                                      <Text style={styles.orderItemName}>
-                                        {item.dish?.name ?? `Dish #${item.dish_id}`} {orderDetails.chef ? `(${orderDetails.chef.name})` : ''}
-                                      </Text>
-                                    </View>
-                                    <View style={styles.orderItemQuantityPrice}>
-                                      <Text style={styles.orderItemQuantity}>{item.quantity}</Text>
-                                      <Text style={styles.orderItemPrice}>{cents(item.unit_price_cents * item.quantity)}</Text>
-                                    </View>
-                                  </View>
-                                ))}
-                                <View style={styles.summaryDivider} />
-                                <View style={styles.summaryRow}>
-                                  <Text style={styles.summaryLabel}>Subtotal</Text>
-                                  <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
-                                </View>
-                                <View style={styles.summaryRow}>
-                                  <Text style={styles.summaryLabel}>Platform service fee</Text>
-                                  <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
-                                </View>
-                                <View style={styles.summaryRow}>
-                                  <Text style={styles.summaryLabel}>Taxes</Text>
-                                  <Text style={styles.summaryValue}>{cents(taxesCents)}</Text>
-                                </View>
-                                <View style={[styles.summaryRow, { marginTop: 8 }]}>
-                                  <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>Total</Text>
-                                  <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>
-                                </View>
-                              </View>
-                            )}
-                          </View>
-                        )}
-                      </ScrollView>
-                    </TouchableOpacity>
-                  </TouchableOpacity>
-                </Modal>
-              );
-            })()}
-
             {showRefundModal && (
               <Modal
                 visible
@@ -4644,6 +4492,106 @@ export default function AdminPage() {
    return (
     <Screen style={{ backgroundColor: palette.background }} contentStyle={styles.screenContent}>
       {content}
+      
+      {/* Order Detail Modal - Root level so it works from Orders tab (and Issues tab) */}
+      {orderDetailModalId !== null && (() => {
+        if (loadingOrderDetails) {
+          return (
+            <Modal visible transparent animationType="fade" onRequestClose={() => setOrderDetailModalId(null)}>
+              <View style={styles.issueDetailOverlay}>
+                <View style={styles.issueDetailContent}>
+                  <ActivityIndicator size="large" color={palette.primary} />
+                  <Text style={{ marginTop: 16, color: palette.text, fontFamily: theme.typography.fontFamily.body }}>Loading order details...</Text>
+                </View>
+              </View>
+            </Modal>
+          );
+        }
+        if (!orderDetails) return null;
+        const subtotalCents = orderDetails.items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
+        const platformFeeCents = orderDetails.platformFeeCents !== null ? orderDetails.platformFeeCents : 150;
+        const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents;
+        return (
+          <Modal visible transparent animationType="fade" onRequestClose={() => setOrderDetailModalId(null)}>
+            <TouchableOpacity style={styles.issueDetailOverlay} activeOpacity={1} onPress={() => setOrderDetailModalId(null)}>
+              <TouchableOpacity style={styles.issueDetailContent} activeOpacity={1} onPress={() => {}}>
+                <View style={styles.issueDetailHeader}>
+                  <Text style={styles.issueDetailTitle}>Order #{String(orderDetailModalId).padStart(5, '0')}</Text>
+                  <TouchableOpacity style={styles.issueDetailClose} onPress={() => setOrderDetailModalId(null)}>
+                    <Text style={styles.issueDetailCloseText}>✕</Text>
+                  </TouchableOpacity>
+                </View>
+                <ScrollView style={styles.issueDetailBody} contentContainerStyle={styles.issueDetailBodyContent} showsVerticalScrollIndicator>
+                  {orderDetails.chefLocation && (
+                    <View style={styles.orderDetailSectionCard}>
+                      <TouchableOpacity style={styles.orderDetailSectionHeader} onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}>
+                        <Text style={styles.issueDetailLabel}>Pickup address</Text>
+                        <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
+                      </TouchableOpacity>
+                      {isPickupAddressExpanded && (
+                        <View style={styles.orderDetailSectionContent}>
+                          <Text style={styles.issueDetailValue}>{orderDetails.chefLocation}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  {orderDetails.pickupAt && (
+                    <View style={styles.orderDetailSectionCard}>
+                      <TouchableOpacity style={styles.orderDetailSectionHeader} onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}>
+                        <Text style={styles.issueDetailLabel}>Pickup date & time</Text>
+                        <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
+                      </TouchableOpacity>
+                      {isPickupDateTimeExpanded && (
+                        <View style={styles.orderDetailSectionContent}>
+                          <Text style={styles.issueDetailValue}>{formatPickupDateTime(orderDetails.pickupAt)}</Text>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                  {orderDetails.items.length > 0 && (
+                    <View style={styles.orderDetailSectionCard}>
+                      <TouchableOpacity style={styles.orderDetailSectionHeader} onPress={() => setIsOrderSummaryExpanded(!isOrderSummaryExpanded)}>
+                        <Text style={styles.issueDetailLabel}>Order summary</Text>
+                        <Text style={styles.expandIcon}>{isOrderSummaryExpanded ? '−' : '+'}</Text>
+                      </TouchableOpacity>
+                      {isOrderSummaryExpanded && (
+                        <View style={styles.orderDetailSectionContent}>
+                          {orderDetails.items.map(item => (
+                            <View key={item.id} style={styles.orderItemRow}>
+                              <View style={styles.orderItemInfo}>
+                                <Text style={styles.orderItemName}>
+                                  {item.dish?.name ?? `Dish #${item.dish_id}`} {orderDetails.chef ? `(${orderDetails.chef.name})` : ''}
+                                </Text>
+                              </View>
+                              <View style={styles.orderItemQuantityPrice}>
+                                <Text style={styles.orderItemQuantity}>{item.quantity}</Text>
+                                <Text style={styles.orderItemPrice}>{cents(item.unit_price_cents * item.quantity)}</Text>
+                              </View>
+                            </View>
+                          ))}
+                          <View style={styles.summaryDivider} />
+                          <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Subtotal</Text>
+                            <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
+                          </View>
+                          <View style={styles.summaryRow}>
+                            <Text style={styles.summaryLabel}>Platform service fee</Text>
+                            <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
+                          </View>
+                          <View style={[styles.summaryRow, { marginTop: 8 }]}>
+                            <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>Total</Text>
+                            <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>
+                          </View>
+                        </View>
+                      )}
+                    </View>
+                  )}
+                </ScrollView>
+              </TouchableOpacity>
+            </TouchableOpacity>
+          </Modal>
+        );
+      })()}
       
       {/* Chef Application Modal - Root level so it works from any tab */}
       {chefApplicationModalId && (
