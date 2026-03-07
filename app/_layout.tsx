@@ -1,5 +1,6 @@
 'use client';
 import { useEffect, useRef } from 'react';
+import { Analytics } from '@vercel/analytics/react';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { View, ScrollView, Platform } from 'react-native';
 import { ensureUser } from '../lib/ensureUser';
@@ -125,6 +126,7 @@ export default function RootLayout() {
         <LocationModalProvider>
           <View style={{ flex: 1, backgroundColor: 'white' }}>
             <Stack screenOptions={{ headerShown: false }} />
+            <Analytics />
           </View>
         </LocationModalProvider>
       </CartProvider>
