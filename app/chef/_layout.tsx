@@ -1,7 +1,7 @@
 'use client';
 import { useEffect } from 'react';
 import { View, ActivityIndicator } from 'react-native';
-import { Slot, useRouter, usePathname } from 'expo-router';
+import { Slot, useRouter, usePathname, useLocalSearchParams } from 'expo-router';
 import { useRole } from '../../hooks/useRole';
 import { theme } from '../../constants/theme';
 
@@ -12,6 +12,7 @@ import { theme } from '../../constants/theme';
 export default function ChefLayout() {
   const router = useRouter();
   const pathname = usePathname();
+  const params = useLocalSearchParams<{ viewAs?: string }>();
   const { loading, user, isAdmin, isChef } = useRole();
 
   useEffect(() => {
@@ -28,15 +29,15 @@ export default function ChefLayout() {
       }
       
       // If admin is trying to access chef dashboard, redirect to admin
-      // But allow admins to view individual chef pages
-      if (isAdmin && isChefDashboard) {
+      // But allow admins to view a specific chef's dashboard when viewAs is present
+      if (isAdmin && isChefDashboard && !params?.viewAs) {
         router.replace('/admin');
       } else if (!isAdmin && !isChef && isChefDashboard) {
         // Non-chef, non-admin trying to access chef dashboard
         router.replace('/');
       }
     }
-  }, [loading, user, isAdmin, isChef, router, pathname]);
+  }, [loading, user, isAdmin, isChef, router, pathname, params?.viewAs]);
 
   if (loading) {
     return (

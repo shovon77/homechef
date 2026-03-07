@@ -49,7 +49,7 @@ type OrderRow = { id: number; user_id: string; status: string; total_cents: numb
 
 export default function ChefDashboard() {
   const router = useRouter();
-  const { tab } = useLocalSearchParams();
+  const { tab, viewAs } = useLocalSearchParams<{ tab?: string; viewAs?: string }>();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [loading, setLoading] = useState(true);
@@ -273,7 +273,7 @@ export default function ChefDashboard() {
   const [bio, setBio] = useState('');
   const [photo, setPhoto] = useState<string | undefined>(undefined);
   const [location, setLocation] = useState('');
-  const { user, profile, refreshRole } = useRole();
+  const { user, profile, refreshRole, isAdmin } = useRole();
   const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
@@ -456,6 +456,9 @@ export default function ChefDashboard() {
     sender_type?: 'customer' | 'chef' | null;
   };
 
+  const viewAsChefId = viewAs && typeof viewAs === 'string' ? viewAs : null;
+  const isViewingAsChef = Boolean(viewAsChefId && isAdmin);
+
   useEffect(() => {
     (async () => {
       setLoading(true);
@@ -466,35 +469,72 @@ export default function ChefDashboard() {
           router.replace('/auth');
           return;
         }
-        const email = auth.user.email;
-        if (!email) throw new Error('Missing email on session');
+        let me: ChefRow | null = null;
 
-        const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id').eq('id', auth.user.id).maybeSingle();
-        if (!profileRow.error) {
-          setChargesEnabled(profileRow.data?.charges_enabled ?? false);
-          setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
-          setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
-        }
-
-        // Fetch latest Stripe Connect status for accurate charges/payouts state (may update chef in DB)
-        let connectStatus: { chef_status?: string | null; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string } | null = null;
-        try {
-          connectStatus = await callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string; chef_status?: string | null }>('get-connect-status', {});
-          if (connectStatus) {
-            if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
-            if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
-            if (connectStatus.accountId) setStripeAccountId(connectStatus.accountId);
+        if (isViewingAsChef && viewAsChefId) {
+          // Admin viewing a specific chef's dashboard
+          const chefId = parseInt(viewAsChefId, 10);
+          if (!Number.isFinite(chefId)) throw new Error('Invalid chef ID');
+          me = (await supabase.from('chefs').select('*').eq('id', chefId).maybeSingle()).data as ChefRow | null;
+          if (!me) throw new Error('Chef not found');
+          setChargesEnabled(false);
+          setStripeAccountId(null);
+          setPayoutsEnabled(false);
+          // If chefs.status is 'pending' but chef has an approved application, treat as approved
+          if ((me as any).status === 'pending') {
+            let hasApproved = false;
+            if ((me as any).user_id) {
+              const { data: byUser } = await supabase
+                .from('chef_applications')
+                .select('id')
+                .eq('user_id', (me as any).user_id)
+                .eq('status', 'approved')
+                .limit(1);
+              hasApproved = !!(byUser && byUser.length > 0);
+            }
+            if (!hasApproved && (me as any).email) {
+              const { data: byEmail } = await supabase
+                .from('chef_applications')
+                .select('id')
+                .eq('email', (me as any).email)
+                .eq('status', 'approved')
+                .limit(1);
+              hasApproved = !!(byEmail && byEmail.length > 0);
+            }
+            if (hasApproved) me = { ...me, status: 'active' } as ChefRow;
           }
-        } catch (_) { /* non-blocking */ }
+        } else {
+          const email = auth.user.email;
+          if (!email) throw new Error('Missing email on session');
 
-        let me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
-        if (!me) {
-          const defaultName = auth.user.user_metadata?.name || email.split('@')[0];
-          const ins = await supabase.from('chefs').insert({ name: defaultName, email }).select('*').single();
-          if (ins.error) throw ins.error;
-          me = ins.data as ChefRow;
+          const profileRow = await supabase.from('profiles').select('charges_enabled,stripe_account_id').eq('id', auth.user.id).maybeSingle();
+          if (!profileRow.error) {
+            setChargesEnabled(profileRow.data?.charges_enabled ?? false);
+            setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
+            setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
+          }
+
+          // Fetch latest Stripe Connect status for accurate charges/payouts state (may update chef in DB)
+          let connectStatus: { chef_status?: string | null; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string } | null = null;
+          try {
+            connectStatus = await callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string; chef_status?: string | null }>('get-connect-status', {});
+            if (connectStatus) {
+              if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
+              if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
+              if (connectStatus.accountId) setStripeAccountId(connectStatus.accountId);
+            }
+          } catch (_) { /* non-blocking */ }
+
+          me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
+          if (!me) {
+            const defaultName = auth.user.user_metadata?.name || email.split('@')[0];
+            const ins = await supabase.from('chefs').insert({ name: defaultName, email }).select('*').single();
+            if (ins.error) throw ins.error;
+            me = ins.data as ChefRow;
+          }
+          if (connectStatus?.chef_status != null) me = { ...me, status: connectStatus.chef_status };
         }
-        if (connectStatus?.chef_status != null) me = { ...me, status: connectStatus.chef_status };
+
         setChef(me);
         setName(me.name || '');
         setBio(me.bio || '');
@@ -515,7 +555,7 @@ export default function ChefDashboard() {
         setLoading(false);
       }
     })();
-  }, []);
+  }, [isViewingAsChef, viewAsChefId]);
 
   useEffect(() => {
     if (dishes.length > 0 && chef) {
@@ -1929,6 +1969,16 @@ export default function ChefDashboard() {
 
   const WelcomeHeader = (
     <View style={styles.welcomeHeader}>
+      {isViewingAsChef && chef && (
+        <View style={[styles.viewingAsBanner]}>
+          <Text style={styles.viewingAsBannerText}>Viewing as {chef.name || `Chef #${chef.id}`}</Text>
+          <Link href="/admin" asChild>
+            <TouchableOpacity>
+              <Text style={styles.viewingAsBannerLink}>← Back to admin</Text>
+            </TouchableOpacity>
+          </Link>
+        </View>
+      )}
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
       <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
       {chef ? (
@@ -1947,14 +1997,14 @@ export default function ChefDashboard() {
           <Text style={[styles.statusToggleText, styles.statusToggleTextPaused]}>Pending Stripe Connect setup</Text>
         </View>
       ) : (
-        <View style={[styles.statusToggleRow, !canToggleStatus && styles.statusToggleDisabled]}>
+        <View style={[styles.statusToggleRow, (!canToggleStatus || isViewingAsChef) && styles.statusToggleDisabled]}>
           <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused]}>
             {isChefActive ? 'Active' : 'Paused'}
           </Text>
           <Switch
             value={isChefActive}
             onValueChange={() => handleToggleChefStatus()}
-            disabled={!canToggleStatus || saving}
+            disabled={!canToggleStatus || saving || isViewingAsChef}
             trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
             thumbColor="#FFFFFF"
             {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
@@ -4054,6 +4104,26 @@ const styles = StyleSheet.create({
   },
   welcomeHeader: {
     marginBottom: theme.spacing.md,
+  },
+  viewingAsBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: '#FEF3C7',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    borderRadius: 8,
+    marginBottom: 12,
+  },
+  viewingAsBannerText: {
+    color: '#92400E',
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  viewingAsBannerLink: {
+    color: PRIMARY_COLOR,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
   },
   welcomeTitle: {
     color: TEXT_DARK,

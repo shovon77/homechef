@@ -123,6 +123,7 @@ export default function ChefDetailView() {
 
   // Distance (km) when user has location
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
+  const [bioExpanded, setBioExpanded] = useState(false);
   const { addToCart } = useCart();
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
@@ -443,7 +444,19 @@ export default function ChefDetailView() {
               </View>
               {bio ? (
                 <View style={styles.chefCardBioWrap}>
-                  <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile, styles.chefCardBioText]}>{bio}</Text>
+                  <Text
+                    style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile, styles.chefCardBioText]}
+                    numberOfLines={isMobile && !bioExpanded ? 2 : undefined}
+                  >
+                    {bio}
+                  </Text>
+                  {isMobile && (bio.length > 80 || bioExpanded) && (
+                    <TouchableOpacity onPress={() => setBioExpanded((e) => !e)} style={styles.chefCardBioSeeMore} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={[styles.chefCardMetaText, styles.chefCardMetaTextMobile, styles.chefCardBioSeeMoreText]}>
+                        {bioExpanded ? 'See less' : 'See more'}
+                      </Text>
+                    </TouchableOpacity>
+                  )}
                 </View>
               ) : null}
             </View>
@@ -748,6 +761,14 @@ const styles = StyleSheet.create({
     paddingTop: Platform.select({ web: theme.spacing.sm, default: theme.spacing.xs }),
   },
   chefCardBioText: {
+    textAlign: 'center',
+  },
+  chefCardBioSeeMore: {
+    alignSelf: 'center',
+    marginTop: 4,
+  },
+  chefCardBioSeeMoreText: {
+    color: PRIMARY_COLOR,
     textAlign: 'center',
   },
   chefCardBio: {

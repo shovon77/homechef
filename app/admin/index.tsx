@@ -2636,11 +2636,18 @@ export default function AdminPage() {
                         {c.name || `Chef #${c.id}`}
                     </Text>
                       {c.id && (
-                        <Link href={`/chef/${c.id}`} asChild>
-                          <TouchableOpacity>
-                            <Text style={styles.viewDetailsLink}>View details</Text>
-                          </TouchableOpacity>
-                        </Link>
+                        <View style={{ gap: 4 }}>
+                          <Link href={`/chef/${c.id}`} asChild>
+                            <TouchableOpacity>
+                              <Text style={styles.viewDetailsLink}>View store</Text>
+                            </TouchableOpacity>
+                          </Link>
+                          <Link href={`/chef?viewAs=${c.id}`} asChild>
+                            <TouchableOpacity>
+                              <Text style={styles.viewDetailsLink}>View dashboard</Text>
+                            </TouchableOpacity>
+                          </Link>
+                        </View>
                       )}
                   </View>
                     <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
