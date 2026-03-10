@@ -4,7 +4,8 @@ import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 
 // Dev (APP_ENV=development): TEST secret only. Prod: PROD secret, then legacy STRIPE_WEBHOOK_SECRET
-const isDev = Deno.env.get('APP_ENV') === 'development';
+// Case-insensitive for consistency with other Stripe functions
+const isDev = (Deno.env.get('APP_ENV') ?? '').toLowerCase() === 'development';
 const rawSecret = isDev
   ? Deno.env.get('STRIPE_WEBHOOK_TEST_SECRET')
   : (Deno.env.get('STRIPE_WEBHOOK_PROD_SECRET') ?? Deno.env.get('STRIPE_WEBHOOK_SECRET'));

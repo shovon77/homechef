@@ -76,7 +76,7 @@ export const handler = async (req: Request) => {
     const body: TCreateCheckoutBody = parsed.data;
 
     // Env guardrails (fail fast with readable messages)
-    const isDev = Deno.env.get('APP_ENV') === 'development';
+    const isDev = (Deno.env.get('APP_ENV') ?? '').toLowerCase() === 'development';
     const STRIPE_SECRET_KEY = isDev
       ? Deno.env.get('STRIPE_SECRET_TEST_KEY')
       : (Deno.env.get('STRIPE_SECRET_PROD_KEY') ?? Deno.env.get('STRIPE_SECRET_KEY'));

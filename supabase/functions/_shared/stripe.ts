@@ -1,7 +1,9 @@
 import Stripe from 'https://esm.sh/stripe@11.2.0?target=deno';
 
 // Dev (APP_ENV=development): TEST key only. Prod: PROD key, then legacy STRIPE_SECRET_KEY
-const isDev = Deno.env.get('APP_ENV') === 'development';
+// Case-insensitive so "Development" and "development" both use test keys
+const appEnv = (Deno.env.get('APP_ENV') ?? '').toLowerCase();
+const isDev = appEnv === 'development';
 const stripeSecret = isDev
   ? (Deno.env.get('STRIPE_SECRET_TEST_KEY') ?? '')
   : (Deno.env.get('STRIPE_SECRET_PROD_KEY') ?? Deno.env.get('STRIPE_SECRET_KEY') ?? '');

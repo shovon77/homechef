@@ -7,7 +7,7 @@ serve(async (_req) => {
     const nowIso = new Date().toISOString();
     const { data: orders, error } = await adminClient
       .from('orders')
-      .select('id, user_id, payment_intent_id')
+      .select('id, user_id, payment_intent_id, stripe_payment_intent_id')
       .eq('status', 'requested')
       .lt('expires_at', nowIso);
 
@@ -21,8 +21,9 @@ serve(async (_req) => {
     let rejected = 0;
     for (const order of orders) {
       try {
-        if (order.payment_intent_id) {
-          await stripe.paymentIntents.cancel(order.payment_intent_id).catch((err) => {
+        const piId = order.stripe_payment_intent_id ?? order.payment_intent_id;
+        if (piId) {
+          await stripe.paymentIntents.cancel(piId).catch((err) => {
             console.warn('stripe cancel failed', err);
           });
         }

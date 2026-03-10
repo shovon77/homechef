@@ -126,11 +126,12 @@ export const handler = async (req: Request) => {
     }
 
     const normalizedSiteUrl = SITE_URL.replace(/\/$/, '');
+    // Use /chef?tab=payouts so user lands on payouts tab (payouts is a tab within chef dashboard, not a separate route)
     const linkRes = await stripeFetch('/account_links', {
       account: accountId,
       type: 'account_onboarding',
-      refresh_url: `${normalizedSiteUrl}/chef/payouts?onboarding=refresh`,
-      return_url: `${normalizedSiteUrl}/chef/payouts?onboarding=return`,
+      refresh_url: `${normalizedSiteUrl}/chef?tab=payouts&onboarding=refresh`,
+      return_url: `${normalizedSiteUrl}/chef?tab=payouts&onboarding=return`,
     });
 
     if (linkRes.error) {
