@@ -72,7 +72,8 @@ export default function PayoutSettings({ onStatusChange }: Props) {
 
   const openExternal = (url: string) => {
     if (Platform.OS === 'web') {
-      window.open(url, '_blank', 'noopener');
+      // Use location.href (not window.open) - reliable on mobile web, avoids popup blocking
+      window.location.href = url;
     } else {
       Linking.openURL(url).catch((err) => console.error('open url error', err));
     }
@@ -123,8 +124,19 @@ export default function PayoutSettings({ onStatusChange }: Props) {
           <Text style={styles.cardTitle}>No payout account yet</Text>
           <Text style={styles.cardBody}>Connect with Stripe to start receiving payouts.</Text>
           <View style={styles.buttonRow}>
-            <Pressable style={styles.primaryBtn} onPress={openStripeLink} disabled={busy}>
-              <Text style={styles.primaryBtnText}>{busy ? 'Opening…' : 'Connect with Stripe'}</Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && { opacity: 0.8 }]}
+              onPress={openStripeLink}
+              disabled={busy}
+            >
+              {busy ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.primaryBtnText}>Opening…</Text>
+                </View>
+              ) : (
+                <Text style={styles.primaryBtnText}>Connect with Stripe</Text>
+              )}
             </Pressable>
           </View>
         </View>
@@ -139,8 +151,20 @@ export default function PayoutSettings({ onStatusChange }: Props) {
               : 'Payouts are not enabled yet.'}
           </Text>
           <View style={styles.buttonRow}>
-            <Pressable style={styles.primaryBtn} onPress={openStripeLink} disabled={busy}>
-              <Text style={styles.primaryBtnText}>Continue onboarding</Text>
+            <Pressable
+              style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && { opacity: 0.8 }]}
+              onPress={openStripeLink}
+              disabled={busy}
+              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+            >
+              {busy ? (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <Text style={styles.primaryBtnText}>Opening…</Text>
+                </View>
+              ) : (
+                <Text style={styles.primaryBtnText}>Continue onboarding</Text>
+              )}
             </Pressable>
             <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
               <Text style={styles.secondaryBtnText}>Refresh</Text>
