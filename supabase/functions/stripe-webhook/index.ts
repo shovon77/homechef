@@ -1,5 +1,5 @@
 import { serve } from 'https://deno.land/std@0.200.0/http/server.ts';
-import Stripe from 'https://esm.sh/stripe@12?target=deno&deno-std=0.224.0';
+import Stripe from 'https://esm.sh/stripe@11.2.0?target=deno';
 import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 

@@ -772,6 +772,7 @@ export default function AdminPage() {
             ...chef,
             dishes: dishesData || [],
             status: chef.status === 'pending' ? 'submitted' : (chef.status === 'active' ? 'approved' : 'rejected'),
+            applicationId: undefined, // No chef_applications record - use toggleChefActive path
           };
           
           console.log('Setting application data:', applicationData);
@@ -794,6 +795,7 @@ export default function AdminPage() {
         const applicationData = {
           ...application,
           dishes: dishesData || [],
+          applicationId: application.id, // Real chef_applications record - use approveChefApplication
         };
         
         console.log('Setting application data from application:', applicationData);
@@ -4752,13 +4754,13 @@ export default function AdminPage() {
                             {chefApplicationData.status === 'submitted' || chefApplicationData.status === 'pending' ? (
                               <>
                                 <TouchableOpacity
-                                  onPress={() => handleApproveChefApplication(chefApplicationModalId, chefApplicationData.id)}
+                                  onPress={() => handleApproveChefApplication(chefApplicationModalId, chefApplicationData.applicationId)}
                                   style={styles.approveButton}
                                 >
                                   <Text style={styles.approveButtonText}>Approve</Text>
                                 </TouchableOpacity>
                                 <TouchableOpacity
-                                  onPress={() => handleRejectChefApplication(chefApplicationModalId, chefApplicationData.id)}
+                                  onPress={() => handleRejectChefApplication(chefApplicationModalId, chefApplicationData.applicationId)}
                                   style={styles.rejectButton}
                                 >
                                   <Text style={styles.rejectButtonText}>Reject</Text>
@@ -4774,7 +4776,7 @@ export default function AdminPage() {
                             ) : chefApplicationData.status === 'rejected' ? (
                               <>
                                 <TouchableOpacity
-                                  onPress={() => handleApproveChefApplication(chefApplicationModalId, chefApplicationData.id)}
+                                  onPress={() => handleApproveChefApplication(chefApplicationModalId, chefApplicationData.applicationId)}
                                   style={styles.approveButton}
                                 >
                                   <Text style={styles.approveButtonText}>Approve</Text>

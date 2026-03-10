@@ -1,4 +1,4 @@
-import Stripe from 'https://esm.sh/stripe@12?target=deno&deno-std=0.224.0';
+import Stripe from 'https://esm.sh/stripe@11.2.0?target=deno';
 
 // Dev (APP_ENV=development): TEST key only. Prod: PROD key, then legacy STRIPE_SECRET_KEY
 const isDev = Deno.env.get('APP_ENV') === 'development';
