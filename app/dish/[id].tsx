@@ -389,7 +389,7 @@ export default function DishDetail() {
             </Text>
             
             {chefId ? (
-              <Link href={`/chef/${chefId}?name=${encodeURIComponent(chefName)}&photo=${encodeURIComponent(chef?.photo || chef?.avatar || '')}&location=${encodeURIComponent(chef?.location || '')}&rating=${chef?.rating ?? ''}&rating_count=${chef?.rating_count ?? ''}`} asChild>
+              <Link href={`/chef/${chefId}`} asChild>
                 <TouchableOpacity style={styles.chefLink}>
                   {chef?.photo || chef?.avatar ? (
                     <Image 
@@ -993,8 +993,7 @@ const styles = StyleSheet.create({
   },
   tabTextActive: {
     color: PRIMARY_COLOR,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontFamily: theme.typography.fontFamily.body,
   },
   tabContent: {
     paddingVertical: theme.spacing['2xl'],

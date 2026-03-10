@@ -277,7 +277,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
                   <Image
                     source={require('../../assets/star.png')}
                     style={[styles.starIconImage, styles.starIconExplore]}
-                    tintColor={BRAND_BLACK}
+                    tintColor={PRIMARY_COLOR}
                     resizeMode="contain"
                   />
                   <Text style={[styles.ratingText, styles.ratingTextExplore]}>{safeToFixed(avg)}</Text>
@@ -294,7 +294,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
                 <Image
                   source={require('../../assets/star.png')}
                   style={[styles.starIconImage, styles.starIconExplore, inlinePriceRating && styles.starIconInlineMatch]}
-                  tintColor={BRAND_BLACK}
+                  tintColor={PRIMARY_COLOR}
                   resizeMode="contain"
                 />
                 <Text style={[styles.ratingText, styles.ratingTextExplore, inlinePriceRating && styles.ratingTextInlineMatch]}>{safeToFixed(avg)}</Text>

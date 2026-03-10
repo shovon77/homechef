@@ -989,10 +989,12 @@ export default function BrowsePage() {
           <View style={styles.grid}>
             {dishes.map((dish) => (
               <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
-                <DishCard 
-                  dish={dish} 
+                <DishCard
+                  dish={dish}
                   variant="explore"
-                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }} 
+                  inlinePriceRating
+                  quantityOnImage
+                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                 />
               </View>
             ))}
