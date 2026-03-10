@@ -263,8 +263,8 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
     return (
       <View style={[styles.cardExplore, style]}>
         {imageBlock}
-        <View style={styles.exploreContent}>
-          <Text style={[styles.name, styles.nameExplore]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
+        <View style={[styles.exploreContent, inlinePriceRating && styles.exploreContentTight]}>
+          <Text style={[styles.name, styles.nameExplore, inlinePriceRating && styles.nameExploreTight]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
           {(chefDisplayName || (avg > 0 && !inlinePriceRating)) && (
             <View style={styles.chefRatingRowExplore}>
               {chefDisplayName ? (
@@ -285,7 +285,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
               )}
             </View>
           )}
-          <View style={inlinePriceRating ? styles.priceRatingRowExplore : styles.priceRowExplore}>
+          <View style={[inlinePriceRating ? styles.priceRatingRowExplore : styles.priceRowExplore, inlinePriceRating && styles.priceRatingRowExploreTight]}>
             <Text style={[styles.price, styles.priceExplore, inlinePriceRating && styles.priceInlineMatch]} numberOfLines={1}>
               {formatCad(Number(dish.price) ?? 0)}
             </Text>
@@ -355,6 +355,11 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: theme.spacing.xs,
   },
+  exploreContentTight: {
+    paddingTop: 6,
+    paddingBottom: 4,
+    gap: 2,
+  },
   exploreContentHomepage: {
     alignItems: 'stretch',
   },
@@ -395,11 +400,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     gap: 12,
-    // Keep vertical rhythm consistent with name/chef spacing
     marginTop: 2,
     marginBottom: 0,
     minHeight: 20,
     flexShrink: 0,
+  },
+  priceRatingRowExploreTight: {
+    marginTop: 1,
+    minHeight: 0,
   },
   ratingPriceRowHomepage: {
     flexDirection: 'row',
@@ -577,6 +585,9 @@ const styles = StyleSheet.create({
     marginBottom: 2,
     color: BRAND_BLACK,
     minHeight: 18,
+  },
+  nameExploreTight: {
+    marginBottom: 1,
   },
   chefNameExplore: {
     fontSize: 10,

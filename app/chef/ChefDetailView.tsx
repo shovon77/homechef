@@ -67,6 +67,7 @@ export default function ChefDetailView() {
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
+  const dishGridColumns = isMobile ? 2 : isTablet ? 3 : 4;
   const raw = String(Array.isArray(id) ? id[0] : id || '');
   
   const chefId = useMemo(() => {
@@ -485,7 +486,7 @@ export default function ChefDetailView() {
             </View>
 
             {/* Content based on active tab */}
-            <View style={styles.contentScroll}>
+            <View style={[styles.contentScroll, isMobile && activeTab === 'dishes' && styles.contentScrollMobile]}>
               {activeTab === 'dishes' ? (
                 <>
                   {isFetchingDishes && !newlyAddedDishes.length && !bestSellerDishes.length ? (
@@ -523,19 +524,19 @@ export default function ChefDetailView() {
                         </View>
                       )}
 
-                      {/* All dishes */}
-                      <View style={styles.sectionBlock}>
-                        <Text style={styles.sectionTitle}>All dishes</Text>
+                      {/* Full menu - vertical grid, 2 cols mobile like explore */}
+                      <View style={[styles.sectionBlock, isMobile && styles.sectionBlockLast]}>
+                        <Text style={styles.sectionTitle}>Full menu</Text>
                         {dishes.length === 0 ? (
                           <Text style={styles.sectionEmpty}>No dishes yet.</Text>
                         ) : (
-                          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
+                          <View style={styles.dishGridAll}>
                             {dishes.map(d => (
-                              <View key={d.id} style={styles.dishCardHorizontal}>
+                              <View key={d.id} style={[styles.dishCardGridWrapper, isMobile && styles.dishCardGridWrapperMobile, { width: `${100 / dishGridColumns}%` }]}>
                                 <DishCard dish={{ ...d, chef: '', chefs: {} }} variant="explore" inlinePriceRating quantityOnImage />
                               </View>
                             ))}
-                          </ScrollView>
+                          </View>
                         )}
                       </View>
                     </>
@@ -630,7 +631,7 @@ export default function ChefDetailView() {
           </View>
 
           {/* Disclaimer before footer */}
-          <View style={styles.disclaimerBlock}>
+          <View style={[styles.disclaimerBlock, isMobile && styles.disclaimerBlockMobile]}>
             <Text style={styles.disclaimerText}>
               Food is prepared by an independent home chef. Customers are responsible for safe handling after pickup.
             </Text>
@@ -656,7 +657,7 @@ const styles = StyleSheet.create({
   },
   layout: {
     flexDirection: 'column',
-    gap: theme.spacing['2xl'],
+    gap: theme.spacing.sm,
     alignItems: 'stretch',
   },
   layoutColumn: {},
@@ -949,8 +950,9 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     gap: theme.spacing['2xl'],
-    minHeight: 64,
-    paddingVertical: theme.spacing.lg,
+    minHeight: 40,
+    paddingTop: 4,
+    paddingBottom: theme.spacing.sm,
     borderBottomWidth: 1,
     borderBottomColor: '#FFFFFF',
   },
@@ -976,6 +978,9 @@ const styles = StyleSheet.create({
   sectionBlock: {
     marginBottom: theme.spacing['2xl'],
     width: '100%',
+  },
+  sectionBlockLast: {
+    marginBottom: 0,
   },
   sectionTitle: {
     width: '100%',
@@ -1010,10 +1015,17 @@ const styles = StyleSheet.create({
     gap: theme.spacing.md,
     width: '100%',
   },
+  dishGridAll: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    marginHorizontal: -6,
+  },
   dishCardGridWrapper: {
-    flex: 1,
-    minWidth: 200,
-    maxWidth: 280,
+    paddingHorizontal: 6,
+    marginBottom: 16,
+  },
+  dishCardGridWrapperMobile: {
+    marginBottom: 8,
   },
   filterContainer: {
     paddingVertical: theme.spacing['2xl'],
@@ -1062,6 +1074,9 @@ const styles = StyleSheet.create({
     minWidth: 0,
     paddingTop: theme.spacing['2xl'],
     paddingBottom: theme.spacing['4xl'],
+  },
+  contentScrollMobile: {
+    paddingBottom: theme.spacing.sm,
   },
   dishesGrid: {
     flexDirection: Platform.select({
@@ -1415,13 +1430,18 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   disclaimerBlock: {
-    marginTop: theme.spacing['2xl'],
-    marginBottom: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.lg,
+    marginTop: 0,
+    marginBottom: 2,
+    paddingHorizontal: theme.spacing.sm,
+    paddingTop: 0,
+    paddingBottom: 2,
     width: '100%',
     alignSelf: 'stretch',
     flexShrink: 0,
+  },
+  disclaimerBlockMobile: {
+    marginTop: -4,
+    paddingTop: 0,
   },
   disclaimerText: {
     color: BRAND_BLACK,
