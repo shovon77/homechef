@@ -207,7 +207,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
           />
         </TouchableOpacity>
       ) : (
-        <>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           <TouchableOpacity
             onPress={() => setCartQuantity(dish.id, cartQty - 1)}
             style={[styles.quantityBtn, styles.quantityBtnExplore, quantityOnImage && styles.quantityBtnOverlay]}
@@ -233,7 +233,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
               resizeMode="contain"
             />
           </TouchableOpacity>
-        </>
+        </View>
       )}
     </View>
   );

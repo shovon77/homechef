@@ -514,16 +514,19 @@ export default function ChefDashboard() {
             setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
           }
 
-          // Fetch latest Stripe Connect status for accurate charges/payouts state (may update chef in DB)
-          let connectStatus: { chef_status?: string | null; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string } | null = null;
-          try {
-            connectStatus = await callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string; chef_status?: string | null }>('get-connect-status', {});
-            if (connectStatus) {
-              if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
-              if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
-              if (connectStatus.accountId) setStripeAccountId(connectStatus.accountId);
-            }
-          } catch (_) { /* non-blocking */ }
+          // Fetch Stripe Connect status in background (don't block dashboard load - can hang if edge fn is slow)
+          callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string; chef_status?: string | null }>('get-connect-status', {})
+            .then((connectStatus) => {
+              if (connectStatus) {
+                if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
+                if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
+                if (connectStatus.accountId) setStripeAccountId(connectStatus.accountId);
+                if (connectStatus.chef_status != null) {
+                  setChef((prev) => (prev ? { ...prev, status: connectStatus!.chef_status! } : prev));
+                }
+              }
+            })
+            .catch(() => { /* non-blocking */ });
 
           me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
           if (!me) {
@@ -532,7 +535,7 @@ export default function ChefDashboard() {
             if (ins.error) throw ins.error;
             me = ins.data as ChefRow;
           }
-          if (connectStatus?.chef_status != null) me = { ...me, status: connectStatus.chef_status };
+          // chef_status updated in background when get-connect-status resolves
         }
 
         setChef(me);

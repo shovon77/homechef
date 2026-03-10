@@ -1,8 +1,41 @@
-import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { stripe } from '../_shared/stripe.ts';
+import { createClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
+
+// Stripe: use fetch (no Stripe SDK - avoids Deno.core.runMicrotasks in Edge Runtime)
+const appEnv = (Deno.env.get('APP_ENV') ?? '').toLowerCase();
+const isDev = appEnv === 'development';
+const STRIPE_SECRET = isDev
+  ? (Deno.env.get('STRIPE_SECRET_TEST_KEY') ?? '')
+  : (Deno.env.get('STRIPE_SECRET_PROD_KEY') ?? Deno.env.get('STRIPE_SECRET_KEY') ?? '');
+
+const STRIPE_API = 'https://api.stripe.com/v1';
+
+async function stripeGet(endpoint: string): Promise<{ data?: any; error?: { message: string } }> {
+  const res = await fetch(`${STRIPE_API}${endpoint}`, {
+    method: 'GET',
+    headers: { Authorization: `Bearer ${STRIPE_SECRET}` },
+  });
+  const json = await res.json();
+  if (!res.ok) return { error: { message: json.error?.message ?? String(json) } };
+  return { data: json };
+}
+
+async function stripePost(endpoint: string, params: Record<string, string> = {}): Promise<{ data?: any; error?: { message: string } }> {
+  const body = new URLSearchParams(params).toString();
+  const res = await fetch(`${STRIPE_API}${endpoint}`, {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${STRIPE_SECRET}`,
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body,
+  });
+  const json = await res.json();
+  if (!res.ok) return { error: { message: json.error?.message ?? String(json) } };
+  return { data: json };
+}
 
 if (!SUPABASE_URL || !SUPABASE_SERVICE_ROLE_KEY) {
   console.error('Missing SUPABASE_URL or SUPABASE_SERVICE_ROLE_KEY');
@@ -85,14 +118,18 @@ export const handler = async (req: Request) => {
       return respond(200, { hasAccount: false, chef_status: chefStatusNoAccount });
     }
 
-    const account = await stripe.accounts.retrieve(profile.stripe_account_id);
+    const accountRes = await stripeGet(`/accounts/${profile.stripe_account_id}`);
+    if (accountRes.error) {
+      throw new Error(accountRes.error.message);
+    }
+    const account = accountRes.data;
 
     let loginLink: string | null = null;
     try {
-      const link = await stripe.accounts.createLoginLink(account.id);
-      loginLink = link.url;
+      const linkRes = await stripePost(`/accounts/${account.id}/login_links`);
+      if (linkRes.data?.url) loginLink = linkRes.data.url;
     } catch (err) {
-      console.warn('get-connect-status login link error', err?.raw ?? err);
+      console.warn('get-connect-status login link error', err);
     }
 
     const requirements = account.requirements ?? null;
@@ -178,8 +215,8 @@ export const handler = async (req: Request) => {
       chef_status: chefStatus,
     });
   } catch (err: any) {
-    console.error('get-connect-status error', err?.raw ?? err);
-    return respond(400, { error: err?.raw?.message ?? String(err) });
+    console.error('get-connect-status error', err);
+    return respond(400, { error: err?.message ?? String(err) });
   }
 };
 

@@ -133,11 +133,11 @@ export default function PayoutSettings({ onStatusChange }: Props) {
       {hasAccount && needsMoreInfo && (
         <View style={styles.cardWarning}>
           <Text style={styles.cardTitle}>More information required</Text>
-          {requirements.length > 0 ? (
-            <Text style={styles.cardBodyWarning}>Stripe still needs: {requirements.join(', ')}</Text>
-          ) : (
-            <Text style={styles.cardBodyWarning}>Payouts are not enabled yet.</Text>
-          )}
+          <Text style={styles.cardBodyWarning}>
+            {requirements.length > 0
+              ? 'Stripe needs more details to enable payouts—business info, personal details, and bank account. Click below to complete the setup.'
+              : 'Payouts are not enabled yet.'}
+          </Text>
           <View style={styles.buttonRow}>
             <Pressable style={styles.primaryBtn} onPress={openStripeLink} disabled={busy}>
               <Text style={styles.primaryBtnText}>Continue onboarding</Text>
