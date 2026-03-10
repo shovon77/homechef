@@ -502,7 +502,7 @@ export default function ChefDetailView() {
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
                             {newlyAddedDishes.map(d => (
                               <View key={d.id} style={styles.dishCardHorizontal}>
-                                <DishCard dish={{ ...d, chef: title, chefs: { name: title } }} variant="explore" />
+                                <DishCard dish={{ ...d, chef: '', chefs: {} }} variant="explore" inlinePriceRating quantityOnImage />
                               </View>
                             ))}
                           </ScrollView>
@@ -516,7 +516,7 @@ export default function ChefDetailView() {
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
                             {bestSellerDishes.map(d => (
                               <View key={d.id} style={styles.dishCardHorizontal}>
-                                <DishCard dish={{ ...d, chef: title, chefs: { name: title } }} variant="explore" />
+                                <DishCard dish={{ ...d, chef: '', chefs: {} }} variant="explore" inlinePriceRating quantityOnImage />
                               </View>
                             ))}
                           </ScrollView>
@@ -532,7 +532,7 @@ export default function ChefDetailView() {
                           <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.horizontalScrollContent} style={styles.horizontalScroll}>
                             {dishes.map(d => (
                               <View key={d.id} style={styles.dishCardHorizontal}>
-                                <DishCard dish={{ ...d, chef: title, chefs: { name: title } }} variant="explore" />
+                                <DishCard dish={{ ...d, chef: '', chefs: {} }} variant="explore" inlinePriceRating quantityOnImage />
                               </View>
                             ))}
                           </ScrollView>

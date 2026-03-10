@@ -15,9 +15,13 @@ type DishCardProps = {
   dish: any;
   style?: StyleProp<ViewStyle>;
   variant?: 'default' | 'explore' | 'homepage';
+  /** When true (e.g. on chef detail page), show price and rating on same line */
+  inlinePriceRating?: boolean;
+  /** When true (e.g. on chef detail page), show quantity controls overlayed on bottom of image */
+  quantityOnImage?: boolean;
 };
 
-export default function DishCard({ dish, style, variant = 'default' }: DishCardProps) {
+export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false }: DishCardProps) {
   const router = useRouter();
   const [avg, setAvg] = useState(0);
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
@@ -178,20 +182,97 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
     );
   }
 
+  const quantityControlsExplore = (
+    <View style={[styles.quantityRowExplore, quantityOnImage && styles.quantityRowExploreOverlay]}>
+      {cartQty === 0 ? (
+        <TouchableOpacity
+          onPress={() => {
+            addToCart({
+              id: dish.id,
+              name: dish.name,
+              price: Number(dish.price || 0),
+              quantity: 1,
+              image: dish.image,
+              chef_id: dish.chef_id,
+            });
+          }}
+          style={[styles.plusIconBtn, styles.plusIconBtnExplore, quantityOnImage && styles.quantityBtnOverlay]}
+          activeOpacity={0.7}
+        >
+          <Image
+            source={require('../../assets/add (1).png')}
+            style={[styles.plusIconImage, quantityOnImage && styles.quantityIconOverlay]}
+            tintColor={PRIMARY_COLOR}
+            resizeMode="contain"
+          />
+        </TouchableOpacity>
+      ) : (
+        <>
+          <TouchableOpacity
+            onPress={() => setCartQuantity(dish.id, cartQty - 1)}
+            style={[styles.quantityBtn, styles.quantityBtnExplore, quantityOnImage && styles.quantityBtnOverlay]}
+          >
+            <Image
+              source={require('../../assets/minus.png')}
+              style={[styles.quantityIconImage, quantityOnImage && styles.quantityIconOverlay]}
+              tintColor={PRIMARY_COLOR}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+          <View style={[styles.quantityNumberWrap, quantityOnImage && styles.quantityNumberOverlay]}>
+            <Text style={[styles.quantityText, styles.quantityTextExplore, quantityOnImage && styles.quantityTextOverlay]}>{cartQty}</Text>
+          </View>
+          <TouchableOpacity
+            onPress={() => setCartQuantity(dish.id, cartQty + 1)}
+            style={[styles.quantityBtn, styles.quantityBtnExplore, quantityOnImage && styles.quantityBtnOverlay]}
+          >
+            <Image
+              source={require('../../assets/add (1).png')}
+              style={[styles.quantityIconImage, quantityOnImage && styles.quantityIconOverlay]}
+              tintColor={PRIMARY_COLOR}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        </>
+      )}
+    </View>
+  );
+
   if (variant === 'explore') {
+    const imageBlock = quantityOnImage ? (
+      <View style={styles.imageWrapperExplore}>
+        <Link href={`/dish/${dish.id}`} asChild>
+          <TouchableOpacity activeOpacity={0.8} style={styles.imageContainerExplore}><Image source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }} style={styles.image} /></TouchableOpacity>
+        </Link>
+        <View style={[styles.quantityOverlayOnImage, cartQty === 0 && styles.quantityOverlayInitial]}>
+          {cartQty === 0 ? (
+            <TouchableOpacity
+              onPress={() => addToCart({ id: dish.id, name: dish.name, price: Number(dish.price || 0), quantity: 1, image: dish.image, chef_id: dish.chef_id })}
+              style={styles.plusInitialBtn}
+              activeOpacity={0.7}
+            >
+              <Image source={require('../../assets/add (1).png')} style={styles.plusInitialIcon} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+            </TouchableOpacity>
+          ) : (
+            <View style={styles.quantityPillWrap}>{quantityControlsExplore}</View>
+          )}
+        </View>
+      </View>
+    ) : imageEl;
+
     return (
       <View style={[styles.cardExplore, style]}>
-        {imageEl}
+        {imageBlock}
         <View style={styles.exploreContent}>
           <Text style={[styles.name, styles.nameExplore]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
-          {(chefDisplayName || avg > 0) && (
+          {(chefDisplayName || (avg > 0 && !inlinePriceRating)) && (
             <View style={styles.chefRatingRowExplore}>
               {chefDisplayName ? (
                 <Text style={[styles.chefName, styles.chefNameExplore, styles.chefNameExploreFlex]} numberOfLines={1}>
                   {chefDisplayName}
                 </Text>
               ) : null}
-              {avg > 0 && (
+              {avg > 0 && !inlinePriceRating && (
                 <View style={[styles.ratingRow, styles.ratingRowExplore]}>
                   <Image
                     source={require('../../assets/star.png')}
@@ -204,68 +285,27 @@ export default function DishCard({ dish, style, variant = 'default' }: DishCardP
               )}
             </View>
           )}
-          <View style={styles.priceRowExplore}>
-            <Text style={[styles.price, styles.priceExplore]} numberOfLines={1}>
+          <View style={inlinePriceRating ? styles.priceRatingRowExplore : styles.priceRowExplore}>
+            <Text style={[styles.price, styles.priceExplore, inlinePriceRating && styles.priceInlineMatch]} numberOfLines={1}>
               {formatCad(Number(dish.price) ?? 0)}
             </Text>
-          </View>
-          <View style={styles.priceAndQuantityRowExplore}>
-            <View style={styles.quantityRowExplore}>
-            {cartQty === 0 ? (
-              <TouchableOpacity
-                  onPress={() => {
-                    addToCart({
-                      id: dish.id,
-                      name: dish.name,
-                      price: Number(dish.price || 0),
-                      quantity: 1,
-                      image: dish.image,
-                      chef_id: dish.chef_id,
-                    });
-                  }}
-                  style={[styles.plusIconBtn, styles.plusIconBtnExplore]}
-                  activeOpacity={0.7}
-                >
-                  <Image
-                    source={require('../../assets/add (1).png')}
-                    style={styles.plusIconImage}
-                    tintColor={PRIMARY_COLOR}
-                    resizeMode="contain"
-                  />
-                </TouchableOpacity>
-            ) : (
-              <>
-                <View style={styles.quantityRowExploreLeft}>
-                  <TouchableOpacity
-                    onPress={() => setCartQuantity(dish.id, cartQty - 1)}
-                    style={[styles.quantityBtn, styles.quantityBtnExplore]}
-                  >
-                    <Image
-                      source={require('../../assets/minus.png')}
-                      style={styles.quantityIconImage}
-                      tintColor={PRIMARY_COLOR}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                </View>
-                <Text style={[styles.quantityText, styles.quantityTextExplore]}>{cartQty}</Text>
-                <View style={styles.quantityRowExploreRight}>
-                  <TouchableOpacity
-                    onPress={() => setCartQuantity(dish.id, cartQty + 1)}
-                    style={[styles.quantityBtn, styles.quantityBtnExplore]}
-                  >
-                    <Image
-                      source={require('../../assets/add (1).png')}
-                      style={styles.quantityIconImage}
-                      tintColor={PRIMARY_COLOR}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                </View>
-              </>
+            {inlinePriceRating && avg > 0 && (
+              <View style={[styles.ratingRow, styles.ratingRowExplore]}>
+                <Image
+                  source={require('../../assets/star.png')}
+                  style={[styles.starIconImage, styles.starIconExplore, inlinePriceRating && styles.starIconInlineMatch]}
+                  tintColor={BRAND_BLACK}
+                  resizeMode="contain"
+                />
+                <Text style={[styles.ratingText, styles.ratingTextExplore, inlinePriceRating && styles.ratingTextInlineMatch]}>{safeToFixed(avg)}</Text>
+              </View>
             )}
-            </View>
           </View>
+          {!quantityOnImage && (
+            <View style={styles.priceAndQuantityRowExplore}>
+              {quantityControlsExplore}
+            </View>
+          )}
         </View>
       </View>
     );
@@ -349,6 +389,12 @@ const styles = StyleSheet.create({
     width: '100%',
     justifyContent: 'center',
     alignItems: 'center',
+  },
+  priceRatingRowExplore: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
     // Keep vertical rhythm consistent with name/chef spacing
     marginTop: 2,
     marginBottom: 0,
@@ -420,6 +466,83 @@ const styles = StyleSheet.create({
     borderRadius: 0,
     overflow: 'hidden',
     alignSelf: 'stretch',
+  },
+  imageWrapperExplore: {
+    width: '100%',
+    aspectRatio: 1.1,
+    position: 'relative',
+    alignSelf: 'stretch',
+  },
+  quantityOverlayOnImage: {
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  quantityOverlayInitial: {
+    alignItems: 'flex-end',
+    justifyContent: 'flex-end',
+  },
+  plusInitialBtn: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: '#fff',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  plusInitialIcon: {
+    width: 16,
+    height: 16,
+  },
+  quantityPillWrap: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#fff',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 8,
+    gap: 4,
+  },
+  quantityRowExploreOverlay: {
+    justifyContent: 'center',
+    width: 'auto',
+    gap: 4,
+    minHeight: 0,
+  },
+  quantityBtnOverlay: {
+    width: 24,
+    height: 24,
+    borderRadius: 12,
+  },
+  quantityIconOverlay: {
+    width: 14,
+    height: 14,
+  },
+  quantityNumberWrap: {
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityNumberOverlay: {
+    minWidth: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  quantityTextOverlay: {
+    color: BRAND_BLACK,
+    flex: 0,
+    minWidth: 0,
+    textAlign: 'center',
+    fontSize: 12,
+  },
+  quantityOverlaySpacer: {
+    flex: 1,
   },
   image: {
     width: "100%",
@@ -508,6 +631,17 @@ const styles = StyleSheet.create({
     color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: '400',
+  },
+  priceInlineMatch: {
+    fontSize: 13,
+    lineHeight: 18,
+  },
+  ratingTextInlineMatch: {
+    fontSize: 13,
+  },
+  starIconInlineMatch: {
+    width: 13,
+    height: 13,
   },
   footer: {
     flexDirection: 'row',
