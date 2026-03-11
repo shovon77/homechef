@@ -12,6 +12,7 @@ import { CartProvider } from '../context/CartContext';
 import { AuthProvider } from '../context/AuthContext';
 import { LocationModalProvider } from '../context/LocationModalContext';
 import { redirectAfterLogin } from '../lib/authRedirect';
+import { isInAppBrowser } from '../lib/inAppBrowser';
 import { 
   useFonts, 
   OpenSans_300Light,
@@ -68,6 +69,16 @@ export default function RootLayout() {
       document.head.appendChild(appleLink);
     }
   }, []);
+
+  // When opened inside Messenger/Facebook/Instagram in-app browser, send user to /open-in-browser so they can open in Safari/Chrome (required for Google sign-in)
+  useEffect(() => {
+    if (Platform.OS !== 'web') return;
+    if (!isInAppBrowser()) return;
+    const path = pathname ?? '/';
+    if (path === '/open-in-browser') return;
+    const then = encodeURIComponent(path);
+    router.replace(`/open-in-browser?then=${then}`);
+  }, [Platform.OS, pathname, router]);
 
   // Ensure profile and welcome notification on auth state changes
   useEffect(() => {
