@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { theme } from '../lib/theme';
 import ENV from '../lib/env';
@@ -30,16 +30,8 @@ export default function OpenInBrowserScreen() {
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
       navigator.clipboard.writeText(targetUrl).then(() => {
         setCopied(true);
-        setTimeout(() => setCopied(false), 2000);
+        setTimeout(() => setCopied(false), 4000);
       });
-    }
-  };
-
-  const handleOpenInBrowser = () => {
-    if (Platform.OS === 'web') {
-      window.open(targetUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      Linking.openURL(targetUrl);
     }
   };
 
@@ -55,7 +47,7 @@ export default function OpenInBrowserScreen() {
           You're viewing this link inside Messenger (or another app). Sign-in with Google doesn't work here.
         </Text>
         <Text style={styles.instruction}>
-          Tap the menu (•••) or "Open in Browser" / "Open in Safari" / "Open in Chrome" in the app, or copy the link below and paste it into Safari or Chrome.
+          Use Messenger’s menu: tap the ••• at the top, then choose “Open in Browser” or “Open in Safari”. Or copy the link below and paste it into Safari or Chrome.
         </Text>
         <View style={styles.urlRow}>
           <Text style={styles.url} selectable numberOfLines={2}>
@@ -63,11 +55,11 @@ export default function OpenInBrowserScreen() {
           </Text>
         </View>
         <TouchableOpacity style={styles.copyBtn} onPress={handleCopyLink} activeOpacity={0.8}>
-          <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy link'}</Text>
+          <Text style={styles.copyBtnText}>{copied ? 'Copied! Open Safari or Chrome and paste the link.' : 'Copy link'}</Text>
         </TouchableOpacity>
-        <TouchableOpacity style={styles.openBtn} onPress={handleOpenInBrowser} activeOpacity={0.8}>
-          <Text style={styles.openBtnText}>Try opening in browser</Text>
-        </TouchableOpacity>
+        {copied && (
+          <Text style={styles.copiedHint}>Then open Safari or Chrome and paste in the address bar.</Text>
+        )}
       </View>
     </View>
   );
@@ -114,28 +106,21 @@ const styles = StyleSheet.create({
     color: theme.colors.primary,
   },
   copyBtn: {
-    backgroundColor: theme.colors.border,
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
-    marginBottom: 10,
-  },
-  copyBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.text,
-  },
-  openBtn: {
     backgroundColor: theme.colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
   },
-  openBtnText: {
+  copyBtnText: {
     fontSize: 16,
     fontWeight: '600',
     color: theme.colors.primaryContrast,
+  },
+  copiedHint: {
+    fontSize: 14,
+    color: theme.colors.subtle,
+    marginTop: 12,
+    textAlign: 'center',
   },
 });
