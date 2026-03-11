@@ -768,11 +768,23 @@ export default function AdminPage() {
             console.error('Error fetching dishes:', dishesError);
           }
           
+          // Normalize pickup_availability (from chefs table) - may be string or array
+          let pickupAvailability = (chef as any).pickup_availability ?? null;
+          if (typeof pickupAvailability === 'string') {
+            try {
+              pickupAvailability = JSON.parse(pickupAvailability);
+            } catch (_) {
+              pickupAvailability = null;
+            }
+          }
+          if (!Array.isArray(pickupAvailability)) pickupAvailability = null;
+          
           const applicationData = {
             ...chef,
             dishes: dishesData || [],
             status: chef.status === 'pending' ? 'submitted' : (chef.status === 'active' ? 'approved' : 'rejected'),
             applicationId: undefined, // No chef_applications record - use toggleChefActive path
+            pickup_availability: pickupAvailability,
           };
           
           console.log('Setting application data:', applicationData);
@@ -792,10 +804,27 @@ export default function AdminPage() {
           console.error('Error fetching dishes:', dishesError);
         }
         
+        // Pickup availability is stored on chefs table, not chef_applications - fetch it
+        const { data: chefRow } = await supabase
+          .from('chefs')
+          .select('pickup_availability')
+          .eq('id', chefId)
+          .maybeSingle();
+        
+        let pickupAvailability = chefRow?.pickup_availability ?? null;
+        if (typeof pickupAvailability === 'string') {
+          try {
+            pickupAvailability = JSON.parse(pickupAvailability);
+          } catch (_) {
+            pickupAvailability = null;
+          }
+        }
+        
         const applicationData = {
           ...application,
           dishes: dishesData || [],
           applicationId: application.id, // Real chef_applications record - use approveChefApplication
+          pickup_availability: Array.isArray(pickupAvailability) ? pickupAvailability : null,
         };
         
         console.log('Setting application data from application:', applicationData);
