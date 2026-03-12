@@ -137,27 +137,31 @@ export default function IntroPage() {
             <Text style={styles.welcomeHint}>You can change it later in your settings.</Text>
           </View>
 
-          {/* Order Food Option */}
+          {/* Sell Food Option */}
           <View style={styles.optionCard}>
-            <Text style={styles.optionTitle}>Order homemade food</Text>
-            <Text style={styles.optionDescription}>Pickup meals from local chefs nearby</Text>
+            <View style={styles.optionHeader}>
+              <Text style={styles.optionTitle}>Sell homemade food</Text>
+              <Text style={styles.optionDescription}>No sign-up fees. No commitments.{'\n'}Cook from home, whenever you want.</Text>
+            </View>
             <TouchableOpacity
               style={styles.actionButton}
-              onPress={() => router.push('/browse')}
+              onPress={() => router.push('/auth/chef')}
             >
-              <Text style={styles.actionButtonText}>Start exploring food</Text>
+              <Text style={styles.actionButtonText}>Start chef setup</Text>
             </TouchableOpacity>
           </View>
 
-          {/* Sell Food Option */}
+          {/* Order Food Option */}
           <View style={styles.optionCard}>
-            <Text style={styles.optionTitle}>Sell dishes as a chef</Text>
-            <Text style={styles.optionDescription}>Cook & manage pickups on schedule</Text>
+            <View style={styles.optionHeader}>
+              <Text style={styles.optionTitle}>Order homemade food</Text>
+              <Text style={styles.optionDescription}>Pickup from local chefs nearby.{'\n'}Secure payments. Order with confidence.</Text>
+            </View>
             <TouchableOpacity
               style={[styles.actionButton, styles.actionButtonChef]}
-              onPress={() => router.push('/auth/chef')}
+              onPress={() => router.push('/browse')}
             >
-              <Text style={[styles.actionButtonText, styles.actionButtonTextChef]}>Start chef setup</Text>
+              <Text style={[styles.actionButtonText, styles.actionButtonTextChef]}>Start exploring food</Text>
             </TouchableOpacity>
           </View>
 
@@ -236,6 +240,9 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.xl,
     padding: theme.spacing.xl,
     gap: theme.spacing.md,
+  },
+  optionHeader: {
+    gap: theme.spacing.xs,
   },
   optionTitle: {
     fontSize: theme.typography.fontSize.lg,
