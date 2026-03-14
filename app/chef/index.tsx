@@ -45,7 +45,7 @@ const INPUT_NO_FOCUS_OUTLINE = Platform.select({
 
 type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number }>; user_email?: string; user_name?: string };
+type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number; notes?: string | null }>; user_email?: string; user_name?: string };
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -1063,7 +1063,7 @@ export default function ChefDashboard() {
       const userIds = [...new Set(filteredOrders.map(o => o.user_id))];
 
       const { data: itemsData, error: itemsError } = orderIds.length > 0
-        ? await supabase.from('order_items').select('id,order_id,dish_id,quantity,unit_price_cents').in('order_id', orderIds)
+        ? await supabase.from('order_items').select('id,order_id,dish_id,quantity,unit_price_cents,notes').in('order_id', orderIds)
         : { data: [], error: null };
       if (itemsError) console.warn('order_items fetch error', itemsError);
 
@@ -1091,6 +1091,7 @@ export default function ChefDashboard() {
           dish_name: item.dish_id ? dishMap.get(item.dish_id) ?? 'Dish' : undefined,
           quantity: item.quantity,
           unit_price_cents: item.unit_price_cents,
+          notes: item.notes ?? null,
         });
       });
 
@@ -2407,7 +2408,7 @@ export default function ChefDashboard() {
                   <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
                 )}
                 <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
-                  {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+                  {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}${item.notes?.trim() ? ` — ${item.notes.trim()}` : ''}`).join(', ') || 'No items'}
                 </Text>
                 <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
                 <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_email || 'Unknown'}</Text>
@@ -3107,7 +3108,7 @@ export default function ChefDashboard() {
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
                         )}
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
-            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}${item.notes?.trim() ? ` — ${item.notes.trim()}` : ''}`).join(', ') || 'No items'}
                         </Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
@@ -3349,7 +3350,7 @@ export default function ChefDashboard() {
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
                         )}
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
-            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}`).join(', ') || 'No items'}
+            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}${item.notes?.trim() ? ` — ${item.notes.trim()}` : ''}`).join(', ') || 'No items'}
                         </Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
