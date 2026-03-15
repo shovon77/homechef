@@ -117,12 +117,20 @@ export async function createNotification(
 
 /**
  * Create welcome notification for new users
- * Always uses direct insert since welcome notifications are always for the current user
+ * Always uses direct insert since welcome notifications are always for the current user.
+ * Checks for existing welcome first to avoid duplicates when ensureProfile runs multiple times.
  */
 export async function createWelcomeNotification(userId: string): Promise<Notification | null> {
   try {
-    // For welcome notifications, always use direct insert since they're for the current user
-    // This avoids any timing issues with session establishment
+    // Use limit(1) so we don't error when user already has multiple welcome rows (e.g. from past bug)
+    const { data: existingList } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', 'welcome')
+      .limit(1);
+    if (existingList && existingList.length > 0) return null;
+
     const { data, error } = await supabase
       .from('notifications')
       .insert({

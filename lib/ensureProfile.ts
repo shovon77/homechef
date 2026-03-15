@@ -47,69 +47,11 @@ export async function ensureProfile(client?: SupabaseClient): Promise<{ ok: bool
           .select('*')
           .eq('id', user.id)
           .single();
-        
-        // Check if user has welcome notification, create if not (even after email update)
-        // Fire-and-forget with timeout - don't block the main flow
-        setTimeout(() => {
-          (async () => {
-            try {
-              const { data: existingWelcomeNotif, error: notifCheckError } = await sb
-                .from('notifications')
-                .select('id')
-                .eq('user_id', user.id)
-                .eq('type', 'welcome')
-                .maybeSingle();
 
-              // If query failed or notification doesn't exist, try to create it
-              if (notifCheckError || !existingWelcomeNotif) {
-                try {
-                  const result = await createWelcomeNotification(user.id);
-                  if (result) {
-                    console.log('Welcome notification created successfully after email update');
-                  }
-                } catch (notifError: any) {
-                  // Silently fail - don't log to avoid noise
-                }
-              }
-            } catch (err: any) {
-              // Silently fail - don't log to avoid noise
-            }
-          })();
-        }, 100); // Delay by 100ms to ensure profile operation completes first
-        
         return { ok: true, profile: updated || existingProfile };
       }
-      
-      // Profile exists - check if user has welcome notification, create if not
-      // Fire-and-forget with timeout - don't block the main flow
-      setTimeout(() => {
-        (async () => {
-          try {
-            const { data: existingWelcomeNotif, error: notifCheckError } = await sb
-              .from('notifications')
-              .select('id')
-              .eq('user_id', user.id)
-              .eq('type', 'welcome')
-              .maybeSingle();
 
-            // If query failed or notification doesn't exist, try to create it
-            if (notifCheckError || !existingWelcomeNotif) {
-              try {
-                const result = await createWelcomeNotification(user.id);
-                if (result) {
-                  console.log('Welcome notification created successfully');
-                }
-              } catch (notifError: any) {
-                // Silently fail - don't log to avoid noise
-              }
-            }
-          } catch (err: any) {
-            // Silently fail - don't log to avoid noise
-          }
-        })();
-      }, 100); // Delay by 100ms to ensure profile operation completes first
-      
-      // Profile exists and email is the same, return as-is
+      // Profile exists and email is the same - do not create welcome (existing user logging in)
       return { ok: true, profile: existingProfile };
     }
 
@@ -131,34 +73,26 @@ export async function ensureProfile(client?: SupabaseClient): Promise<{ ok: bool
     // (see migrations/add_new_user_signup_notification_trigger.sql)
     // This ensures RLS policies are bypassed and notifications are created server-side
 
-    // Create welcome notification for new users if they haven't seen it before
-    // Fire-and-forget with timeout - don't block profile creation
+    // Welcome notification only for new users (we just created their profile).
+    // Existing users never get welcome created here, so no duplicate on every login.
     setTimeout(() => {
       (async () => {
         try {
-          const { data: existingWelcomeNotif, error: notifCheckError } = await sb
+          const { data: existingList } = await sb
             .from('notifications')
             .select('id')
             .eq('user_id', user.id)
             .eq('type', 'welcome')
-            .maybeSingle();
+            .limit(1);
 
-          // If query failed or notification doesn't exist, try to create it
-          if (notifCheckError || !existingWelcomeNotif) {
-            try {
-              const result = await createWelcomeNotification(user.id);
-              if (result) {
-                console.log('Welcome notification created successfully for new user');
-              }
-            } catch (notifError: any) {
-              // Silently fail - don't log to avoid noise
-            }
+          if (!existingList || existingList.length === 0) {
+            await createWelcomeNotification(user.id);
           }
-        } catch (err: any) {
-          // Silently fail - don't log to avoid noise
+        } catch {
+          // Silently fail
         }
       })();
-    }, 100); // Delay by 100ms to ensure profile operation completes first
+    }, 100);
 
     return { ok: true, profile: upserted };
   } catch (e: any) {
