@@ -12,7 +12,7 @@ import { CartProvider } from '../context/CartContext';
 import { AuthProvider } from '../context/AuthContext';
 import { LocationModalProvider } from '../context/LocationModalContext';
 import { redirectAfterLogin } from '../lib/authRedirect';
-import { isInAppBrowser } from '../lib/inAppBrowser';
+import { isInAppBrowser, isAuthOrOnboardingPath } from '../lib/inAppBrowser';
 import { 
   useFonts, 
   OpenSans_300Light,
@@ -70,12 +70,13 @@ export default function RootLayout() {
     }
   }, []);
 
-  // When opened inside Messenger/Facebook/Instagram in-app browser, send user to /open-in-browser so they can open in Safari/Chrome (required for Google sign-in)
+  // When opened inside Messenger/Facebook/Instagram in-app browser on auth/onboarding pages, send user to /open-in-browser (required for Google sign-in)
   useEffect(() => {
     if (Platform.OS !== 'web') return;
     if (!isInAppBrowser()) return;
     const path = pathname ?? '/';
     if (path === '/open-in-browser') return;
+    if (!isAuthOrOnboardingPath(path)) return;
     const then = encodeURIComponent(path);
     router.replace(`/open-in-browser?then=${then}`);
   }, [Platform.OS, pathname, router]);
