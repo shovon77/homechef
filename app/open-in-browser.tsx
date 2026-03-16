@@ -1,18 +1,23 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { theme } from '../lib/theme';
 import ENV from '../lib/env';
 import { isInAppBrowser } from '../lib/inAppBrowser';
+import Screen from '../components/Screen';
+
+const PAGE_BG = '#F2F0EF'; // same as homepage
+const BRAND_BLACK = '#33393A';
 
 export default function OpenInBrowserScreen() {
   const router = useRouter();
-  const { then: thenPath } = useLocalSearchParams<{ then?: string }>();
+  const { then: thenPath, show: showParam } = useLocalSearchParams<{ then?: string; show?: string }>();
   const [copied, setCopied] = useState(false);
 
   const destination = thenPath && thenPath !== '' ? String(thenPath) : '/';
+  const forceShow = showParam === '1' || showParam === 'true';
   const baseUrl =
     Platform.OS === 'web' && typeof window !== 'undefined'
       ? window.location.origin
@@ -21,10 +26,11 @@ export default function OpenInBrowserScreen() {
 
   useEffect(() => {
     if (Platform.OS !== 'web') return;
+    if (forceShow) return; // allow manual navigation to this page
     if (!isInAppBrowser()) {
       router.replace(destination as any);
     }
-  }, [Platform.OS, destination, router]);
+  }, [Platform.OS, destination, router, forceShow]);
 
   const handleCopyLink = () => {
     if (Platform.OS === 'web' && typeof navigator !== 'undefined' && navigator.clipboard?.writeText) {
@@ -35,46 +41,65 @@ export default function OpenInBrowserScreen() {
     }
   };
 
-  if (Platform.OS !== 'web' || !isInAppBrowser()) {
+  const handleOpenInBrowser = () => {
+    if (Platform.OS === 'web' && typeof window !== 'undefined') {
+      window.open(targetUrl, '_blank', 'noopener,noreferrer');
+    } else {
+      Linking.openURL(targetUrl);
+    }
+  };
+
+  if (Platform.OS !== 'web' || (!isInAppBrowser() && !forceShow)) {
     return null;
   }
 
   return (
-    <View style={styles.container}>
-      <View style={styles.card}>
-        <Text style={styles.title}>Open in your browser</Text>
-        <Text style={styles.message}>
-          You're viewing this link inside Messenger (or another app). Sign-in with Google doesn't work here.
-        </Text>
-        <Text style={styles.instruction}>
-          Use Messenger’s menu: tap the ••• at the top, then choose “Open in Browser” or “Open in Safari”. Or copy the link below and paste it into Safari or Chrome.
-        </Text>
-        <View style={styles.urlRow}>
-          <Text style={styles.url} selectable numberOfLines={2}>
-            {targetUrl}
+    <Screen style={{ backgroundColor: PAGE_BG }} noFooter={false}>
+      <View style={styles.container}>
+        <View style={styles.card}>
+          <Text style={styles.title}>Open link in your phone browser</Text>
+          <Text style={styles.subtitle}>Messenger cannot complete Google sign-in</Text>
+          <Text style={styles.stepLabel}>Step 1</Text>
+          <Text style={styles.stepBody}>Tap Copy link</Text>
+
+          <Text style={styles.stepLabel}>Step 2</Text>
+          <Text style={styles.stepBody}>Open Safari (iPhone) or Chrome (Android)</Text>
+
+          <Text style={styles.stepLabel}>Step 3</Text>
+          <Text style={styles.stepBody}>Tap the top search bar</Text>
+
+          <Text style={styles.stepLabel}>Step 4</Text>
+          <Text style={styles.stepBody}>Paste the link and press Go</Text>
+
+          <Text style={styles.sectionLabel}>Faster option</Text>
+          <Text style={styles.stepBody}>
+            Tap the ⋮ menu on Messenger (top-right corner){'\n'}
+            Select Open in Browser or{'\n'}
+            Select Open in Chrome
           </Text>
+
+          <TouchableOpacity style={styles.openBtn} onPress={handleOpenInBrowser} activeOpacity={0.8}>
+            <Text style={styles.openBtnText}>Open in Safari or Chrome</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={styles.copyBtn} onPress={handleCopyLink} activeOpacity={0.8}>
+            <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy link'}</Text>
+          </TouchableOpacity>
         </View>
-        <TouchableOpacity style={styles.copyBtn} onPress={handleCopyLink} activeOpacity={0.8}>
-          <Text style={styles.copyBtnText}>{copied ? 'Copied! Open Safari or Chrome and paste the link.' : 'Copy link'}</Text>
-        </TouchableOpacity>
-        {copied && (
-          <Text style={styles.copiedHint}>Then open Safari or Chrome and paste in the address bar.</Text>
-        )}
       </View>
-    </View>
+    </Screen>
   );
 }
 
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: theme.colors.background,
+    backgroundColor: PAGE_BG,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
   },
   card: {
-    backgroundColor: theme.colors.surface,
+    backgroundColor: '#FFFFFF',
     borderRadius: 12,
     padding: 24,
     maxWidth: 420,
@@ -83,30 +108,57 @@ const styles = StyleSheet.create({
   title: {
     fontSize: 22,
     fontWeight: '700',
-    color: theme.colors.text,
-    marginBottom: 12,
+    color: BRAND_BLACK,
+    marginBottom: 8,
+    fontFamily: theme.typography.fontFamily.display,
   },
-  message: {
+  subtitle: {
     fontSize: 16,
-    color: theme.colors.text,
-    lineHeight: 24,
-    marginBottom: 12,
+    color: BRAND_BLACK,
+    marginBottom: 16,
+    fontFamily: theme.typography.fontFamily.body,
   },
-  instruction: {
+  stepLabel: {
     fontSize: 15,
-    color: theme.colors.subtle,
+    fontWeight: '700',
+    color: BRAND_BLACK,
+    marginTop: 12,
+    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  stepBody: {
+    fontSize: 15,
+    color: BRAND_BLACK,
     lineHeight: 22,
+    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  sectionLabel: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: BRAND_BLACK,
+    marginTop: 16,
+    marginBottom: 4,
+    fontFamily: theme.typography.fontFamily.display,
+  },
+  openBtn: {
+    backgroundColor: theme.colors.primary,
+    paddingVertical: 14,
+    paddingHorizontal: 20,
+    borderRadius: 8,
+    alignItems: 'center',
     marginBottom: 16,
   },
-  urlRow: {
-    marginBottom: 16,
-  },
-  url: {
-    fontSize: 14,
-    color: theme.colors.primary,
+  openBtnText: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: theme.colors.primaryContrast,
+    fontFamily: theme.typography.fontFamily.body,
   },
   copyBtn: {
-    backgroundColor: theme.colors.primary,
+    backgroundColor: '#FFFFFF',
+    borderWidth: 1,
+    borderColor: '#E3EEE8',
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 8,
@@ -115,12 +167,7 @@ const styles = StyleSheet.create({
   copyBtnText: {
     fontSize: 16,
     fontWeight: '600',
-    color: theme.colors.primaryContrast,
-  },
-  copiedHint: {
-    fontSize: 14,
-    color: theme.colors.subtle,
-    marginTop: 12,
-    textAlign: 'center',
+    color: BRAND_BLACK,
+    fontFamily: theme.typography.fontFamily.body,
   },
 });
