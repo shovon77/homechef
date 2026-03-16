@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useEffect, useState } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Platform, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, Platform } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { theme } from '../lib/theme';
 import ENV from '../lib/env';
@@ -41,20 +41,16 @@ export default function OpenInBrowserScreen() {
     }
   };
 
-  const handleOpenInBrowser = () => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      window.open(targetUrl, '_blank', 'noopener,noreferrer');
-    } else {
-      Linking.openURL(targetUrl);
-    }
-  };
-
   if (Platform.OS !== 'web' || (!isInAppBrowser() && !forceShow)) {
     return null;
   }
 
   return (
-    <Screen style={{ backgroundColor: PAGE_BG }} noFooter={false}>
+    <Screen
+      style={{ backgroundColor: PAGE_BG }}
+      noFooter={false}
+      scrollViewContentStyle={{ paddingBottom: 160 }}
+    >
       <View style={styles.container}>
         <View style={styles.card}>
           <Text style={styles.title}>Open link in your phone browser</Text>
@@ -78,9 +74,6 @@ export default function OpenInBrowserScreen() {
             Select Open in Chrome
           </Text>
 
-          <TouchableOpacity style={styles.openBtn} onPress={handleOpenInBrowser} activeOpacity={0.8}>
-            <Text style={styles.openBtnText}>Open in Safari or Chrome</Text>
-          </TouchableOpacity>
           <TouchableOpacity style={styles.copyBtn} onPress={handleCopyLink} activeOpacity={0.8}>
             <Text style={styles.copyBtnText}>{copied ? 'Copied!' : 'Copy link'}</Text>
           </TouchableOpacity>
@@ -97,6 +90,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 24,
+    paddingBottom: 120,
   },
   card: {
     backgroundColor: '#FFFFFF',
@@ -106,7 +100,7 @@ const styles = StyleSheet.create({
     width: '100%',
   },
   title: {
-    fontSize: 22,
+    fontSize: 18,
     fontWeight: '700',
     color: BRAND_BLACK,
     marginBottom: 8,
@@ -115,14 +109,14 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 16,
     color: BRAND_BLACK,
-    marginBottom: 16,
+    marginBottom: 6,
     fontFamily: theme.typography.fontFamily.body,
   },
   stepLabel: {
     fontSize: 15,
     fontWeight: '700',
     color: BRAND_BLACK,
-    marginTop: 12,
+    marginTop: 8,
     marginBottom: 4,
     fontFamily: theme.typography.fontFamily.display,
   },
@@ -141,33 +135,18 @@ const styles = StyleSheet.create({
     marginBottom: 4,
     fontFamily: theme.typography.fontFamily.display,
   },
-  openBtn: {
+  copyBtn: {
     backgroundColor: theme.colors.primary,
     paddingVertical: 14,
     paddingHorizontal: 20,
     borderRadius: 8,
     alignItems: 'center',
-    marginBottom: 16,
-  },
-  openBtnText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: theme.colors.primaryContrast,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  copyBtn: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 1,
-    borderColor: '#E3EEE8',
-    paddingVertical: 14,
-    paddingHorizontal: 20,
-    borderRadius: 8,
-    alignItems: 'center',
+    marginTop: 16,
   },
   copyBtnText: {
     fontSize: 16,
-    fontWeight: '600',
-    color: BRAND_BLACK,
+    fontWeight: '400',
+    color: '#FFFFFF',
     fontFamily: theme.typography.fontFamily.body,
   },
 });
