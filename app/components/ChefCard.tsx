@@ -103,7 +103,7 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
     <View style={cardStyle}>
       <Link href={`/chef/${chef.id}`} asChild>
         <Pressable style={pressableStyle} activeOpacity={0.9}>
-          <Image source={{ uri: avatar }} style={avatarStyle} />
+          <Image source={{ uri: avatar }} style={avatarStyle} resizeMode="cover" />
           <View style={infoStyle}>
             <Text style={StyleSheet.flatten([styles.name, compact && styles.nameCompact, nameColor ? { color: nameColor } : undefined])} numberOfLines={1}>{chef.name}</Text>
             <Text style={StyleSheet.flatten([styles.cuisine, compact && styles.cuisineCompact])} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
@@ -201,23 +201,25 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
 const styles = StyleSheet.create({
   card: {
     width: "100%",
+    minHeight: 140,
     backgroundColor: '#F4F4F4',
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
   },
   pressable: {
     flexDirection: 'row',
-    alignItems: 'stretch',
+    alignItems: 'center',
     width: "100%",
     paddingTop: 0,
     paddingBottom: 0,
     paddingLeft: 0,
     paddingRight: theme.spacing.md,
     gap: 0,
+    minHeight: 140,
   },
   avatar: {
     width: 140,
-    alignSelf: 'stretch',
+    height: 140,
     borderTopLeftRadius: theme.radius.xl,
     borderBottomLeftRadius: theme.radius.xl,
     backgroundColor: theme.colors.surface,
@@ -308,9 +310,11 @@ const styles = StyleSheet.create({
   // Compact variant (explore grid desktop/tablet)
   pressableCompact: {
     paddingRight: theme.spacing.sm,
+    minHeight: 88,
   },
   avatarCompact: {
     width: 88,
+    height: 88,
     borderTopLeftRadius: theme.radius.lg,
     borderBottomLeftRadius: theme.radius.lg,
   },

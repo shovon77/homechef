@@ -367,20 +367,149 @@ export default function DishDetail() {
       <View style={{ paddingBottom: 120 }}>
         <View style={styles.container}>
         {/* Breadcrumbs - REMOVED */}
-        {/* Main Content Grid */}
-        <View style={[styles.grid, isMobile && styles.gridMobile]}>
-          {/* Left Column: Image Gallery */}
+        {/* Main Content: separate mobile stack so image is always above text with no overlap */}
+        {isMobile ? (
+          <View style={styles.mobileStack}>
+            <View style={styles.mobileImageWrap}>
+              <View style={[styles.mainImageContainer, styles.mainImageContainerMobile]}>
+                <Image
+                  source={{ uri: mainImage }}
+                  style={styles.mainImage as any}
+                  resizeMode="contain"
+                />
+              </View>
+            </View>
+            <View style={styles.mobileInfoWrap}>
+            <Text
+              style={[styles.dishTitle, styles.dishTitleMobile]}
+            >
+              {dish.name}
+            </Text>
+            
+            {chefId ? (
+              <Link href={`/chef/${chefId}`} asChild>
+                <TouchableOpacity style={styles.chefLink}>
+                  {chef?.photo || chef?.avatar ? (
+                    <Image 
+                      source={{ uri: chef.photo || chef.avatar }} 
+                      style={styles.chefAvatar as any} 
+                    />
+                  ) : (
+                    <Text style={styles.chefIcon}>🏪</Text>
+                  )}
+                  <Text style={styles.chefLinkText}>{chefName}</Text>
+                </TouchableOpacity>
+              </Link>
+            ) : (
+              <View style={styles.chefLink}>
+                <Text style={styles.chefIcon}>🏪</Text>
+                <Text style={styles.chefLinkText}>{chefName}</Text>
+              </View>
+            )}
+
+            <TouchableOpacity style={styles.ratingContainer} activeOpacity={0.7} onPress={scrollToReviews}>
+              {renderStars(avgRating)}
+              <Text style={styles.reviewCount} onPress={scrollToReviews}>
+                ({ratingCount} {ratingCount === 1 ? 'review' : 'reviews'})
+              </Text>
+            </TouchableOpacity>
+
+            {dish.description ? (
+              <Text style={styles.description}>{dish.description}</Text>
+            ) : null}
+
+            <View style={styles.priceAndCartRow}>
+              <Text style={[styles.price, styles.priceRight, styles.priceMobile]}>{formatCad(dish.price)}</Text>
+              <View style={styles.actionRow}>
+                <View style={styles.cartQtyRow}>
+                {cartQty > 0 ? (
+                  <TouchableOpacity
+                    style={styles.cartQtyBtn}
+                    activeOpacity={0.7}
+                    onPress={() => {
+                      if (dish && cartQty > 0) {
+                        setCartQuantity(dish.id, cartQty - 1);
+                      }
+                    }}
+                  >
+                    <Image
+                      source={require('../../assets/minus.png')}
+                      style={styles.cartQtyIconImage as any}
+                      tintColor={PRIMARY_COLOR}
+                      resizeMode="contain"
+                    />
+                  </TouchableOpacity>
+                ) : (
+                  <View style={styles.cartQtyBtn} pointerEvents="none" />
+                )}
+
+                <Text
+                  style={[styles.cartQtyValue, cartQty <= 0 && styles.cartQtyValueHidden]}
+                >
+                  {cartQty}
+                </Text>
+
+                <TouchableOpacity
+                  style={styles.cartQtyBtn}
+                  activeOpacity={0.7}
+                  onPress={() => {
+                    if (!dish) return;
+                    if (cartQty <= 0) {
+                      addToCart({
+                        id: dish.id,
+                        name: dish.name || '',
+                        price: Number(dish.price || 0),
+                        quantity: 1,
+                        image: dish.image || undefined,
+                        chef_id: dish.chef_id || null,
+                        notes: chefNotes.trim() || undefined,
+                      });
+                      return;
+                    }
+                    setCartQuantity(dish.id, cartQty + 1);
+                  }}
+                >
+                  <Image
+                    source={require('../../assets/add (1).png')}
+                    style={styles.cartQtyIconImage as any}
+                    tintColor={PRIMARY_COLOR}
+                    resizeMode="contain"
+                  />
+                </TouchableOpacity>
+              </View>
+            </View>
+            </View>
+
+            <View style={styles.notesContainer}>
+              <Text style={styles.notesButtonText}>Chef notes</Text>
+              <TextInput
+                style={styles.notesInput}
+                value={chefNotes}
+                onChangeText={(t) => {
+                  setChefNotes(t);
+                  if (dish && cartQty > 0) {
+                    setCartNotes(dish.id, t);
+                  }
+                }}
+                placeholder="Add notes for the chef (e.g., no onions)"
+                placeholderTextColor={TEXT_MUTED}
+                multiline
+              />
+            </View>
+            </View>
+        </View>
+        ) : (
+        <View style={styles.grid}>
           <View style={styles.imageColumn}>
             <View style={styles.mainImageContainer}>
               <Image
                 source={{ uri: mainImage }}
                 style={styles.mainImage as any}
-                resizeMode="cover"
+                resizeMode="contain"
               />
             </View>
           </View>
 
-          {/* Right Column: Dish Info & Actions */}
           <View style={styles.infoColumn}>
             <Text
               style={[styles.dishTitle, isMobile && styles.dishTitleMobile]}
@@ -505,6 +634,7 @@ export default function DishDetail() {
             </View>
           </View>
         </View>
+        )}
 
         {/* Tabs Section */}
         <View
@@ -718,29 +848,31 @@ const styles = StyleSheet.create({
         maxWidth: 480,
         alignSelf: 'stretch',
       },
-      default: {},
+      default: {
+        flex: 0,
+        alignSelf: 'stretch',
+      },
     }),
   },
   mainImageContainer: {
     width: '100%',
-    maxWidth: 480, // Limit width to be smaller
+    maxWidth: 480,
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
-    marginBottom: 0,
     ...Platform.select({
       web: {
         boxShadow: 'none' as any,
-        // Match height of dish details column on desktop
-        alignSelf: 'stretch',
-        height: '100%',
-        minHeight: 320,
+        aspectRatio: 4 / 3,
+        alignSelf: 'flex-start',
+        marginBottom: 0,
       },
       default: {
         elevation: 0,
         shadowOpacity: 0,
-        aspectRatio: 1,
+        aspectRatio: 3 / 4,
         alignSelf: 'flex-start',
+        marginBottom: theme.spacing.sm,
       } as any,
     }),
   },
@@ -750,7 +882,13 @@ const styles = StyleSheet.create({
   },
   infoColumn: {
     flex: 1,
-    paddingTop: 0, // Removed paddingTop to reduce spacing
+    paddingTop: 0,
+    ...Platform.select({
+      web: {},
+      default: {
+        flex: 0,
+      },
+    }),
   },
   dishTitle: {
     color: TEXT_DARK,
@@ -767,17 +905,12 @@ const styles = StyleSheet.create({
     letterSpacing: -0.033,
     // Spacing is controlled by the next rows' top margins for consistency.
     marginBottom: 0,
-    // Reduce image->title vertical gap on native (mobile/tablet)
-    marginTop: Platform.select({
-      web: theme.spacing.xs,
-      default: theme.spacing.xs,
-    }),
+    marginTop: theme.spacing.xs,
   },
   dishTitleMobile: {
-    // Use a smaller title on mobile so it's always visible
     fontSize: 22,
     lineHeight: 22 * 1.2,
-    marginTop: theme.spacing.sm,
+    marginTop: 0,
   },
   chefLink: {
     flexDirection: 'row',
@@ -1118,10 +1251,47 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.body,
   },
-  // Mobile styles
+  // Mobile-only layout: single column, image then info, no Platform dependency
+  mobileStack: {
+    width: '100%',
+    flexDirection: 'column',
+    marginBottom: theme.spacing['4xl'],
+  },
+  mobileImageWrap: {
+    width: '100%',
+    marginBottom: theme.spacing.sm,
+  },
+  mainImageContainerMobile: {
+    width: '100%',
+    maxWidth: 480,
+    aspectRatio: 3 / 4,
+    minHeight: 200,
+    marginBottom: 0,
+    borderRadius: theme.radius.xl,
+    overflow: 'hidden',
+    backgroundColor: '#FFFFFF',
+  },
+  mobileInfoWrap: {
+    width: '100%',
+    paddingTop: 0,
+  },
+  // Legacy mobile overrides (used only in desktop branch when isMobile was true)
   gridMobile: {
     flexDirection: 'column',
-    gap: 0, // Reduced gap to 0 for mobile view
+    gap: 0,
+    alignItems: 'stretch',
+    alignSelf: 'stretch',
+  },
+  imageColumnMobile: {
+    flex: 0,
+    flexShrink: 0,
+    width: '100%',
+  },
+  infoColumnMobile: {
+    flex: 0,
+    flexShrink: 0,
+    width: '100%',
+    paddingTop: theme.spacing.sm,
   },
   reviewsList: {
     gap: theme.spacing.lg,
