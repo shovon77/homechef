@@ -4,6 +4,8 @@ import { View, Text, TextInput, TouchableOpacity, Platform, StyleSheet, ScrollVi
 import { useRouter } from 'expo-router';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { supabase } from '../../lib/supabase';
+import { ensureChefSlug } from '../../lib/db';
+import { slugify } from '../../lib/slug';
 import { ensureProfile } from '../../lib/ensureProfile';
 import { ensureSession } from '../../lib/session';
 import { Screen } from '../../components/Screen';
@@ -736,13 +738,15 @@ export default function ChefSignup() {
         if (!updatedChef?.id) throw new Error('Failed to update chef');
         chefId = updatedChef.id;
       } else {
-        // Create new chef
+        // Create new chef (slug required NOT NULL; use temp unique then normalize)
+        const tempSlug = (slugify(chefName) || 'chef') + '-' + Date.now();
         const { data: newChef, error: insertError } = await supabase
           .from('chefs')
           .insert({
             name: chefName,
+            slug: tempSlug,
             email: emailNormalized || null,
-          phone: phoneIsValid ? phoneE164 : (phone || null),
+            phone: phoneIsValid ? phoneE164 : (phone || null),
             location: chefLocation,
             bio: chefBio,
             cuisine: chefCuisine,
@@ -750,12 +754,13 @@ export default function ChefSignup() {
             status: 'pending', // Deactivated until admin approval
             user_id: session.user.id,
           })
-        .select('id')
-        .single();
+          .select('id')
+          .single();
 
         if (insertError) throw insertError;
         if (!newChef?.id) throw new Error('Failed to create chef');
         chefId = newChef.id;
+        await ensureChefSlug(chefId, chefName);
       }
 
       // 6) Update profile to mark user as chef
