@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react'
 import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from 'react-native'
 import { useRouter, Link } from 'expo-router'
 import { supabase } from '../../lib/supabase'
+import { ensureChefSlug } from '../../lib/db'
 import { uploadToBucket } from '../../lib/upload'
 import FilePicker from '../../components/FilePicker'
 
@@ -20,7 +21,7 @@ const C = {
   btnTextDark: '#0B1F17',
 }
 
-type ChefRow = { id: number; name: string; email?: string|null; bio?: string|null; photo?: string|null }
+type ChefRow = { id: number; name: string; slug?: string|null; email?: string|null; bio?: string|null; photo?: string|null }
 type DishRow = { id: number; chef_id: number|null; name: string; price: number; description?: string|null; image?: string|null; thumbnail?: string|null; chef?: string|null }
 
 export default function ChefDashboard() {
@@ -47,6 +48,8 @@ export default function ChefDashboard() {
         const ins = await supabase.from('chefs').insert({ name: defaultName, email }).select('*').single()
         if(ins.error) throw ins.error
         me = ins.data as ChefRow
+        const slug = await ensureChefSlug(me.id, defaultName)
+        if (slug) me = { ...me, slug }
       }
       setChef(me); setName(me.name||''); setBio(me.bio||''); setPhoto(me.photo||undefined)
 
@@ -157,7 +160,7 @@ export default function ChefDashboard() {
       <View style={{ height:3, width:160, backgroundColor:C.accent, marginTop:6, borderRadius:3 }} />
 
       {chef ? (
-        <Link href={`/chef/${chef.id}`} asChild>
+        <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
           <TouchableOpacity style={{ backgroundColor: C.primary, paddingVertical: 12, paddingHorizontal: 16, borderRadius: 10, alignSelf: 'flex-start', marginTop: 12 }}>
             <Text style={{ color: C.btnTextDark, fontWeight: '900', fontFamily: theme.typography.fontFamily.body }}>View my store page</Text>
           </TouchableOpacity>

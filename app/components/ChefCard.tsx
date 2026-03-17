@@ -54,6 +54,7 @@ const BRAND_BLACK = '#33393A';
 
 type Chef = {
   id: number | string;
+  slug?: string | null;
   name: string;
   photo?: string | null;
   avatar?: string | null;
@@ -101,7 +102,7 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
 
   return (
     <View style={cardStyle}>
-      <Link href={`/chef/${chef.id}`} asChild>
+      <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
         <Pressable style={pressableStyle} activeOpacity={0.9}>
           <Image source={{ uri: avatar }} style={avatarStyle} resizeMode="cover" />
           <View style={infoStyle}>

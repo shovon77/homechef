@@ -387,7 +387,7 @@ export default function DishDetail() {
             </Text>
             
             {chefId ? (
-              <Link href={`/chef/${chefId}`} asChild>
+              <Link href={`/chef/${chef?.slug ?? chefId}`} asChild>
                 <TouchableOpacity style={styles.chefLink}>
                   {chef?.photo || chef?.avatar ? (
                     <Image 
@@ -518,7 +518,7 @@ export default function DishDetail() {
             </Text>
             
             {chefId ? (
-              <Link href={`/chef/${chefId}`} asChild>
+              <Link href={`/chef/${chef?.slug ?? chefId}`} asChild>
                 <TouchableOpacity style={styles.chefLink}>
                   {chef?.photo || chef?.avatar ? (
                     <Image 

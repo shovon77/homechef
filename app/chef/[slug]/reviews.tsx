@@ -2,15 +2,16 @@ import React, { useEffect, useMemo, useState } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert } from "react-native";
 import { useLocalSearchParams, Link } from "expo-router";
 import { supabase } from "../../../lib/supabase";
+import { getChefByIdOrSlug } from "../../../lib/db";
 import { theme } from "../../../constants/theme";
 import Stars from "../../components/Stars";
 
-type Chef = { id: number; name: string; rating?: number | null; rating_count?: number | null; };
+type Chef = { id: number; name: string; slug?: string | null; rating?: number | null; rating_count?: number | null; };
 type Review = { id: number; chef_id: number; user_name: string | null; rating: number; comment: string | null; created_at: string; };
 
 export default function ChefReviewsPage() {
-  const { id } = useLocalSearchParams<{ id: string }>();
-  const chefId = Number(id);
+  const { slug } = useLocalSearchParams<{ slug: string }>();
+  const slugOrId = Array.isArray(slug) ? slug[0] : slug ?? "";
   const [chef, setChef] = useState<Chef | null>(null);
   const [reviews, setReviews] = useState<Review[]>([]);
   const [loading, setLoading] = useState(true);
@@ -30,24 +31,37 @@ export default function ChefReviewsPage() {
   useEffect(() => {
     let mounted = true;
     (async () => {
+      if (!slugOrId) {
+        setLoading(false);
+        return;
+      }
       setLoading(true);
-      const [{ data: chefData }, { data: revData }] = await Promise.all([
-        supabase.from("chefs").select("id,name,rating,rating_count").eq("id", chefId).single(),
-        supabase.from("chef_reviews").select("*").eq("chef_id", chefId).order("created_at", { ascending: false })
-      ]);
+      const chefData = await getChefByIdOrSlug(slugOrId);
       if (!mounted) return;
-      setChef(chefData as any);
+      if (!chefData) {
+        setChef(null);
+        setLoading(false);
+        return;
+      }
+      setChef(chefData as Chef);
+      const chefId = chefData.id;
+      const { data: revData } = await supabase
+        .from("chef_reviews")
+        .select("*")
+        .eq("chef_id", chefId)
+        .order("created_at", { ascending: false });
+      if (!mounted) return;
       setReviews((revData as any) || []);
       setLoading(false);
     })();
     return () => { mounted = false; };
-  }, [chefId]);
+  }, [slugOrId]);
 
   const submit = async () => {
-    if (!stars || stars < 1 || stars > 5) return Alert.alert("Rating required", "Please select 1–5 stars.");
+    if (!chef || !stars || stars < 1 || stars > 5) return Alert.alert("Rating required", "Please select 1–5 stars.");
+    const chefId = chef.id;
     try {
       setSaving(true);
-      // 1) insert review
       const { error: insErr } = await supabase.from("chef_reviews").insert({
         chef_id: chefId,
         user_name: userName || null,
@@ -56,13 +70,11 @@ export default function ChefReviewsPage() {
       });
       if (insErr) { Alert.alert("Error", insErr.message); setSaving(false); return; }
 
-      // 2) refresh reviews
       const { data: revData, error: rErr } = await supabase
         .from("chef_reviews").select("*").eq("chef_id", chefId).order("created_at", { ascending: false });
       if (rErr) { Alert.alert("Error", rErr.message); setSaving(false); return; }
       setReviews((revData as any) || []);
 
-      // 3) recompute avg + count, update chef row
       const total = (revData || []).reduce((a: number, r: any) => a + (Number(r.rating) || 0), 0);
       const count = (revData || []).length;
       const newAvg = count > 0 ? total / count : null;
@@ -76,7 +88,6 @@ export default function ChefReviewsPage() {
         Alert.alert("Warning", "Review submitted but rating update failed. Please refresh.");
       }
 
-      // reset form
       setUserName("");
       setStars(5);
       setComment("");
@@ -104,6 +115,8 @@ export default function ChefReviewsPage() {
     );
   }
 
+  const chefPath = `/chef/${chef.slug ?? chef.id}`;
+
   return (
     <ScrollView style={{ flex: 1, backgroundColor: theme.colors.background }}>
       <View style={{ maxWidth: 900, width: "100%", alignSelf: "center", padding: 16, gap: 16 }}>
@@ -111,14 +124,13 @@ export default function ChefReviewsPage() {
           <Text style={{ color: theme.colors.white, fontSize: 22, fontWeight: "900" }}>
             Reviews for {chef.name}
           </Text>
-          <Link href={`/chef/${chef.id}`} asChild>
+          <Link href={chefPath} asChild>
             <TouchableOpacity style={{ paddingVertical: 8, paddingHorizontal: 12, borderRadius: 10, backgroundColor: "rgba(255,255,255,0.06)", borderWidth: 1, borderColor: "rgba(255,255,255,0.12)" }}>
               <Text style={{ color: "#e2e8f0", fontWeight: "800" }}>Back to chef</Text>
             </TouchableOpacity>
           </Link>
         </View>
 
-        {/* Summary */}
         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)" }}>
           <Text style={{ color: "#cbd5e1", marginBottom: 6 }}>Average rating</Text>
           <View style={{ flexDirection: "row", alignItems: "center", gap: 10 }}>
@@ -129,7 +141,6 @@ export default function ChefReviewsPage() {
           </View>
         </View>
 
-        {/* New review form */}
         <View style={{ backgroundColor: theme.colors.surface, borderRadius: 12, padding: 14, borderWidth: 1, borderColor: "rgba(255,255,255,0.08)", gap: 10 }}>
           <Text style={{ color: theme.colors.white, fontWeight: "900" }}>Leave a review</Text>
           <View style={{ gap: 8 }}>
@@ -169,7 +180,6 @@ export default function ChefReviewsPage() {
           </TouchableOpacity>
         </View>
 
-        {/* Reviews list */}
         <View style={{ gap: 10 }}>
           {reviews.length === 0 ? (
             <Text style={{ color: "#94a3b8" }}>No reviews yet.</Text>

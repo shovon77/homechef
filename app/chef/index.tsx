@@ -24,6 +24,7 @@ import { useRole } from '../../hooks/useRole';
 import type { Profile, OrderStatus } from '../../lib/types';
 import FilePicker from '../../components/FilePicker';
 import { createNotification, createOrderRejectedNotification } from '../../lib/notifications';
+import { ensureChefSlug } from '../../lib/db';
 import { Stars } from '../../components/ui/Stars';
 
 // Colors matching homepage
@@ -43,7 +44,7 @@ const INPUT_NO_FOCUS_OUTLINE = Platform.select({
   default: {},
 });
 
-type ChefRow = { id: number; name: string; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
+type ChefRow = { id: number; name: string; slug?: string | null; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number; notes?: string | null }>; user_email?: string; user_name?: string };
 
@@ -534,6 +535,8 @@ export default function ChefDashboard() {
             const ins = await supabase.from('chefs').insert({ name: defaultName, email }).select('*').single();
             if (ins.error) throw ins.error;
             me = ins.data as ChefRow;
+            const slug = await ensureChefSlug(me.id, defaultName);
+            if (slug) me = { ...me, slug };
           }
           // chef_status updated in background when get-connect-status resolves
         }
@@ -1986,7 +1989,7 @@ export default function ChefDashboard() {
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
       <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
       {chef ? (
-        <Link href={`/chef/${chef.id}`} asChild>
+        <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
           <TouchableOpacity style={styles.viewStoreButton}>
             <Text style={styles.viewStoreButtonText}>View my store page</Text>
           </TouchableOpacity>

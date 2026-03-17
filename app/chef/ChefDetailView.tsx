@@ -1,10 +1,10 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView } from 'react-native';
-import { useLocalSearchParams, useRouter, Link } from 'expo-router';
+import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
-import { getChefById } from '../../lib/db';
+import { getChefByIdOrSlug, getChefById } from '../../lib/db';
 import { submitChefReview, getChefReviews as getChefReviewsHelper } from '../../lib/reviews';
 import { useAuth } from '../../context/AuthContext';
 import type { Chef, Dish, ChefReview } from '../../lib/types';
@@ -62,45 +62,58 @@ function formatCuisine(cuisine: unknown): string {
 
 export default function ChefDetailView() {
   const router = useRouter();
-  const { id, name, photo, location: locParam, rating: ratingParam, rating_count: rcParam, cuisine } = useLocalSearchParams();
+  const pathname = usePathname();
+  const { slug, id, name, photo, location: locParam, rating: ratingParam, rating_count: rcParam, cuisine } = useLocalSearchParams<{ slug?: string; id?: string }>();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
   const dishGridColumns = isMobile ? 2 : isTablet ? 3 : 4;
-  const raw = String(Array.isArray(id) ? id[0] : id || '');
-  
-  const chefId = useMemo(() => {
-    const m = raw.match(/(\d+)/);
-    if (m) return Number(m[1]);
-    const tail = raw.replace(/[^0-9]+/g, '');
-    return tail ? Number(tail) : NaN;
-  }, [raw]);
+  const raw = String(Array.isArray(slug) ? slug[0] : slug ?? (Array.isArray(id) ? id[0] : id) ?? '');
+  const cleanedSlugUrlRef = useRef<string | null>(null);
+  const redirectToSlugTriggeredRef = useRef<string | null>(null);
 
-  // Optimistically initialize chef from params to speed up initial render
+  // Clean redundant ?slug= in URL on web (Expo Router sometimes adds it). Use history.replaceState to avoid triggering router and breaking on refresh.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || !pathname || typeof window === 'undefined') return;
+    if (!pathname.startsWith('/chef/') || pathname === '/chef/' || pathname.startsWith('/chef/profile') || pathname === '/chef/index') return;
+    const segment = pathname.replace(/^\/chef\//, '').split('/')[0]?.trim();
+    if (!segment) return;
+    const params = new URLSearchParams(window.location.search);
+    const slugParam = params.get('slug');
+    if (slugParam !== segment) return;
+    const key = `${pathname}?${window.location.search}`;
+    if (cleanedSlugUrlRef.current === key) return;
+    cleanedSlugUrlRef.current = key;
+    params.delete('slug');
+    const rest = params.toString();
+    const cleanUrl = rest ? `${pathname}?${rest}` : pathname;
+    window.history.replaceState(null, '', cleanUrl);
+  }, [pathname]);
+
+  // Optimistically initialize chef from params to speed up initial render (only when numeric id and we have name)
   const initialChef = useMemo(() => {
-    if (!chefId) return null;
-    if (name) {
-      return {
-        id: chefId,
-        name: String(name),
-        photo: String(photo || ''),
-        avatar: String(photo || ''),
-        location: String(locParam || ''),
-        rating: Number(ratingParam) || 0,
-        rating_count: Number(rcParam) || 0,
-        cuisine: String(cuisine || ''),
-        bio: '', // Will be fetched
-        status: 'active', // Assumed
-        created_at: '',
-        email: '',
-        phone: ''
-      } as Chef;
-    }
-    return null;
-  }, [chefId, name, photo, locParam, ratingParam, rcParam, cuisine]);
+    const numId = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
+    if (!Number.isFinite(numId) || !name) return null;
+    return {
+      id: numId,
+      name: String(name),
+      photo: String(photo || ''),
+      avatar: String(photo || ''),
+      location: String(locParam || ''),
+      rating: Number(ratingParam) || 0,
+      rating_count: Number(rcParam) || 0,
+      cuisine: String(cuisine || ''),
+      bio: '', // Will be fetched
+      status: 'active', // Assumed
+      created_at: '',
+      email: '',
+      phone: ''
+    } as Chef;
+  }, [raw, name, photo, locParam, ratingParam, rcParam, cuisine]);
 
   const [chef, setChef] = useState<Chef | null>(initialChef);
+  const chefId = chef?.id ?? null;
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [reviews, setReviews] = useState<ChefReview[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -131,68 +144,43 @@ export default function ChefDetailView() {
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Consolidated data fetching
+  // Consolidated data fetching (by slug or numeric id)
   useEffect(() => {
-    if (!chefId) {
-      if (raw) setLoading(false);
+    if (!raw) {
+      setLoading(false);
       return;
     }
 
     let mounted = true;
-    
-    const fetchChef = async () => {
-      try {
-        if (!initialChef) setLoading(true);
-        setError(null);
 
-        const chefData = await getChefById(chefId);
-
-        if (!mounted) return;
-
-        if (!chefData) {
-          if (!initialChef) setError('Chef not found');
-          setLoading(false);
-          return;
-        }
-
-          setChef(chefData);
-          setChefImageError(false);
-      } catch (e: any) {
-        if (mounted && !chef && !initialChef) setError(e.message || String(e));
-      } finally {
-        if (mounted && !initialChef) setLoading(false);
-      }
-    };
-
-    const fetchDishes = async () => {
-      if(mounted) setIsFetchingDishes(true);
+    const fetchDishes = async (cid: number) => {
+      if (mounted) setIsFetchingDishes(true);
       try {
         const { data, count } = await supabase
           .from('dishes')
           .select('*', { count: 'exact' })
-          .eq('chef_id', chefId)
+          .eq('chef_id', cid)
           .or('is_active.eq.true,is_active.is.null')
           .order('id', { ascending: true })
           .range(0, 499);
-          
         if (mounted && data) {
           setDishes(data);
           setDishesTotal(count || 0);
         }
-      } catch(e) {
+      } catch (e) {
         console.error("Error fetching dishes", e);
       } finally {
-        if(mounted) setIsFetchingDishes(false);
+        if (mounted) setIsFetchingDishes(false);
       }
     };
 
-    const fetchNewlyAdded = async () => {
+    const fetchNewlyAdded = async (cid: number) => {
       try {
         const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
         const { data } = await supabase
           .from('dishes')
           .select('*')
-          .eq('chef_id', chefId)
+          .eq('chef_id', cid)
           .or('is_active.eq.true,is_active.is.null')
           .gte('created_at', since)
           .order('created_at', { ascending: false });
@@ -202,13 +190,13 @@ export default function ChefDetailView() {
       }
     };
 
-    const fetchBestSellers = async () => {
+    const fetchBestSellers = async (cid: number) => {
       try {
         const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
         const { data: ordersData } = await supabase
           .from('orders')
           .select('id')
-          .eq('chef_id', chefId)
+          .eq('chef_id', cid)
           .in('status', ['completed', 'ready'])
           .gte('created_at', since);
         if (!mounted || !ordersData?.length) {
@@ -229,7 +217,7 @@ export default function ChefDetailView() {
         const { data: dishesData } = await supabase
           .from('dishes')
           .select('*')
-          .eq('chef_id', chefId)
+          .eq('chef_id', cid)
           .or('is_active.eq.true,is_active.is.null')
           .in('id', dishIds);
         if (mounted && dishesData) setBestSellerDishes(dishesData);
@@ -238,27 +226,59 @@ export default function ChefDetailView() {
       }
     };
 
-    const fetchReviews = async () => {
-      if(mounted) setIsFetchingReviews(true);
+    const fetchReviews = async (cid: number) => {
+      if (mounted) setIsFetchingReviews(true);
       try {
-        const reviewsData = await getChefReviewsHelper(chefId);
+        const reviewsData = await getChefReviewsHelper(cid);
         if (mounted) setReviews(reviewsData);
-      } catch(e) {
+      } catch (e) {
         console.error("Error fetching reviews", e);
       } finally {
-        if(mounted) setIsFetchingReviews(false);
+        if (mounted) setIsFetchingReviews(false);
       }
     };
 
-    // Trigger all fetches in parallel, independently
-    fetchChef();
-    fetchDishes();
-    fetchReviews();
-    fetchNewlyAdded();
-    fetchBestSellers();
+    const run = async () => {
+      try {
+        if (!initialChef) setLoading(true);
+        setError(null);
+        const chefData = await getChefByIdOrSlug(raw);
+        if (!mounted) return;
+        if (!chefData) {
+          if (!initialChef) setError('Chef not found');
+          setLoading(false);
+          return;
+        }
+        setChef(chefData);
+        setChefImageError(false);
+        const cid = chefData.id;
+        fetchDishes(cid);
+        fetchReviews(cid);
+        fetchNewlyAdded(cid);
+        fetchBestSellers(cid);
+      } catch (e: any) {
+        if (mounted && !chef && !initialChef) setError(e.message || String(e));
+      } finally {
+        if (mounted && !initialChef) setLoading(false);
+      }
+    };
 
+    run();
     return () => { mounted = false; };
-  }, [chefId, isMobile]); // Re-fetch if chefId changes
+  }, [raw, isMobile]);
+
+  // Redirect numeric-ID URL to slug URL once we have chef (separate effect to avoid navigation loop). Only when pathname is actually the numeric URL (so refresh on slug URL doesn't redirect).
+  useEffect(() => {
+    if (!raw || !/^\d+$/.test(raw) || !chef?.slug) return;
+    if (pathname !== `/chef/${raw}`) return;
+    if (redirectToSlugTriggeredRef.current === raw) return;
+    redirectToSlugTriggeredRef.current = raw;
+    const slug = chef.slug;
+    const id = setTimeout(() => {
+      router.replace(`/chef/${slug}`);
+    }, 0);
+    return () => clearTimeout(id);
+  }, [raw, pathname, chef?.slug, router]);
 
   // Compute distance when profile and chef have coords (with geocode fallback)
   useEffect(() => {

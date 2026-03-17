@@ -2668,7 +2668,7 @@ export default function AdminPage() {
                     </Text>
                       {c.id && (
                         <View style={{ gap: 4 }}>
-                          <Link href={`/chef/${c.id}`} asChild>
+                          <Link href={`/chef/${c.slug ?? c.id}`} asChild>
                             <TouchableOpacity>
                               <Text style={styles.viewDetailsLink}>View store</Text>
                             </TouchableOpacity>
@@ -3069,7 +3069,7 @@ export default function AdminPage() {
                   {order.chef?.id ? (
                     <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }, styles.chefCell]}>
                       <Text style={styles.chefNameText}>{order.chef.name || 'Unknown'}</Text>
-                      <Link href={`/chef/${order.chef.id}`} asChild>
+                      <Link href={`/chef/${order.chef.slug ?? order.chef.id}`} asChild>
                         <TouchableOpacity style={styles.chefLinkIcon}>
                           <Text style={styles.chefLinkIconText}>↗</Text>
                         </TouchableOpacity>
@@ -3927,7 +3927,7 @@ export default function AdminPage() {
                   <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }, styles.chefCell]}>
                     <Text style={styles.chefNameText} numberOfLines={1}>{issue.chefs?.name || 'Unknown'}</Text>
                     {issue.chefs?.id && (
-                      <Link href={`/chef/${issue.chefs.id}`} asChild>
+                      <Link href={`/chef/${issue.chefs.slug ?? issue.chefs.id}`} asChild>
                         <TouchableOpacity style={styles.chefLinkIcon}>
                           <Text style={styles.chefLinkIconText}>↗</Text>
                         </TouchableOpacity>

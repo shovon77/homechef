@@ -45,7 +45,7 @@ export default function HorizontalCarousel({ title, items, kind, seeAllHref }: P
         snapToInterval={260}
         contentContainerStyle={{ paddingHorizontal: 6 }}
         renderItem={({ item }) => {
-          const href = kind === "dish" ? `/dish/${item.id}` : `/chef/${item.id}`;
+          const href = kind === "dish" ? `/dish/${item.id}` : `/chef/${item.slug ?? item.id}`;
           const titleText = kind === "dish" ? item?.name ?? "Dish" : item?.name ?? "Chef";
           const subtitle = kind === "dish" ? (item?.chef ? `by ${item.chef}` : "—") : (item?.location ?? "—");
           const rating = Number(item?.rating ?? 0);

@@ -29,6 +29,7 @@ export type Profile = {
 // ============================================================================
 export type Chef = {
   id: number; // BIGINT (may exceed JS safe int in production)
+  slug?: string | null; // URL-safe unique identifier (e.g. chittagong-kitchen)
   name: string; // UNIQUE, NOT NULL
   location: string | null;
   bio: string | null;

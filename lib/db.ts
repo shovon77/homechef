@@ -6,6 +6,7 @@
  */
 
 import { supabase } from './supabase';
+import { slugify, uniqueSlug } from './slug';
 import type {
   Profile,
   Chef,
@@ -130,6 +131,54 @@ export async function getChefById(id: number): Promise<Chef | null> {
   }
 
   return data as Chef | null;
+}
+
+/**
+ * Get chef by slug (pretty URL identifier)
+ */
+export async function getChefBySlug(slug: string): Promise<Chef | null> {
+  if (!slug || typeof slug !== 'string') return null;
+  const { data, error } = await supabase
+    .from('chefs')
+    .select('*')
+    .eq('slug', slug.trim())
+    .maybeSingle();
+
+  if (error) {
+    console.error('Error fetching chef by slug:', error);
+    return null;
+  }
+
+  return data as Chef | null;
+}
+
+/**
+ * Get chef by numeric id or slug. Prefer slug for canonical URL.
+ */
+export async function getChefByIdOrSlug(idOrSlug: string): Promise<Chef | null> {
+  const s = String(idOrSlug || '').trim();
+  if (!s) return null;
+  const numericId = /^\d+$/.test(s) ? parseInt(s, 10) : NaN;
+  if (Number.isFinite(numericId)) {
+    return getChefById(numericId);
+  }
+  return getChefBySlug(s);
+}
+
+/**
+ * Ensure a chef has a slug; set from name if missing. Call after creating a new chef.
+ */
+export async function ensureChefSlug(chefId: number, name: string): Promise<string | null> {
+  const base = slugify(name || 'chef') || 'chef';
+  const { data: existing } = await supabase.from('chefs').select('slug').not('slug', 'is', null);
+  const used = new Set((existing || []).map((r: { slug: string }) => r.slug).filter(Boolean));
+  const slug = uniqueSlug(base, chefId, used);
+  const { error } = await supabase.from('chefs').update({ slug }).eq('id', chefId);
+  if (error) {
+    console.error('ensureChefSlug update error:', error);
+    return null;
+  }
+  return slug;
 }
 
 // ============================================================================
