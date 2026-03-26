@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -60,10 +60,41 @@ function formatCuisine(cuisine: unknown): string {
   return 'Chef';
 }
 
+async function fetchBestSellerDishesForChef(cid: number): Promise<Dish[]> {
+  try {
+    const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
+    const { data: ordersData } = await supabase
+      .from('orders')
+      .select('id')
+      .eq('chef_id', cid)
+      .in('status', ['completed', 'ready'])
+      .gte('created_at', since);
+    if (!ordersData?.length) return [];
+    const orderIds = ordersData.map((o) => o.id);
+    const { data: itemsData } = await supabase
+      .from('order_items')
+      .select('dish_id')
+      .in('order_id', orderIds)
+      .not('dish_id', 'is', null);
+    const dishIds = [...new Set((itemsData || []).map((i) => i.dish_id).filter(Boolean))] as number[];
+    if (dishIds.length === 0) return [];
+    const { data: dishesData } = await supabase
+      .from('dishes')
+      .select('*')
+      .eq('chef_id', cid)
+      .or('is_active.eq.true,is_active.is.null')
+      .in('id', dishIds);
+    return dishesData || [];
+  } catch (e) {
+    console.error('Error fetching best-seller dishes', e);
+    return [];
+  }
+}
+
 export default function ChefDetailView() {
   const router = useRouter();
   const pathname = usePathname();
-  const { slug, id, name, photo, location: locParam, rating: ratingParam, rating_count: rcParam, cuisine } = useLocalSearchParams<{ slug?: string; id?: string }>();
+  const { slug, id } = useLocalSearchParams<{ slug?: string; id?: string }>();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
@@ -91,33 +122,12 @@ export default function ChefDetailView() {
     window.history.replaceState(null, '', cleanUrl);
   }, [pathname]);
 
-  // Optimistically initialize chef from params to speed up initial render (only when numeric id and we have name)
-  const initialChef = useMemo(() => {
-    const numId = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
-    if (!Number.isFinite(numId) || !name) return null;
-    return {
-      id: numId,
-      name: String(name),
-      photo: String(photo || ''),
-      avatar: String(photo || ''),
-      location: String(locParam || ''),
-      rating: Number(ratingParam) || 0,
-      rating_count: Number(rcParam) || 0,
-      cuisine: String(cuisine || ''),
-      bio: '', // Will be fetched
-      status: 'active', // Assumed
-      created_at: '',
-      email: '',
-      phone: ''
-    } as Chef;
-  }, [raw, name, photo, locParam, ratingParam, rcParam, cuisine]);
-
-  const [chef, setChef] = useState<Chef | null>(initialChef);
+  const [chef, setChef] = useState<Chef | null>(null);
   const chefId = chef?.id ?? null;
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [reviews, setReviews] = useState<ChefReview[]>([]);
   const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(!initialChef); // Only load if we don't have initial data
+  const [loading, setLoading] = useState(true);
 
   // Loading States for individual sections
   const [isFetchingDishes, setIsFetchingDishes] = useState(true);
@@ -138,134 +148,117 @@ export default function ChefDetailView() {
   // Distance (km) when user has location
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
-  const [bioLineCount, setBioLineCount] = useState<number | null>(null);
   const { addToCart } = useCart();
   const [reviewRating, setReviewRating] = useState(5);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
 
-  // Consolidated data fetching (by slug or numeric id)
+  // By slug or id: load chef, then dishes + reviews + carousels in parallel before first paint (CLS).
+  // Depends only on `raw` — not `isMobile` — so crossing the breakpoint does not refetch and shift layout.
   useEffect(() => {
     if (!raw) {
       setLoading(false);
+      setChef(null);
+      setDishes([]);
+      setReviews([]);
+      setNewlyAddedDishes([]);
+      setBestSellerDishes([]);
+      setError(null);
+      setIsFetchingDishes(false);
+      setIsFetchingReviews(false);
       return;
     }
 
     let mounted = true;
+    setLoading(true);
+    setError(null);
+    setChef(null);
+    setDishes([]);
+    setReviews([]);
+    setNewlyAddedDishes([]);
+    setBestSellerDishes([]);
+    setIsFetchingDishes(true);
+    setIsFetchingReviews(true);
+    setChefImageError(false);
 
-    const fetchDishes = async (cid: number) => {
-      if (mounted) setIsFetchingDishes(true);
+    (async () => {
       try {
-        const { data, count } = await supabase
-          .from('dishes')
-          .select('*', { count: 'exact' })
-          .eq('chef_id', cid)
-          .or('is_active.eq.true,is_active.is.null')
-          .order('id', { ascending: true })
-          .range(0, 499);
-        if (mounted && data) {
-          setDishes(data);
-          setDishesTotal(count || 0);
-        }
-      } catch (e) {
-        console.error("Error fetching dishes", e);
-      } finally {
-        if (mounted) setIsFetchingDishes(false);
-      }
-    };
-
-    const fetchNewlyAdded = async (cid: number) => {
-      try {
-        const since = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
-        const { data } = await supabase
-          .from('dishes')
-          .select('*')
-          .eq('chef_id', cid)
-          .or('is_active.eq.true,is_active.is.null')
-          .gte('created_at', since)
-          .order('created_at', { ascending: false });
-        if (mounted && data) setNewlyAddedDishes(data);
-      } catch (e) {
-        console.error("Error fetching newly added dishes", e);
-      }
-    };
-
-    const fetchBestSellers = async (cid: number) => {
-      try {
-        const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-        const { data: ordersData } = await supabase
-          .from('orders')
-          .select('id')
-          .eq('chef_id', cid)
-          .in('status', ['completed', 'ready'])
-          .gte('created_at', since);
-        if (!mounted || !ordersData?.length) {
-          if (mounted) setBestSellerDishes([]);
-          return;
-        }
-        const orderIds = ordersData.map(o => o.id);
-        const { data: itemsData } = await supabase
-          .from('order_items')
-          .select('dish_id')
-          .in('order_id', orderIds)
-          .not('dish_id', 'is', null);
-        const dishIds = [...new Set((itemsData || []).map(i => i.dish_id).filter(Boolean))] as number[];
-        if (dishIds.length === 0) {
-          if (mounted) setBestSellerDishes([]);
-          return;
-        }
-        const { data: dishesData } = await supabase
-          .from('dishes')
-          .select('*')
-          .eq('chef_id', cid)
-          .or('is_active.eq.true,is_active.is.null')
-          .in('id', dishIds);
-        if (mounted && dishesData) setBestSellerDishes(dishesData);
-      } catch (e) {
-        console.error("Error fetching best-seller dishes", e);
-      }
-    };
-
-    const fetchReviews = async (cid: number) => {
-      if (mounted) setIsFetchingReviews(true);
-      try {
-        const reviewsData = await getChefReviewsHelper(cid);
-        if (mounted) setReviews(reviewsData);
-      } catch (e) {
-        console.error("Error fetching reviews", e);
-      } finally {
-        if (mounted) setIsFetchingReviews(false);
-      }
-    };
-
-    const run = async () => {
-      try {
-        if (!initialChef) setLoading(true);
-        setError(null);
         const chefData = await getChefByIdOrSlug(raw);
         if (!mounted) return;
         if (!chefData) {
-          if (!initialChef) setError('Chef not found');
+          setError('Chef not found');
           setLoading(false);
+          setIsFetchingDishes(false);
+          setIsFetchingReviews(false);
           return;
         }
+
+        const cid = chefData.id;
+        const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
+
+        const [dishesRes, reviewsData, newlyRes, bestSellers] = await Promise.all([
+          supabase
+            .from('dishes')
+            .select('*', { count: 'exact' })
+            .eq('chef_id', cid)
+            .or('is_active.eq.true,is_active.is.null')
+            .order('id', { ascending: true })
+            .range(0, 499),
+          getChefReviewsHelper(cid).catch((err) => {
+            console.error('Error fetching chef reviews', err);
+            return [] as ChefReview[];
+          }),
+          supabase
+            .from('dishes')
+            .select('*')
+            .eq('chef_id', cid)
+            .or('is_active.eq.true,is_active.is.null')
+            .gte('created_at', since30)
+            .order('created_at', { ascending: false }),
+          fetchBestSellerDishesForChef(cid),
+        ]);
+
+        if (!mounted) return;
+
         setChef(chefData);
         setChefImageError(false);
-        const cid = chefData.id;
-        fetchDishes(cid);
-        fetchReviews(cid);
-        fetchNewlyAdded(cid);
-        fetchBestSellers(cid);
-      } catch (e: any) {
-        if (mounted && !chef && !initialChef) setError(e.message || String(e));
-      } finally {
-        if (mounted && !initialChef) setLoading(false);
-      }
-    };
 
-    run();
-    return () => { mounted = false; };
-  }, [raw, isMobile]);
+        const { data: dishRows, count } = dishesRes;
+        if (dishRows) {
+          setDishes(dishRows);
+          setDishesTotal(count ?? 0);
+        } else {
+          setDishes([]);
+          setDishesTotal(0);
+        }
+
+        setReviews(reviewsData);
+        setNewlyAddedDishes(newlyRes.data ?? []);
+        setBestSellerDishes(bestSellers);
+
+        setIsFetchingDishes(false);
+        setIsFetchingReviews(false);
+        setLoading(false);
+      } catch (e: unknown) {
+        console.error('Error loading chef page', e);
+        if (mounted) {
+          const msg = e instanceof Error ? e.message : String(e);
+          setError(msg);
+          setIsFetchingDishes(false);
+          setIsFetchingReviews(false);
+          setLoading(false);
+        }
+      }
+    })();
+
+    return () => {
+      mounted = false;
+    };
+  }, [raw]);
+
+  useEffect(() => {
+    setBioExpanded(false);
+  }, [raw]);
 
   // Redirect numeric-ID URL to slug URL once we have chef (separate effect to avoid navigation loop). Only when pathname is actually the numeric URL (so refresh on slug URL doesn't redirect).
   useEffect(() => {
@@ -337,11 +330,6 @@ export default function ChefDetailView() {
   const title = (chef as any)?.brand_name?.trim() || chef?.name?.trim() || (chefId ? `Chef #${chefId}` : 'Chef');
   const location = chef?.location || '';
   const bio = chef?.bio ?? chef?.description ?? '';
-
-  // Reset bio line count when chef changes so we re-measure
-  useEffect(() => {
-    setBioLineCount(null);
-  }, [chefId, chef]);
 
   const avgRating = Number(chef?.rating ?? 0);
   const reviewCount = Number(chef?.rating_count ?? reviews.length);
@@ -465,30 +453,22 @@ export default function ChefDetailView() {
                       </View>
                     ) : null}
                   </View>
-                  {/* Distance on next line */}
-                  {distanceKm != null ? (
-                    <View style={[styles.chefCardMetaRow, styles.chefCardDistanceRow]}>
-                      <View style={styles.chefCardMetaItem}>
-                        <Image source={require('../../assets/map.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                        <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{`${distanceKm.toFixed(1)} km`}</Text>
+                  {/* Reserve one line on mobile so geocoded distance does not push content (CLS) */}
+                  <View style={[styles.chefCardDistanceSlot, isMobile && styles.chefCardDistanceSlotMobile]}>
+                    {distanceKm != null ? (
+                      <View style={[styles.chefCardMetaRow, styles.chefCardDistanceRow]}>
+                        <View style={styles.chefCardMetaItem}>
+                          <Image source={require('../../assets/map.png')} style={[styles.chefCardMetaIcon, isMobile && styles.chefCardMetaIconMobile]} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                          <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile]}>{`${distanceKm.toFixed(1)} km`}</Text>
+                        </View>
                       </View>
-                    </View>
-                  ) : null}
+                    ) : null}
+                  </View>
                 </View>
               </View>
               {bio ? (
                 <View style={styles.chefCardBioWrap}>
-                  {isMobile && !bioExpanded && (
-                    <View style={styles.chefCardBioMeasureWrap} pointerEvents="none">
-                      <Text
-                        style={[styles.chefCardMetaText, styles.chefCardMetaTextMobile, styles.chefCardBioText]}
-                        onTextLayout={(e) => setBioLineCount(e.nativeEvent.lines.length)}
-                      >
-                        {bio}
-                      </Text>
-                    </View>
-                  )}
-                  {isMobile && !bioExpanded && ((bioLineCount != null && bioLineCount > 2) || (bioLineCount === null && bio.length > 70)) ? (
+                  {isMobile && !bioExpanded && bio.length > 96 ? (
                     <View style={styles.chefCardBioStack}>
                       <Text
                         style={[styles.chefCardMetaText, styles.chefCardMetaTextMobile, styles.chefCardBioText]}
@@ -767,6 +747,10 @@ const styles = StyleSheet.create({
   chefCardDistanceRow: {
     marginTop: 0,
   },
+  chefCardDistanceSlot: {},
+  chefCardDistanceSlotMobile: {
+    minHeight: 26,
+  },
   chefCardImageWrap: {
     width: Platform.select({ web: 96, default: 80 }),
     height: Platform.select({ web: 96, default: 80 }),
@@ -832,14 +816,6 @@ const styles = StyleSheet.create({
   },
   chefCardBioStack: {
     gap: theme.spacing.xs,
-  },
-  chefCardBioMeasureWrap: {
-    position: 'absolute',
-    top: 0,
-    left: 0,
-    right: 0,
-    opacity: 0,
-    zIndex: -1,
   },
   chefCardBioText: {
     textAlign: 'left',
