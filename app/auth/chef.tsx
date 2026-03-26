@@ -70,8 +70,24 @@ const CARD_LIGHT = '#FFFFFF';
 const BORDER_LIGHT = '#e2e8f0';
 const TEXT_LIGHT = '#264653';
 const TEXT_MUTED = '#6b7280';
-/** Required-field indicator; pair with `show={!fieldSatisfied}` so it disappears when complete. */
+/** Required-field asterisk color */
 const REQ = '#DC2626';
+
+/**
+ * Always reserves space for ` *` and toggles opacity so labels don’t reflow when a field
+ * becomes valid (reduces CLS on /auth/chef — Speed Insights).
+ */
+function RequiredMark({ show }: { show: boolean }) {
+  return (
+    <Text
+      style={[styles.requiredAsterisk, { opacity: show ? 1 : 0 }]}
+      accessibilityElementsHidden={!show}
+      importantForAccessibility={show ? 'yes' : 'no-hide-descendants'}
+    >
+      {' *'}
+    </Text>
+  );
+}
 
 export default function ChefSignup() {
   const router = useRouter();
@@ -1036,7 +1052,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Full name
-                          {!fullName.trim() ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!fullName.trim()} />
                         </Text>
                       </View>
                       <TextInput
@@ -1056,7 +1072,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Brand name
-                          {!brandName.trim() ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!brandName.trim()} />
                         </Text>
                       </View>
                       <TextInput
@@ -1076,7 +1092,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Brief description
-                          {!briefDescription.trim() ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!briefDescription.trim()} />
                         </Text>
                       </View>
           <TextInput
@@ -1098,7 +1114,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Cuisine type
-                          {cuisineType.length === 0 ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={cuisineType.length === 0} />
                         </Text>
                       </View>
                       <TouchableOpacity
@@ -1178,7 +1194,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Phone
-                          {!phoneIsValid ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!phoneIsValid} />
                         </Text>
                       </View>
           <TextInput
@@ -1209,7 +1225,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Email
-                          {!emailOk ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!emailOk} />
                         </Text>
                       </View>
                         <TextInput
@@ -1255,7 +1271,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                         <Text style={styles.label}>
                           Address
-                          {!String(address || '').trim() ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!String(address || '').trim()} />
                         </Text>
                     </View>
                       <View style={styles.locationPickerContainer}>
@@ -1292,7 +1308,7 @@ export default function ChefSignup() {
                       <View style={styles.fieldLabel}>
                       <Text style={styles.label}>
                         Pickup days & times
-                        {pickupSlots.length === 0 ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                        <RequiredMark show={pickupSlots.length === 0} />
                       </Text>
                       </View>
                     <TouchableOpacity
@@ -1542,7 +1558,7 @@ export default function ChefSignup() {
                   {/* Step 3: Dish Management */}
                   <Text style={[styles.sectionTitle, { borderBottomWidth: 0, paddingBottom: 0 }]}>
                     Create your first dish!
-                    {dishes.length === 0 ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                    <RequiredMark show={dishes.length === 0} />
                   </Text>
                   <Text style={styles.sectionSubtitle}>Draft it first — nothing goes live yet.</Text>
                   
@@ -1608,7 +1624,7 @@ export default function ChefSignup() {
                           </Text>
                         </TouchableOpacity>
                         {agreementAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
-                        {!agreementAccepted ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                        <RequiredMark show={!agreementAccepted} />
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
                         <TouchableOpacity onPress={() => {
@@ -1622,7 +1638,7 @@ export default function ChefSignup() {
                           </Text>
                         </TouchableOpacity>
                         {payoutAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
-                        {!payoutAccepted ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                        <RequiredMark show={!payoutAccepted} />
                       </View>
                       <View style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.sm, flexWrap: 'wrap' }}>
                         <TouchableOpacity onPress={() => {
@@ -1636,7 +1652,7 @@ export default function ChefSignup() {
                           </Text>
                         </TouchableOpacity>
                         {feeAccepted && <Image source={require('../../assets/success.png')} style={{ width: 20, height: 20, tintColor: PRIMARY_COLOR }} resizeMode="contain" />}
-                        {!feeAccepted ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                        <RequiredMark show={!feeAccepted} />
                       </View>
                     </View>
 
@@ -1652,7 +1668,7 @@ export default function ChefSignup() {
                         </View>
                         <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
                           I'll clearly list ingredients & allergens
-                          {!allergensDisclosed ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!allergensDisclosed} />
                         </Text>
                       </TouchableOpacity>
 
@@ -1666,7 +1682,7 @@ export default function ChefSignup() {
                         </View>
                         <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
                           I'll prepare food safely and responsibly
-                          {!foodSafetyAcknowledged ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!foodSafetyAcknowledged} />
                         </Text>
                       </TouchableOpacity>
 
@@ -1680,7 +1696,7 @@ export default function ChefSignup() {
                         </View>
                         <Text style={[styles.checkboxLabel, isMobile && { fontSize: theme.typography.fontSize.sm }]}>
                           The platform doesn't inspect food
-                          {!platformInspectionUnderstood ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                          <RequiredMark show={!platformInspectionUnderstood} />
                         </Text>
                       </TouchableOpacity>
                     </View>
@@ -2381,7 +2397,7 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                       <Text style={{ fontSize: theme.typography.fontSize.lg, color: TEXT_LIGHT, marginBottom: theme.spacing.sm, fontFamily: theme.typography.fontFamily.display }}>
                         Create your account password
-                        {!passwordPolicy.meets ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+                        <RequiredMark show={!passwordPolicy.meets} />
                       </Text>
                       <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.sm, marginBottom: theme.spacing.md, fontFamily: theme.typography.fontFamily.body }}>
                         This password will be used to sign in to your account.
@@ -2468,7 +2484,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>
               Name
-              {!name.trim() ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+              <RequiredMark show={!name.trim()} />
             </Text>
             <TextInput
               value={name}
@@ -2481,7 +2497,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           <View style={{ flex: isMobile ? undefined : 1, minWidth: isMobile ? undefined : 120 }}>
             <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>
               Price
-              {!(Number(price) > 0) ? <Text style={styles.requiredAsterisk}> *</Text> : null}
+              <RequiredMark show={!(Number(price) > 0)} />
             </Text>
             <View style={{ flexDirection: 'row', flexWrap: 'nowrap', alignItems: 'center', backgroundColor: CARD_LIGHT, borderColor: '#d1d5db', borderWidth: 1, borderRadius: 8, minHeight: 40 }}>
               <View style={{ flexShrink: 0 }}>
