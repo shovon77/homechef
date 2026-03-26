@@ -7,6 +7,8 @@ import { getDishAvgRating } from "../../utils/ratings";
 import { useCart } from "../../context/CartContext";
 import { toNumber, safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
+import { optimizeDishImageUrl } from "../../lib/dishImageUrl";
+import { prefetchDishWithChef } from "../../lib/db";
 
 const PRIMARY_COLOR = '#FE734C';
 const BRAND_BLACK = '#33393A';
@@ -34,11 +36,19 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
     return () => { m = false; };
   }, [dish?.id]);
 
+  const cardImageUri = optimizeDishImageUrl(
+    dish.image ?? null,
+    variant === 'homepage' ? 560 : 480
+  );
   const imageEl = (
     <Link href={`/dish/${dish.id}`} asChild>
-      <TouchableOpacity activeOpacity={0.8} style={variant === 'explore' ? styles.imageContainerExplore : styles.imageContainer}>
+      <TouchableOpacity
+        activeOpacity={0.8}
+        style={variant === 'explore' ? styles.imageContainerExplore : styles.imageContainer}
+        onPressIn={() => prefetchDishWithChef(Number(dish.id))}
+      >
         <Image
-          source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
+          source={{ uri: cardImageUri }}
           style={styles.image}
         />
       </TouchableOpacity>
@@ -142,11 +152,12 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
     return (
       <Pressable
         onPress={() => router.push(`/dish/${dish.id}`)}
+        onPressIn={() => prefetchDishWithChef(Number(dish.id))}
         style={({ pressed }) => StyleSheet.flatten([styles.cardExplore, style, pressed && { opacity: 0.8 }])}
       >
         <View style={styles.imageContainerExplore}>
             <Image
-              source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
+              source={{ uri: cardImageUri }}
               style={styles.image}
             />
           </View>
@@ -239,12 +250,27 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
   );
 
   if (variant === 'explore') {
+    const dishHref = `/dish/${dish.id}`;
+    const prefetch = () => prefetchDishWithChef(Number(dish.id));
+
+    const linkedImageLayer = (
+      <View style={styles.imageContainerExplore}>
+        <Image source={{ uri: cardImageUri }} style={styles.image} resizeMode="cover" />
+      </View>
+    );
+
+    // Quantity controls sit OUTSIDE the Link (sibling overlay / below-card row) so +/− don't navigate on web.
     const imageBlock = quantityOnImage ? (
       <View style={styles.imageWrapperExplore}>
-        <Link href={`/dish/${dish.id}`} asChild>
-          <TouchableOpacity activeOpacity={0.8} style={styles.imageContainerExplore}><Image source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }} style={styles.image} /></TouchableOpacity>
+        <Link href={dishHref} asChild>
+          <Pressable onPressIn={prefetch} style={StyleSheet.absoluteFillObject}>
+            {linkedImageLayer}
+          </Pressable>
         </Link>
-        <View style={[styles.quantityOverlayOnImage, cartQty === 0 && styles.quantityOverlayInitial]}>
+        <View
+          pointerEvents="box-none"
+          style={[styles.quantityOverlayOnImage, cartQty === 0 && styles.quantityOverlayInitial]}
+        >
           {cartQty === 0 ? (
             <TouchableOpacity
               onPress={() => addToCart({ id: dish.id, name: dish.name, price: Number(dish.price || 0), quantity: 1, image: dish.image, chef_id: dish.chef_id })}
@@ -258,55 +284,72 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
           )}
         </View>
       </View>
-    ) : imageEl;
+    ) : (
+      <Link href={dishHref} asChild>
+        <Pressable onPressIn={prefetch} style={{ width: '100%' }}>
+          {linkedImageLayer}
+        </Pressable>
+      </Link>
+    );
+
+    const textBlock = (
+      <View style={[styles.exploreContent, inlinePriceRating && styles.exploreContentTight]}>
+        <Text style={[styles.name, styles.nameExplore, inlinePriceRating && styles.nameExploreTight]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
+        {(chefDisplayName || (avg > 0 && !inlinePriceRating)) && (
+          <View style={styles.chefRatingRowExplore}>
+            {chefDisplayName ? (
+              <Text style={[styles.chefName, styles.chefNameExplore, styles.chefNameExploreFlex]} numberOfLines={1}>
+                {chefDisplayName}
+              </Text>
+            ) : null}
+            {avg > 0 && !inlinePriceRating && (
+              <View style={[styles.ratingRow, styles.ratingRowExplore]}>
+                <Image
+                  source={require('../../assets/star.png')}
+                  style={[styles.starIconImage, styles.starIconExplore]}
+                  tintColor={PRIMARY_COLOR}
+                  resizeMode="contain"
+                />
+                <Text style={[styles.ratingText, styles.ratingTextExplore]}>{safeToFixed(avg)}</Text>
+              </View>
+            )}
+          </View>
+        )}
+        <View style={[inlinePriceRating ? styles.priceRatingRowExplore : styles.priceRowExplore, inlinePriceRating && styles.priceRatingRowExploreTight]}>
+          <Text style={[styles.price, styles.priceExplore, inlinePriceRating && styles.priceInlineMatch]} numberOfLines={1}>
+            {formatCad(Number(dish.price) ?? 0)}
+          </Text>
+          {inlinePriceRating && avg > 0 && (
+            <View style={[styles.ratingRow, styles.ratingRowExplore]}>
+              <Image
+                source={require('../../assets/star.png')}
+                style={[styles.starIconImage, styles.starIconExplore, inlinePriceRating && styles.starIconInlineMatch]}
+                tintColor={PRIMARY_COLOR}
+                resizeMode="contain"
+              />
+              <Text style={[styles.ratingText, styles.ratingTextExplore, inlinePriceRating && styles.ratingTextInlineMatch]}>{safeToFixed(avg)}</Text>
+            </View>
+          )}
+        </View>
+      </View>
+    );
 
     return (
       <View style={[styles.cardExplore, style]}>
         {imageBlock}
-        <View style={[styles.exploreContent, inlinePriceRating && styles.exploreContentTight]}>
-          <Text style={[styles.name, styles.nameExplore, inlinePriceRating && styles.nameExploreTight]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
-          {(chefDisplayName || (avg > 0 && !inlinePriceRating)) && (
-            <View style={styles.chefRatingRowExplore}>
-              {chefDisplayName ? (
-                <Text style={[styles.chefName, styles.chefNameExplore, styles.chefNameExploreFlex]} numberOfLines={1}>
-                  {chefDisplayName}
-                </Text>
-              ) : null}
-              {avg > 0 && !inlinePriceRating && (
-                <View style={[styles.ratingRow, styles.ratingRowExplore]}>
-                  <Image
-                    source={require('../../assets/star.png')}
-                    style={[styles.starIconImage, styles.starIconExplore]}
-                    tintColor={PRIMARY_COLOR}
-                    resizeMode="contain"
-                  />
-                  <Text style={[styles.ratingText, styles.ratingTextExplore]}>{safeToFixed(avg)}</Text>
-                </View>
-              )}
-            </View>
-          )}
-          <View style={[inlinePriceRating ? styles.priceRatingRowExplore : styles.priceRowExplore, inlinePriceRating && styles.priceRatingRowExploreTight]}>
-            <Text style={[styles.price, styles.priceExplore, inlinePriceRating && styles.priceInlineMatch]} numberOfLines={1}>
-              {formatCad(Number(dish.price) ?? 0)}
-            </Text>
-            {inlinePriceRating && avg > 0 && (
-              <View style={[styles.ratingRow, styles.ratingRowExplore]}>
-                <Image
-                  source={require('../../assets/star.png')}
-                  style={[styles.starIconImage, styles.starIconExplore, inlinePriceRating && styles.starIconInlineMatch]}
-                  tintColor={PRIMARY_COLOR}
-                  resizeMode="contain"
-                />
-                <Text style={[styles.ratingText, styles.ratingTextExplore, inlinePriceRating && styles.ratingTextInlineMatch]}>{safeToFixed(avg)}</Text>
-              </View>
-            )}
+        <Link href={dishHref} asChild>
+          <Pressable
+            onPressIn={prefetch}
+            style={({ pressed }) => (pressed && Platform.OS !== 'web' ? { opacity: 0.92 } : null)}
+          >
+            {textBlock}
+          </Pressable>
+        </Link>
+        {!quantityOnImage && (
+          <View style={styles.exploreQuantityBelow}>
+            <View style={styles.priceAndQuantityRowExplore}>{quantityControlsExplore}</View>
           </View>
-          {!quantityOnImage && (
-            <View style={styles.priceAndQuantityRowExplore}>
-              {quantityControlsExplore}
-            </View>
-          )}
-        </View>
+        )}
       </View>
     );
   }
@@ -359,6 +402,11 @@ const styles = StyleSheet.create({
     paddingTop: 6,
     paddingBottom: 4,
     gap: 2,
+  },
+  exploreQuantityBelow: {
+    width: '100%',
+    paddingHorizontal: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
   exploreContentHomepage: {
     alignItems: 'stretch',
@@ -486,6 +534,7 @@ const styles = StyleSheet.create({
     bottom: 0,
     left: 0,
     right: 0,
+    zIndex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',

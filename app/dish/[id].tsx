@@ -3,13 +3,14 @@ import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Ale
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
-import { getDishById, getDishRatings, getChefById, getDishWithChef, getDishReviews } from "../../lib/db";
-import { submitDishRating, getDishRatingSummary } from "../../lib/reviews";
+import { getDishRatings, getChefById, getDishWithChef, getDishReviews } from "../../lib/db";
+import { submitDishRating } from "../../lib/reviews";
 import type { Dish, DishWithChef, DishRating } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import Screen from "../../components/Screen";
 import { formatCad } from "../../lib/money";
+import { optimizeDishImageUrl } from "../../lib/dishImageUrl";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -24,6 +25,7 @@ const BORDER_LIGHT = '#FFFFFF';
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 const REVIEWS_SECTION_ID = 'dish-tabs-section';
+const REVIEWS_PAGE_SIZE = 20;
 
 // TS helper: Screen/View styles in this file are a mix of RNW + native.
 // We keep the runtime behavior and relax typings locally to avoid red lints.
@@ -69,6 +71,8 @@ export default function DishDetail() {
   const [avgRating, setAvgRating] = useState(0);
   const [ratingCount, setRatingCount] = useState(0);
   const [reviews, setReviews] = useState<DishRating[]>([]);
+  const [reviewsHasMore, setReviewsHasMore] = useState(false);
+  const [reviewsLoadingMore, setReviewsLoadingMore] = useState(false);
   const [userRating, setUserRating] = useState(0);
   const [comment, setComment] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -128,10 +132,10 @@ export default function DishDetail() {
           }
         });
 
-        // Fetch reviews in background
-        getDishReviews(dishId).then(reviewsData => {
+        getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0).then(reviewsData => {
           if (mounted) {
             setReviews(reviewsData);
+            setReviewsHasMore(reviewsData.length >= REVIEWS_PAGE_SIZE);
           }
         });
 
@@ -246,8 +250,9 @@ export default function DishDetail() {
       setAvgRating(summary.avg);
       
       // Refresh reviews
-      const updatedReviews = await getDishReviews(dishId);
+      const updatedReviews = await getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0);
       setReviews(updatedReviews);
+      setReviewsHasMore(updatedReviews.length >= REVIEWS_PAGE_SIZE);
 
       const { data: userRatingData } = await supabase
         .from("dish_ratings")
@@ -338,11 +343,48 @@ export default function DishDetail() {
     setTimeout(tryScroll, 800);
   };
 
+  const imageMaxW = isMobile ? 960 : 1400;
+
+  const loadMoreReviews = async () => {
+    if (!Number.isFinite(dishId) || reviewsLoadingMore || !reviewsHasMore) return;
+    setReviewsLoadingMore(true);
+    try {
+      const next = await getDishReviews(dishId, REVIEWS_PAGE_SIZE, reviews.length);
+      setReviews((prev) => [...prev, ...next]);
+      setReviewsHasMore(next.length >= REVIEWS_PAGE_SIZE);
+    } catch (e) {
+      console.error("loadMoreReviews", e);
+    } finally {
+      setReviewsLoadingMore(false);
+    }
+  };
+
   if (loading) {
     return (
-      <ScreenCmp>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center" }}>
-          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
+      <ScreenCmp style={{ backgroundColor: BACKGROUND_LIGHT }}>
+        <View style={styles.container}>
+          {isMobile ? (
+            <View style={styles.mobileStack}>
+              <View style={[styles.skeletonBlock, styles.skeletonHeroMobile]} />
+              <View style={styles.skeletonLineLg} />
+              <View style={styles.skeletonLineMd} />
+              <View style={styles.skeletonLineSm} />
+              <ActivityIndicator size="small" color={PRIMARY_COLOR} style={{ marginTop: 24 }} />
+            </View>
+          ) : (
+            <View style={styles.grid}>
+              <View style={styles.imageColumn}>
+                <View style={[styles.skeletonBlock, styles.skeletonHeroDesktop]} />
+              </View>
+              <View style={[styles.infoColumn, { gap: 12 }]}>
+                <View style={styles.skeletonLineLg} />
+                <View style={styles.skeletonLineMd} />
+                <View style={styles.skeletonLineSm} />
+                <View style={styles.skeletonLineSm} />
+                <ActivityIndicator size="small" color={PRIMARY_COLOR} style={{ marginTop: 16 }} />
+              </View>
+            </View>
+          )}
         </View>
       </ScreenCmp>
     );
@@ -359,8 +401,11 @@ export default function DishDetail() {
 
   const chefId = dish.chef_id != null ? Number(dish.chef_id) : null;
   const chefName = chef?.name || dish.chef || 'Chef';
-  const mainImage = dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=1200&q=80&auto=format&fit=crop";
-  const thumbnailImages = [mainImage, mainImage, mainImage, mainImage]; // Placeholder - could be expanded
+  const mainImage = optimizeDishImageUrl(dish.image ?? null, imageMaxW);
+  const chefAvatarUri =
+    chef?.photo || chef?.avatar
+      ? optimizeDishImageUrl(String(chef.photo || chef.avatar), 96)
+      : null;
 
   return (
     <ScreenCmp style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
@@ -389,9 +434,9 @@ export default function DishDetail() {
             {chefId ? (
               <Link href={`/chef/${chef?.slug ?? chefId}`} asChild>
                 <TouchableOpacity style={styles.chefLink}>
-                  {chef?.photo || chef?.avatar ? (
+                  {chefAvatarUri ? (
                     <Image 
-                      source={{ uri: chef.photo || chef.avatar }} 
+                      source={{ uri: chefAvatarUri }} 
                       style={styles.chefAvatar as any} 
                     />
                   ) : (
@@ -520,9 +565,9 @@ export default function DishDetail() {
             {chefId ? (
               <Link href={`/chef/${chef?.slug ?? chefId}`} asChild>
                 <TouchableOpacity style={styles.chefLink}>
-                  {chef?.photo || chef?.avatar ? (
+                  {chefAvatarUri ? (
                     <Image 
-                      source={{ uri: chef.photo || chef.avatar }} 
+                      source={{ uri: chefAvatarUri }} 
                       style={styles.chefAvatar as any} 
                     />
                   ) : (
@@ -771,6 +816,19 @@ export default function DishDetail() {
                     </ViewCmp>
                   ))}
                 </View>
+
+                {reviewsHasMore ? (
+                  <TouchableOpacity
+                    style={styles.loadMoreReviewsBtn}
+                    onPress={loadMoreReviews}
+                    disabled={reviewsLoadingMore}
+                    activeOpacity={0.8}
+                  >
+                    <Text style={styles.loadMoreReviewsText}>
+                      {reviewsLoadingMore ? 'Loading…' : 'Load more reviews'}
+                    </Text>
+                  </TouchableOpacity>
+                ) : null}
 
                 {!user && (
                   <Text style={styles.signInPrompt}>
@@ -1264,7 +1322,7 @@ const styles = StyleSheet.create({
   mainImageContainerMobile: {
     width: '100%',
     maxWidth: 480,
-    aspectRatio: 3 / 4,
+    aspectRatio: 1,
     minHeight: 200,
     marginBottom: 0,
     borderRadius: theme.radius.xl,
@@ -1274,6 +1332,57 @@ const styles = StyleSheet.create({
   mobileInfoWrap: {
     width: '100%',
     paddingTop: 0,
+  },
+  skeletonBlock: {
+    width: '100%',
+    borderRadius: theme.radius.xl,
+    backgroundColor: '#E6E4E1',
+  },
+  skeletonHeroMobile: {
+    aspectRatio: 1,
+    maxWidth: 480,
+    alignSelf: 'center',
+  },
+  skeletonHeroDesktop: {
+    aspectRatio: 4 / 3,
+    maxWidth: 480,
+  },
+  skeletonLineLg: {
+    height: 28,
+    borderRadius: 8,
+    backgroundColor: '#E6E4E1',
+    width: '88%',
+    marginTop: theme.spacing.md,
+  },
+  skeletonLineMd: {
+    height: 20,
+    borderRadius: 8,
+    backgroundColor: '#E6E4E1',
+    width: '55%',
+    marginTop: 12,
+  },
+  skeletonLineSm: {
+    height: 16,
+    borderRadius: 6,
+    backgroundColor: '#EDECEA',
+    width: '72%',
+    marginTop: 10,
+  },
+  loadMoreReviewsBtn: {
+    marginTop: theme.spacing.lg,
+    alignSelf: 'center',
+    paddingVertical: 12,
+    paddingHorizontal: 20,
+    borderRadius: theme.radius.lg,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    backgroundColor: '#FFFFFF',
+  },
+  loadMoreReviewsText: {
+    color: TEXT_DARK,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '600' as any,
+    fontSize: theme.typography.fontSize.sm,
   },
   // Legacy mobile overrides (used only in desktop branch when isMobile was true)
   gridMobile: {

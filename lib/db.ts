@@ -241,13 +241,25 @@ export async function getDishById(id: number): Promise<Dish | null> {
   return data as Dish | null;
 }
 
+/** Columns needed for dish detail + chef link; smaller payload than select * */
+const DISH_DETAIL_SELECT =
+  'id, name, chef, chef_id, price, category, image, description, ingredients, thumbnail, featured, created_at, is_active, chefs ( id, name, slug, photo, email, user_id )';
+
+const DISH_WITH_CHEF_CACHE_MS = 20_000;
+const dishWithChefCache = new Map<number, { t: number; v: DishWithChef | null }>();
+
 /**
- * Get dish by ID with joined Chef data
+ * Get dish by ID with joined Chef data (narrow columns + short-lived cache for faster repeat visits / prefetch).
  */
 export async function getDishWithChef(id: number): Promise<DishWithChef | null> {
+  if (!Number.isFinite(id)) return null;
+  const now = Date.now();
+  const hit = dishWithChefCache.get(id);
+  if (hit && now - hit.t < DISH_WITH_CHEF_CACHE_MS) return hit.v;
+
   const { data, error } = await supabase
     .from('dishes')
-    .select('*, chefs(*)')
+    .select(DISH_DETAIL_SELECT)
     .eq('id', id)
     .maybeSingle();
 
@@ -256,7 +268,14 @@ export async function getDishWithChef(id: number): Promise<DishWithChef | null> 
     return null;
   }
 
-  return data as DishWithChef | null;
+  const v = data as DishWithChef | null;
+  dishWithChefCache.set(id, { t: now, v });
+  return v;
+}
+
+/** Warm cache when user hovers / press-in on a dish card */
+export function prefetchDishWithChef(id: number): void {
+  if (Number.isFinite(id)) void getDishWithChef(id);
 }
 
 // ============================================================================
@@ -264,48 +283,63 @@ export async function getDishWithChef(id: number): Promise<DishWithChef | null> 
 // ============================================================================
 
 /**
- * Get dish ratings and calculate average
- * Uses dish_ratings.rating or dish_ratings.stars (prefer rating, fallback to stars)
+ * Get dish ratings aggregate (prefers RPC; falls back to capped client compute if RPC missing).
  */
 export async function getDishRatings(dishId: number): Promise<DishRatingStats> {
+  const { data: rows, error: rpcErr } = await supabase.rpc('get_dish_rating_stats', {
+    p_dish_id: dishId,
+  });
+
+  if (!rpcErr && rows && rows.length > 0) {
+    const r = rows[0] as { avg_rating: number | null; rating_count: number | null };
+    return {
+      average: Number(r.avg_rating) || 0,
+      count: Number(r.rating_count) || 0,
+    };
+  }
+
   const { data, error } = await supabase
     .from('dish_ratings')
     .select('rating, stars')
-    .eq('dish_id', dishId);
+    .eq('dish_id', dishId)
+    .limit(2000);
 
   if (error || !data || data.length === 0) {
     return { average: 0, count: 0 };
   }
 
-  // Use rating if available, otherwise use stars
-  const ratings = data.map((r: any) => r.rating ?? r.stars ?? 0).filter((r: number) => r > 0);
-
-  if (ratings.length === 0) {
-    return { average: 0, count: 0 };
-  }
+  const ratings = data.map((row: any) => row.rating ?? row.stars ?? 0).filter((n: number) => n > 0);
+  if (ratings.length === 0) return { average: 0, count: 0 };
 
   const sum = ratings.reduce((acc, r) => acc + r, 0);
   const average = sum / ratings.length;
-
   return {
-    average: Math.round(average * 10) / 10, // Round to 1 decimal
+    average: Math.round(average * 10) / 10,
     count: ratings.length,
   };
 }
 
 /**
- * Get dish reviews with user names
- * Uses RPC get_dish_reviews_with_names to include user names for both logged-in and anonymous users
+ * Get dish reviews with user names (paginated RPC; fallback matches).
+ * @param limit max 100 per RPC contract
+ * @param offset for "load more"
  */
-export async function getDishReviews(dishId: number, limit = 100): Promise<DishRating[]> {
+export async function getDishReviews(
+  dishId: number,
+  limit = 20,
+  offset = 0
+): Promise<DishRating[]> {
+  const safeLimit = Math.min(Math.max(1, limit), 100);
+  const safeOffset = Math.max(0, offset);
+
   const { data: ratings, error } = await supabase.rpc('get_dish_reviews_with_names', {
     p_dish_id: dishId,
-    p_limit: limit,
+    p_limit: safeLimit,
+    p_offset: safeOffset,
   });
 
   if (error) {
-    // Fallback when RPC not yet deployed (e.g. migration not run)
-    return getDishReviewsFallback(dishId, limit);
+    return getDishReviewsFallback(dishId, safeLimit, safeOffset);
   }
 
   return (ratings || []) as DishRating[];
@@ -315,13 +349,18 @@ export async function getDishReviews(dishId: number, limit = 100): Promise<DishR
  * Fallback when RPC is not available - fetches ratings and profiles separately.
  * Profiles may be empty for anonymous users due to RLS.
  */
-async function getDishReviewsFallback(dishId: number, limit = 100): Promise<DishRating[]> {
+async function getDishReviewsFallback(
+  dishId: number,
+  limit = 20,
+  offset = 0
+): Promise<DishRating[]> {
+  const to = offset + limit - 1;
   const { data: ratings, error } = await supabase
     .from('dish_ratings')
     .select('*')
     .eq('dish_id', dishId)
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .range(offset, to);
 
   if (error || !ratings) {
     console.error('Error fetching dish reviews:', error);

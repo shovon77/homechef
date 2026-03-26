@@ -479,7 +479,7 @@ export default function AuthPage() {
 
             {/* Toggle sign-in / sign-up */}
             <TouchableOpacity testID="auth-toggle" onPress={() => setMode(mode === 'signin' ? 'signup' : 'signin')}>
-              <Text style={{ color:C.brandBlack, textAlign:'center', fontFamily: theme.typography.fontFamily.body }}>
+              <Text style={{ color: C.primary, textAlign:'center', fontFamily: theme.typography.fontFamily.body }}>
                 {mode === 'signin' ? 'New to YourHomeChef? Sign-up.' : 'Already have a profile? Login.'}
               </Text>
             </TouchableOpacity>
