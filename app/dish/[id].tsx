@@ -83,69 +83,68 @@ export default function DishDetail() {
   const { items: cartItems, addToCart, setQuantity: setCartQuantity, setNotes: setCartNotes, getQty } = useCart();
   const { isAdmin, user } = useRole();
 
-  // 1. Fetch public data (dish, ratings) - depends only on dishId
+  // 1. Fetch public data (dish, chef, ratings, first page of reviews) — batch before first paint
+  //    to avoid CLS from stars/review count/chef/reviews populating after the hero (Speed Insights).
   useEffect(() => {
     if (!Number.isFinite(dishId)) {
       setLoading(false);
+      setDish(null);
       return;
     }
-    
+
     let mounted = true;
-    
+    setLoading(true);
+    setChef(null);
+    setRatingCount(0);
+    setAvgRating(0);
+    setReviews([]);
+    setReviewsHasMore(false);
+    setDish((prev) =>
+      prev != null && Number(prev.id) === dishId ? prev : null
+    );
+
     (async () => {
-      // We don't set loading to true here if dish is already loaded (e.g. revalidation)
-      // but since this runs on mount or id change, we usually want loading true.
-      // However, for speed, we can start fetching immediately.
-      if (!dish) setLoading(true);
-      
       try {
-        // Fetch dish first for faster TTI
-        const dishData = await getDishWithChef(dishId);
-        
+        const [dishData, ratingStats, reviewsData] = await Promise.all([
+          getDishWithChef(dishId),
+          getDishRatings(dishId),
+          getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0),
+        ]);
+
         if (!mounted) return;
 
         if (!dishData) {
           console.log("Dish not found");
+          setDish(null);
           setLoading(false);
           return;
         }
 
-        // Render dish immediately
+        const chefData =
+          dishData.chefs != null
+            ? dishData.chefs
+            : dishData.chef_id
+              ? await getChefById(Number(dishData.chef_id))
+              : null;
+
+        if (!mounted) return;
+
         setDish(dishData);
-        setLoading(false); // Stop loading spinner as soon as we have the dish
-
-        // Set chef info from joined data
-        if (dishData.chefs) {
-          setChef(dishData.chefs);
-        } else if (dishData.chef_id) {
-          const chefData = await getChefById(Number(dishData.chef_id));
-          if (mounted && chefData) {
-            setChef(chefData);
-          }
-        }
-
-        // Fetch ratings in background
-        getDishRatings(dishId).then(ratingStats => {
-          if (mounted) {
-            setRatingCount(ratingStats.count);
-            setAvgRating(ratingStats.average);
-          }
-        });
-
-        getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0).then(reviewsData => {
-          if (mounted) {
-            setReviews(reviewsData);
-            setReviewsHasMore(reviewsData.length >= REVIEWS_PAGE_SIZE);
-          }
-        });
-
+        if (chefData) setChef(chefData);
+        setRatingCount(ratingStats.count);
+        setAvgRating(ratingStats.average);
+        setReviews(reviewsData);
+        setReviewsHasMore(reviewsData.length >= REVIEWS_PAGE_SIZE);
+        setLoading(false);
       } catch (e) {
         console.error("Error loading dish details:", e);
         if (mounted) setLoading(false);
       }
     })();
 
-    return () => { mounted = false; };
+    return () => {
+      mounted = false;
+    };
   }, [dishId]);
 
   // 2. Fetch user-specific data - depends on dishId and user.id
@@ -997,6 +996,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: theme.spacing.sm,
     marginTop: theme.spacing.md,
+    // Reserve one line so late font/layout tweaks don’t shift rows (web CLS)
+    minHeight: 22,
   },
   starsContainer: {
     flexDirection: 'row',
@@ -1328,6 +1329,7 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
+    alignSelf: 'center',
   },
   mobileInfoWrap: {
     width: '100%',
