@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useRef } from 'react';
 import { Analytics } from '@vercel/analytics/react';
-import { SpeedInsights } from '@vercel/speed-insights/react';
+import { VercelSpeedInsights } from '../components/VercelSpeedInsights';
 import { Stack, useRouter, usePathname } from 'expo-router';
 import { View, ScrollView, Platform } from 'react-native';
 import { ensureUser } from '../lib/ensureUser';
@@ -140,7 +140,7 @@ export default function RootLayout() {
           <View style={{ flex: 1, backgroundColor: 'white' }}>
             <Stack screenOptions={{ headerShown: false }} />
             <Analytics />
-            <SpeedInsights />
+            <VercelSpeedInsights />
           </View>
         </LocationModalProvider>
       </CartProvider>
