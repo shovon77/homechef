@@ -13,7 +13,7 @@ import { theme } from '../../lib/theme';
 import LocationPicker from '../../components/LocationPicker';
 import FilePicker from '../../components/FilePicker';
 import { uploadToBucket } from '../../lib/upload';
-import { createNotification } from '../../lib/notifications';
+import { createNotification, createChefApplicationSubmittedNotification } from '../../lib/notifications';
 
 // Storage key for chef onboarding form data
 const CHEF_FORM_STORAGE_KEY = 'chef_onboarding_form_data';
@@ -910,6 +910,11 @@ export default function ChefSignup() {
         // Don't block the submission if notification creation fails
         console.error('Error creating notifications for admins:', notifError);
       }
+
+      // Applicant welcome / how-it-works (in-app notification + modal from bell / notifications page)
+      createChefApplicationSubmittedNotification(session.user.id).catch((err) => {
+        console.warn('Chef application submitted notification:', err);
+      });
 
       // 10) Clear saved form data and navigate to chef dashboard
       await storage.removeItem(CHEF_FORM_STORAGE_KEY);

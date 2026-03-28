@@ -281,17 +281,31 @@ export async function createChefRequestNotification(
 }
 
 /**
- * Create chef application submitted notification
+ * Create chef application submitted notification (applicant).
+ * One per user — avoids duplicates if onboarding submit runs more than once.
  */
 export async function createChefApplicationSubmittedNotification(
   userId: string
 ): Promise<Notification | null> {
-  return createNotification(
-    userId,
-    'chef_application_submitted',
-    'Chef Application Submitted',
-    'Your chef application has been submitted successfully. We will review it and get back to you soon.'
-  );
+  try {
+    const { data: existingList } = await supabase
+      .from('notifications')
+      .select('id')
+      .eq('user_id', userId)
+      .eq('type', 'chef_application_submitted')
+      .limit(1);
+    if (existingList && existingList.length > 0) return null;
+
+    return createNotification(
+      userId,
+      'chef_application_submitted',
+      'Welcome, Chef!',
+      "Here's how YourHomeChef works for you. Open to read the details before you list your menu."
+    );
+  } catch (err) {
+    console.error('Error creating chef application submitted notification:', err);
+    return null;
+  }
 }
 
 /**

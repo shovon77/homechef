@@ -34,6 +34,7 @@ export default function NotificationsPage() {
   }>>([]);
   const [loading, setLoading] = useState(true);
   const [showWelcomeModal, setShowWelcomeModal] = useState(false);
+  const [welcomeModalVariant, setWelcomeModalVariant] = useState<'user' | 'chef'>('user');
 
   useEffect(() => {
     if (user?.id) {
@@ -70,6 +71,7 @@ export default function NotificationsPage() {
       // Define allowed notification types based on user role
       const allowedTypes: string[] = [
         'welcome',
+        'chef_application_submitted',
         'order_placed',
         'order_ready',
         'order_issue_updated',
@@ -144,6 +146,12 @@ export default function NotificationsPage() {
         message: 'Explore homemade meals or start selling.',
       };
     }
+    if (notification.type === 'chef_application_submitted') {
+      return {
+        title: 'Welcome, Chef!',
+        message: "Here's how YourHomeChef works for you.",
+      };
+    }
     return {
       title: notification.title,
       message: notification.message,
@@ -167,6 +175,13 @@ export default function NotificationsPage() {
     
     // Handle welcome notification - show modal
     if (notification.type === 'welcome') {
+      setWelcomeModalVariant('user');
+      setShowWelcomeModal(true);
+      return;
+    }
+
+    if (notification.type === 'chef_application_submitted') {
+      setWelcomeModalVariant('chef');
       setShowWelcomeModal(true);
       return;
     }
@@ -261,6 +276,7 @@ export default function NotificationsPage() {
       <WelcomeModal
         visible={showWelcomeModal}
         onClose={() => setShowWelcomeModal(false)}
+        variant={welcomeModalVariant}
       />
     </Screen>
   );

@@ -409,7 +409,7 @@ export default function HomePage() {
         useNativeDriver: true,
       }),
       Animated.timing(howItWorksSlide, {
-        toValue: -28,
+        toValue: 10,
         duration: 200,
         easing: Easing.out(Easing.quad),
         useNativeDriver: true,
@@ -421,7 +421,7 @@ export default function HomePage() {
       const next = howItWorksAudienceRef.current;
       setHowItWorksPanelAudience(next);
       howItWorksFade.setValue(0);
-      howItWorksSlide.setValue(14);
+      howItWorksSlide.setValue(-14);
       Animated.parallel([
         Animated.timing(howItWorksFade, {
           toValue: 1,

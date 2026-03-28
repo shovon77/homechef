@@ -166,6 +166,7 @@ export default function NavBar() {
   }>>([])
   const [notificationsLoading, setNotificationsLoading] = useState(false)
   const [showWelcomeModal, setShowWelcomeModal] = useState(false)
+  const [welcomeModalVariant, setWelcomeModalVariant] = useState<'user' | 'chef'>('user')
 
   // Calculate unread count - memoized for performance
   const unreadCount = useMemo(() => {
@@ -422,6 +423,7 @@ export default function NavBar() {
       // Define allowed notification types based on user role
       const allowedTypes: string[] = [
         'welcome',
+        'chef_application_submitted',
         'order_placed',
         'order_ready',
         'order_issue_updated',
@@ -438,7 +440,7 @@ export default function NavBar() {
       }
 
       if (isChef) {
-        allowedTypes.push('chef_application_submitted', 'chef_application_approved', 'chef_application_rejected', 'new_order_request');
+        allowedTypes.push('chef_application_approved', 'chef_application_rejected', 'new_order_request');
       }
 
       const { data, error } = await supabase
@@ -1427,6 +1429,14 @@ export default function NavBar() {
                       // Handle welcome notification - show modal
                       if (notification.type === 'welcome') {
                         setIsNotificationsOpen(false);
+                        setWelcomeModalVariant('user');
+                        setShowWelcomeModal(true);
+                        return;
+                      }
+
+                      if (notification.type === 'chef_application_submitted') {
+                        setIsNotificationsOpen(false);
+                        setWelcomeModalVariant('chef');
                         setShowWelcomeModal(true);
                         return;
                       }
@@ -1492,6 +1502,13 @@ export default function NavBar() {
                           <Text style={styles.notificationItemTitle}>Welcome!</Text>
                           <Text style={styles.notificationItemMessage}>
                             Explore homemade meals or start selling.
+                          </Text>
+                        </>
+                      ) : notification.type === 'chef_application_submitted' ? (
+                        <>
+                          <Text style={styles.notificationItemTitle}>Welcome, Chef!</Text>
+                          <Text style={styles.notificationItemMessage}>
+                            {"Here's how YourHomeChef works for you."}
                           </Text>
                         </>
                       ) : (
@@ -1635,6 +1652,7 @@ export default function NavBar() {
       <WelcomeModal
         visible={showWelcomeModal}
         onClose={() => setShowWelcomeModal(false)}
+        variant={welcomeModalVariant}
       />
     </View>
   )

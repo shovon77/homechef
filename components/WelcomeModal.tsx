@@ -1,6 +1,6 @@
 'use client';
 import React from 'react';
-import { View, Text, TouchableOpacity, Modal, ScrollView, StyleSheet, Platform, useWindowDimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Modal, ScrollView, StyleSheet, Platform, useWindowDimensions } from 'react-native';
 import { useRouter } from 'expo-router';
 import { theme } from '../lib/theme';
 
@@ -12,12 +12,15 @@ const BORDER_LIGHT = '#E5E7EB';
 interface WelcomeModalProps {
   visible: boolean;
   onClose: () => void;
+  /** `chef` = copy for applicants who just submitted a chef application */
+  variant?: 'user' | 'chef';
 }
 
-export default function WelcomeModal({ visible, onClose }: WelcomeModalProps) {
+export default function WelcomeModal({ visible, onClose, variant = 'user' }: WelcomeModalProps) {
   const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const isChefVariant = variant === 'chef';
 
   return (
     <Modal
@@ -28,8 +31,26 @@ export default function WelcomeModal({ visible, onClose }: WelcomeModalProps) {
     >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
-          <View style={styles.modalHeader}>
-            <Text style={styles.modalTitle}>Welcome!</Text>
+          {isChefVariant ? (
+            <View style={[styles.chefBrandRow, isMobile && styles.chefBrandRowMobile]} collapsable={false}>
+              <Image
+                source={require('../assets/YHC-New-Logo-Only.png')}
+                style={[
+                  styles.chefBrandLogo,
+                  { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74, minWidth: 40, minHeight: 28 },
+                ]}
+                resizeMode="contain"
+                accessibilityRole="image"
+                accessibilityLabel="YourHomeChef logo"
+              />
+              <Text style={styles.chefBrandName}>
+                <Text style={styles.chefBrandNameYour}>Your</Text>
+                <Text style={styles.chefBrandNameHomeChef}>HomeChef</Text>
+              </Text>
+            </View>
+          ) : null}
+          <View style={[styles.modalHeader, isChefVariant && styles.modalHeaderChef]}>
+            <Text style={styles.modalTitle}>{isChefVariant ? 'Welcome, Chef!' : 'Welcome!'}</Text>
             <TouchableOpacity
               onPress={onClose}
               style={styles.closeButton}
@@ -44,32 +65,59 @@ export default function WelcomeModal({ visible, onClose }: WelcomeModalProps) {
             showsVerticalScrollIndicator={!isMobile}
           >
             <Text style={styles.introText}>
-              To keep things transparent, here's how we work:
+              {isChefVariant
+                ? "Here's how YourHomeChef works for you:"
+                : "To keep things transparent, here's how we work:"}
             </Text>
             
-            <View style={styles.bulletPoint}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>
-                <Text style={styles.bulletLabel}>Platform fees:</Text> A small service fee supports customer service, payments & operations
-              </Text>
-            </View>
-            
-            <View style={styles.bulletPoint}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>
-                <Text style={styles.bulletLabel}>Pickup-only marketplace:</Text> Orders are picked up directly from the chef. No courier or delivery fees apply for you.
-              </Text>
-            </View>
-            
-            <View style={styles.bulletPoint}>
-              <Text style={styles.bullet}>•</Text>
-              <Text style={styles.bulletText}>
-                <Text style={styles.bulletLabel}>Independent home chefs:</Text> All meals are prepared by independent home chefs, not YourHomeChef.
-              </Text>
-            </View>
+            {isChefVariant ? (
+              <>
+                <View style={styles.bulletPoint}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletLabel}>Platform support:</Text> A small service fee helps payments, operations & support
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletLabel}>Pickup-only marketplace:</Text> You prepare meals, and customers collect directly
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletLabel}>Independent business:</Text> You run your own kitchen, not YourHomeChef
+                  </Text>
+                </View>
+              </>
+            ) : (
+              <>
+                <View style={styles.bulletPoint}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletLabel}>Platform fees:</Text> A small service fee supports customer service, payments & operations
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletLabel}>Pickup-only marketplace:</Text> Orders are picked up directly from the chef. No courier or delivery fees apply for you.
+                  </Text>
+                </View>
+                <View style={styles.bulletPoint}>
+                  <Text style={styles.bullet}>•</Text>
+                  <Text style={styles.bulletText}>
+                    <Text style={styles.bulletLabel}>Independent home chefs:</Text> All meals are prepared by independent home chefs, not YourHomeChef.
+                  </Text>
+                </View>
+              </>
+            )}
             
             <Text style={styles.footerText}>
-              All details & fees are shown before you order.
+              {isChefVariant
+                ? 'All details & fees are shown before you list your menu.'
+                : 'All details & fees are shown before you order.'}
             </Text>
           </ScrollView>
           
@@ -103,6 +151,49 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
+  },
+  /** Match `Footer` `brandContainer` / `brandLogo` / `brandName` — gap 0, negative margins so logo meets wordmark */
+  chefBrandRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 0,
+    alignSelf: 'center',
+    marginLeft: -12,
+    paddingTop: 20,
+    paddingHorizontal: 24,
+    paddingBottom: 12,
+    backgroundColor: BG_LIGHT,
+    borderTopLeftRadius: 16,
+    borderTopRightRadius: 16,
+    width: 'auto',
+  },
+  chefBrandRowMobile: {
+    paddingTop: 16,
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    flexWrap: 'wrap',
+  },
+  chefBrandLogo: {
+    backgroundColor: 'transparent',
+    alignSelf: 'center',
+    marginLeft: -8,
+  },
+  chefBrandName: {
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    fontSize: 24,
+    lineHeight: 32,
+    marginLeft: -12,
+  },
+  chefBrandNameYour: {
+    color: '#33393A',
+  },
+  chefBrandNameHomeChef: {
+    color: PRIMARY_COLOR,
+  },
+  modalHeaderChef: {
+    paddingTop: 8,
   },
   modalContent: {
     backgroundColor: BG_LIGHT,
