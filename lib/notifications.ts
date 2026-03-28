@@ -300,7 +300,7 @@ export async function createChefApplicationSubmittedNotification(
       userId,
       'chef_application_submitted',
       'Welcome, Chef!',
-      "Here's how YourHomeChef works for you. Open to read the details before you list your menu."
+      "Here's how YourHomeChef works for you. Open to read the details before you list your menu on the website"
     );
   } catch (err) {
     console.error('Error creating chef application submitted notification:', err);

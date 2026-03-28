@@ -4,11 +4,15 @@ import { Screen } from '../components/Screen';
 import { theme } from '../lib/theme';
 import { Stack } from 'expo-router';
 
+/** Matches `NavBar` `BG_LIGHT`; extra bottom padding clears `Screen` footer `marginTop: -60` overlap without a large gap */
+const NAV_BG = '#F2F0EF';
+const FOOTER_CLEARANCE = 96;
+
 export default function ParticipationAgreement() {
   return (
-    <Screen>
+    <Screen style={{ backgroundColor: NAV_BG }}>
       <Stack.Screen options={{ title: 'Participation Agreement' }} />
-      <ScrollView contentContainerStyle={styles.content}>
+      <ScrollView style={styles.scroll} contentContainerStyle={styles.content}>
         <Text style={styles.h1}>PARTICIPATION AGREEMENT</Text>
         <Text style={styles.subtitle}>(Marketplace Platform – Ontario, Canada)</Text>
         
@@ -97,11 +101,17 @@ export default function ParticipationAgreement() {
 }
 
 const styles = StyleSheet.create({
+  scroll: {
+    flex: 1,
+    backgroundColor: NAV_BG,
+  },
   content: {
     padding: 24,
+    paddingBottom: 24 + FOOTER_CLEARANCE,
     maxWidth: 800,
     alignSelf: 'center',
     gap: 16,
+    backgroundColor: NAV_BG,
   },
   h1: {
     fontSize: 24,

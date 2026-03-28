@@ -356,7 +356,7 @@ const HOW_IT_WORKS_USERS: HowItWorksStep[] = [
 const HOW_IT_WORKS_CHEFS: HowItWorksStep[] = [
   {
     title: "Join",
-    text: "Sign up as a home chef and showcase dishes for pickup near you",
+    text: "Sign up as a home chef and showcase dishes for pickup",
     icon: require("../assets/chef.png"),
   },
   {

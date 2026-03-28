@@ -31,32 +31,24 @@ export default function WelcomeModal({ visible, onClose, variant = 'user' }: Wel
     >
       <View style={styles.modalOverlay}>
         <View style={[styles.modalContent, isMobile && styles.modalContentMobile]}>
-          {isChefVariant ? (
-            <View style={[styles.chefBrandRow, isMobile && styles.chefBrandRowMobile]} collapsable={false}>
-              <Image
-                source={require('../assets/YHC-New-Logo-Only.png')}
-                style={[
-                  styles.chefBrandLogo,
-                  { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74, minWidth: 40, minHeight: 28 },
-                ]}
-                resizeMode="contain"
-                accessibilityRole="image"
-                accessibilityLabel="YourHomeChef logo"
-              />
-              <Text style={styles.chefBrandName}>
-                <Text style={styles.chefBrandNameYour}>Your</Text>
-                <Text style={styles.chefBrandNameHomeChef}>HomeChef</Text>
-              </Text>
-            </View>
-          ) : null}
-          <View style={[styles.modalHeader, isChefVariant && styles.modalHeaderChef]}>
+          <View style={[styles.brandRow, isMobile && styles.brandRowMobile]} collapsable={false}>
+            <Image
+              source={require('../assets/YHC-New-Logo-Only.png')}
+              style={[
+                styles.brandLogo,
+                { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74, minWidth: 40, minHeight: 28 },
+              ]}
+              resizeMode="contain"
+              accessibilityRole="image"
+              accessibilityLabel="YourHomeChef logo"
+            />
+            <Text style={styles.brandName}>
+              <Text style={styles.brandNameYour}>Your</Text>
+              <Text style={styles.brandNameHomeChef}>HomeChef</Text>
+            </Text>
+          </View>
+          <View style={[styles.modalHeader, styles.modalHeaderAfterBrand]}>
             <Text style={styles.modalTitle}>{isChefVariant ? 'Welcome, Chef!' : 'Welcome!'}</Text>
-            <TouchableOpacity
-              onPress={onClose}
-              style={styles.closeButton}
-            >
-              <Text style={styles.closeButtonText}>×</Text>
-            </TouchableOpacity>
           </View>
           
           <ScrollView 
@@ -116,7 +108,7 @@ export default function WelcomeModal({ visible, onClose, variant = 'user' }: Wel
             
             <Text style={styles.footerText}>
               {isChefVariant
-                ? 'All details & fees are shown before you list your menu.'
+                ? 'All details & fees are shown before you list your menu on the website'
                 : 'All details & fees are shown before you order.'}
             </Text>
           </ScrollView>
@@ -131,7 +123,7 @@ export default function WelcomeModal({ visible, onClose, variant = 'user' }: Wel
             <TouchableOpacity
               onPress={() => {
                 onClose();
-                router.push('/terms');
+                router.push(isChefVariant ? '/participation-agreement' : '/terms');
               }}
               style={[styles.viewTermsButton, isMobile && styles.viewTermsButtonMobile]}
             >
@@ -152,8 +144,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     padding: 20,
   },
-  /** Match `Footer` `brandContainer` / `brandLogo` / `brandName` — gap 0, negative margins so logo meets wordmark */
-  chefBrandRow: {
+  /** Match `Footer` — gap 0, negative margins so logo meets wordmark (user + chef modals) */
+  brandRow: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
@@ -168,31 +160,31 @@ const styles = StyleSheet.create({
     borderTopRightRadius: 16,
     width: 'auto',
   },
-  chefBrandRowMobile: {
+  brandRowMobile: {
     paddingTop: 16,
     paddingHorizontal: 20,
     paddingBottom: 10,
     flexWrap: 'wrap',
   },
-  chefBrandLogo: {
+  brandLogo: {
     backgroundColor: 'transparent',
     alignSelf: 'center',
     marginLeft: -8,
   },
-  chefBrandName: {
+  brandName: {
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold as any,
     fontSize: 24,
     lineHeight: 32,
     marginLeft: -12,
   },
-  chefBrandNameYour: {
+  brandNameYour: {
     color: '#33393A',
   },
-  chefBrandNameHomeChef: {
+  brandNameHomeChef: {
     color: PRIMARY_COLOR,
   },
-  modalHeaderChef: {
+  modalHeaderAfterBrand: {
     paddingTop: 8,
   },
   modalContent: {
@@ -216,9 +208,11 @@ const styles = StyleSheet.create({
   },
   modalHeader: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-start',
     alignItems: 'center',
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 24,
+    paddingBottom: 10,
     borderBottomWidth: 1,
     borderBottomColor: BORDER_LIGHT,
   },
@@ -228,25 +222,13 @@ const styles = StyleSheet.create({
     color: TEXT_DARK,
     fontFamily: theme.typography.fontFamily.display,
   },
-  closeButton: {
-    width: 32,
-    height: 32,
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 16,
-    backgroundColor: BORDER_LIGHT,
-  },
-  closeButtonText: {
-    fontSize: 24,
-    color: TEXT_DARK,
-    fontWeight: '300',
-    lineHeight: 24,
-  },
   modalBody: {
     flex: 1,
   },
   modalBodyContent: {
-    padding: 24,
+    paddingHorizontal: 24,
+    paddingTop: 10,
+    paddingBottom: 24,
     gap: 16,
   },
   introText: {
@@ -274,9 +256,10 @@ const styles = StyleSheet.create({
     lineHeight: 24,
     fontFamily: theme.typography.fontFamily.body,
   },
+  /** Real semibold face so labels read bold vs body (`OpenSans_400Regular` ignores nested `fontWeight`). */
   bulletLabel: {
-    fontWeight: '700',
-    fontFamily: theme.typography.fontFamily.body,
+    fontFamily: 'OpenSans_600SemiBold',
+    fontWeight: '600',
   },
   footerText: {
     fontSize: 15,
@@ -313,7 +296,7 @@ const styles = StyleSheet.create({
   gotItButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
+    fontWeight: '400',
     fontFamily: theme.typography.fontFamily.body,
   },
   viewTermsButton: {
