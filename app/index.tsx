@@ -1503,22 +1503,22 @@ const styles = StyleSheet.create({
     borderRadius: 999,
     overflow: "hidden",
     minHeight: 42,
-    minWidth: 170,
+    minWidth: 136,
   },
   howItWorksToggleTrackMinMobile: {
-    minWidth: 188,
+    minWidth: 152,
     minHeight: 40,
   },
   howItWorksToggleSegment: {
     flex: 1,
     paddingVertical: 6,
-    paddingHorizontal: 5,
+    paddingHorizontal: 3,
     alignItems: "center",
     justifyContent: "center",
   },
   howItWorksToggleSegmentMobile: {
     paddingVertical: 4,
-    paddingHorizontal: 4,
+    paddingHorizontal: 2,
   },
   howItWorksToggleSegmentInactive: {
     backgroundColor: "transparent",
