@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing } from "react-native";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../lib/supabase";
@@ -333,6 +333,44 @@ function HomeDishCard({ dish }: { dish: Dish }) {
 
 const CONTENT_MAX_WIDTH = 1280;
 
+type HowItWorksStep = { title: string; text: string; icon: ImageSourcePropType };
+
+const HOW_IT_WORKS_USERS: HowItWorksStep[] = [
+  {
+    title: "Discover",
+    text: "Browse homemade food from local chefs near you",
+    icon: require("../assets/search.png"),
+  },
+  {
+    title: "Order",
+    text: "Choose a dish, select pickup time and pay securely online",
+    icon: require("../assets/shopping-cart.png"),
+  },
+  {
+    title: "Pickup",
+    text: "Collect your order on time, handle food safely after pickup",
+    icon: require("../assets/dinner.png"),
+  },
+];
+
+const HOW_IT_WORKS_CHEFS: HowItWorksStep[] = [
+  {
+    title: "Join",
+    text: "Sign up as a home chef and showcase dishes for pickup near you",
+    icon: require("../assets/chef.png"),
+  },
+  {
+    title: "Manage",
+    text: "Upload menu, set pricing, portions & pickup time slots for customers",
+    icon: require("../assets/list (1).png"),
+  },
+  {
+    title: "Earn",
+    text: "Receive orders, prepare meals & get paid securely after pickups",
+    icon: require("../assets/money-bag.png"),
+  },
+];
+
 export default function HomePage() {
   const router = useRouter();
   const { width } = useWindowDimensions();
@@ -348,6 +386,63 @@ export default function HomePage() {
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [heroLayout, setHeroLayout] = useState<{ width: number; height: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [howItWorksAudience, setHowItWorksAudience] = useState<"users" | "chefs">("chefs");
+  const [howItWorksPanelAudience, setHowItWorksPanelAudience] = useState<"users" | "chefs">("chefs");
+  const howItWorksAudienceRef = React.useRef(howItWorksAudience);
+  howItWorksAudienceRef.current = howItWorksAudience;
+  const howItWorksFade = React.useRef(new Animated.Value(1)).current;
+  const howItWorksSlide = React.useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    if (howItWorksPanelAudience === howItWorksAudience) {
+      return;
+    }
+
+    howItWorksFade.stopAnimation();
+    howItWorksSlide.stopAnimation();
+
+    const fadeOut = Animated.parallel([
+      Animated.timing(howItWorksFade, {
+        toValue: 0,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+      Animated.timing(howItWorksSlide, {
+        toValue: 10,
+        duration: 200,
+        easing: Easing.out(Easing.quad),
+        useNativeDriver: true,
+      }),
+    ]);
+
+    fadeOut.start(({ finished }) => {
+      if (!finished) return;
+      const next = howItWorksAudienceRef.current;
+      setHowItWorksPanelAudience(next);
+      howItWorksFade.setValue(0);
+      howItWorksSlide.setValue(-14);
+      Animated.parallel([
+        Animated.timing(howItWorksFade, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+        Animated.timing(howItWorksSlide, {
+          toValue: 0,
+          duration: 300,
+          easing: Easing.out(Easing.cubic),
+          useNativeDriver: true,
+        }),
+      ]).start();
+    });
+
+    return () => {
+      fadeOut.stop();
+    };
+  }, [howItWorksAudience, howItWorksPanelAudience]);
+
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const featuredScrollRef = React.useRef<ScrollView>(null);
   const isUserScrollingRef = React.useRef(false);
@@ -938,57 +1033,94 @@ export default function HomePage() {
 
           {/* How It Works section */}
           <View style={[styles.section, styles.howItWorksSection]}>
-            <Text style={[styles.sectionTitle, styles.howItWorksTitle, isMobile && styles.sectionTitleMobile]}>How it works?</Text>
-            <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile, !isMobile && styles.howItWorksGridDesktop]}>
-              <View style={styles.howItWorksCard}>
-                <View style={styles.howItWorksIconContainer}>
-                  <Image 
-                    source={require('../assets/search.png')} 
-                    style={styles.howItWorksIconImage} 
-                    tintColor="#FFFFFF"
-                    resizeMode="contain"
-                  />
-                </View>
-                <View style={styles.howItWorksContent}>
-                  <Text style={styles.howItWorksCardTitle}>Discover</Text>
-                  <Text style={styles.howItWorksText}>
-                    Browse homemade food from local chefs near you today
+            <View style={[styles.howItWorksHeaderRow, isMobile && styles.howItWorksHeaderRowMobile]}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  styles.howItWorksHeadingInline,
+                  isMobile && styles.sectionTitleMobile,
+                ]}
+                numberOfLines={2}
+              >
+                How it works?
+              </Text>
+              <View
+                style={[styles.howItWorksToggleTrack, isMobile && styles.howItWorksToggleTrackMinMobile]}
+                accessibilityRole="tablist"
+              >
+                <TouchableOpacity
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: howItWorksAudience === "chefs" }}
+                  onPress={() => setHowItWorksAudience("chefs")}
+                  style={[
+                    styles.howItWorksToggleSegment,
+                    isMobile && styles.howItWorksToggleSegmentMobile,
+                    howItWorksAudience === "chefs"
+                      ? styles.howItWorksToggleSegmentActive
+                      : styles.howItWorksToggleSegmentInactive,
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.howItWorksToggleLabel,
+                      isMobile && styles.howItWorksToggleLabelMobile,
+                      howItWorksAudience === "chefs" ? styles.howItWorksToggleLabelActive : styles.howItWorksToggleLabelInactive,
+                    ]}
+                  >
+                    For chefs
                   </Text>
-                </View>
-              </View>
-              <View style={styles.howItWorksCard}>
-                <View style={styles.howItWorksIconContainer}>
-                  <Image 
-                    source={require('../assets/shopping-cart.png')} 
-                    style={styles.howItWorksIconImage} 
-                    tintColor="#FFFFFF"
-                    resizeMode="contain"
-                  />
-                </View>
-                <View style={styles.howItWorksContent}>
-                  <Text style={styles.howItWorksCardTitle}>Order</Text>
-                  <Text style={styles.howItWorksText}>
-                    Choose a dish, select a pickup time, and pay securely online
+                </TouchableOpacity>
+                <TouchableOpacity
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected: howItWorksAudience === "users" }}
+                  onPress={() => setHowItWorksAudience("users")}
+                  style={[
+                    styles.howItWorksToggleSegment,
+                    isMobile && styles.howItWorksToggleSegmentMobile,
+                    howItWorksAudience === "users"
+                      ? styles.howItWorksToggleSegmentActive
+                      : styles.howItWorksToggleSegmentInactive,
+                  ]}
+                >
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.howItWorksToggleLabel,
+                      isMobile && styles.howItWorksToggleLabelMobile,
+                      howItWorksAudience === "users" ? styles.howItWorksToggleLabelActive : styles.howItWorksToggleLabelInactive,
+                    ]}
+                  >
+                    For users
                   </Text>
-                </View>
-              </View>
-              <View style={styles.howItWorksCard}>
-                <View style={styles.howItWorksIconContainer}>
-                  <Image 
-                    source={require('../assets/dinner.png')} 
-                    style={styles.howItWorksIconImage} 
-                    tintColor="#FFFFFF"
-                    resizeMode="contain"
-                  />
-                </View>
-                <View style={styles.howItWorksContent}>
-                  <Text style={styles.howItWorksCardTitle}>Pickup</Text>
-                  <Text style={styles.howItWorksText}>
-                    Collect your order on time & handle food safely after pickup
-                  </Text>
-                </View>
+                </TouchableOpacity>
               </View>
             </View>
+            <Animated.View
+              style={{
+                opacity: howItWorksFade,
+                transform: [{ translateY: howItWorksSlide }],
+              }}
+            >
+              <View style={[styles.howItWorksGrid, isMobile && styles.howItWorksGridMobile, !isMobile && styles.howItWorksGridDesktop]}>
+                {(howItWorksPanelAudience === "users" ? HOW_IT_WORKS_USERS : HOW_IT_WORKS_CHEFS).map((step, idx) => (
+                  <View key={`${howItWorksPanelAudience}-${step.title}-${idx}`} style={styles.howItWorksCard}>
+                    <View style={styles.howItWorksIconContainer}>
+                      <Image
+                        source={step.icon}
+                        style={styles.howItWorksIconImage}
+                        tintColor="#FFFFFF"
+                        resizeMode="contain"
+                      />
+                    </View>
+                    <View style={styles.howItWorksContent}>
+                      <Text style={styles.howItWorksCardTitle}>{step.title}</Text>
+                      <Text style={styles.howItWorksText}>{step.text}</Text>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            </Animated.View>
           </View>
 
           {/* Sell on YourHomeChef CTA - only show for regular users and non-logged in users */}
@@ -1305,8 +1437,81 @@ const styles = StyleSheet.create({
   howItWorksSection: {
     paddingBottom: 0,
   },
-  howItWorksTitle: {
+  howItWorksHeaderRow: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.lg,
+    gap: theme.spacing.sm,
+  },
+  howItWorksHeaderRowMobile: {
+    paddingBottom: theme.spacing.md,
+    gap: theme.spacing.xs,
+  },
+  howItWorksHeadingInline: {
+    flex: 1,
+    flexShrink: 1,
+    minWidth: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
     paddingBottom: 0,
+  },
+  howItWorksToggleTrack: {
+    flexDirection: "row",
+    alignItems: "stretch",
+    flexShrink: 0,
+    backgroundColor: "#EBEBEB",
+    borderWidth: 1,
+    borderColor: "#E8E8E8",
+    borderRadius: 999,
+    overflow: "hidden",
+    minHeight: 42,
+    minWidth: 170,
+  },
+  howItWorksToggleTrackMinMobile: {
+    minWidth: 188,
+    minHeight: 40,
+  },
+  howItWorksToggleSegment: {
+    flex: 1,
+    paddingVertical: 6,
+    paddingHorizontal: 5,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  howItWorksToggleSegmentMobile: {
+    paddingVertical: 4,
+    paddingHorizontal: 4,
+  },
+  howItWorksToggleSegmentInactive: {
+    backgroundColor: "transparent",
+  },
+  howItWorksToggleSegmentActive: {
+    backgroundColor: "#FE734C",
+    // Full capsule so the inner edge is a semicircle, not a hard vertical split.
+    borderRadius: 999,
+    overflow: "hidden",
+  },
+  howItWorksToggleLabel: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: 14,
+    fontWeight: theme.typography.fontWeight.normal,
+    ...Platform.select({
+      web: { whiteSpace: "nowrap" as const },
+      default: {},
+    }),
+  },
+  howItWorksToggleLabelMobile: {
+    fontSize: 12,
+    lineHeight: 15,
+  },
+  howItWorksToggleLabelActive: {
+    color: "#FFFFFF",
+  },
+  howItWorksToggleLabelInactive: {
+    color: "#33393A",
   },
   sellCtaContainer: {
     alignItems: 'center',

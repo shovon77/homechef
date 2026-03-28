@@ -440,7 +440,7 @@ export default function CartScreen() {
     }
 
     if (!user) {
-      router.push('/auth');
+      router.push('/login');
       return;
     }
 

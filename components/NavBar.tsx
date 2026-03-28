@@ -136,7 +136,10 @@ export default function NavBar() {
   const isOrderActive = pathname.startsWith('/orders') && !pathname.includes('/thank-you');
   const isDashboardActive = pathname.startsWith('/admin') || pathname === '/chef' || pathname === '/chef/' || pathname === '/chef/index';
   const isChefDashboard = pathname.startsWith('/chef');
-  const isAuthPage = pathname.startsWith('/auth') || pathname.startsWith('/login');
+  const isAuthPage =
+    pathname.startsWith('/auth') ||
+    pathname.startsWith('/login') ||
+    pathname.startsWith('/signup');
   const isCartPage = pathname.startsWith('/cart');
   const isCheckoutPage = pathname.startsWith('/checkout');
   const isChefSignupPage = pathname.startsWith('/auth/chef');
@@ -844,7 +847,7 @@ export default function NavBar() {
         <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
           <NavButton href="/browse" label="Explore" isActive={isExploreActive} />
             {!loggedIn && (
-              <NavButton href="/auth" label="Sign-up" isActive={false} />
+              <NavButton href="/signup" label="Sign-up" isActive={false} />
             )}
             {hasActiveOrder ? (
             <Link href="/orders/track" asChild style={Platform.OS === 'web' ? { textDecoration: 'none', outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' } as any : undefined}>
@@ -1044,7 +1047,7 @@ export default function NavBar() {
                       if (subscription) {
                         subscription.unsubscribe();
                       }
-                  router.push('/auth');
+                  router.push('/login');
                     }
                   };
 
@@ -1127,7 +1130,7 @@ export default function NavBar() {
               </TouchableOpacity>
             </View>
           ) : (
-              <Link href="/auth" asChild>
+              <Link href="/login" asChild>
                   <TouchableOpacity style={styles.secondaryButton}>
                   <Text style={styles.secondaryButtonText}>Login / Sign-up</Text>
                 </TouchableOpacity>
@@ -1234,7 +1237,7 @@ export default function NavBar() {
                       if (subscription) {
                         subscription.unsubscribe();
                       }
-                      router.push('/auth');
+                      router.push('/login');
                     }
                   };
 
@@ -1342,7 +1345,7 @@ export default function NavBar() {
                 </TouchableOpacity>
               </Link>
               
-              <Link href="/auth" asChild>
+              <Link href="/login" asChild>
                 <TouchableOpacity 
                   style={StyleSheet.flatten([styles.mobileMenuItem, { borderBottomWidth: 0 }])}
                   onPress={() => setIsMenuOpen(false)}

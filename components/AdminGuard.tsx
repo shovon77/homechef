@@ -57,7 +57,7 @@ export default function AdminGuard({ children }: { children: JSX.Element }) {
         <Text style={{ color: '#94a3b8' }}>Signed in as: {email || '— not signed in —'}</Text>
         {err ? <Text style={{ color: '#cbd5e1' }}>{err}</Text> : null}
         <TouchableOpacity
-          onPress={() => { try { /* @ts-ignore */ if (window) window.location.href = '/auth'; } catch {} }}
+          onPress={() => { try { /* @ts-ignore */ if (window) window.location.href = '/login'; } catch {} }}
           style={{ backgroundColor: '#0ea5e9', paddingVertical: 8, paddingHorizontal: 12, borderRadius: 8 }}
         >
           <Text style={{ color: '#fff', fontWeight: '800' }}>Go to Login</Text>

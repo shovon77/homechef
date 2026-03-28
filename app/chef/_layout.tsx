@@ -24,7 +24,7 @@ export default function ChefLayout() {
       if (!user) {
         // Allow unauthenticated access only to chef detail pages
         if (isChefDetailPage) return;
-        router.replace('/auth');
+        router.replace('/login');
         return;
       }
       

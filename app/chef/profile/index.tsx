@@ -480,7 +480,7 @@ export default function ChefProfilePage() {
           style: "destructive",
           onPress: async () => {
             await supabase.auth.signOut();
-            router.replace("/auth");
+            router.replace("/login");
           },
         },
       ]

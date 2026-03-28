@@ -15,7 +15,7 @@ test.describe('Auth: Google signup', () => {
   test.skip(!HAS_GOOGLE_CREDENTIALS, 'Set GOOGLE_TEST_EMAIL and GOOGLE_TEST_PASSWORD in .env.test to run');
 
   test('user signups with Google and details are captured in Supabase', async ({ page }) => {
-    await page.goto('/auth');
+    await page.goto('/signup');
 
     // Click Google button
     await page.getByTestId('auth-google').click();

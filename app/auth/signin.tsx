@@ -57,7 +57,7 @@ export default function SignIn() {
         <Text style={{ fontWeight:'600' }}>{busy ? 'Please wait…' : 'Sign in'}</Text>
       </TouchableOpacity>
 
-      <TouchableOpacity onPress={() => router.push('/auth')}>
+      <TouchableOpacity onPress={() => router.push('/login')}>
         <Text style={{ color:'#60a5fa', marginTop:10 }}>New here? Create an account</Text>
       </TouchableOpacity>
     </View>

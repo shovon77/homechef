@@ -38,7 +38,7 @@ export default function ChefDashboard() {
     setLoading(true); setErr(null)
     try{
       const { data:auth } = await supabase.auth.getUser()
-      if(!auth?.user){ router.replace('/auth'); return }
+      if(!auth?.user){ router.replace('/login'); return }
       const email = auth.user.email
       if(!email) throw new Error('Missing email on session')
 

@@ -16,7 +16,7 @@ test.describe('Auth: Email signin', () => {
     testEmail = `${TEST_EMAIL_PREFIX}${Date.now()}@test.homechef.local`;
 
     // Step 1: Sign up to create a user
-    await page.goto('/auth');
+    await page.goto('/login');
     await page.getByTestId('auth-toggle').click();
     await expect(page.getByTestId('auth-first-name')).toBeVisible({ timeout: 5000 });
 
@@ -42,7 +42,7 @@ test.describe('Auth: Email signin', () => {
       localStorage.clear();
       sessionStorage.clear();
     });
-    await page.goto('/auth');
+    await page.goto('/login');
     await page.waitForTimeout(500);
 
     // Step 3: Sign in

@@ -27,12 +27,9 @@ test.describe('Auth: Email signup', () => {
   });
 
   test('user signups for app and user details are captured in Supabase', async ({ page }) => {
-    await page.goto('/auth');
+    await page.goto('/signup');
 
-    // Switch to signup mode
-    await page.getByTestId('auth-toggle').click();
-
-    // Wait for signup form to show (first name, last name visible)
+    // Wait for signup form (first name, last name visible)
     await expect(page.getByTestId('auth-first-name')).toBeVisible({ timeout: 5000 });
 
     // Fill signup form

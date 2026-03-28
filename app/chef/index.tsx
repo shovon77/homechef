@@ -467,7 +467,7 @@ export default function ChefDashboard() {
       try {
         const { data: auth } = await supabase.auth.getUser();
         if (!auth?.user) {
-          router.replace('/auth');
+          router.replace('/login');
           return;
         }
         let me: ChefRow | null = null;
@@ -618,7 +618,7 @@ export default function ChefDashboard() {
           style: "destructive",
           onPress: async () => {
             await supabase.auth.signOut();
-            router.replace("/auth");
+            router.replace("/login");
           },
         },
       ]
@@ -742,7 +742,7 @@ export default function ChefDashboard() {
               onPress: () => {
                 // Sign out and redirect to auth to refresh user role
                 supabase.auth.signOut().then(() => {
-                  router.replace("/auth");
+                  router.replace("/login");
                 });
               }
             }
@@ -752,7 +752,7 @@ export default function ChefDashboard() {
       
       // Sign out and redirect to auth to refresh user role
       await supabase.auth.signOut();
-      router.replace("/auth");
+      router.replace("/login");
     } catch (e: any) {
       console.error("Deactivate chef account error:", e);
       const errorMsg = e?.message || "Failed to deactivate chef account. Please try again.";
@@ -1865,7 +1865,7 @@ export default function ChefDashboard() {
         <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: BG_LIGHT }}>
           <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '700', fontFamily: theme.typography.fontFamily.display }}>Chef profile not found</Text>
           <TouchableOpacity
-            onPress={() => router.replace('/auth')}
+            onPress={() => router.replace('/login')}
             style={{ marginTop: 16, backgroundColor: PRIMARY_COLOR, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 8 }}
           >
             <Text style={{ color: '#FFFFFF', fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Go to Login</Text>
@@ -1894,7 +1894,7 @@ export default function ChefDashboard() {
   
   async function handleLogout() {
     await supabase.auth.signOut();
-    router.replace('/auth');
+    router.replace('/login');
   }
 
   const Sidebar = (

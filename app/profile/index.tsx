@@ -65,7 +65,7 @@ export default function ProfilePage() {
 
   useEffect(() => {
     if (!roleLoading && !user) {
-      router.replace("/auth");
+      router.replace("/login");
       return;
     }
 
@@ -369,7 +369,7 @@ export default function ProfilePage() {
           if (subscription) {
             subscription.unsubscribe();
           }
-          router.replace("/auth");
+          router.replace("/login");
         }
       };
 
@@ -452,7 +452,7 @@ export default function ProfilePage() {
     } catch (error: any) {
       console.error("Logout error:", error);
       // Even on error, try to navigate to auth page
-      router.replace("/auth");
+      router.replace("/login");
     }
   }
 
@@ -482,14 +482,14 @@ export default function ProfilePage() {
               
               // Sign out the user (account is deactivated, no records deleted)
               await supabase.auth.signOut();
-              router.replace("/auth");
+              router.replace("/login");
               Alert.alert("Success", "Account deactivated successfully");
             } catch (e: any) {
               console.error("Deactivate account error:", e);
               // Even if update fails, sign out the user (records are still preserved)
               try {
                 await supabase.auth.signOut();
-                router.replace("/auth");
+                router.replace("/login");
                 Alert.alert("Success", "You have been signed out");
               } catch (signOutError: any) {
                 console.error("Sign out error:", signOutError);
@@ -547,7 +547,7 @@ export default function ProfilePage() {
         <View style={{ flex: 1, alignItems: "center", justifyContent: "center", padding: 16 }}>
           <Text style={{ color: '#101828', fontSize: 18, marginBottom: 16 }}>Please sign in to view your profile</Text>
           <TouchableOpacity
-            onPress={() => router.push("/auth")}
+            onPress={() => router.push("/login")}
             style={{ backgroundColor: theme.colors.primary, paddingVertical: 12, paddingHorizontal: 24, borderRadius: 10 }}
           >
             <Text style={{ color: '#FFFFFF', fontWeight: "800" }}>Sign In</Text>

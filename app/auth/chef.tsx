@@ -468,7 +468,7 @@ export default function ChefSignup() {
         Alert.alert(
           'Account already exists',
           'An account with this email already exists. Please log in first, then continue the chef sign-up.',
-          [{ text: 'Log in', onPress: () => router.push('/auth') }, { text: 'OK' }]
+          [{ text: 'Log in', onPress: () => router.push('/login') }, { text: 'OK' }]
         );
       }
     } else if (step === 2 && canProceedToStep3) {
@@ -663,7 +663,7 @@ export default function ChefSignup() {
           email: emailForAuth,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth?mode=reset`
+            emailRedirectTo: `${window.location.origin}/login?mode=reset`
           }
         });
 
@@ -677,7 +677,7 @@ export default function ChefSignup() {
               'Account Already Exists',
               'An account with this email already exists. Please sign in first, then complete the chef onboarding.',
               [
-                { text: 'OK', onPress: () => router.push('/auth') }
+                { text: 'OK', onPress: () => router.push('/login') }
               ]
             );
             return;
@@ -701,7 +701,7 @@ export default function ChefSignup() {
               'Check Your Email',
               'We sent you a verification email. Please verify your email address, then sign in to complete the chef onboarding.',
               [
-                { text: 'OK', onPress: () => router.push('/auth') }
+                { text: 'OK', onPress: () => router.push('/login') }
               ]
             );
             return;
