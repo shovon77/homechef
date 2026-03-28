@@ -914,7 +914,16 @@ export default function HomePage() {
 
           {/* Featured Dishes section - Auto-scroll + Swipeable Carousel */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Featured this week</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                styles.homeSectionTitleSmaller,
+                isMobile && styles.sectionTitleMobile,
+                isMobile && styles.homeSectionTitleSmallerMobile,
+              ]}
+            >
+              Featured this week
+            </Text>
             <ScrollView 
               ref={featuredScrollRef}
               horizontal 
@@ -975,7 +984,16 @@ export default function HomePage() {
 
           {/* Featured Chefs section - matches HTML design */}
           <View style={styles.section}>
-            <Text style={[styles.sectionTitle, isMobile && styles.sectionTitleMobile]}>Popular near you</Text>
+            <Text
+              style={[
+                styles.sectionTitle,
+                styles.homeSectionTitleSmaller,
+                isMobile && styles.sectionTitleMobile,
+                isMobile && styles.homeSectionTitleSmallerMobile,
+              ]}
+            >
+              Popular near you
+            </Text>
             {isMobile ? (
               <ScrollView 
                 horizontal 
@@ -1038,7 +1056,9 @@ export default function HomePage() {
                 style={[
                   styles.sectionTitle,
                   styles.howItWorksHeadingInline,
+                  styles.homeSectionTitleSmaller,
                   isMobile && styles.sectionTitleMobile,
+                  isMobile && styles.homeSectionTitleSmallerMobile,
                 ]}
                 numberOfLines={2}
               >
@@ -1457,6 +1477,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 0,
     paddingTop: 0,
     paddingBottom: 0,
+  },
+  /** Slightly smaller than `sectionTitle` for homepage section headings only */
+  homeSectionTitleSmaller: {
+    fontSize: Platform.select({
+      web: 24,
+      default: 20,
+    }),
+    lineHeight: Platform.select({
+      web: 30,
+      default: 26,
+    }),
+  },
+  homeSectionTitleSmallerMobile: {
+    fontSize: 22,
+    lineHeight: 28,
   },
   howItWorksToggleTrack: {
     flexDirection: "row",
