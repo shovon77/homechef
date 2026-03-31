@@ -3,7 +3,6 @@ import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle, Platfor
 import { Link } from "expo-router";
 import { theme } from "../../lib/theme";
 import { toNumber, safeToFixed } from "../../lib/number";
-import { optimizeImageUrl } from "../../lib/dishImageUrl";
 
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
@@ -78,11 +77,10 @@ type Props = {
 };
 
 export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default', compact = false }: Props) {
-  const rawAvatar =
+  const avatar =
     chef?.photo ||
     chef?.avatar ||
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
-  const avatar = optimizeImageUrl(rawAvatar, compact ? 120 : 200);
 
   const ratingVal = toNumber(chef?.rating, 0);
   const starTint = ratingColor ?? ACCENT_COLOR;
