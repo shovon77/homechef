@@ -243,7 +243,7 @@ export async function getDishById(id: number): Promise<Dish | null> {
 
 /** Columns needed for dish detail + chef link; smaller payload than select * */
 const DISH_DETAIL_SELECT =
-  'id, name, chef, chef_id, price, category, image, description, ingredients, thumbnail, featured, created_at, is_active, chefs ( id, name, slug, photo, email, user_id )';
+  'id, name, chef, chef_id, price, category, image, description, ingredients, thumbnail, featured, created_at, is_active, rating, chefs ( id, name, slug, photo, email, user_id )';
 
 const DISH_WITH_CHEF_CACHE_MS = 20_000;
 const dishWithChefCache = new Map<number, { t: number; v: DishWithChef | null }>();
@@ -282,20 +282,26 @@ export function prefetchDishWithChef(id: number): void {
 // Dish Ratings
 // ============================================================================
 
+const DISH_RATING_CACHE_MS = 30_000;
+const dishRatingCache = new Map<number, { t: number; v: DishRatingStats }>();
+
 /**
  * Get dish ratings aggregate (prefers RPC; falls back to capped client compute if RPC missing).
+ * Results cached for 30 s to avoid repeat RPCs on back-navigation.
  */
 export async function getDishRatings(dishId: number): Promise<DishRatingStats> {
+  const now = Date.now();
+  const hit = dishRatingCache.get(dishId);
+  if (hit && now - hit.t < DISH_RATING_CACHE_MS) return hit.v;
   const { data: rows, error: rpcErr } = await supabase.rpc('get_dish_rating_stats', {
     p_dish_id: dishId,
   });
 
   if (!rpcErr && rows && rows.length > 0) {
     const r = rows[0] as { avg_rating: number | null; rating_count: number | null };
-    return {
-      average: Number(r.avg_rating) || 0,
-      count: Number(r.rating_count) || 0,
-    };
+    const v: DishRatingStats = { average: Number(r.avg_rating) || 0, count: Number(r.rating_count) || 0 };
+    dishRatingCache.set(dishId, { t: Date.now(), v });
+    return v;
   }
 
   const { data, error } = await supabase
@@ -313,10 +319,9 @@ export async function getDishRatings(dishId: number): Promise<DishRatingStats> {
 
   const sum = ratings.reduce((acc, r) => acc + r, 0);
   const average = sum / ratings.length;
-  return {
-    average: Math.round(average * 10) / 10,
-    count: ratings.length,
-  };
+  const v: DishRatingStats = { average: Math.round(average * 10) / 10, count: ratings.length };
+  dishRatingCache.set(dishId, { t: Date.now(), v });
+  return v;
 }
 
 /**

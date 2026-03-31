@@ -5,7 +5,7 @@ import { theme, cardStyle } from "../../lib/theme";
 import { Button } from "../../components/ui/Button";
 import { getDishAvgRating } from "../../utils/ratings";
 import { useCart } from "../../context/CartContext";
-import { toNumber, safeToFixed } from "../../lib/number";
+import { safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
 import { optimizeDishImageUrl } from "../../lib/dishImageUrl";
 import { prefetchDishWithChef } from "../../lib/db";
@@ -25,16 +25,18 @@ type DishCardProps = {
 
 export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false }: DishCardProps) {
   const router = useRouter();
-  const [avg, setAvg] = useState(0);
+  const inlineRating = typeof dish.rating === 'number' && dish.rating > 0 ? dish.rating : null;
+  const [avg, setAvg] = useState(inlineRating ?? 0);
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
   const [quantity, setQuantity] = useState(1);
   const cartQty = getQty(dish.id);
 
   useEffect(() => {
+    if (inlineRating != null) return;
     let m = true;
     getDishAvgRating(Number(dish.id)).then(v => m && setAvg(v));
     return () => { m = false; };
-  }, [dish?.id]);
+  }, [dish?.id, inlineRating]);
 
   const cardImageUri = optimizeDishImageUrl(
     dish.image ?? null,

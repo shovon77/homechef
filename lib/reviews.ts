@@ -24,14 +24,19 @@ export async function submitDishRating({
   dishId,
   stars,
   comment,
+  userId,
 }: {
   dishId: number;
   stars: number;
   comment?: string;
+  /** Pass from caller to skip an extra `auth.getUser()` round-trip */
+  userId?: string;
 }): Promise<DishRatingSummary> {
-  const { data: { user } } = await supabase.auth.getUser();
-  if (!user) {
-    throw new Error('User must be authenticated to submit ratings');
+  let uid = userId;
+  if (!uid) {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (!user) throw new Error('User must be authenticated to submit ratings');
+    uid = user.id;
   }
 
   // Upsert rating (both rating and stars for schema compatibility)
@@ -42,12 +47,7 @@ export async function submitDishRating({
     stars: stars, // Also set stars for compatibility
   };
   
-  // Add user_id if column exists (will be added via migration)
-  try {
-    ratingData.user_id = user.id;
-  } catch (e) {
-    // Column might not exist yet
-  }
+  ratingData.user_id = uid;
   
   if (comment?.trim()) {
     ratingData.comment = comment.trim();

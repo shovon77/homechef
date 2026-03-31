@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image, Animated, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Screen from '../../components/Screen';
@@ -11,7 +11,8 @@ import { theme, elev } from '../../lib/theme';
 import { useLocationModal } from '../../context/LocationModalContext';
 
 const PER_PAGE = 25; // chefs/cuisines
-const DISHES_FETCH_LIMIT = 9999; // fetch all dishes in one page (no pagination)
+const DISHES_PER_PAGE = 24; // dishes: load in batches for infinite scroll
+const DISHES_FETCH_LIMIT = 9999; // kept only for "nearest" sort which needs all dishes for distance calc
 const GRID_COLUMNS = 5;
 const PRIMARY_COLOR = '#FE734C';
 
@@ -221,6 +222,19 @@ export default function BrowsePage() {
   const [query, setQuery] = useState('');
   const debouncedQuery = useDebounce(query, 800);
   const [cuisineFilter, setCuisineFilter] = useState<string | null>(null);
+  const [aiKeywords, setAiKeywords] = useState<string | null>(null);
+  const [aiMaxPrice, setAiMaxPrice] = useState<number | null>(null);
+
+  // Infinite scroll state (dishes tab)
+  const [dishPage, setDishPage] = useState(0);
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [hasMoreDishes, setHasMoreDishes] = useState(true);
+  const browseScrollRef = useRef<ScrollView>(null);
+
+  // P5: In-memory cache keyed by (tab, sort, query, cuisineFilter)
+  type CacheEntry = { dishes: Dish[]; chefs: Chef[]; cuisines: string[]; total: number; distances: Record<number, number>; dishPage: number; hasMore: boolean };
+  const cacheRef = useRef<Record<string, CacheEntry>>({});
+  const makeCacheKey = (t: string, s: string, q: string, cf: string | null) => `${t}|${s}|${q}|${cf ?? ''}`;
 
   // Floating search: collapsed mic FAB -> expanded search bar
   const [searchExpanded, setSearchExpanded] = useState(false);
@@ -297,6 +311,22 @@ export default function BrowsePage() {
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / perPage)), [total, perPage]);
 
   useEffect(() => {
+    const cf = tab !== 'dishes' ? null : cuisineFilter;
+    if (tab !== 'dishes') setCuisineFilter(null);
+    const key = makeCacheKey(tab, sortBy as string, debouncedQuery, cf);
+    const cached = cacheRef.current[key];
+    if (cached) {
+      setDishes(cached.dishes);
+      setChefs(cached.chefs);
+      setCuisines(cached.cuisines);
+      setTotal(cached.total);
+      setChefDistances(cached.distances);
+      setDishPage(cached.dishPage);
+      setHasMoreDishes(cached.hasMore);
+      setError(null);
+      setPage(1);
+      return;
+    }
     setPage(1);
     setTotal(0);
     setError(null);
@@ -304,10 +334,13 @@ export default function BrowsePage() {
     setChefs([]);
     setChefDistances({});
     setCuisines([]);
-    if (tab !== 'dishes') setCuisineFilter(null);
+    setDishPage(0);
+    setHasMoreDishes(true);
   }, [tab, debouncedQuery, sortBy]);
   useEffect(() => {
     if (debouncedQuery.trim()) setCuisineFilter(null);
+    setAiKeywords(null);
+    setAiMaxPrice(null);
   }, [debouncedQuery]);
 
   useEffect(() => {
@@ -328,19 +361,33 @@ export default function BrowsePage() {
   }, []);
 
   useEffect(() => {
-    // If auth is still loading, wait for it to complete
-    if (authLoading) {
+    if (authLoading) return;
+
+    // Skip fetch if cache was already applied (by the reset effect above)
+    const ck = makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter);
+    if (cacheRef.current[ck] && (
+      (tab === 'dishes' && dishes.length > 0) ||
+      (tab === 'chefs' && chefs.length > 0) ||
+      (tab === 'cuisines' && cuisines.length > 0)
+    )) {
       return;
     }
-    
+
     let cancelled = false;
     (async () => {
       setLoading(true);
       setError(null);
       try {
-        const pageSize = tab === 'dishes' ? DISHES_FETCH_LIMIT : PER_PAGE;
+        const isNearestSort = tab === 'dishes' && ((() => {
+          const sp = Array.isArray(paramSort) ? paramSort[0] : paramSort;
+          if (sp === 'nearest') return true;
+          if (sortBy === 'nearest') return true;
+          return false;
+        })());
+        const dishPageSize = isNearestSort ? DISHES_FETCH_LIMIT : DISHES_PER_PAGE;
+        const pageSize = tab === 'dishes' ? dishPageSize : PER_PAGE;
         const from = tab === 'dishes' ? 0 : (page - 1) * pageSize;
-        const to = tab === 'dishes' ? DISHES_FETCH_LIMIT - 1 : from + pageSize - 1;
+        const to = tab === 'dishes' ? dishPageSize - 1 : from + pageSize - 1;
 
         if (tab === 'dishes') {
           let request = supabase
@@ -353,34 +400,16 @@ export default function BrowsePage() {
             request = request.ilike('chefs.cuisine', `%${cuisineFilter.trim()}%`);
           }
 
-          // Extract search parameters using AI or fallback
+          // Use AI keywords if available (from explicit submit), else simple cleaned query
           let searchKeywords = '';
-          let maxPrice = null;
-          // let sortIntent = null;
+          let maxPrice: number | null = null;
 
           if (debouncedQuery.trim()) {
-            try {
-                // Attempt AI search
-                console.log('Invoking AI search for:', debouncedQuery);
-                const { data: aiData, error: aiError } = await supabase.functions.invoke('ai-search', { 
-                    body: { query: debouncedQuery } 
-                });
-                
-                if (aiError) {
-                    console.warn('AI Search Error:', aiError);
-                    searchKeywords = cleanSearchQuery(debouncedQuery);
-                } else if (aiData) {
-                    console.log('AI Search Result:', aiData);
-                    searchKeywords = aiData.keywords || debouncedQuery;
-                    maxPrice = aiData.max_price;
-                    // if (aiData.sort) setSortBy(aiData.sort); 
-                } else {
-                    searchKeywords = cleanSearchQuery(debouncedQuery);
-                }
-            } catch (e) {
-                console.error('AI Search Exception:', e);
-                // Fallback to local cleaning
-                searchKeywords = cleanSearchQuery(debouncedQuery);
+            if (aiKeywords != null) {
+              searchKeywords = aiKeywords;
+              maxPrice = aiMaxPrice;
+            } else {
+              searchKeywords = cleanSearchQuery(debouncedQuery);
             }
           }
 
@@ -539,9 +568,16 @@ export default function BrowsePage() {
             setDishes([]);
             setTotal(0);
           } else {
-            // For other sorts, use data as-is
-          setDishes((data as any) ?? []);
-          setTotal(count ?? (data?.length ?? 0));
+            const fetched = (data as any) ?? [];
+            const fetchedTotal = count ?? fetched.length;
+            const fetchedHasMore = fetched.length >= dishPageSize;
+            setDishes(fetched);
+            setTotal(fetchedTotal);
+            setHasMoreDishes(fetchedHasMore);
+            setDishPage(0);
+            cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
+              dishes: fetched, chefs: [], cuisines: [], total: fetchedTotal, distances: {}, dishPage: 0, hasMore: fetchedHasMore,
+            };
           }
         } else if (tab === 'chefs') {
           const ninetyDaysAgo = new Date();
@@ -652,9 +688,17 @@ export default function BrowsePage() {
                   distances[chef.id] = haversineKm(userLat, userLng, chefLat, chefLon);
                 }
               }
-              if (!cancelled) setChefDistances(distances);
+              if (!cancelled) {
+                setChefDistances(distances);
+                cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
+                  dishes: [], chefs: chefsData, cuisines: [], total: count ?? chefsData.length, distances, dishPage: 0, hasMore: false,
+                };
+              }
             } else {
               setChefDistances({});
+              cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
+                dishes: [], chefs: chefsData, cuisines: [], total: count ?? chefsData.length, distances: {}, dishPage: 0, hasMore: false,
+              };
             }
           }
         } else {
@@ -692,6 +736,9 @@ export default function BrowsePage() {
             const pagedCuisines = uniqueCuisines.slice(from, to + 1);
             setCuisines(pagedCuisines);
             setTotal(uniqueCuisines.length);
+            cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
+              dishes: [], chefs: [], cuisines: pagedCuisines, total: uniqueCuisines.length, distances: {}, dishPage: 0, hasMore: false,
+            };
           }
         }
       } catch (err: any) {
@@ -712,7 +759,72 @@ export default function BrowsePage() {
     return () => {
       cancelled = true;
     };
-  }, [tab, page, debouncedQuery, sortBy, cuisineFilter, profile?.location, profile?.latitude, profile?.longitude, authLoading]);
+  }, [tab, page, debouncedQuery, sortBy, cuisineFilter, authLoading, aiKeywords, aiMaxPrice]);
+
+  // Infinite scroll: load next page of dishes
+  const loadMoreDishes = useCallback(async () => {
+    if (loadingMore || !hasMoreDishes || tab !== 'dishes' || loading) return;
+    const isNearestSort = sortBy === 'nearest';
+    if (isNearestSort) return; // nearest fetches all at once
+
+    const nextPage = dishPage + 1;
+    const from = nextPage * DISHES_PER_PAGE;
+    const to = from + DISHES_PER_PAGE - 1;
+
+    setLoadingMore(true);
+    try {
+      let request = supabase
+        .from('dishes')
+        .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)', { count: 'exact' })
+        .eq('chefs.status', 'active')
+        .eq('chefs.stripe_connect_completed', true)
+        .or('is_active.eq.true,is_active.is.null');
+
+      if (cuisineFilter?.trim()) {
+        request = request.ilike('chefs.cuisine', `%${cuisineFilter.trim()}%`);
+      }
+
+      const effectiveSort = sortBy && sortBy !== 'none' ? sortBy : 'newest';
+      if (effectiveSort === 'price_asc') request = request.order('price', { ascending: true });
+      else if (effectiveSort === 'price_desc') request = request.order('price', { ascending: false });
+      else if (effectiveSort === 'popular') request = request.order('rating', { ascending: false });
+      else request = request.order('created_at', { ascending: false });
+
+      request = request.range(from, to);
+
+      if (debouncedQuery.trim()) {
+        const safeTerm = cleanSearchQuery(debouncedQuery.trim()).replace(/,/g, ' ');
+        request = request.or([
+          `name.ilike.%${safeTerm}%`,
+          `name.wfts.${safeTerm}`,
+          `description.wfts.${safeTerm}`,
+          `category.wfts.${safeTerm}`,
+          `chef.wfts.${safeTerm}`
+        ].join(','));
+      }
+
+      const { data, error: fetchErr } = await request;
+      if (fetchErr) throw fetchErr;
+
+      const newDishes = (data as any) ?? [];
+      setDishes(prev => [...prev, ...newDishes]);
+      setDishPage(nextPage);
+      setHasMoreDishes(newDishes.length >= DISHES_PER_PAGE);
+    } catch (err) {
+      console.error('Load more dishes error:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [loadingMore, hasMoreDishes, tab, loading, dishPage, sortBy, cuisineFilter, debouncedQuery]);
+
+  const handleScroll = useCallback((event: any) => {
+    if (tab !== 'dishes' || !hasMoreDishes || loadingMore || loading) return;
+    const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+    const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+    if (distanceFromBottom < 600) {
+      loadMoreDishes();
+    }
+  }, [tab, hasMoreDishes, loadingMore, loading, loadMoreDishes]);
 
   const go = (next: number) => {
     setPage(Math.max(1, Math.min(totalPages, next)));
@@ -754,9 +866,29 @@ export default function BrowsePage() {
 
   const list = tab === 'dishes' ? dishes : tab === 'chefs' ? chefs : cuisines;
 
-  const handleSearch = () => {
+  const handleSearch = useCallback(async () => {
     setPage(1);
-  };
+    if (!query.trim()) {
+      setAiKeywords(null);
+      setAiMaxPrice(null);
+      return;
+    }
+    try {
+      const { data: aiData, error: aiError } = await supabase.functions.invoke('ai-search', {
+        body: { query },
+      });
+      if (!aiError && aiData) {
+        setAiKeywords(aiData.keywords || query);
+        setAiMaxPrice(aiData.max_price ?? null);
+      } else {
+        setAiKeywords(null);
+        setAiMaxPrice(null);
+      }
+    } catch {
+      setAiKeywords(null);
+      setAiMaxPrice(null);
+    }
+  }, [query]);
 
   const startDictation = () => {
     if (Platform.OS === 'web') {
@@ -839,6 +971,9 @@ export default function BrowsePage() {
           web: 100,
           default: 80,
         })}
+        scrollRef={browseScrollRef}
+        onScroll={handleScroll}
+        scrollEventThrottle={200}
       >
         <View style={!isMobile ? { maxWidth: 1280, width: '100%', alignSelf: 'center' } : undefined}>
         <View style={styles.headerBlock}>
@@ -986,19 +1121,26 @@ export default function BrowsePage() {
           <View style={styles.loader}><Text style={styles.subtitle}>No results found.</Text></View>
           )
         ) : tab === 'dishes' ? (
-          <View style={styles.grid}>
-            {dishes.map((dish) => (
-              <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
-                <DishCard
-                  dish={dish}
-                  variant="explore"
-                  inlinePriceRating
-                  quantityOnImage
-                  style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
-                />
+          <>
+            <View style={styles.grid}>
+              {dishes.map((dish) => (
+                <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
+                  <DishCard
+                    dish={dish}
+                    variant="explore"
+                    inlinePriceRating
+                    quantityOnImage
+                    style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
+                  />
+                </View>
+              ))}
+            </View>
+            {loadingMore && (
+              <View style={{ paddingVertical: 24, alignItems: 'center' }}>
+                <ActivityIndicator size="small" color={PRIMARY_COLOR} />
               </View>
-            ))}
-          </View>
+            )}
+          </>
         ) : tab === 'chefs' ? (
           <View style={styles.grid}>
             {chefs.map((chef) => (

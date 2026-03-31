@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, ScrollView, ViewProps, ViewStyle, StyleSheet, Platform } from 'react-native';
+import { View, ScrollView, ViewProps, ViewStyle, StyleSheet, Platform, NativeSyntheticEvent, NativeScrollEvent } from 'react-native';
 import { usePathname } from 'expo-router';
 import NavBar from './NavBar';
 import Footer from './Footer';
@@ -15,6 +15,8 @@ type ScreenProps = ViewProps & {
   noHeader?: boolean;
   noFooter?: boolean;
   fixedFooterHeight?: number; // Height of fixed/floating element at bottom
+  onScroll?: (event: NativeSyntheticEvent<NativeScrollEvent>) => void;
+  scrollEventThrottle?: number;
 };
 
 export default function Screen({
@@ -27,6 +29,8 @@ export default function Screen({
   noHeader = false,
   noFooter = false,
   fixedFooterHeight = 0,
+  onScroll,
+  scrollEventThrottle,
 }: ScreenProps) {
   const pathname = usePathname?.() || '';
   const isChefDashboard = pathname.startsWith('/chef');
@@ -95,6 +99,8 @@ export default function Screen({
           ]}
           style={{ flex: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, backgroundColor: scrollBg, borderTopWidth: 0 }}
           contentInsetAdjustmentBehavior="never"
+          onScroll={onScroll}
+          scrollEventThrottle={scrollEventThrottle ?? 16}
         >
         <View style={[content, { minHeight: '100%', justifyContent: 'space-between' }, isChefDashboard && { backgroundColor: BG_LIGHT, borderTopWidth: 0, borderTopColor: 'transparent' }]} data-testid={isChefDashboard ? 'chef-dashboard-scroll-content' : undefined}>
           <View style={[{ flexGrow: 1, flexShrink: 0 }, isChefDashboard && { backgroundColor: BG_LIGHT, borderTopWidth: 0, borderTopColor: 'transparent' }]}>

@@ -60,33 +60,23 @@ function formatCuisine(cuisine: unknown): string {
   return 'Chef';
 }
 
-async function fetchBestSellerDishesForChef(cid: number): Promise<Dish[]> {
+const DISH_LIST_SELECT = 'id, name, image, thumbnail, price, rating, chef_id, description, ingredients, is_active, created_at';
+
+/** Fetch best-seller dish IDs for a chef (2 queries instead of 3: join order_items via orders). */
+async function fetchBestSellerDishIds(cid: number): Promise<number[]> {
   try {
     const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
-    const { data: ordersData } = await supabase
-      .from('orders')
-      .select('id')
-      .eq('chef_id', cid)
-      .in('status', ['completed', 'ready'])
-      .gte('created_at', since);
-    if (!ordersData?.length) return [];
-    const orderIds = ordersData.map((o) => o.id);
-    const { data: itemsData } = await supabase
+    const { data } = await supabase
       .from('order_items')
-      .select('dish_id')
-      .in('order_id', orderIds)
-      .not('dish_id', 'is', null);
-    const dishIds = [...new Set((itemsData || []).map((i) => i.dish_id).filter(Boolean))] as number[];
-    if (dishIds.length === 0) return [];
-    const { data: dishesData } = await supabase
-      .from('dishes')
-      .select('*')
-      .eq('chef_id', cid)
-      .or('is_active.eq.true,is_active.is.null')
-      .in('id', dishIds);
-    return dishesData || [];
+      .select('dish_id, orders!inner(chef_id, status, created_at)')
+      .not('dish_id', 'is', null)
+      .eq('orders.chef_id', cid)
+      .in('orders.status', ['completed', 'ready'])
+      .gte('orders.created_at', since);
+    if (!data?.length) return [];
+    return [...new Set(data.map((r: any) => r.dish_id).filter(Boolean))] as number[];
   } catch (e) {
-    console.error('Error fetching best-seller dishes', e);
+    console.error('Error fetching best-seller dish IDs', e);
     return [];
   }
 }
@@ -183,6 +173,7 @@ export default function ChefDetailView() {
 
     (async () => {
       try {
+        // Step 1: fetch chef (narrow select — only columns used on this page)
         const chefData = await getChefByIdOrSlug(raw);
         if (!mounted) return;
         if (!chefData) {
@@ -194,12 +185,12 @@ export default function ChefDetailView() {
         }
 
         const cid = chefData.id;
-        const since30 = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString();
 
-        const [dishesRes, reviewsData, newlyRes, bestSellers] = await Promise.all([
+        // Step 2: everything else in parallel (no "newly added" query — derived client-side)
+        const [dishesRes, reviewsData, bestSellerIds] = await Promise.all([
           supabase
             .from('dishes')
-            .select('*', { count: 'exact' })
+            .select(DISH_LIST_SELECT, { count: 'exact' })
             .eq('chef_id', cid)
             .or('is_active.eq.true,is_active.is.null')
             .order('id', { ascending: true })
@@ -208,14 +199,7 @@ export default function ChefDetailView() {
             console.error('Error fetching chef reviews', err);
             return [] as ChefReview[];
           }),
-          supabase
-            .from('dishes')
-            .select('*')
-            .eq('chef_id', cid)
-            .or('is_active.eq.true,is_active.is.null')
-            .gte('created_at', since30)
-            .order('created_at', { ascending: false }),
-          fetchBestSellerDishesForChef(cid),
+          fetchBestSellerDishIds(cid),
         ]);
 
         if (!mounted) return;
@@ -224,18 +208,23 @@ export default function ChefDetailView() {
         setChefImageError(false);
 
         const { data: dishRows, count } = dishesRes;
-        if (dishRows) {
-          setDishes(dishRows);
-          setDishesTotal(count ?? 0);
-        } else {
-          setDishes([]);
-          setDishesTotal(0);
-        }
+        const allDishes = (dishRows || []) as Dish[];
+        setDishes(allDishes);
+        setDishesTotal(count ?? allDishes.length);
+
+        // Derive newly-added (last 30 days) from the full dish list — no extra query
+        const since30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
+        setNewlyAddedDishes(
+          allDishes
+            .filter((d) => d.created_at && new Date(d.created_at).getTime() >= since30)
+            .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime())
+        );
+
+        // Derive best-sellers from the full dish list + IDs from order_items
+        const bestIdSet = new Set(bestSellerIds);
+        setBestSellerDishes(allDishes.filter((d) => bestIdSet.has(d.id)));
 
         setReviews(reviewsData);
-        setNewlyAddedDishes(newlyRes.data ?? []);
-        setBestSellerDishes(bestSellers);
-
         setIsFetchingDishes(false);
         setIsFetchingReviews(false);
         setLoading(false);
@@ -370,13 +359,11 @@ export default function ChefDetailView() {
         comment: reviewComment.trim() || undefined,
       });
 
-      // Refresh chef data to get updated rating
-      const chefData = await getChefById(chefId);
-      if (chefData) {
-        setChef(chefData);
-      }
-
-      const updatedReviews = await getChefReviewsHelper(chefId);
+      const [chefData, updatedReviews] = await Promise.all([
+        getChefById(chefId),
+        getChefReviewsHelper(chefId),
+      ]);
+      if (chefData) setChef(chefData);
       setReviews(updatedReviews);
 
       setReviewRating(5);

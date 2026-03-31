@@ -3,7 +3,7 @@ import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Ale
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
-import { getDishRatings, getChefById, getDishWithChef, getDishReviews } from "../../lib/db";
+import { getDishRatings, getDishWithChef, getDishReviews } from "../../lib/db";
 import { submitDishRating } from "../../lib/reviews";
 import type { Dish, DishWithChef, DishRating } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
@@ -105,9 +105,8 @@ export default function DishDetail() {
 
     (async () => {
       try {
-        const [dishData, ratingStats, reviewsData] = await Promise.all([
+        const [dishData, reviewsData] = await Promise.all([
           getDishWithChef(dishId),
-          getDishRatings(dishId),
           getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0),
         ]);
 
@@ -120,19 +119,35 @@ export default function DishDetail() {
           return;
         }
 
-        const chefData =
-          dishData.chefs != null
-            ? dishData.chefs
-            : dishData.chef_id
-              ? await getChefById(Number(dishData.chef_id))
-              : null;
+        let chefData: any = dishData.chefs ?? null;
+        if (!chefData && dishData.chef_id) {
+          const { data: fallbackChef } = await supabase
+            .from('chefs')
+            .select('id, name, slug, photo, email, user_id')
+            .eq('id', Number(dishData.chef_id))
+            .maybeSingle();
+          chefData = fallbackChef;
+        }
 
         if (!mounted) return;
 
         setDish(dishData);
         if (chefData) setChef(chefData);
-        setRatingCount(ratingStats.count);
-        setAvgRating(ratingStats.average);
+
+        // Use inline rating from dish row when available (avoids an extra RPC)
+        const inlineRating = typeof (dishData as any).rating === 'number' && (dishData as any).rating > 0
+          ? (dishData as any).rating : null;
+        if (inlineRating != null) {
+          setAvgRating(inlineRating);
+        } else {
+          getDishRatings(dishId).then((stats) => {
+            if (mounted) {
+              setAvgRating(stats.average);
+              setRatingCount(stats.count);
+            }
+          });
+        }
+
         setReviews(reviewsData);
         setReviewsHasMore(reviewsData.length >= REVIEWS_PAGE_SIZE);
         setLoading(false);
@@ -243,27 +258,30 @@ export default function DishDetail() {
         dishId,
         stars: userRating,
         comment: comment.trim() || undefined,
+        userId: user.id,
       });
 
       setRatingCount(summary.count);
       setAvgRating(summary.avg);
       
-      // Refresh reviews
-      const updatedReviews = await getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0);
+      // Refresh reviews + user's own rating in parallel
+      const [updatedReviews, userRatingResult] = await Promise.all([
+        getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0),
+        supabase
+          .from("dish_ratings")
+          .select("rating, stars, comment")
+          .eq("dish_id", dishId)
+          .eq("user_id", user.id)
+          .maybeSingle(),
+      ]);
+
       setReviews(updatedReviews);
       setReviewsHasMore(updatedReviews.length >= REVIEWS_PAGE_SIZE);
 
-      const { data: userRatingData } = await supabase
-        .from("dish_ratings")
-        .select("rating, stars, comment")
-        .eq("dish_id", dishId)
-        .eq("user_id", user.id)
-        .maybeSingle();
-      
-      if (userRatingData) {
-        const rating = userRatingData.rating ?? userRatingData.stars ?? 0;
+      if (userRatingResult.data) {
+        const rating = userRatingResult.data.rating ?? userRatingResult.data.stars ?? 0;
         setUserRating(Number(rating));
-        setComment(userRatingData.comment || "");
+        setComment(userRatingResult.data.comment || "");
       }
 
       Alert.alert("Success", "Rating submitted successfully!");

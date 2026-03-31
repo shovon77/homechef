@@ -1,16 +1,13 @@
 import React, { useEffect, useState, useMemo } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType } from "react-native";
 import { Link, useRouter } from "expo-router";
-import { useFocusEffect } from "@react-navigation/native";
+
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
 import Screen from "../components/Screen";
 import ChefCard from "./components/ChefCard";
 import DishCard from "./components/DishCard";
-import { getDishRatings, getChefById } from "../lib/db";
-import { safeToFixed } from "../lib/number";
 import { toFiniteNumberOrNull } from "../lib/number";
-import { formatCad } from "../lib/money";
 import { useRole } from "../hooks/useRole";
 
 type Chef = Record<string, any>;
@@ -273,62 +270,13 @@ const formatCuisine = (cuisine: any): string => {
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
 
-// Dish card matching HTML design
-function HomeDishCard({ dish }: { dish: Dish }) {
-  const [rating, setRating] = useState<{ avg: number; count: number }>({ avg: 0, count: 0 });
-  const [chefInfo, setChefInfo] = useState<{ name?: string; photo?: string } | null>(null);
-
-  useEffect(() => {
-    let m = true;
-    getDishRatings(Number(dish.id)).then((stats) => {
-      if (m) setRating({ avg: stats.average, count: stats.count });
-    });
-    if (dish.chef_id) {
-      getChefById(Number(dish.chef_id)).then((chef) => {
-        if (m && chef) setChefInfo({ name: chef.name, photo: chef.photo || chef.avatar });
-      });
-    }
-    return () => { m = false; };
-  }, [dish.id, dish.chef_id]);
-
-  const chefName = chefInfo?.name || dish.chef || 'Chef';
-  const chefPhoto = chefInfo?.photo || `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(dish.chef_id || dish.id))}`;
-
-  return (
-    <Link href={`/dish/${dish.id}`} asChild>
-      <TouchableOpacity activeOpacity={0.9} style={styles.dishCard}>
-        <View style={styles.dishImageContainer}>
-          <Image
-            source={{ uri: dish.image || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=800&q=80&auto=format&fit=crop" }}
-            style={styles.dishImage}
-            resizeMode="cover"
-          />
-        </View>
-        <View style={styles.dishInfo}>
-          <Text style={styles.dishName} numberOfLines={1}>{dish.name}</Text>
-          <View style={styles.dishChefRow}>
-            <Image
-              source={{ uri: chefPhoto }}
-              style={styles.chefAvatarSmall}
-            />
-            <Text style={styles.dishChefName} numberOfLines={1}>{chefName}</Text>
-          </View>
-          <View style={styles.dishFooter}>
-            <Text style={styles.dishPrice}>{formatCad(dish.price)}</Text>
-            <View style={styles.dishRating}>
-              <Image 
-                source={require('../assets/star.png')} 
-                style={{ width: 14, height: 14 }} 
-                tintColor="#FE734C"
-                resizeMode="contain" 
-              />
-              <Text style={styles.ratingText}>{safeToFixed(rating?.avg)}</Text>
-            </View>
-          </View>
-        </View>
-      </TouchableOpacity>
-    </Link>
-  );
+/** Resize googleusercontent banner URLs to match viewport (2x for retina, capped at 3000). */
+function sizeBannerUrl(url: string, viewportWidth: number): string {
+  if (!url.includes('googleusercontent.com')) return url;
+  const px = Math.min(Math.ceil(viewportWidth * 2), 3000);
+  if (url.match(/=s\d+$/)) return url.replace(/=s\d+$/, `=s${px}`);
+  if (!url.includes('=')) return `${url}=s${px}`;
+  return url;
 }
 
 const CONTENT_MAX_WIDTH = 1280;
@@ -382,7 +330,8 @@ export default function HomePage() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
-  const [bannerUrl, setBannerUrl] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
+  const [bannerUrlRaw, setBannerUrlRaw] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
+  const bannerUrl = useMemo(() => sizeBannerUrl(bannerUrlRaw, width), [bannerUrlRaw, width]);
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [heroLayout, setHeroLayout] = useState<{ width: number; height: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -445,20 +394,16 @@ export default function HomePage() {
 
   const scrollX = React.useRef(new Animated.Value(0)).current;
   const featuredScrollRef = React.useRef<ScrollView>(null);
+  const featuredSectionRef = React.useRef<View>(null);
+  const isCarouselVisibleRef = React.useRef(true);
   const isUserScrollingRef = React.useRef(false);
   const autoScrollPosition = React.useRef(0);
   const autoScrollRafRef = React.useRef<number | null>(null);
   const lastAutoScrollTsRef = React.useRef<number>(0);
   const resumeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Trigger distance recalculation whenever the homepage is focused again (e.g. navigating away and back).
-  const [distanceRecalcNonce, setDistanceRecalcNonce] = useState(0);
-  useFocusEffect(
-    React.useCallback(() => {
-      setDistanceRecalcNonce((n) => n + 1);
-      return () => {};
-    }, [])
-  );
+  // Track last location used for distance calc to skip redundant work
+  const lastDistanceLocationRef = React.useRef<string | null>(null);
   
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -513,6 +458,19 @@ export default function HomePage() {
     return dishes;
   }, [dishes]);
 
+  // Pause auto-scroll when carousel scrolls off-screen (saves CPU/battery on mobile)
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof IntersectionObserver === 'undefined') return;
+    const node = (featuredSectionRef.current as any);
+    if (!node) return;
+    const observer = new IntersectionObserver(
+      ([entry]) => { isCarouselVisibleRef.current = entry.isIntersecting; },
+      { threshold: 0 }
+    );
+    observer.observe(node);
+    return () => observer.disconnect();
+  }, [dishes.length]);
+
   // Track if we're in the process of resetting to start
   const isResettingRef = React.useRef(false);
   
@@ -546,9 +504,13 @@ export default function HomePage() {
     }
 
     const tick = (ts: number) => {
-      // If user is interacting or we're resetting, stop the loop (resume is handled elsewhere).
       if (isUserScrollingRef.current || isResettingRef.current) {
         stopAutoScroll();
+        return;
+      }
+      // Skip frame when carousel is scrolled off-screen (saves CPU)
+      if (!isCarouselVisibleRef.current) {
+        autoScrollRafRef.current = requestAnimationFrame(tick);
         return;
       }
 
@@ -604,56 +566,33 @@ export default function HomePage() {
 
   useEffect(() => {
     let mounted = true;
-    let channel: ReturnType<typeof supabase.channel> | null = null;
-    
+
     (async () => {
       setLoading(true);
-      
-      // Try to fetch dynamic banner from app_settings (with fallback to default)
-      supabase.from('app_settings').select('value').eq('key', 'banner_url').single()
-        .then(({ data, error }) => {
-          if (!error && mounted && data?.value) {
-            let url = data.value;
-            if (url.includes('googleusercontent.com')) {
-               if (url.match(/=s\d+$/)) {
-                 url = url.replace(/=s\d+$/, '=s3000');
-               } else if (!url.includes('=')) {
-                 url += '=s3000';
-               }
-            }
-            setBannerUrl(url);
-          }
-          // If error or no data, keep using default bannerUrl from useState
-        })
-        .catch(() => {
-          // Silently fail - use default banner
-        });
 
-      // Try to fetch search placeholders from app_settings (with fallback to default)
-      supabase.from('app_settings').select('value').eq('key', 'search_placeholders').single()
-        .then(({ data, error }) => {
-          if (!error && mounted && data?.value) {
-            try {
-              const parsed = JSON.parse(data.value);
-              if (Array.isArray(parsed) && parsed.length === 5 && parsed.every((p: any) => typeof p === 'string' && p.trim())) {
-                setPLACEHOLDERS(parsed);
-              }
-            } catch (e) {
-              // Silently fail - use default placeholders
+      // Single query for all app_settings (banner + placeholders) — saves one round-trip
+      supabase.from('app_settings').select('key, value').in('key', ['banner_url', 'search_placeholders'])
+        .then(({ data }) => {
+          if (!mounted || !data) return;
+          for (const row of data) {
+            if (row.key === 'banner_url' && row.value) {
+              setBannerUrlRaw(row.value);
+            } else if (row.key === 'search_placeholders' && row.value) {
+              try {
+                const parsed = JSON.parse(row.value);
+                if (Array.isArray(parsed) && parsed.length === 5 && parsed.every((p: any) => typeof p === 'string' && p.trim())) {
+                  setPLACEHOLDERS(parsed);
+                }
+              } catch {}
             }
           }
-          // If error or no data, keep using default PLACEHOLDERS from useState
         })
-        .catch(() => {
-          // Silently fail - use default placeholders
-        });
+        .catch(() => {});
 
       const [{ data: c }, { data: d }] = await Promise.all([
-        // Show only featured, active chefs who have completed Stripe Connect
-        supabase.from("chefs").select("*").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
-        // Show all dishes from featured, active chefs with Stripe Connect completed, sorted by price
+        supabase.from("chefs").select("id, name, slug, photo, bio, location, rating, cuisine, latitude, longitude, user_id").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
         supabase.from("dishes")
-          .select("id,name,image,price,chef_id,chef, chefs!inner(featured, status, stripe_connect_completed, name)")
+          .select("id,name,image,price,chef_id,chef,rating, chefs!inner(featured, status, stripe_connect_completed, name)")
           .eq("chefs.featured", true)
           .eq("chefs.status", "active")
           .eq("chefs.stripe_connect_completed", true)
@@ -664,55 +603,22 @@ export default function HomePage() {
       setChefs((c || []) as Chef[]);
       setDishes((d || []) as Dish[]);
       setLoading(false);
-
-      // Subscribe to real-time updates for chefs table
-      channel = supabase
-        .channel('homepage-chefs-updates')
-        .on(
-          'postgres_changes',
-          {
-            event: 'UPDATE',
-            schema: 'public',
-            table: 'chefs',
-            filter: 'featured=eq.true',
-          },
-          async () => {
-            // Refetch chefs when a featured chef is updated
-            if (mounted) {
-              const { data: updatedChefs } = await supabase
-                .from("chefs")
-                .select("*")
-                .eq("featured", true)
-                .eq("status", "active")
-                .eq("stripe_connect_completed", true)
-                .order("rating", { ascending: false })
-                .limit(FEATURED_CHEFS_LIMIT);
-              if (mounted && updatedChefs) {
-                setChefs(updatedChefs as Chef[]);
-              }
-            }
-          }
-        )
-        .subscribe();
     })();
-    
-    return () => { 
-      mounted = false;
-      if (channel) {
-        supabase.removeChannel(channel);
-      }
-    };
+
+    return () => { mounted = false; };
   }, []);
 
-  // Fast distance calculation for homepage chefs:
-  // - Prefer stored coordinates (profile/chef latitude+longitude) for instant results
-  // - Fallback to geocoding only when coords are missing (small list: max 5 chefs)
   useEffect(() => {
     let mounted = true;
 
     const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
     const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
     const hasProfileCoords = profileLat !== null && profileLon !== null;
+
+    // Skip recalc if distances are already populated and location hasn't changed
+    const locKey = normalizeLocationKey((profile as any)?.location) || `${profileLat},${profileLon}`;
+    if (chefDistances.size > 0 && lastDistanceLocationRef.current === locKey) return;
+    lastDistanceLocationRef.current = locKey;
 
     // If we can't compute user coords quickly, fall back to cached geocoding once.
     (async () => {
@@ -820,7 +726,7 @@ export default function HomePage() {
     return () => {
       mounted = false;
     };
-  }, [profile, chefs, distanceRecalcNonce]);
+  }, [profile, chefs]);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -913,7 +819,7 @@ export default function HomePage() {
           </Link>
 
           {/* Featured Dishes section - Auto-scroll + Swipeable Carousel */}
-          <View style={styles.section}>
+          <View ref={featuredSectionRef} style={styles.section}>
             <Text
               style={[
                 styles.sectionTitle,
