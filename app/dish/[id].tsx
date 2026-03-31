@@ -419,10 +419,7 @@ export default function DishDetail() {
   const chefId = dish.chef_id != null ? Number(dish.chef_id) : null;
   const chefName = chef?.name || dish.chef || 'Chef';
   const mainImage = optimizeDishImageUrl(dish.image ?? null, imageMaxW);
-  const chefAvatarUri =
-    chef?.photo || chef?.avatar
-      ? optimizeDishImageUrl(String(chef.photo || chef.avatar), 96)
-      : null;
+  const chefAvatarUri = chef?.photo || chef?.avatar || null;
 
   return (
     <ScreenCmp style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
@@ -437,7 +434,7 @@ export default function DishDetail() {
                 <Image
                   source={{ uri: mainImage }}
                   style={styles.mainImage as any}
-                  resizeMode="contain"
+                  resizeMode="cover"
                   {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
                 />
               </View>
@@ -568,7 +565,7 @@ export default function DishDetail() {
               <Image
                 source={{ uri: mainImage }}
                 style={styles.mainImage as any}
-                resizeMode="contain"
+                resizeMode="cover"
                 {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
               />
             </View>
@@ -934,20 +931,19 @@ const styles = StyleSheet.create({
   mainImageContainer: {
     width: '100%',
     maxWidth: 480,
+    aspectRatio: 1,
     borderRadius: theme.radius.xl,
     overflow: 'hidden',
     backgroundColor: '#FFFFFF',
     ...Platform.select({
       web: {
         boxShadow: 'none' as any,
-        aspectRatio: 4 / 3,
         alignSelf: 'flex-start',
         marginBottom: 0,
       },
       default: {
         elevation: 0,
         shadowOpacity: 0,
-        aspectRatio: 3 / 4,
         alignSelf: 'flex-start',
         marginBottom: theme.spacing.sm,
       } as any,

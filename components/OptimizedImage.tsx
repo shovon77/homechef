@@ -12,7 +12,7 @@ type Props = {
   lazy?: boolean;
 };
 
-const PLACEHOLDER_COLOR = '#E8E4E1';
+const PLACEHOLDER_COLOR = '#FFFFFF';
 const SHIMMER_COLOR = '#F5F2F0';
 
 /**
