@@ -9,6 +9,7 @@ import { safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
 import { optimizeDishImageUrl } from "../../lib/dishImageUrl";
 import { prefetchDishWithChef } from "../../lib/db";
+import OptimizedImage from "../../components/OptimizedImage";
 
 const PRIMARY_COLOR = '#FE734C';
 const BRAND_BLACK = '#33393A';
@@ -49,10 +50,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
         style={variant === 'explore' ? styles.imageContainerExplore : styles.imageContainer}
         onPressIn={() => prefetchDishWithChef(Number(dish.id))}
       >
-        <Image
-          source={{ uri: cardImageUri }}
-          style={styles.image}
-        />
+        <OptimizedImage uri={cardImageUri} style={styles.image} />
       </TouchableOpacity>
     </Link>
   );
@@ -158,10 +156,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
         style={({ pressed }) => StyleSheet.flatten([styles.cardExplore, style, pressed && { opacity: 0.8 }])}
       >
         <View style={styles.imageContainerExplore}>
-            <Image
-              source={{ uri: cardImageUri }}
-              style={styles.image}
-            />
+            <OptimizedImage uri={cardImageUri} style={styles.image} />
           </View>
           <View style={[styles.exploreContent, styles.exploreContentHomepage]}>
             <Text style={[styles.name, styles.nameExplore, styles.nameHomepage]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
@@ -257,7 +252,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
 
     const linkedImageLayer = (
       <View style={styles.imageContainerExplore}>
-        <Image source={{ uri: cardImageUri }} style={styles.image} resizeMode="cover" />
+        <OptimizedImage uri={cardImageUri} style={styles.image} />
       </View>
     );
 

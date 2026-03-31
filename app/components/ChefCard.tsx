@@ -1,8 +1,9 @@
 import React from "react";
-import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle } from "react-native";
+import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle, Platform } from "react-native";
 import { Link } from "expo-router";
 import { theme } from "../../lib/theme";
 import { toNumber, safeToFixed } from "../../lib/number";
+import { optimizeImageUrl } from "../../lib/dishImageUrl";
 
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
@@ -77,10 +78,11 @@ type Props = {
 };
 
 export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default', compact = false }: Props) {
-  const avatar =
+  const rawAvatar =
     chef?.photo ||
     chef?.avatar ||
     `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
+  const avatar = optimizeImageUrl(rawAvatar, compact ? 120 : 200);
 
   const ratingVal = toNumber(chef?.rating, 0);
   const starTint = ratingColor ?? ACCENT_COLOR;
@@ -104,7 +106,12 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
     <View style={cardStyle}>
       <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
         <Pressable style={pressableStyle} activeOpacity={0.9}>
-          <Image source={{ uri: avatar }} style={avatarStyle} resizeMode="cover" />
+          <Image
+            source={{ uri: avatar }}
+            style={avatarStyle}
+            resizeMode="cover"
+            {...(Platform.OS === 'web' ? { loading: 'lazy', decoding: 'async' } as any : {})}
+          />
           <View style={infoStyle}>
             <Text style={StyleSheet.flatten([styles.name, compact && styles.nameCompact, nameColor ? { color: nameColor } : undefined])} numberOfLines={1}>{chef.name}</Text>
             <Text style={StyleSheet.flatten([styles.cuisine, compact && styles.cuisineCompact])} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>

@@ -360,7 +360,7 @@ export default function DishDetail() {
     setTimeout(tryScroll, 800);
   };
 
-  const imageMaxW = isMobile ? 960 : 1400;
+  const imageMaxW = isMobile ? Math.min(viewportWidth * 2, 960) : 1400;
 
   const loadMoreReviews = async () => {
     if (!Number.isFinite(dishId) || reviewsLoadingMore || !reviewsHasMore) return;
@@ -438,6 +438,7 @@ export default function DishDetail() {
                   source={{ uri: mainImage }}
                   style={styles.mainImage as any}
                   resizeMode="contain"
+                  {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
                 />
               </View>
             </View>
@@ -568,6 +569,7 @@ export default function DishDetail() {
                 source={{ uri: mainImage }}
                 style={styles.mainImage as any}
                 resizeMode="contain"
+                {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
               />
             </View>
           </View>

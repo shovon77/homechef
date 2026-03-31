@@ -11,6 +11,7 @@ import type { Chef, Dish, ChefReview } from '../../lib/types';
 import Screen from '../../components/Screen';
 import DishCard from '../components/DishCard';
 import { theme, elev } from '../../lib/theme';
+import { optimizeImageUrl } from '../../lib/dishImageUrl';
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -315,7 +316,8 @@ export default function ChefDetailView() {
     return () => { cancelled = true; };
   }, [chef, profile]);
 
-  const avatar = chef?.photo || chef?.avatar || '';
+  const rawAvatar = chef?.photo || chef?.avatar || '';
+  const avatar = rawAvatar ? optimizeImageUrl(rawAvatar, 240) : '';
   const title = (chef as any)?.brand_name?.trim() || chef?.name?.trim() || (chefId ? `Chef #${chefId}` : 'Chef');
   const location = chef?.location || '';
   const bio = chef?.bio ?? chef?.description ?? '';
@@ -412,6 +414,7 @@ export default function ChefDetailView() {
                       style={styles.chefCardAvatar}
                       resizeMode="cover"
                       onError={() => setChefImageError(true)}
+                      {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
                     />
                   ) : (
                     <View style={[styles.chefCardAvatar, styles.chefCardAvatarPlaceholder]}>
