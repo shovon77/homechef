@@ -23,7 +23,8 @@ export default function SignupChef() {
     }
     const picked = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      quality: 0.9,
+      quality: 0.8,
+      allowsEditing: true,
     });
     if (picked.canceled) return;
     const file = picked.assets[0];

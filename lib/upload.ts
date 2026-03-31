@@ -1,5 +1,6 @@
 // lib/upload.ts
 import { supabase } from './supabase'
+import { resizeImageForUpload } from './resizeImage'
 
 function safeName(name: string, fallback: string) {
   const base = (name && name.trim()) ? name.trim() : `${fallback}_${Date.now()}`
@@ -48,7 +49,16 @@ export async function uploadToBucket(
   file: any,                 // File | Blob | { uri, name?, type? }
   pathPrefix: string         // e.g. chefs/123/avatar or chefs/123/dishes/456
 ): Promise<{ publicUrl: string; path: string }> {
-  const { blob, fileName, contentType } = await normalizeToBlob(file)
+  let { blob, fileName, contentType } = await normalizeToBlob(file)
+
+  // Resize images before upload (dish images + chef avatars) — keeps storage lean
+  if (contentType.startsWith('image/') && (blob instanceof Blob || blob instanceof File)) {
+    const resized = await resizeImageForUpload(blob as Blob | File)
+    blob = resized.blob
+    fileName = safeName(resized.fileName, 'upload')
+    contentType = resized.contentType
+  }
+
   const path = `${pathPrefix}/${fileName}`
 
   const { data, error } = await supabase.storage
