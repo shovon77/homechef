@@ -129,30 +129,33 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
                     <Text style={[styles.ratingText, compact && styles.ratingTextCompact]}>{safeToFixed(ratingVal)}</Text>
                   </View>
                 )}
-                {showDistance && (
-                  <View style={styles.distanceRow}>
-                    <Image
-                      source={require('../../assets/map.png')}
-                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
-                      tintColor={metaTint}
-                      resizeMode="contain"
-                    />
-                    <Text style={[styles.distanceText, compact && styles.ratingTextCompact]}>{distanceText}</Text>
-                  </View>
-                )}
-                {showLocation && (
-                  <View style={styles.locationRow}>
-                    <Image 
-                      source={require('../../assets/locationnewicon.png')} 
-                      style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
-                      tintColor={metaTint}
-                      resizeMode="contain" 
-                    />
-                    <Text style={[styles.location, compact && styles.locationCompact]} numberOfLines={1}>
-                      {locationText}
-                    </Text>
-                  </View>
-                )}
+                {/* Fixed-height slot reserves space so async distance load doesn't shift layout (CLS) */}
+                <View style={styles.metaSlot}>
+                  {showDistance && (
+                    <View style={styles.distanceRow}>
+                      <Image
+                        source={require('../../assets/map.png')}
+                        style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
+                        tintColor={metaTint}
+                        resizeMode="contain"
+                      />
+                      <Text style={[styles.distanceText, compact && styles.ratingTextCompact]}>{distanceText}</Text>
+                    </View>
+                  )}
+                  {showLocation && (
+                    <View style={styles.locationRow}>
+                      <Image 
+                        source={require('../../assets/locationnewicon.png')} 
+                        style={[styles.metaIconImage, compact && styles.metaIconImageCompact]}
+                        tintColor={metaTint}
+                        resizeMode="contain" 
+                      />
+                      <Text style={[styles.location, compact && styles.locationCompact]} numberOfLines={1}>
+                        {locationText}
+                      </Text>
+                    </View>
+                  )}
+                </View>
               </>
             ) : (
               <>
@@ -300,6 +303,10 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.normal,
+  },
+  metaSlot: {
+    minHeight: 44,
+    justifyContent: 'flex-start',
   },
   distanceRow: {
     flexDirection: 'row',

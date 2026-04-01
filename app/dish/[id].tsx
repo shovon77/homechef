@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState, startTransition } from "react";
 import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
@@ -435,7 +435,7 @@ export default function DishDetail() {
                   source={{ uri: mainImage }}
                   style={styles.mainImage as any}
                   resizeMode="cover"
-                  {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
+                  {...(Platform.OS === 'web' ? { decoding: 'async', loading: 'eager', fetchpriority: 'high' } as any : {})}
                 />
               </View>
             </View>
@@ -566,7 +566,7 @@ export default function DishDetail() {
                 source={{ uri: mainImage }}
                 style={styles.mainImage as any}
                 resizeMode="cover"
-                {...(Platform.OS === 'web' ? { decoding: 'async' } as any : {})}
+                {...(Platform.OS === 'web' ? { decoding: 'async', loading: 'eager', fetchpriority: 'high' } as any : {})}
               />
             </View>
           </View>
@@ -723,7 +723,7 @@ export default function DishDetail() {
           >
             <TouchableOpacity
               style={[styles.tab, activeTab === 'ingredients' && styles.tabActive]}
-              onPress={() => setActiveTab('ingredients')}
+              onPress={() => startTransition(() => setActiveTab('ingredients'))}
             >
               <Text style={[styles.tabText, activeTab === 'ingredients' && styles.tabTextActive]}>
                 Allergens & Ingredients
@@ -731,7 +731,7 @@ export default function DishDetail() {
             </TouchableOpacity>
             <TouchableOpacity
               style={[styles.tab, activeTab === 'reviews' && styles.tabActive]}
-              onPress={() => setActiveTab('reviews')}
+              onPress={() => startTransition(() => setActiveTab('reviews'))}
             >
               <Text style={[styles.tabText, activeTab === 'reviews' && styles.tabTextActive]}>
                 Customer Reviews

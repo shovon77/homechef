@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo } from "react";
+import React, { useEffect, useState, useMemo, startTransition } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType } from "react-native";
 import { Link, useRouter } from "expo-router";
 
@@ -759,9 +759,28 @@ export default function HomePage() {
 
   if (loading) {
     return (
-      <Screen style={{ backgroundColor: '#F2F0EF' }}>
-        <View style={{ flex: 1, alignItems: "center", justifyContent: "center", backgroundColor: '#F2F0EF' }}>
-          <ActivityIndicator size="large" color={theme.colors.primary} />
+      <Screen style={{ backgroundColor: '#F2F0EF' }} contentPadding={0}>
+        <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
+          {/* Skeleton hero — same aspect ratio as the real hero to prevent CLS */}
+          <View style={[styles.hero, isMobile && styles.heroMobile, !isMobile && styles.heroDesktop]} />
+          {/* Skeleton section: featured dishes */}
+          <View style={styles.section}>
+            <View style={{ width: '40%', height: 22, borderRadius: 8, backgroundColor: '#E6E4E1', marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: GAP, paddingHorizontal: GAP / 2 }}>
+              {[0,1,2].map(i => (
+                <View key={i} style={{ width: isMobile ? 200 : 240, aspectRatio: 0.85, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
+              ))}
+            </View>
+          </View>
+          {/* Skeleton section: popular chefs */}
+          <View style={styles.section}>
+            <View style={{ width: '35%', height: 22, borderRadius: 8, backgroundColor: '#E6E4E1', marginBottom: 12 }} />
+            <View style={{ flexDirection: 'row', gap: 16 }}>
+              {[0,1,2].map(i => (
+                <View key={i} style={{ width: isMobile ? 220 : 260, height: 140, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
+              ))}
+            </View>
+          </View>
         </View>
       </Screen>
     );
@@ -786,17 +805,25 @@ export default function HomePage() {
               onLayout={(e) => Platform.OS !== 'web' && setHeroLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
             >
               {Platform.OS === 'web' ? (
-                <View
-                  style={[
-                    styles.heroBackgroundImage,
-                    {
-                      backgroundImage: `url(${bannerUrl})`,
-                      backgroundSize: 'cover',
-                      backgroundPosition: isMobile ? 'left center' : 'center',
-                      backgroundRepeat: 'no-repeat',
-                    } as any,
-                  ]}
-                />
+                <>
+                  <View
+                    style={[
+                      styles.heroBackgroundImage,
+                      {
+                        backgroundImage: `url(${bannerUrl})`,
+                        backgroundSize: 'cover',
+                        backgroundPosition: isMobile ? 'left center' : 'center',
+                        backgroundRepeat: 'no-repeat',
+                      } as any,
+                    ]}
+                  />
+                  {/* Hidden img for LCP: fetchpriority=high + eager loading so browser starts early */}
+                  <Image
+                    source={{ uri: bannerUrl }}
+                    style={{ position: 'absolute', width: 1, height: 1, opacity: 0 } as any}
+                    {...{ fetchpriority: 'high', loading: 'eager', decoding: 'async' } as any}
+                  />
+                </>
               ) : imageSize && heroLayout ? (
                 <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper, isMobile && styles.heroImageFillHeightWrapperLeft]}>
                   <Image
@@ -1157,7 +1184,7 @@ const styles = StyleSheet.create({
     overflow: "hidden",
     marginBottom: theme.spacing.xl,
     position: "relative",
-    backgroundColor: 'transparent',
+    backgroundColor: '#E6E4E1',
   },
   heroDesktop: {
     maxHeight: 420,

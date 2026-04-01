@@ -50,7 +50,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
         style={variant === 'explore' ? styles.imageContainerExplore : styles.imageContainer}
         onPressIn={() => prefetchDishWithChef(Number(dish.id))}
       >
-        <OptimizedImage uri={cardImageUri} style={styles.image} />
+        <OptimizedImage uri={cardImageUri} style={styles.image} width={100} height={100} />
       </TouchableOpacity>
     </Link>
   );
@@ -98,7 +98,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
             });
             setQuantity(1);
           }}
-          style={[styles.button, styles.buttonNoShadow]}
+          style={StyleSheet.flatten([styles.button, styles.buttonNoShadow]) as any}
         />
       </View>
     </View>
@@ -599,10 +599,10 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   image: {
-    width: "100%",
-    height: "100%",
+    width: "100%" as any,
+    height: "100%" as any,
     backgroundColor: '#FFFFFF',
-  },
+  } as any,
   content: {
     flex: 1,
     justifyContent: 'space-between',
@@ -610,7 +610,7 @@ const styles = StyleSheet.create({
   name: {
     color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.extrabold,
+    fontWeight: theme.typography.fontWeight.extrabold as '800',
     fontSize: theme.typography.fontSize.base,
   },
   description: {
@@ -669,7 +669,7 @@ const styles = StyleSheet.create({
     color: BRAND_BLACK,
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: theme.typography.fontWeight.medium,
+    fontWeight: theme.typography.fontWeight.medium as '500',
   },
   ratingTextExplore: {
     fontSize: 10,

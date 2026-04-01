@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState, useRef, useCallback } from 'react';
+import React, { useEffect, useMemo, useState, useRef, useCallback, startTransition } from 'react';
 import { View, Text, StyleSheet, Pressable, ActivityIndicator, TextInput, useWindowDimensions, TouchableOpacity, Platform, ScrollView, Image, Animated, Modal } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import Screen from '../../components/Screen';
@@ -330,10 +330,6 @@ export default function BrowsePage() {
     setPage(1);
     setTotal(0);
     setError(null);
-    setDishes([]);
-    setChefs([]);
-    setChefDistances({});
-    setCuisines([]);
     setDishPage(0);
     setHasMoreDishes(true);
   }, [tab, debouncedQuery, sortBy]);
@@ -950,11 +946,13 @@ export default function BrowsePage() {
               style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
               onPress={(e) => {
                 e.stopPropagation();
-                setSortBy(opt.value);
                 setShowSortMenu(false);
-                const currentTab = tab || 'dishes';
-                const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
-                router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+                startTransition(() => {
+                  setSortBy(opt.value);
+                  const currentTab = tab || 'dishes';
+                  const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                  router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+                });
               }}
             >
               <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
@@ -988,19 +986,19 @@ export default function BrowsePage() {
           <View style={styles.tabsRow}>
             <View style={[styles.tabs, { overflow: 'visible' }]}>
               <Pressable
-                onPress={() => setTab('dishes')}
+                onPress={() => startTransition(() => setTab('dishes'))}
                 style={[styles.tab, styles.tabSpacing]}
               >
                 <Text style={[styles.tabText, tab === 'dishes' && styles.tabTextActive]}>Dishes</Text>
               </Pressable>
               <Pressable
-                onPress={() => setTab('chefs')}
+                onPress={() => startTransition(() => setTab('chefs'))}
                 style={[styles.tab, styles.tabSpacing]}
               >
                 <Text style={[styles.tabText, tab === 'chefs' && styles.tabTextActive]}>Chefs</Text>
               </Pressable>
               <Pressable
-                onPress={() => setTab('cuisines')}
+                onPress={() => startTransition(() => setTab('cuisines'))}
                 style={[styles.tab, styles.tabSpacing]}
               >
                 <Text style={[styles.tabText, tab === 'cuisines' && styles.tabTextActive]}>Cuisines</Text>
@@ -1073,11 +1071,13 @@ export default function BrowsePage() {
                           style={[styles.dropdownItem, sortBy === opt.value && styles.dropdownItemActive]}
                           onPress={(e) => {
                             e.stopPropagation();
-                            setSortBy(opt.value);
                             setShowSortMenu(false);
-                            const currentTab = tab || 'dishes';
-                            const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
-                            router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+                            startTransition(() => {
+                              setSortBy(opt.value);
+                              const currentTab = tab || 'dishes';
+                              const currentQuery = query ? `&q=${encodeURIComponent(query)}` : '';
+                              router.push(`/browse?tab=${currentTab}&sort=${opt.value}${currentQuery}`);
+                            });
                           }}
                         >
                           <Text style={[styles.dropdownItemText, sortBy === opt.value && styles.dropdownItemTextActive]}>
@@ -1161,12 +1161,12 @@ export default function BrowsePage() {
               <View key={cuisine} style={[styles.cuisineCardWrapper, !isMobile && { width: `${100 / cuisineColumns}%` }]}>
                 <TouchableOpacity 
                   style={styles.cuisineCard}
-                  onPress={() => {
+                  onPress={() => startTransition(() => {
                     setCuisineFilter(cuisine);
                     setQuery('');
                     setTab('dishes');
                     setPage(1);
-                  }}
+                  })}
                 >
                   <Text style={styles.cuisineText} numberOfLines={1}>{cuisine}</Text>
                 </TouchableOpacity>

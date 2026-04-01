@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState, startTransition } from 'react';
 import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -262,7 +262,8 @@ export default function ChefDetailView() {
     return () => clearTimeout(id);
   }, [raw, pathname, chef?.slug, router]);
 
-  // Compute distance when profile and chef have coords (with geocode fallback)
+  // Compute distance when profile and chef have coords (with geocode fallback).
+  // Uses startTransition so geocode latency never blocks INP.
   useEffect(() => {
     if (!chef || !profile) {
       setDistanceKm(null);
@@ -275,40 +276,34 @@ export default function ChefDetailView() {
       let chefLat: number | null = typeof (chef as any)?.latitude === 'number' ? (chef as any).latitude : null;
       let chefLon: number | null = typeof (chef as any)?.longitude === 'number' ? (chef as any).longitude : null;
 
-      // Geocode user if we have location but no coords
-      if ((userLat == null || userLon == null) && (profile as any)?.location?.trim()) {
-        try {
-          const { data } = await supabase.functions.invoke('google-geocode-forward', {
-            body: { address: (profile as any).location },
-          });
-          if (!cancelled && data?.lat != null && data?.lng != null) {
-            userLat = data.lat;
-            userLon = data.lng;
-          }
-        } catch {
-          // ignore
-        }
-      }
+      const needUserGeocode = (userLat == null || userLon == null) && (profile as any)?.location?.trim();
+      const needChefGeocode = (chefLat == null || chefLon == null) && chef?.location?.trim();
 
-      // Geocode chef if we have location but no coords
-      if ((chefLat == null || chefLon == null) && chef?.location?.trim()) {
-        try {
-          const { data } = await supabase.functions.invoke('google-geocode-forward', {
-            body: { address: chef.location },
-          });
-          if (!cancelled && data?.lat != null && data?.lng != null) {
-            chefLat = data.lat;
-            chefLon = data.lng;
-          }
-        } catch {
-          // ignore
-        }
+      // Parallelise both geocode requests instead of running them sequentially
+      const [userGeo, chefGeo] = await Promise.all([
+        needUserGeocode
+          ? supabase.functions.invoke('google-geocode-forward', { body: { address: (profile as any).location } }).catch(() => ({ data: null }))
+          : Promise.resolve({ data: null }),
+        needChefGeocode
+          ? supabase.functions.invoke('google-geocode-forward', { body: { address: chef.location } }).catch(() => ({ data: null }))
+          : Promise.resolve({ data: null }),
+      ]);
+
+      if (cancelled) return;
+
+      if (userGeo.data?.lat != null && userGeo.data?.lng != null) {
+        userLat = userGeo.data.lat;
+        userLon = userGeo.data.lng;
+      }
+      if (chefGeo.data?.lat != null && chefGeo.data?.lng != null) {
+        chefLat = chefGeo.data.lat;
+        chefLon = chefGeo.data.lng;
       }
 
       if (!cancelled && userLat != null && userLon != null && chefLat != null && chefLon != null) {
-        setDistanceKm(haversineKm(userLat, userLon, chefLat, chefLon));
-      } else {
-        setDistanceKm(null);
+        startTransition(() => setDistanceKm(haversineKm(userLat!, userLon!, chefLat!, chefLon!)));
+      } else if (!cancelled) {
+        startTransition(() => setDistanceKm(null));
       }
     };
     run();
@@ -493,7 +488,7 @@ export default function ChefDetailView() {
             <View style={styles.tabContainer}>
                 <TouchableOpacity
                 style={[styles.tab, activeTab === 'dishes' && styles.tabActive]}
-                onPress={() => setActiveTab('dishes')}
+                onPress={() => startTransition(() => setActiveTab('dishes'))}
               >
                 <Text style={[styles.tabText, activeTab === 'dishes' && styles.tabTextActive]}>
                   Dishes
@@ -501,7 +496,7 @@ export default function ChefDetailView() {
                 </TouchableOpacity>
                     <TouchableOpacity
                 style={[styles.tab, activeTab === 'reviews' && styles.tabActive]}
-                onPress={() => setActiveTab('reviews')}
+                onPress={() => startTransition(() => setActiveTab('reviews'))}
               >
                 <Text style={[styles.tabText, activeTab === 'reviews' && styles.tabTextActive]}>
                   Reviews
