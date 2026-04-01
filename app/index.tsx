@@ -597,7 +597,8 @@ export default function HomePage() {
           .eq("chefs.status", "active")
           .eq("chefs.stripe_connect_completed", true)
           .or("is_active.eq.true,is_active.is.null")
-          .order("price", { ascending: true }),
+          .order("price", { ascending: true })
+          .limit(15),
       ]);
       if (!mounted) return;
       setChefs((c || []) as Chef[]);

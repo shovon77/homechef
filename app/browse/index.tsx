@@ -229,6 +229,22 @@ export default function BrowsePage() {
   const [dishPage, setDishPage] = useState(0);
   const [loadingMore, setLoadingMore] = useState(false);
   const [hasMoreDishes, setHasMoreDishes] = useState(true);
+
+  // Progressive render: show first batch immediately, defer rest to unblock scroll
+  const INITIAL_RENDER_COUNT = 8;
+  const [visibleDishCount, setVisibleDishCount] = useState(INITIAL_RENDER_COUNT);
+  const prevDishesLenRef = useRef(0);
+  useEffect(() => {
+    if (dishes.length === prevDishesLenRef.current) return;
+    prevDishesLenRef.current = dishes.length;
+    if (dishes.length <= INITIAL_RENDER_COUNT) {
+      setVisibleDishCount(dishes.length);
+      return;
+    }
+    setVisibleDishCount(INITIAL_RENDER_COUNT);
+    const id = requestAnimationFrame(() => setVisibleDishCount(dishes.length));
+    return () => cancelAnimationFrame(id);
+  }, [dishes.length]);
   const browseScrollRef = useRef<ScrollView>(null);
 
   // P5: In-memory cache keyed by (tab, sort, query, cuisineFilter)
@@ -1123,7 +1139,7 @@ export default function BrowsePage() {
         ) : tab === 'dishes' ? (
           <>
             <View style={styles.grid}>
-              {dishes.map((dish) => (
+              {dishes.slice(0, visibleDishCount).map((dish) => (
                 <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
                   <DishCard
                     dish={dish}

@@ -1,9 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useState } from "react";
 import { View, Text, Image, TouchableOpacity, Pressable, StyleSheet, ViewStyle, StyleProp, Platform } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Button } from "../../components/ui/Button";
-import { getDishAvgRating } from "../../utils/ratings";
 import { useCart } from "../../context/CartContext";
 import { safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
@@ -26,18 +25,10 @@ type DishCardProps = {
 
 export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false }: DishCardProps) {
   const router = useRouter();
-  const inlineRating = typeof dish.rating === 'number' && dish.rating > 0 ? dish.rating : null;
-  const [avg, setAvg] = useState(inlineRating ?? 0);
+  const avg = typeof dish.rating === 'number' && dish.rating > 0 ? dish.rating : 0;
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
   const [quantity, setQuantity] = useState(1);
   const cartQty = getQty(dish.id);
-
-  useEffect(() => {
-    if (inlineRating != null) return;
-    let m = true;
-    getDishAvgRating(Number(dish.id)).then(v => m && setAvg(v));
-    return () => { m = false; };
-  }, [dish?.id, inlineRating]);
 
   const cardImageUri = optimizeDishImageUrl(
     dish.image ?? null,
