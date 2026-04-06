@@ -10,7 +10,8 @@ import ChefCard from '../components/ChefCard';
 import { theme, elev } from '../../lib/theme';
 import { useLocationModal } from '../../context/LocationModalContext';
 
-const PER_PAGE = 25; // chefs/cuisines
+const PER_PAGE_DESKTOP = 25;
+const PER_PAGE_MOBILE = 12;
 const DISHES_PER_PAGE = 24; // dishes: load in batches for infinite scroll
 const DISHES_FETCH_LIMIT = 9999; // kept only for "nearest" sort which needs all dishes for distance calc
 const GRID_COLUMNS = 5;
@@ -245,6 +246,20 @@ export default function BrowsePage() {
     const id = requestAnimationFrame(() => setVisibleDishCount(dishes.length));
     return () => cancelAnimationFrame(id);
   }, [dishes.length]);
+
+  const [visibleChefCount, setVisibleChefCount] = useState(INITIAL_RENDER_COUNT);
+  const prevChefsLenRef = useRef(0);
+  useEffect(() => {
+    if (chefs.length === prevChefsLenRef.current) return;
+    prevChefsLenRef.current = chefs.length;
+    if (chefs.length <= INITIAL_RENDER_COUNT) {
+      setVisibleChefCount(chefs.length);
+      return;
+    }
+    setVisibleChefCount(INITIAL_RENDER_COUNT);
+    const id = requestAnimationFrame(() => setVisibleChefCount(chefs.length));
+    return () => cancelAnimationFrame(id);
+  }, [chefs.length]);
   const browseScrollRef = useRef<ScrollView>(null);
 
   // P5: In-memory cache keyed by (tab, sort, query, cuisineFilter)
@@ -323,32 +338,9 @@ export default function BrowsePage() {
     }
   }, [q]);
 
-  const perPage = PER_PAGE; // dishes tab shows all, no pagination
+  const perPage = isMobile ? PER_PAGE_MOBILE : PER_PAGE_DESKTOP;
   const totalPages = useMemo(() => Math.max(1, Math.ceil(total / perPage)), [total, perPage]);
 
-  useEffect(() => {
-    const cf = tab !== 'dishes' ? null : cuisineFilter;
-    if (tab !== 'dishes') setCuisineFilter(null);
-    const key = makeCacheKey(tab, sortBy as string, debouncedQuery, cf);
-    const cached = cacheRef.current[key];
-    if (cached) {
-      setDishes(cached.dishes);
-      setChefs(cached.chefs);
-      setCuisines(cached.cuisines);
-      setTotal(cached.total);
-      setChefDistances(cached.distances);
-      setDishPage(cached.dishPage);
-      setHasMoreDishes(cached.hasMore);
-      setError(null);
-      setPage(1);
-      return;
-    }
-    setPage(1);
-    setTotal(0);
-    setError(null);
-    setDishPage(0);
-    setHasMoreDishes(true);
-  }, [tab, debouncedQuery, sortBy]);
   useEffect(() => {
     if (debouncedQuery.trim()) setCuisineFilter(null);
     setAiKeywords(null);
@@ -356,7 +348,6 @@ export default function BrowsePage() {
   }, [debouncedQuery]);
 
   useEffect(() => {
-    // Fetch search placeholders
     supabase.from('app_settings').select('value').eq('key', 'search_placeholders').single()
       .then(({ data }) => {
         if (data?.value) {
@@ -372,18 +363,33 @@ export default function BrowsePage() {
       });
   }, []);
 
+  // Single unified effect: check cache first, fetch if miss.
   useEffect(() => {
     if (authLoading) return;
 
-    // Skip fetch if cache was already applied (by the reset effect above)
-    const ck = makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter);
-    if (cacheRef.current[ck] && (
-      (tab === 'dishes' && dishes.length > 0) ||
-      (tab === 'chefs' && chefs.length > 0) ||
-      (tab === 'cuisines' && cuisines.length > 0)
-    )) {
+    if (tab !== 'dishes') setCuisineFilter(null);
+    const cf = tab !== 'dishes' ? null : cuisineFilter;
+    const key = makeCacheKey(tab, sortBy as string, debouncedQuery, cf);
+    const cached = cacheRef.current[key];
+    if (cached) {
+      setDishes(cached.dishes);
+      setChefs(cached.chefs);
+      setCuisines(cached.cuisines);
+      setTotal(cached.total);
+      setChefDistances(cached.distances);
+      setDishPage(cached.dishPage);
+      setHasMoreDishes(cached.hasMore);
+      setError(null);
+      setLoading(false);
+      setPage(1);
       return;
     }
+
+    setPage(1);
+    setTotal(0);
+    setError(null);
+    setDishPage(0);
+    setHasMoreDishes(true);
 
     let cancelled = false;
     (async () => {
@@ -397,7 +403,7 @@ export default function BrowsePage() {
           return false;
         })());
         const dishPageSize = isNearestSort ? DISHES_FETCH_LIMIT : DISHES_PER_PAGE;
-        const pageSize = tab === 'dishes' ? dishPageSize : PER_PAGE;
+        const pageSize = tab === 'dishes' ? dishPageSize : perPage;
         const from = tab === 'dishes' ? 0 : (page - 1) * pageSize;
         const to = tab === 'dishes' ? dishPageSize - 1 : from + pageSize - 1;
 
@@ -598,7 +604,7 @@ export default function BrowsePage() {
 
           let request = supabase
             .from('chefs')
-            .select('id,name,location,photo,rating,cuisine,bio,created_at,latitude,longitude', { count: 'exact' })
+            .select('id,name,location,photo,rating,cuisine,created_at,latitude,longitude', { count: 'exact' })
             .eq('status', 'active')
             .eq('stripe_connect_completed', true);
 
@@ -1163,13 +1169,14 @@ export default function BrowsePage() {
           </>
         ) : tab === 'chefs' ? (
           <View style={styles.grid}>
-            {chefs.map((chef) => (
+            {chefs.slice(0, visibleChefCount).map((chef) => (
               <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <ChefCard 
                   chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                   ratingColor="#FE734C"
                   compact={!isMobile}
+                  hideBio
                   distanceKm={chefDistances[chef.id] != null ? chefDistances[chef.id] : undefined}
                 />
               </View>

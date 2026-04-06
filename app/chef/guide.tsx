@@ -16,28 +16,44 @@ const TIP_BG = '#FE734C10';
 const CONTENT_MAX_WIDTH = 720;
 
 type StepData = {
-  number: number;
   title: string;
   body: string;
   tipText?: string;
   iconSource: any;
 };
 
-const SECTION_A: StepData[] = [
+const SECTION_1: StepData[] = [
   {
-    number: 1,
-    title: 'Application submitted',
-    body: 'Your application has been received. Our team reviews every application manually to ensure quality and safety for all users. Review typically takes 1\u20133 business days. You\u2019ll receive a notification once your application has been reviewed.',
-    iconSource: require('../../assets/success.png'),
+    title: 'Sign up for an account',
+    body: 'Create a free account on YourHomeChef. You can sign up with your email or Google account.',
+    iconSource: require('../../assets/user.png'),
   },
   {
-    number: 2,
+    title: 'Fill out the chef application',
+    body: 'Go to the chef application page and tell us about yourself \u2014 your name, cuisine style, location, and a short bio. Upload a profile photo so customers can get to know you.',
+    tipText: 'Be detailed in your bio \u2014 customers love knowing the story behind the food.',
+    iconSource: require('../../assets/edit.png'),
+  },
+  {
+    title: 'Submit your application',
+    body: 'Review your details and hit submit. You\u2019ll receive a confirmation notification that your application has been received.',
+    tipText: 'Make sure your phone number is up to date in your profile so you receive SMS notifications for new orders and updates.',
+    iconSource: require('../../assets/success.png'),
+  },
+];
+
+const SECTION_2: StepData[] = [
+  {
+    title: 'Application under review',
+    body: 'Our team reviews every application manually to ensure quality and safety. Review typically takes 1\u20133 business days. You\u2019ll receive a notification once it\u2019s been reviewed.',
+    iconSource: require('../../assets/alarm.png'),
+  },
+  {
     title: 'While you wait',
-    body: 'You don\u2019t need to do anything while we review. In the meantime you can start thinking about your menu \u2014 dishes, pricing, and descriptions. Prepare a few food photos with bright, natural lighting, and make sure your pickup location is accurate.',
+    body: 'Start thinking about your menu \u2014 dishes, pricing, and descriptions. Prepare a few food photos with bright, natural lighting, and make sure your pickup location is accurate.',
     iconSource: require('../../assets/idea.png'),
   },
   {
-    number: 3,
     title: 'Application approved',
     body: 'Once approved, you\u2019ll receive a notification and get full access to your chef dashboard. Your next step is to set up Stripe so you can receive payments.',
     tipText: 'If your application needs changes, we\u2019ll let you know what to update.',
@@ -45,22 +61,19 @@ const SECTION_A: StepData[] = [
   },
 ];
 
-const SECTION_B: StepData[] = [
+const SECTION_3: StepData[] = [
   {
-    number: 4,
     title: 'Go to the Payment tab',
     body: 'In your chef dashboard, tap the Payment tab. You\u2019ll see a prompt to set up your Stripe Connect account. This is how you\u2019ll receive payouts for your orders.',
     iconSource: require('../../assets/credit-card.png'),
   },
   {
-    number: 5,
     title: 'Complete Stripe onboarding',
     body: 'Tap \u201CSet up payouts\u201D to be redirected to Stripe\u2019s secure onboarding page. You\u2019ll need your legal name and date of birth, a bank account or debit card for payouts, and a brief business description.',
     tipText: 'This usually takes about 5 minutes. All information is handled securely by Stripe \u2014 we never see your banking details.',
     iconSource: require('../../assets/forward.png'),
   },
   {
-    number: 6,
     title: 'You\u2019re ready to receive orders',
     body: 'Once Stripe verifies your information, your dashboard will show \u201CPayouts enabled.\u201D You can now accept orders and receive payments directly to your bank account.',
     tipText: 'Payouts from Stripe typically arrive in 2\u20133 business days after an order is completed.',
@@ -68,35 +81,31 @@ const SECTION_B: StepData[] = [
   },
 ];
 
-const SECTION_C: StepData[] = [
+const SECTION_4: StepData[] = [
   {
-    number: 7,
     title: 'You receive a new order',
     body: 'When a customer places an order, it appears in your Orders tab with status \u201CRequested.\u201D You\u2019ll see the customer\u2019s name, order items, pickup time, and total amount.',
+    tipText: 'Keep your phone number updated in your profile to receive SMS notifications when new orders come in.',
     iconSource: require('../../assets/add.png'),
   },
   {
-    number: 8,
     title: 'Accept or decline',
     body: 'Review the order details. Tap Accept to confirm you can prepare it, or Reject if you\u2019re unavailable. Payment is only captured when you accept.',
     tipText: 'Make sure Stripe Connect is set up before accepting your first order.',
     iconSource: require('../../assets/success.png'),
   },
   {
-    number: 9,
     title: 'Prepare the food',
     body: 'Once accepted, the order moves to \u201CPending\u201D (In the kitchen). Prepare the dishes as described in the order. Check any chef notes from the customer for special requests.',
     iconSource: require('../../assets/notebook.png'),
   },
   {
-    number: 10,
     title: 'Mark as ready',
     body: 'When the food is ready, tap \u201CMark as ready.\u201D The customer will receive a notification that their order is ready for pickup.',
     tipText: 'You can message the customer directly from the order if you need to coordinate pickup timing.',
     iconSource: require('../../assets/alarm.png'),
   },
   {
-    number: 11,
     title: 'Customer picks up',
     body: 'The customer comes to your location to collect their order. Once picked up, the order is marked as completed and your earnings appear in the Payment section.',
     iconSource: require('../../assets/shopping-cart.png'),
@@ -111,11 +120,9 @@ const TIPS = [
   'Bright, well-lit food photos attract more customers',
 ];
 
-function StepNumber({ n }: { n: number }) {
+function StepIcon({ source }: { source: any }) {
   return (
-    <View style={stepStyles.circle}>
-      <Text style={stepStyles.circleText}>{n}</Text>
-    </View>
+    <Image source={source} style={stepStyles.iconImg} tintColor={PRIMARY_COLOR} resizeMode="contain" />
   );
 }
 
@@ -123,9 +130,8 @@ function StepCard({ step }: { step: StepData }) {
   return (
     <View style={stepStyles.card}>
       <View style={stepStyles.headerRow}>
-        <StepNumber n={step.number} />
+        <StepIcon source={step.iconSource} />
         <Text style={stepStyles.title}>{step.title}</Text>
-        <Image source={step.iconSource} style={stepStyles.icon} tintColor={PRIMARY_COLOR} resizeMode="contain" />
       </View>
       <Text style={stepStyles.body}>{step.body}</Text>
       {step.tipText && (
@@ -137,11 +143,11 @@ function StepCard({ step }: { step: StepData }) {
   );
 }
 
-function SectionHeader({ label }: { label: string }) {
+function SectionHeader({ number, label }: { number: number; label: string }) {
   return (
     <View style={sectionStyles.header}>
       <View style={sectionStyles.line} />
-      <Text style={sectionStyles.label}>{label}</Text>
+      <Text style={sectionStyles.label}>{number}. {label}</Text>
       <View style={sectionStyles.line} />
     </View>
   );
@@ -174,22 +180,25 @@ export default function ChefGuide() {
         )}
 
         <Text style={[pageStyles.pageTitle, isMobile && pageStyles.pageTitleMobile]}>
-          Getting started as a chef on YourHomeChef
+          Chef Guide
         </Text>
         <Text style={pageStyles.pageSubtitle}>
-          Everything you need to know {'\u2014'} from application to your first order
+          From sign-up to your first sale
         </Text>
 
-        <SectionHeader label="After you submit your application" />
-        {SECTION_A.map(s => <StepCard key={s.number} step={s} />)}
+        <SectionHeader number={1} label="Submitting your application" />
+        {SECTION_1.map((s, i) => <StepCard key={`s1-${i}`} step={s} />)}
 
-        <SectionHeader label="Setting up Stripe Connect" />
-        {SECTION_B.map(s => <StepCard key={s.number} step={s} />)}
+        <SectionHeader number={2} label="After you submit" />
+        {SECTION_2.map((s, i) => <StepCard key={`s2-${i}`} step={s} />)}
 
-        <SectionHeader label="How to manage your orders" />
-        {SECTION_C.map(s => <StepCard key={s.number} step={s} />)}
+        <SectionHeader number={3} label="Setting up Stripe Connect" />
+        {SECTION_3.map((s, i) => <StepCard key={`s3-${i}`} step={s} />)}
 
-        <SectionHeader label="Tips for success" />
+        <SectionHeader number={4} label="Managing your orders" />
+        {SECTION_4.map((s, i) => <StepCard key={`s4-${i}`} step={s} />)}
+
+        <SectionHeader number={5} label="Tips for success" />
         <View style={stepStyles.card}>
           {TIPS.map((tip, i) => (
             <View key={i} style={tipListStyles.row}>
@@ -235,7 +244,7 @@ const pageStyles = StyleSheet.create({
     fontWeight: '900' as const,
     fontFamily: theme.typography.fontFamily.display,
     lineHeight: 38,
-    marginBottom: 8,
+    marginBottom: 6,
   },
   pageTitleMobile: {
     fontSize: 24,
@@ -246,7 +255,7 @@ const pageStyles = StyleSheet.create({
     fontSize: 16,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: 24,
-    marginBottom: 32,
+    marginBottom: 24,
   },
   ctaBtn: {
     backgroundColor: PRIMARY_COLOR,
@@ -279,9 +288,9 @@ const sectionStyles = StyleSheet.create({
   },
   label: {
     color: TEXT_DARK,
-    fontSize: 15,
-    fontWeight: '700' as const,
-    fontFamily: theme.typography.fontFamily.display,
+    fontSize: 18,
+    fontWeight: '400' as const,
+    fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
   },
 });
@@ -301,23 +310,9 @@ const stepStyles = StyleSheet.create({
     gap: 10,
     marginBottom: 12,
   },
-  circle: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: PRIMARY_COLOR,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  circleText: {
-    color: '#FFFFFF',
-    fontSize: 15,
-    fontWeight: '800' as const,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  icon: {
-    width: 22,
-    height: 22,
+  iconImg: {
+    width: 24,
+    height: 24,
   },
   title: {
     flex: 1,
