@@ -8,7 +8,7 @@ declare global {
   }
 }
 
-import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef, startTransition } from 'react';
 import { View, Text, TouchableOpacity, ScrollView, TextInput, Image, ActivityIndicator, Alert, Linking, Platform, StyleSheet, Pressable, useWindowDimensions, Modal, Switch } from 'react-native';
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -547,13 +547,16 @@ export default function ChefDashboard() {
         setPhoto(me.photo || undefined);
         setLocation(me.location || '');
 
-        // Load dishes
-        const d = await supabase.from('dishes').select('*').eq('chef_id', me.id).order('id', { ascending: true });
-        if (d.error) throw d.error;
-        setDishes((d.data || []) as DishRow[]);
-
-        await refreshOrdersForChef(me.id);
-        await loadReviews(me.id);
+        // Load dishes + orders in parallel (reviews deferred to tab switch)
+        const [dishesRes] = await Promise.all([
+          supabase.from('dishes')
+            .select('id,chef_id,name,price,description,ingredients,image,thumbnail,chef,is_active')
+            .eq('chef_id', me.id)
+            .order('id', { ascending: true }),
+          refreshOrdersForChef(me.id),
+        ]);
+        if (dishesRes.error) throw dishesRes.error;
+        setDishes((dishesRes.data || []) as DishRow[]);
 
       } catch (e: any) {
         setErr(e.message || String(e));
@@ -563,14 +566,11 @@ export default function ChefDashboard() {
     })();
   }, [isViewingAsChef, viewAsChefId]);
 
+  // Lazy-load reviews only when Reviews tab is first opened (P2)
+  const reviewsLoadedForChefRef = useRef<number | null>(null);
   useEffect(() => {
-    if (dishes.length > 0 && chef) {
-      refreshOrdersForChef(chef.id);
-    }
-  }, [dishes, chef]);
-
-  useEffect(() => {
-    if (activeTab === 'reviews' && chef) {
+    if (activeTab === 'reviews' && chef && reviewsLoadedForChefRef.current !== chef.id) {
+      reviewsLoadedForChefRef.current = chef.id;
       loadReviews(chef.id);
     }
   }, [activeTab, chef]);
@@ -1065,21 +1065,28 @@ export default function ChefDashboard() {
       const orderIds = filteredOrders.map(o => o.id);
       const userIds = [...new Set(filteredOrders.map(o => o.user_id))];
 
-      const { data: itemsData, error: itemsError } = orderIds.length > 0
-        ? await supabase.from('order_items').select('id,order_id,dish_id,quantity,unit_price_cents,notes').in('order_id', orderIds)
-        : { data: [], error: null };
-      if (itemsError) console.warn('order_items fetch error', itemsError);
+      // Fetch order_items + profiles in parallel (both only need order/user IDs)
+      const [itemsRes, profilesRes] = await Promise.all([
+        orderIds.length > 0
+          ? supabase.from('order_items').select('id,order_id,dish_id,quantity,unit_price_cents,notes').in('order_id', orderIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+        userIds.length > 0
+          ? supabase.from('profiles').select('id,email,name,charges_enabled').in('id', userIds)
+          : Promise.resolve({ data: [] as any[], error: null }),
+      ]);
 
-      const dishIds = [...new Set((itemsData || []).map(item => item.dish_id).filter(Boolean))];
+      const itemsData = itemsRes.data;
+      if (itemsRes.error) console.warn('order_items fetch error', itemsRes.error);
+
+      // Dish names lookup (depends on itemsData, but fast — small ID set)
+      const dishIds = [...new Set((itemsData || []).map((item: any) => item.dish_id).filter(Boolean))];
       const { data: dishesData } = dishIds.length > 0
         ? await supabase.from('dishes').select('id,name').in('id', dishIds as number[])
         : { data: [], error: null };
       const dishMap = new Map((dishesData || []).map((d: any) => [d.id, d.name]));
 
-      const { data: profilesData, error: profilesError } = userIds.length > 0
-        ? await supabase.from('profiles').select('id,email,name,charges_enabled').in('id', userIds)
-        : { data: [], error: null };
-      if (profilesError) console.warn('profiles fetch error', profilesError);
+      const profilesData = profilesRes.data;
+      if (profilesRes.error) console.warn('profiles fetch error', profilesRes.error);
       const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
       const nameMap = new Map((profilesData || []).map((p: any) => [p.id, p.name || p.email || 'Customer']));
 
@@ -1848,6 +1855,49 @@ export default function ChefDashboard() {
     setReviewsPage(1);
   }, [reviewSearch]);
 
+  // ── S1: Memoize tab content so inactive-tab state changes don't rebuild JSX ──
+
+  const menuTabContent = useMemo(() => (
+    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120, paddingTop: 0 }}>
+      <NewDishForm onCreate={createDish} saving={saving} />
+      <View style={{ gap: 24 }}>
+        {dishes.length === 0 ? (
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No dishes yet. Add your first dish above.</Text>
+        ) : (
+          dishes.map(d => (
+            <DishEditor key={d.id} dish={d} onSave={updateDish} onDeactivate={deactivateDish} onActivate={activateDish} saving={saving} />
+          ))
+        )}
+      </View>
+    </ScrollView>
+  ), [dishes, saving, createDish, updateDish, deactivateDish, activateDish]);
+
+  const payoutsTabContent = useMemo(() => {
+    const pending = (chef as any)?.status === 'pending';
+    return (
+      <View style={pending ? { backgroundColor: BG_PAGE, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 } : { flex: 1, backgroundColor: BG_PAGE }}>
+        {pending ? (
+          <Text style={{ color: TEXT_DARK, fontSize: 16, fontFamily: theme.typography.fontFamily.body, lineHeight: 24 }}>
+            Your application is pending to be approved. You will be able to set up your Stripe Connect account once your chef application has been approved.
+          </Text>
+        ) : (
+          <PayoutSettings
+            onStatusChange={async (nextStatus: any) => {
+              setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
+              if (typeof nextStatus?.charges_enabled === 'boolean') setChargesEnabled(nextStatus.charges_enabled);
+              if (nextStatus?.accountId) setStripeAccountId(nextStatus.accountId);
+              if (chef && nextStatus?.chef_status != null) {
+                setChef((prev) => prev ? { ...prev, status: nextStatus!.chef_status! } : prev);
+              } else {
+                await refetchChef();
+              }
+            }}
+          />
+        )}
+      </View>
+    );
+  }, [chef, refetchChef]);
+
   if (loading) {
     return (
       <Screen style={{ backgroundColor: BG_PAGE }}>
@@ -2038,7 +2088,7 @@ export default function ChefDashboard() {
             key={item.key}
             onPress={() => {
               userInitiatedTabChange.current = true;
-              setActiveTab(item.key);
+              startTransition(() => setActiveTab(item.key));
             }}
             style={[styles.tab, activeTab === item.key && styles.tabActive]}
             onLayout={(event) => {
@@ -2531,7 +2581,7 @@ export default function ChefDashboard() {
       <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
         <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 12, fontFamily: theme.typography.fontFamily.display }}>Top-selling dishes</Text>
         <TouchableOpacity
-          onPress={() => setActiveTab('menu')}
+          onPress={() => startTransition(() => setActiveTab('menu'))}
           style={{
             backgroundColor: PRIMARY_COLOR,
             paddingVertical: 8,
@@ -3231,7 +3281,7 @@ export default function ChefDashboard() {
               <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
                 <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 12, fontFamily: theme.typography.fontFamily.display }}>Top-selling dishes</Text>
                 <TouchableOpacity
-                  onPress={() => setActiveTab('menu')}
+                  onPress={() => startTransition(() => setActiveTab('menu'))}
                   style={{
                     backgroundColor: PRIMARY_COLOR,
                     paddingVertical: 8,
@@ -3267,20 +3317,7 @@ export default function ChefDashboard() {
               </View>
             </ScrollView>
           )}
-          {activeTab === 'menu' && (
-            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120, paddingTop: 0 }}>
-              <NewDishForm onCreate={createDish} saving={saving} />
-              <View style={{ gap: 24 }}>
-                {dishes.length === 0 ? (
-                  <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No dishes yet. Add your first dish above.</Text>
-                ) : (
-                  dishes.map(d => (
-                    <DishEditor key={d.id} dish={d} onSave={updateDish} onDeactivate={deactivateDish} onActivate={activateDish} saving={saving} />
-                  ))
-                )}
-              </View>
-            </ScrollView>
-          )}
+          {activeTab === 'menu' && menuTabContent}
           {activeTab === 'orders' && (
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120, paddingTop: 0 }}>
               {/* Order Management */}
@@ -3636,32 +3673,7 @@ export default function ChefDashboard() {
               )}
             </ScrollView>
           )}
-          {activeTab === 'payouts' && (
-            <View style={isApplicationPending ? { backgroundColor: BG_PAGE, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 } : { flex: 1, backgroundColor: BG_PAGE }}>
-              {isApplicationPending ? (
-                <Text style={{ color: TEXT_DARK, fontSize: 16, fontFamily: theme.typography.fontFamily.body, lineHeight: 24 }}>
-                  Your application is pending to be approved. You will be able to set up your Stripe Connect account once your chef application has been approved.
-                </Text>
-              ) : (
-                <PayoutSettings
-                  onStatusChange={async (nextStatus: { chef_status?: string | null } | null) => {
-                    setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
-                    if (typeof nextStatus?.charges_enabled === 'boolean') {
-                      setChargesEnabled(nextStatus.charges_enabled);
-                    }
-                    if (nextStatus?.accountId) {
-                      setStripeAccountId(nextStatus.accountId);
-                    }
-                    if (chef && nextStatus?.chef_status != null) {
-                      setChef((prev) => prev ? { ...prev, status: nextStatus!.chef_status! } : prev);
-                    } else {
-                      await refetchChef();
-                    }
-                  }}
-                />
-              )}
-            </View>
-          )}
+          {activeTab === 'payouts' && payoutsTabContent}
           {/* Toast in Modal so it always shows on top (works on mobile); blocks scroll for ~3s then auto-dismisses */}
           {(msg || err) && (
             <Modal visible transparent animationType="fade" statusBarTranslucent onRequestClose={() => { setMsg(null); setErr(null); }}>
