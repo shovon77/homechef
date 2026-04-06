@@ -58,21 +58,21 @@ function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: st
     const containerStyle = {
       display: 'inline-flex',
       alignItems: 'center',
-      gap: isMobile ? '4px' : '8px',
-      paddingInline: isMobile ? '8px' : '16px',
-      paddingBlock: '8px',
+      gap: isMobile ? '4px' : '5px',
+      paddingInline: isMobile ? '8px' : '8px',
+      paddingBlock: '7px',
       borderRadius: '8px',
       position: 'relative',
       backgroundColor: isActive ? activeColor : 'transparent',
       cursor: 'pointer',
-      marginRight: isActive ? '8px' : '0px', // Add margin when active to prevent touching location icon
       flexWrap: 'nowrap',
+      flexShrink: 0,
     };
     const textStyle = {
       fontWeight: '400',
       color: isActive ? '#FFFFFF' : TEXT_DARK,
       fontFamily: theme.typography.fontFamily.body,
-      fontSize: '14px',
+      fontSize: '13px',
       whiteSpace: 'nowrap',
       letterSpacing: '0.015em',
     };
@@ -102,9 +102,10 @@ function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: st
       <TouchableOpacity 
         style={StyleSheet.flatten([
           styles.navLink,
-          { flexDirection: 'row', alignItems: 'center', gap: 6 },
+          { flexDirection: 'row', alignItems: 'center', gap: 5 },
           isMobile && { paddingHorizontal: 8, paddingVertical: 8 },
-          isActive && { backgroundColor: activeColor, borderRadius: 8, marginRight: 8 } // Add margin when active to prevent touching location icon
+          !isMobile && { paddingHorizontal: 8, paddingVertical: 7 },
+          isActive && { backgroundColor: activeColor, borderRadius: 8 },
         ])}
       >
         {Icon && <Icon size={18} strokeWidth={2.2} color={isActive ? '#FFFFFF' : TEXT_DARK} />}
@@ -967,6 +968,10 @@ export default function NavBar() {
             )}
             {/* Legal button - show for all users */}
             <NavButton href="/terms" label="Legal" isActive={isTermsPage} iconSource={require('../assets/folder.png')} />
+            {/* Chef guide - show for chefs only */}
+            {isChef && (
+              <NavButton href="/chef/guide" label="Chef Guide" isActive={pathname === '/chef/guide'} iconSource={require('../assets/notebook.png')} />
+            )}
           </View>
           {loggedIn && (
             <TouchableOpacity 
@@ -1211,6 +1216,19 @@ export default function NavBar() {
                   >
                     <Image source={require('../assets/list.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                     <Text style={styles.mobileMenuText}>FAQ</Text>
+                  </TouchableOpacity>
+                </Link>
+              )}
+
+              {/* Chef guide - show for chefs only */}
+              {isChef && (
+                <Link href="/chef/guide" asChild>
+                  <TouchableOpacity 
+                    style={styles.mobileMenuItem}
+                    onPress={() => setIsMenuOpen(false)}
+                  >
+                    <Image source={require('../assets/notebook.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                    <Text style={styles.mobileMenuText}>Chef Guide</Text>
                   </TouchableOpacity>
                 </Link>
               )}
@@ -1737,9 +1755,9 @@ const styles = StyleSheet.create({
         left: '50%',
         top: '50%',
         transform: [{ translateX: '-50%' }, { translateY: '-50%' }] as any,
-        overflow: 'visible', // Ensure underline isn't clipped
+        overflow: 'visible',
         marginLeft: 0,
-        maxWidth: 'calc(100% - 300px)', // Prevent overlap with right section
+        maxWidth: 'calc(100% - 520px)',
       },
       default: {
         flex: 1,
@@ -1758,26 +1776,27 @@ const styles = StyleSheet.create({
     borderRadius: 8,
   },
   navLinkText: {
-    fontSize: 14,
+    fontSize: 13,
     fontWeight: theme.typography.fontWeight.normal as any,
     color: TEXT_DARK,
-    lineHeight: 20,
+    lineHeight: 18,
     fontFamily: theme.typography.fontFamily.body,
     letterSpacing: 0.015,
   },
   navActionIcon: {
-    width: 18,
-    height: 18,
+    width: 16,
+    height: 16,
   },
   rightSection: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 12,
+    gap: 8,
   },
   desktopNavLinksGroup: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
+    gap: 0,
+    flexShrink: 1,
   },
   locationNavButton: {
     flexDirection: 'row',

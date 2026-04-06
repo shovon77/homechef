@@ -1934,6 +1934,7 @@ export default function ChefDashboard() {
   ];
 
   const footerNavItems = [
+    { key: 'guide' as const, label: 'How it works', iconSource: require('../../assets/idea.png'), action: 'guide' as const },
     { key: 'profile' as const, label: 'Profile', iconSource: require('../../assets/settings.png'), action: 'profile' as const },
     { key: 'logout' as const, label: 'Logout', iconSource: require('../../assets/exit.png'), action: 'logout' as const },
   ];
@@ -1976,6 +1977,8 @@ export default function ChefDashboard() {
           {footerNavItems.map(item => {
             const handlePress = item.action === 'logout'
               ? handleLogout
+              : item.action === 'guide'
+              ? () => router.push('/chef/guide')
               : handleProfileNavigation;
             return (
               <TouchableOpacity
