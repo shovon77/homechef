@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useRef, useState, startTransition } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView, unstable_batchedUpdates } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -204,30 +204,33 @@ export default function ChefDetailView() {
 
         if (!mounted) return;
 
-        setChef(chefData);
-        setChefImageError(false);
-
         const { data: dishRows, count } = dishesRes;
         const allDishes = (dishRows || []) as Dish[];
-        setDishes(allDishes);
-        setDishesTotal(count ?? allDishes.length);
-
-        // Derive newly-added (last 30 days) from the full dish list — no extra query
         const since30 = Date.now() - 30 * 24 * 60 * 60 * 1000;
-        setNewlyAddedDishes(
-          allDishes
-            .filter((d) => d.created_at && new Date(d.created_at).getTime() >= since30)
-            .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime())
-        );
-
-        // Derive best-sellers from the full dish list + IDs from order_items
+        const newlyAdded = allDishes
+          .filter((d) => d.created_at && new Date(d.created_at).getTime() >= since30)
+          .sort((a, b) => new Date(b.created_at!).getTime() - new Date(a.created_at!).getTime());
         const bestIdSet = new Set(bestSellerIds);
-        setBestSellerDishes(allDishes.filter((d) => bestIdSet.has(d.id)));
+        const bestSellers = allDishes.filter((d) => bestIdSet.has(d.id));
 
-        setReviews(reviewsData);
-        setIsFetchingDishes(false);
-        setIsFetchingReviews(false);
-        setLoading(false);
+        // Single batched update — prevents multiple render passes
+        const batchFn = () => {
+          setChef(chefData);
+          setChefImageError(false);
+          setDishes(allDishes);
+          setDishesTotal(count ?? allDishes.length);
+          setNewlyAddedDishes(newlyAdded);
+          setBestSellerDishes(bestSellers);
+          setReviews(reviewsData);
+          setIsFetchingDishes(false);
+          setIsFetchingReviews(false);
+          setLoading(false);
+        };
+        if (unstable_batchedUpdates) {
+          unstable_batchedUpdates(batchFn);
+        } else {
+          batchFn();
+        }
       } catch (e: unknown) {
         console.error('Error loading chef page', e);
         if (mounted) {
@@ -262,52 +265,51 @@ export default function ChefDetailView() {
     return () => clearTimeout(id);
   }, [raw, pathname, chef?.slug, router]);
 
-  // Compute distance when profile and chef have coords (with geocode fallback).
-  // Uses startTransition so geocode latency never blocks INP.
+  // Compute distance — deferred so it never blocks initial paint or interactions.
   useEffect(() => {
     if (!chef || !profile) {
       setDistanceKm(null);
       return;
     }
     let cancelled = false;
-    const run = async () => {
-      let userLat: number | null = typeof (profile as any)?.latitude === 'number' ? (profile as any).latitude : null;
-      let userLon: number | null = typeof (profile as any)?.longitude === 'number' ? (profile as any).longitude : null;
-      let chefLat: number | null = typeof (chef as any)?.latitude === 'number' ? (chef as any).latitude : null;
-      let chefLon: number | null = typeof (chef as any)?.longitude === 'number' ? (chef as any).longitude : null;
 
-      const needUserGeocode = (userLat == null || userLon == null) && (profile as any)?.location?.trim();
-      const needChefGeocode = (chefLat == null || chefLon == null) && chef?.location?.trim();
+    // Fast path: both have DB coords — compute synchronously, no defer needed
+    const userLat0: number | null = typeof (profile as any)?.latitude === 'number' ? (profile as any).latitude : null;
+    const userLon0: number | null = typeof (profile as any)?.longitude === 'number' ? (profile as any).longitude : null;
+    const chefLat0: number | null = typeof (chef as any)?.latitude === 'number' ? (chef as any).latitude : null;
+    const chefLon0: number | null = typeof (chef as any)?.longitude === 'number' ? (chef as any).longitude : null;
 
-      // Parallelise both geocode requests instead of running them sequentially
+    if (userLat0 != null && userLon0 != null && chefLat0 != null && chefLon0 != null) {
+      setDistanceKm(haversineKm(userLat0, userLon0, chefLat0, chefLon0));
+      return;
+    }
+
+    // Slow path: needs geocoding — defer to avoid blocking INP
+    const timerId = setTimeout(async () => {
+      let userLat = userLat0;
+      let userLon = userLon0;
+      let chefLat = chefLat0;
+      let chefLon = chefLon0;
+
       const [userGeo, chefGeo] = await Promise.all([
-        needUserGeocode
+        (userLat == null || userLon == null) && (profile as any)?.location?.trim()
           ? supabase.functions.invoke('google-geocode-forward', { body: { address: (profile as any).location } }).catch(() => ({ data: null }))
           : Promise.resolve({ data: null }),
-        needChefGeocode
+        (chefLat == null || chefLon == null) && chef?.location?.trim()
           ? supabase.functions.invoke('google-geocode-forward', { body: { address: chef.location } }).catch(() => ({ data: null }))
           : Promise.resolve({ data: null }),
       ]);
 
       if (cancelled) return;
-
-      if (userGeo.data?.lat != null && userGeo.data?.lng != null) {
-        userLat = userGeo.data.lat;
-        userLon = userGeo.data.lng;
-      }
-      if (chefGeo.data?.lat != null && chefGeo.data?.lng != null) {
-        chefLat = chefGeo.data.lat;
-        chefLon = chefGeo.data.lng;
-      }
+      if (userGeo.data?.lat != null && userGeo.data?.lng != null) { userLat = userGeo.data.lat; userLon = userGeo.data.lng; }
+      if (chefGeo.data?.lat != null && chefGeo.data?.lng != null) { chefLat = chefGeo.data.lat; chefLon = chefGeo.data.lng; }
 
       if (!cancelled && userLat != null && userLon != null && chefLat != null && chefLon != null) {
         startTransition(() => setDistanceKm(haversineKm(userLat!, userLon!, chefLat!, chefLon!)));
-      } else if (!cancelled) {
-        startTransition(() => setDistanceKm(null));
       }
-    };
-    run();
-    return () => { cancelled = true; };
+    }, 0);
+
+    return () => { cancelled = true; clearTimeout(timerId); };
   }, [chef, profile]);
 
   const avatar = chef?.photo || chef?.avatar || '';

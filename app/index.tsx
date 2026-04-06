@@ -53,104 +53,40 @@ function saveCacheToStorage() {
   }
 }
 
-// Geocode an address with persistent caching and retry logic
-async function geocodeAddress(address: string, retries = 2): Promise<{ lat: number; lon: number } | null> {
+// Geocode an address — single attempt, no retries, no delays.
+// Distance display is non-critical; never worth blocking INP for seconds.
+async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
   if (!address) return null;
-  
-  // Check in-memory cache first
+
   if (coordinateCache.has(address)) {
-    const cached = coordinateCache.get(address);
-    if (cached) return cached; // Only return if we have valid coordinates
-    // If cached as null, don't retry immediately (was a persistent failure)
-    // But allow one retry attempt
+    return coordinateCache.get(address) ?? null;
   }
 
-  // Try different address formats
-  const addressVariants = [
-    address, // Full address first
-    address.split(',').slice(0, 2).join(',').trim(), // City, State
-    address.split(',')[0]?.trim(), // Just city
-  ].filter((v, i, arr) => v && arr.indexOf(v) === i); // Remove duplicates
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000);
 
-  for (let variantIndex = 0; variantIndex < addressVariants.length; variantIndex++) {
-    const addressToTry = addressVariants[variantIndex];
-    
-    // Check cache for this variant
-    if (coordinateCache.has(addressToTry)) {
-      const cached = coordinateCache.get(addressToTry);
-      if (cached) {
-        // Cache the result for the original address too
-        coordinateCache.set(address, cached);
+    const response = await fetch(
+      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=0`,
+      { headers: { 'User-Agent': 'YourHomeChef/1.0' }, signal: controller.signal }
+    );
+    clearTimeout(timeoutId);
+
+    if (!response.ok) return null;
+    const data = await response.json();
+    if (data?.[0]) {
+      const coords = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
+      if (!isNaN(coords.lat) && !isNaN(coords.lon)) {
+        coordinateCache.set(address, coords);
         saveCacheToStorage();
-        return cached;
+        return coords;
       }
     }
-
-    for (let attempt = 0; attempt <= retries; attempt++) {
-      try {
-        const encodedAddress = encodeURIComponent(addressToTry);
-        const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 5000); // 5 second timeout
-        
-        const response = await fetch(
-          `https://nominatim.openstreetmap.org/search?format=json&q=${encodedAddress}&limit=1&addressdetails=0`,
-          {
-            headers: {
-              'User-Agent': 'YourHomeChef/1.0'
-            },
-            signal: controller.signal
-          }
-        );
-        
-        clearTimeout(timeoutId);
-        
-        if (!response.ok) {
-          throw new Error(`Geocoding failed: ${response.status}`);
-        }
-        
-        const data = await response.json();
-        if (data && data.length > 0) {
-          const coords = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-          // Validate coordinates
-          if (isNaN(coords.lat) || isNaN(coords.lon)) {
-            throw new Error('Invalid coordinates returned');
-          }
-          // Cache for both the variant and original address
-          coordinateCache.set(addressToTry, coords);
-          coordinateCache.set(address, coords);
-          saveCacheToStorage();
-          return coords;
-        }
-        
-        // If no results, try next variant or retry
-        if (attempt < retries) {
-          await new Promise(resolve => setTimeout(resolve, 300)); // Small delay between retries
-          continue;
-        }
-        
-        // This variant failed, try next one
-        break;
-      } catch (error: any) {
-        if (attempt === retries) {
-          // Final attempt for this variant failed, try next variant
-          if (variantIndex === addressVariants.length - 1) {
-            // All variants failed
-            if (error.name === 'AbortError') {
-              console.warn('Geocoding timeout for:', address);
-            } else {
-              console.warn('Geocoding error for:', address, error);
-            }
-            // Don't cache failures - allow retry on next load
-            return null;
-          }
-          break; // Try next variant
-        }
-        // Wait before retry
-        await new Promise(resolve => setTimeout(resolve, 300 * (attempt + 1)));
-      }
-    }
+  } catch {
+    // timeout or network error — skip silently
   }
-  
+
+  coordinateCache.set(address, null);
   return null;
 }
 
@@ -609,124 +545,113 @@ export default function HomePage() {
     return () => { mounted = false; };
   }, []);
 
+  // Distance calculation — deferred so it never blocks first paint or user interactions.
   useEffect(() => {
-    let mounted = true;
+    if (chefs.length === 0) return;
 
     const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
     const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
     const hasProfileCoords = profileLat !== null && profileLon !== null;
-
-    // Skip recalc if distances are already populated and location hasn't changed
     const locKey = normalizeLocationKey((profile as any)?.location) || `${profileLat},${profileLon}`;
+
     if (chefDistances.size > 0 && lastDistanceLocationRef.current === locKey) return;
     lastDistanceLocationRef.current = locKey;
 
-    // If we can't compute user coords quickly, fall back to cached geocoding once.
-    (async () => {
-      let userCoords: { lat: number; lon: number } | null = null;
-      const userLocationKey = normalizeLocationKey((profile as any)?.location);
+    let mounted = true;
 
+    // Defer distance work so initial render / scroll is never blocked (P0).
+    const timerId = setTimeout(async () => {
+      let userCoords: { lat: number; lon: number } | null = null;
       if (hasProfileCoords) {
         userCoords = { lat: profileLat!, lon: profileLon! };
       } else if ((profile as any)?.location) {
         userCoords = await geocodeAddress(String((profile as any).location));
       }
+      if (!mounted || !userCoords) return;
 
-      if (!mounted || !userCoords || chefs.length === 0) {
-        if (mounted) setChefDistances(new Map());
+      const userLocationKey = normalizeLocationKey((profile as any)?.location);
+      const next = new Map<string, number>();
+
+      // P5: fast path — compute distances purely from DB coords (no network)
+      let allHaveCoords = true;
+      for (const chef of chefs) {
+        const chefId = normalizeId((chef as any)?.id);
+        const chefLat = toFiniteNumberOrNull((chef as any)?.latitude);
+        const chefLon = toFiniteNumberOrNull((chef as any)?.longitude);
+        const chefLocationKey = normalizeLocationKey((chef as any)?.location);
+
+        if (userLocationKey && chefLocationKey && userLocationKey === chefLocationKey) {
+          next.set(chefId, 0);
+        } else if (chefLat !== null && chefLon !== null) {
+          const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
+          if (Number.isFinite(d)) next.set(chefId, d);
+        } else {
+          allHaveCoords = false;
+        }
+      }
+
+      // If every chef already had coords, apply immediately — no geocoding needed.
+      if (allHaveCoords) {
+        if (mounted) startTransition(() => setChefDistances(next));
         return;
       }
 
-      // Prefetch chef coordinates from profiles when chef table has no lat/lon.
-      // This avoids geocoding and makes distance display faster.
+      // Slow path: fetch profile coords + geocode for chefs missing coords
       try {
-        const chefUserIds = Array.from(
-          new Set(
-            chefs
-              .map((c) => String((c as any)?.user_id || ''))
-              .filter(Boolean)
-          )
-        );
+        const missingChefs = chefs.filter((c) => {
+          const lat = toFiniteNumberOrNull((c as any)?.latitude);
+          const lon = toFiniteNumberOrNull((c as any)?.longitude);
+          return lat === null || lon === null;
+        });
 
-        const missingUserIds = chefUserIds.filter((uid) => !chefProfileCoordCache.has(uid));
+        const missingUserIds = [...new Set(missingChefs.map((c) => String((c as any)?.user_id || '')).filter(Boolean))]
+          .filter((uid) => !chefProfileCoordCache.has(uid));
 
         if (missingUserIds.length > 0) {
           const { data: rows, error } = await supabase
             .from('profiles')
             .select('id, latitude, longitude')
             .in('id', missingUserIds);
-
           if (!error && Array.isArray(rows)) {
-            // Mark all requested IDs as null by default; fill when valid coords present.
             missingUserIds.forEach((uid) => chefProfileCoordCache.set(uid, null));
             rows.forEach((r: any) => {
               const lat = toFiniteNumberOrNull(r?.latitude);
               const lon = toFiniteNumberOrNull(r?.longitude);
-              if (lat !== null && lon !== null) {
-                chefProfileCoordCache.set(String(r.id), { lat, lon });
-              }
+              if (lat !== null && lon !== null) chefProfileCoordCache.set(String(r.id), { lat, lon });
             });
           }
         }
+
+        for (const chef of missingChefs) {
+          if (!mounted) return;
+          const chefId = normalizeId((chef as any)?.id);
+          if (next.has(chefId)) continue;
+
+          const chefUserId = String((chef as any)?.user_id || '');
+          const profCoords = chefUserId ? chefProfileCoordCache.get(chefUserId) : null;
+          if (profCoords) {
+            const d = calculateDistanceFromCoords(userCoords, profCoords);
+            if (Number.isFinite(d)) next.set(chefId, d);
+            continue;
+          }
+
+          const chefLoc = (chef as any)?.location;
+          if (chefLoc) {
+            const coords = await geocodeAddress(String(chefLoc));
+            if (coords) {
+              const d = calculateDistanceFromCoords(userCoords, coords);
+              if (Number.isFinite(d)) next.set(chefId, d);
+            }
+          }
+        }
       } catch {
-        // If profile lookups are blocked (RLS) or fail, we just fall back to geocoding.
+        // non-critical
       }
 
-      const next = new Map<string, number>();
+      if (mounted) startTransition(() => setChefDistances(next));
+    }, 0);
 
-      // Compute distances (coords-first, geocode fallback)
-      await Promise.all(
-        chefs.map(async (chef) => {
-          try {
-            const chefId = normalizeId((chef as any)?.id);
-            const chefLat = toFiniteNumberOrNull((chef as any)?.latitude);
-            const chefLon = toFiniteNumberOrNull((chef as any)?.longitude);
-
-            // If the user and chef location strings match, treat distance as 0 (avoid bad geocode mismatches).
-            const chefLocationKey = normalizeLocationKey((chef as any)?.location);
-            if (userLocationKey && chefLocationKey && userLocationKey === chefLocationKey) {
-              next.set(chefId, 0);
-              return;
-            }
-
-            if (chefLat !== null && chefLon !== null) {
-              const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
-              if (Number.isFinite(d)) next.set(chefId, d);
-              return;
-            }
-
-            // Second preference: chef's profile stored coordinates (if available)
-            const chefUserId = String((chef as any)?.user_id || '');
-            if (chefUserId) {
-              const profCoords = chefProfileCoordCache.get(chefUserId);
-              if (profCoords) {
-                const d = calculateDistanceFromCoords(userCoords, profCoords);
-                if (Number.isFinite(d)) next.set(chefId, d);
-                return;
-              }
-            }
-
-            // Fallback: geocode chef location (cached) if coords not stored
-            const chefLoc = (chef as any)?.location;
-            if (chefLoc) {
-              const coords = await geocodeAddress(String(chefLoc));
-              if (coords) {
-                const d = calculateDistanceFromCoords(userCoords, coords);
-                if (Number.isFinite(d)) next.set(chefId, d);
-              }
-            }
-          } catch {
-            // ignore per-chef distance failures
-          }
-        })
-      );
-
-      if (mounted) setChefDistances(next);
-    })();
-
-    return () => {
-      mounted = false;
-    };
+    return () => { mounted = false; clearTimeout(timerId); };
   }, [profile, chefs]);
 
   const handleSearch = () => {

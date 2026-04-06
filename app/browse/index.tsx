@@ -650,67 +650,71 @@ export default function BrowsePage() {
             setChefs(chefsData);
             setTotal(count ?? chefsData.length);
 
-            // Compute distances for chef cards when user location is available
+            // Cache immediately (without distances) so the grid paints first
+            cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
+              dishes: [], chefs: chefsData, cuisines: [], total: count ?? chefsData.length, distances: {}, dishPage: 0, hasMore: false,
+            };
+
+            // Defer distance computation so it never blocks first paint / scroll (P0+P1)
             const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
             const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
             const hasUserCoords = profileLat !== null && profileLon !== null;
             const hasUserLocation = !!(profile?.location?.trim());
             if ((hasUserCoords || hasUserLocation) && profile && chefsData.length > 0) {
-              let userLat: number;
-              let userLng: number;
-              if (hasUserCoords) {
-                userLat = profileLat as number;
-                userLng = profileLon as number;
-              } else {
-                try {
-                  const { data: userGeoData, error: userGeoError } = await supabase.functions.invoke('google-geocode-forward', {
-                    body: { address: profile!.location },
-                  });
-                  if (userGeoError || !userGeoData?.lat || !userGeoData?.lng) {
-                    setChefDistances({});
+              setTimeout(async () => {
+                if (cancelled) return;
+                let userLat: number;
+                let userLng: number;
+                if (hasUserCoords) {
+                  userLat = profileLat as number;
+                  userLng = profileLon as number;
+                } else {
+                  try {
+                    const { data: userGeoData, error: userGeoError } = await supabase.functions.invoke('google-geocode-forward', {
+                      body: { address: profile!.location },
+                    });
+                    if (cancelled || userGeoError || !userGeoData?.lat || !userGeoData?.lng) return;
+                    userLat = userGeoData.lat;
+                    userLng = userGeoData.lng;
+                  } catch {
                     return;
                   }
-                  userLat = userGeoData.lat;
-                  userLng = userGeoData.lng;
-                } catch {
-                  setChefDistances({});
-                  return;
                 }
-              }
-              const distances: Record<number, number> = {};
-              for (const chef of chefsData) {
-                let chefLat = toFiniteNumberOrNull(chef.latitude);
-                let chefLon = toFiniteNumberOrNull(chef.longitude);
-                if (chefLat === null || chefLon === null) {
-                  if (chef.location?.trim()) {
-                    try {
-                      const { data: chefGeoData, error: chefGeoError } = await supabase.functions.invoke('google-geocode-forward', {
-                        body: { address: chef.location },
-                      });
-                      if (!chefGeoError && chefGeoData?.lat != null && chefGeoData?.lng != null) {
-                        chefLat = chefGeoData.lat;
-                        chefLon = chefGeoData.lng;
-                      }
-                    } catch {
-                      // skip this chef
-                    }
+                const distances: Record<number, number> = {};
+
+                // Fast path: chefs with DB coords (pure math, no network)
+                const needGeocode: Chef[] = [];
+                for (const chef of chefsData) {
+                  const chefLat = toFiniteNumberOrNull(chef.latitude);
+                  const chefLon = toFiniteNumberOrNull(chef.longitude);
+                  if (chefLat !== null && chefLon !== null) {
+                    distances[chef.id] = haversineKm(userLat, userLng, chefLat, chefLon);
+                  } else if (chef.location?.trim()) {
+                    needGeocode.push(chef);
                   }
                 }
-                if (chefLat !== null && chefLon !== null) {
-                  distances[chef.id] = haversineKm(userLat, userLng, chefLat, chefLon);
+
+                // Parallel geocode for missing coords (max 5 concurrent)
+                if (needGeocode.length > 0 && !cancelled) {
+                  await Promise.all(needGeocode.map(async (chef) => {
+                    try {
+                      const { data: gd } = await supabase.functions.invoke('google-geocode-forward', {
+                        body: { address: chef.location },
+                      });
+                      if (gd?.lat != null && gd?.lng != null) {
+                        distances[chef.id] = haversineKm(userLat, userLng, gd.lat, gd.lng);
+                      }
+                    } catch { /* skip */ }
+                  }));
                 }
-              }
-              if (!cancelled) {
-                setChefDistances(distances);
-                cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
-                  dishes: [], chefs: chefsData, cuisines: [], total: count ?? chefsData.length, distances, dishPage: 0, hasMore: false,
-                };
-              }
-            } else {
-              setChefDistances({});
-              cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
-                dishes: [], chefs: chefsData, cuisines: [], total: count ?? chefsData.length, distances: {}, dishPage: 0, hasMore: false,
-              };
+
+                if (!cancelled) {
+                  startTransition(() => setChefDistances(distances));
+                  cacheRef.current[makeCacheKey(tab, sortBy as string, debouncedQuery, cuisineFilter)] = {
+                    dishes: [], chefs: chefsData, cuisines: [], total: count ?? chefsData.length, distances, dishPage: 0, hasMore: false,
+                  };
+                }
+              }, 0);
             }
           }
         } else {
