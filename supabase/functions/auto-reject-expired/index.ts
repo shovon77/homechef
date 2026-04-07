@@ -23,9 +23,22 @@ serve(async (_req) => {
       try {
         const piId = order.stripe_payment_intent_id ?? order.payment_intent_id;
         if (piId) {
-          await stripe.paymentIntents.cancel(piId).catch((err) => {
-            console.warn('stripe cancel failed', err);
-          });
+          try {
+            const pi = await stripe.paymentIntents.retrieve(piId);
+            if (pi.status === 'succeeded' || pi.status === 'requires_capture') {
+              // Payment was captured — issue a full refund
+              if (pi.status === 'requires_capture') {
+                await stripe.paymentIntents.cancel(piId);
+              } else {
+                await stripe.refunds.create({ payment_intent: piId });
+              }
+            } else if (pi.status === 'requires_payment_method' || pi.status === 'requires_confirmation' || pi.status === 'requires_action' || pi.status === 'processing') {
+              await stripe.paymentIntents.cancel(piId);
+            }
+            // If already canceled/refunded, nothing to do
+          } catch (stripeErr) {
+            console.warn('[auto-reject-expired] stripe refund/cancel failed', order.id, stripeErr);
+          }
         }
         await adminClient
           .from('orders')
