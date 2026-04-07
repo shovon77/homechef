@@ -237,7 +237,7 @@ export default function CheckoutPage() {
       // Log the URLs being sent for debugging
       console.log('Checkout URLs:', { baseUrl, successUrl, cancelUrl, pickupAt: combined });
 
-      const url = await submitCheckout({
+      const checkoutPromise = submitCheckout({
         items: items.map(item => ({
           dish_id: Number(item.id),
           quantity: Number(item.quantity),
@@ -248,6 +248,12 @@ export default function CheckoutPage() {
         successUrl,
         cancelUrl,
       });
+
+      const timeoutPromise = new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new Error('Checkout is taking too long. Please try again.')), 30000)
+      );
+
+      const url = await Promise.race([checkoutPromise, timeoutPromise]);
 
       if (Platform.OS === 'web') {
         window.location.href = url;
