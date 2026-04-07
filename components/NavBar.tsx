@@ -292,9 +292,10 @@ export default function NavBar() {
       try {
         const { data, error } = await supabase
           .from('orders')
-          .select('status')
+          .select('status, payment_status')
           .eq('user_id', user.id)
           .in('status', ['requested', 'pending', 'ready', 'paid'])
+          .neq('payment_status', 'awaiting_payment')
         if (mounted && !error) {
           const statuses = (data ?? []).map((row: any) => row.status)
           setHasActiveOrder(statuses.length > 0)

@@ -149,6 +149,7 @@ export default function TrackOrderPage() {
             .select('*')
             .eq('id', Number(params.id))
             .eq('user_id', user.id)
+            .neq('payment_status', 'awaiting_payment')
             .maybeSingle();
           if (!r.error) selectedOrder = r.data as OrderRow | null;
         }
@@ -159,6 +160,7 @@ export default function TrackOrderPage() {
             .select('*')
             .eq('user_id', user.id)
             .in('status', ACTIVE_STATUSES as any)
+            .neq('payment_status', 'awaiting_payment')
             .order('created_at', { ascending: false })
             .limit(1);
           if (!r.error && Array.isArray(r.data) && r.data.length > 0) {
@@ -166,12 +168,13 @@ export default function TrackOrderPage() {
           }
         }
 
-        // Fetch ALL active orders for navigation
+        // Fetch ALL active orders for navigation (exclude unpaid)
         const allOrdersRes = await supabase
           .from('orders')
           .select('*')
           .eq('user_id', user.id)
           .in('status', ACTIVE_STATUSES as any)
+          .neq('payment_status', 'awaiting_payment')
           .order('created_at', { ascending: false });
 
         const activeOrders = (allOrdersRes.data || []) as OrderRow[];
