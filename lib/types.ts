@@ -44,6 +44,7 @@ export type Chef = {
   user_id?: string | null; // FK -> auth.users.id
   latitude?: number | null; // Geocoded latitude for faster distance calculations
   longitude?: number | null; // Geocoded longitude for faster distance calculations
+  pickup_availability?: Array<{ day: string; timeWindow: string }> | null;
 };
 
 // ============================================================================

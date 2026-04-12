@@ -969,10 +969,8 @@ export default function NavBar() {
             )}
             {/* Legal button - show for all users */}
             <NavButton href="/terms" label="Legal" isActive={isTermsPage} iconSource={require('../assets/folder.png')} />
-            {/* Chef guide - show for chefs only */}
-            {isChef && (
-              <NavButton href="/chef/guide" label="Chef Guide" isActive={pathname === '/chef/guide'} iconSource={require('../assets/notebook.png')} />
-            )}
+            {/* Chef guide - chefs, customers, and guests */}
+            <NavButton href="/chef/guide" label="Chef Guide" isActive={pathname === '/chef/guide'} iconSource={require('../assets/notebook.png')} />
           </View>
           {loggedIn && (
             <TouchableOpacity 
@@ -1221,18 +1219,16 @@ export default function NavBar() {
                 </Link>
               )}
 
-              {/* Chef guide - show for chefs only */}
-              {isChef && (
-                <Link href="/chef/guide" asChild>
-                  <TouchableOpacity 
-                    style={styles.mobileMenuItem}
-                    onPress={() => setIsMenuOpen(false)}
-                  >
-                    <Image source={require('../assets/notebook.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                    <Text style={styles.mobileMenuText}>Chef Guide</Text>
-                  </TouchableOpacity>
-                </Link>
-              )}
+              {/* Chef guide - chefs, customers, and guests */}
+              <Link href="/chef/guide" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/notebook.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>Chef Guide</Text>
+                </TouchableOpacity>
+              </Link>
 
               {/* Legal button - show for all logged-in users */}
               <Link href="/terms" asChild>
@@ -1352,6 +1348,17 @@ export default function NavBar() {
                 >
                   <Image source={require('../assets/list.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                   <Text style={styles.mobileMenuText}>FAQ</Text>
+                </TouchableOpacity>
+              </Link>
+
+              {/* Chef guide - guests */}
+              <Link href="/chef/guide" asChild>
+                <TouchableOpacity 
+                  style={styles.mobileMenuItem}
+                  onPress={() => setIsMenuOpen(false)}
+                >
+                  <Image source={require('../assets/notebook.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
+                  <Text style={styles.mobileMenuText}>Chef Guide</Text>
                 </TouchableOpacity>
               </Link>
 

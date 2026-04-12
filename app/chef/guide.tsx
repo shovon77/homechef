@@ -1,7 +1,9 @@
 'use client';
 
-import { View, Text, Image, TouchableOpacity, ScrollView, StyleSheet, Platform, useWindowDimensions } from 'react-native';
-import { useRouter, Link } from 'expo-router';
+import React, { useState } from 'react';
+import { View, Text, Image, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
+import { Link } from 'expo-router';
 import { theme } from '../../lib/theme';
 import { Screen } from '../../components/Screen';
 import { useRole } from '../../hooks/useRole';
@@ -14,6 +16,10 @@ const TEXT_MUTED = '#555555';
 const BORDER_LIGHT = '#EAECF0';
 const TIP_BG = '#FE734C10';
 const CONTENT_MAX_WIDTH = 720;
+/** Logged-in CTA sits above footer overlap (Screen footer marginTop: -60); keep enough inset when button is shown. */
+const GUIDE_SCROLL_BOTTOM_PADDING_WITH_CTA = 120;
+/** Guests / no CTA: small inset only; avoid flex:1 on ScrollView so content height isn’t stretched. */
+const GUIDE_SCROLL_BOTTOM_PADDING_DEFAULT = 80;
 
 type StepData = {
   title: string;
@@ -143,42 +149,71 @@ function StepCard({ step }: { step: StepData }) {
   );
 }
 
-function SectionHeader({ number, label }: { number: number; label: string }) {
+function CollapsibleSection({
+  sectionId,
+  title,
+  expanded,
+  onToggle,
+  children,
+}: {
+  sectionId: number;
+  title: string;
+  expanded: boolean;
+  onToggle: () => void;
+  children: React.ReactNode;
+}) {
   return (
-    <View style={sectionStyles.header}>
-      <View style={sectionStyles.line} />
-      <Text style={sectionStyles.label}>{number}. {label}</Text>
-      <View style={sectionStyles.line} />
+    <View style={accordionStyles.item}>
+      <TouchableOpacity
+        style={accordionStyles.headerBtn}
+        onPress={onToggle}
+        activeOpacity={0.7}
+        accessibilityRole="button"
+        accessibilityState={{ expanded }}
+        accessibilityLabel={`${sectionId}. ${title}`}
+      >
+        <Text style={[accordionStyles.sectionTitle, expanded && accordionStyles.sectionTitleExpanded]}>
+          {sectionId}. {title}
+        </Text>
+        <Ionicons
+          name={expanded ? 'chevron-up' : 'chevron-down'}
+          size={24}
+          color={PRIMARY_COLOR}
+        />
+      </TouchableOpacity>
+      {expanded && <View style={accordionStyles.body}>{children}</View>}
     </View>
   );
 }
 
 export default function ChefGuide() {
-  const router = useRouter();
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const { user } = useRole();
   const loggedIn = !!user;
+  const [expandedSection, setExpandedSection] = useState<number | null>(null);
+
+  const toggleSection = (id: number) => {
+    setExpandedSection((prev) => (prev === id ? null : id));
+  };
+
+  const scrollBottomPadding = loggedIn
+    ? GUIDE_SCROLL_BOTTOM_PADDING_WITH_CTA
+    : GUIDE_SCROLL_BOTTOM_PADDING_DEFAULT;
 
   return (
     <Screen style={{ backgroundColor: BG_PAGE }}>
-      <ScrollView
-        style={{ flex: 1, backgroundColor: BG_PAGE }}
-        contentContainerStyle={{
-          maxWidth: CONTENT_MAX_WIDTH,
-          alignSelf: 'center',
-          width: '100%',
-          padding: isMobile ? 20 : 32,
-          paddingBottom: 120,
-        }}
+      {/* Single scroll is Screen’s outer ScrollView; avoid nesting ScrollView here or tall
+          expanded sections get clipped by the flex viewport + footer overlap. */}
+      <View
+        style={[
+          pageStyles.pageWrap,
+          {
+            padding: isMobile ? 20 : 32,
+            paddingBottom: scrollBottomPadding,
+          },
+        ]}
       >
-        {loggedIn && (
-          <TouchableOpacity onPress={() => router.back()} style={pageStyles.backBtn}>
-            <Image source={require('../../assets/previous.png')} style={pageStyles.backIcon} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-            <Text style={pageStyles.backText}>Back to Dashboard</Text>
-          </TouchableOpacity>
-        )}
-
         <Text style={[pageStyles.pageTitle, isMobile && pageStyles.pageTitleMobile]}>
           Chef Guide
         </Text>
@@ -186,26 +221,66 @@ export default function ChefGuide() {
           From sign-up to your first sale
         </Text>
 
-        <SectionHeader number={1} label="Submitting your application" />
-        {SECTION_1.map((s, i) => <StepCard key={`s1-${i}`} step={s} />)}
+        <View style={accordionStyles.sectionsWrap}>
+          <CollapsibleSection
+            sectionId={1}
+            title="Submitting your application"
+            expanded={expandedSection === 1}
+            onToggle={() => toggleSection(1)}
+          >
+            {SECTION_1.map((s, i) => (
+              <StepCard key={`s1-${i}`} step={s} />
+            ))}
+          </CollapsibleSection>
 
-        <SectionHeader number={2} label="After you submit" />
-        {SECTION_2.map((s, i) => <StepCard key={`s2-${i}`} step={s} />)}
+          <CollapsibleSection
+            sectionId={2}
+            title="After you submit"
+            expanded={expandedSection === 2}
+            onToggle={() => toggleSection(2)}
+          >
+            {SECTION_2.map((s, i) => (
+              <StepCard key={`s2-${i}`} step={s} />
+            ))}
+          </CollapsibleSection>
 
-        <SectionHeader number={3} label="Setting up Stripe Connect" />
-        {SECTION_3.map((s, i) => <StepCard key={`s3-${i}`} step={s} />)}
+          <CollapsibleSection
+            sectionId={3}
+            title="Setting up Stripe Connect"
+            expanded={expandedSection === 3}
+            onToggle={() => toggleSection(3)}
+          >
+            {SECTION_3.map((s, i) => (
+              <StepCard key={`s3-${i}`} step={s} />
+            ))}
+          </CollapsibleSection>
 
-        <SectionHeader number={4} label="Managing your orders" />
-        {SECTION_4.map((s, i) => <StepCard key={`s4-${i}`} step={s} />)}
+          <CollapsibleSection
+            sectionId={4}
+            title="Managing your orders"
+            expanded={expandedSection === 4}
+            onToggle={() => toggleSection(4)}
+          >
+            {SECTION_4.map((s, i) => (
+              <StepCard key={`s4-${i}`} step={s} />
+            ))}
+          </CollapsibleSection>
 
-        <SectionHeader number={5} label="Tips for success" />
-        <View style={stepStyles.card}>
-          {TIPS.map((tip, i) => (
-            <View key={i} style={tipListStyles.row}>
-              <View style={tipListStyles.bullet} />
-              <Text style={tipListStyles.text}>{tip}</Text>
+          <CollapsibleSection
+            sectionId={5}
+            title="Tips for success"
+            expanded={expandedSection === 5}
+            onToggle={() => toggleSection(5)}
+          >
+            <View style={stepStyles.card}>
+              {TIPS.map((tip, i) => (
+                <View key={i} style={tipListStyles.row}>
+                  <View style={tipListStyles.bullet} />
+                  <Text style={tipListStyles.text}>{tip}</Text>
+                </View>
+              ))}
             </View>
-          ))}
+          </CollapsibleSection>
         </View>
 
         {loggedIn && (
@@ -215,28 +290,17 @@ export default function ChefGuide() {
             </TouchableOpacity>
           </Link>
         )}
-      </ScrollView>
+      </View>
     </Screen>
   );
 }
 
 const pageStyles = StyleSheet.create({
-  backBtn: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    marginBottom: 24,
-    alignSelf: 'flex-start',
-  },
-  backIcon: {
-    width: 18,
-    height: 18,
-  },
-  backText: {
-    color: PRIMARY_COLOR,
-    fontSize: 14,
-    fontWeight: '600' as const,
-    fontFamily: theme.typography.fontFamily.body,
+  pageWrap: {
+    backgroundColor: BG_PAGE,
+    maxWidth: CONTENT_MAX_WIDTH,
+    alignSelf: 'center',
+    width: '100%',
   },
   pageTitle: {
     color: TEXT_DARK,
@@ -268,30 +332,44 @@ const pageStyles = StyleSheet.create({
   ctaBtnText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700' as const,
+    fontWeight: '400' as const,
     fontFamily: theme.typography.fontFamily.body,
   },
 });
 
-const sectionStyles = StyleSheet.create({
-  header: {
+const accordionStyles = StyleSheet.create({
+  sectionsWrap: {
+    marginTop: 12,
+  },
+  item: {
+    paddingVertical: theme.spacing.md,
+    borderBottomWidth: 1,
+    borderBottomColor: '#E5E5E5',
+  },
+  headerBtn: {
     flexDirection: 'row',
+    justifyContent: 'space-between',
     alignItems: 'center',
-    gap: 12,
-    marginTop: 36,
-    marginBottom: 20,
+    paddingVertical: theme.spacing.xs,
+    paddingHorizontal: theme.spacing.sm,
+    width: '100%',
   },
-  line: {
+  sectionTitle: {
     flex: 1,
-    height: 1,
-    backgroundColor: BORDER_LIGHT,
-  },
-  label: {
+    paddingRight: theme.spacing.md,
     color: TEXT_DARK,
-    fontSize: 18,
-    fontWeight: '400' as const,
-    fontFamily: theme.typography.fontFamily.body,
-    textAlign: 'center',
+    fontSize: 20,
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.bold,
+    lineHeight: 20 * 1.4,
+  },
+  sectionTitleExpanded: {
+    color: PRIMARY_COLOR,
+  },
+  body: {
+    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
+    paddingBottom: theme.spacing.xs,
   },
 });
 

@@ -6,7 +6,7 @@ import { useRouter, Link } from 'expo-router';
 import Screen from '../../components/Screen';
 import { useCart } from '../../context/CartContext';
 import { getChefById } from '../../lib/db';
-import { combineLocalDateTime, isValidPickup } from '../../lib/datetime';
+import { combineLocalDateTime, isValidPickup, getAvailableDatesForChef, getTimeSlotsForDate } from '../../lib/datetime';
 import { safeToFixed } from '../../lib/number';
 import { submitCheckout } from '../../lib/orders';
 import ENV from '@/lib/env';
@@ -43,6 +43,7 @@ export default function CheckoutPage() {
   const [selectedDate, setSelectedDate] = useState<Date | null>(null);
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showDateTimePicker, setShowDateTimePicker] = useState(false);
+  const [chefPickupAvailability, setChefPickupAvailability] = useState<Array<{ day: string; timeWindow: string }> | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -52,6 +53,7 @@ export default function CheckoutPage() {
         if (!cancelled) {
           setChefName(null);
           setChefLocation(null);
+          setChefPickupAvailability(null);
         }
         return;
       }
@@ -60,6 +62,13 @@ export default function CheckoutPage() {
       if (cancelled) return;
 
       setChefName(chef?.name ?? null);
+
+      const availability = chef?.pickup_availability;
+      if (Array.isArray(availability) && availability.length > 0) {
+        setChefPickupAvailability(availability);
+      } else {
+        setChefPickupAvailability(null);
+      }
 
       // Pickup location should come from the chef's profile record (fallback to chefs.location).
       let pickupLocation: string | null = chef?.location ?? null;
@@ -107,68 +116,41 @@ export default function CheckoutPage() {
   const total = useMemo(() => subtotal + platformFee, [subtotal, platformFee]);
   const totalCents = useMemo(() => Math.round(total * 100), [total]);
   
-  // Generate dates for next day + 2 days (3 days total)
-  // If current time is >= 8 PM, start from tomorrow instead of today
+  // If chef has pickup_availability, only show dates whose weekday matches.
+  // Otherwise fall back to next 3 days from tomorrow.
   const availableDates = useMemo(() => {
+    if (chefPickupAvailability && chefPickupAvailability.length > 0) {
+      return getAvailableDatesForChef(chefPickupAvailability);
+    }
+
     const now = new Date();
-    const currentHour = now.getHours();
-    
-    // If it's after 8 PM, start from tomorrow (next day)
-    // Otherwise, we can show today if it's before 8 PM, but since we want "next day + 2 days",
-    // we'll always start from tomorrow to be consistent
-    const startOffset = currentHour >= 20 ? 1 : 1; // Always start from tomorrow
-    
     return Array.from({ length: 3 }, (_, i) => {
       const d = new Date();
-      d.setDate(now.getDate() + startOffset + i);
-      d.setHours(0, 0, 0, 0); // Reset time to midnight
+      d.setDate(now.getDate() + 1 + i);
+      d.setHours(0, 0, 0, 0);
       return d;
     });
-  }, []);
+  }, [chefPickupAvailability]);
 
-  // Generate time slots from 8am to 8pm in hourly intervals
-  // Takes into account current time - if selected date is today, only shows future times
-  // MUST be before any early returns to satisfy Rules of Hooks
+  // Show time slots only after a date is selected.
+  // If chef has pickup_availability, filter to their configured windows; otherwise full 8AM-8PM.
   const timeSlots = useMemo(() => {
-    const now = new Date();
-    const currentHour = now.getHours();
-    const slots: Array<{ value: string; label: string }> = [];
-    
-    // If it's after 8 PM, no times available for today
-    // Since available dates start from tomorrow when it's after 8 PM,
-    // we can always show full range for future dates
-    let minHour = 8; // Default start at 8 AM
-    
-    if (selectedDate) {
-      const selectedDateStr = selectedDate.toDateString();
-      const todayStr = now.toDateString();
-      
-      // If selected date is today (shouldn't happen if it's after 8 PM, but handle it)
-      if (selectedDateStr === todayStr) {
-        // If it's already past 8 PM, no times available for today
-        if (currentHour >= 20) {
-          return [];
-        }
-        // Start from the next hour if current time is between 8 AM and 8 PM
-        if (currentHour >= 8) {
-          minHour = currentHour + 1;
-        }
-      }
-      // For future dates, show all times from 8 AM to 8 PM
+    if (!selectedDate) return [];
+
+    if (chefPickupAvailability && chefPickupAvailability.length > 0) {
+      return getTimeSlotsForDate(chefPickupAvailability, selectedDate);
     }
-    
-    for (let hour = minHour; hour <= 20; hour++) {
+
+    // Fallback: full 8AM-8PM range
+    const slots: Array<{ value: string; label: string }> = [];
+    for (let hour = 8; hour <= 20; hour++) {
       const hour24 = hour.toString().padStart(2, '0');
       const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
       const ampm = hour < 12 ? 'AM' : 'PM';
-      
-      slots.push({
-        value: `${hour24}:00`,
-        label: `${hour12}:00 ${ampm}`,
-      });
+      slots.push({ value: `${hour24}:00`, label: `${hour12}:00 ${ampm}` });
     }
     return slots;
-  }, [selectedDate]);
+  }, [selectedDate, chefPickupAvailability]);
   
   // Check if date and time are both selected
   const isFormValid = selectedDate !== null && selectedTime.trim().length > 0;
@@ -195,16 +177,17 @@ export default function CheckoutPage() {
     const combined = new Date(selectedDate);
     combined.setHours(hour, minute, 0, 0);
 
-    // Validate that the date is within the allowed range (next day + 3 days)
+    // Validate that the date is within the allowed range
     const today = new Date();
     today.setHours(0, 0, 0, 0);
     const minDate = new Date(today);
     minDate.setDate(today.getDate() + 1); // Tomorrow
     const maxDate = new Date(today);
-    maxDate.setDate(today.getDate() + 3); // Next day + 2 days (3 days total)
+    const maxDaysAhead = (chefPickupAvailability && chefPickupAvailability.length > 0) ? 14 : 3;
+    maxDate.setDate(today.getDate() + maxDaysAhead);
     
     if (combined < minDate || combined > maxDate) {
-      Alert.alert('Invalid date', 'Pickup must be between tomorrow and 3 days from now.');
+      Alert.alert('Invalid date', `Pickup must be within the next ${maxDaysAhead} days.`);
       return;
     }
 
@@ -394,18 +377,7 @@ export default function CheckoutPage() {
                 </TouchableOpacity>
           </View>
 
-          <View style={styles.pickupLocationRow}>
-            <Text style={styles.pickupLocationLabel}>Pickup location</Text>
-            <View style={styles.pickupLocationValueContainer}>
-              {chefLocation ? (
-                <Text style={styles.pickupLocationValue}>{formatLocationDisplay(chefLocation)}</Text>
-              ) : (
-                <Text style={styles.pickupLocationValue}>Location not available</Text>
-              )}
-            </View>
-          </View>
-
-          {/* Display selected date and time */}
+          {/* Selected date and time */}
           {(selectedDate || selectedTime) && (
             <View style={styles.selectedDateTimeDisplay}>
               {selectedDate && (
@@ -423,6 +395,17 @@ export default function CheckoutPage() {
               )}
             </View>
           )}
+
+          <View style={styles.pickupLocationRow}>
+            <Text style={styles.pickupLocationLabel}>Pickup location</Text>
+            <View style={styles.pickupLocationValueContainer}>
+              {chefLocation ? (
+                <Text style={styles.pickupLocationValue}>{formatLocationDisplay(chefLocation)}</Text>
+              ) : (
+                <Text style={styles.pickupLocationValue}>Location not available</Text>
+              )}
+            </View>
+          </View>
 
           {/* Date/Time Picker Modal */}
           <Modal
@@ -467,6 +450,8 @@ export default function CheckoutPage() {
                             onPress={() => {
                               setSelectedDate(date);
                               setDateInput(date.toISOString().split('T')[0]);
+                              setSelectedTime('');
+                              setTimeInput('');
                             }}
                             style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
                           >
@@ -482,28 +467,46 @@ export default function CheckoutPage() {
                   {/* Time Picker Wheel */}
                   <View style={styles.inlinePickerWheel}>
                     <Text style={styles.inlinePickerLabel}>Time</Text>
-                    <ScrollView 
-                      style={styles.pickerWheelContainer} 
-                      contentContainerStyle={styles.pickerWheelContent}
+                    <ScrollView
+                      style={styles.pickerWheelContainer}
+                      contentContainerStyle={
+                        !selectedDate || timeSlots.length === 0
+                          ? [styles.pickerWheelContent, styles.pickerTimePlaceholderScrollContent]
+                          : styles.pickerWheelContent
+                      }
                       showsVerticalScrollIndicator={false}
                     >
-                      {timeSlots.map((timeSlot) => {
-                        const isSelected = selectedTime === timeSlot.value;
-                        return (
-                <TouchableOpacity
-                  key={timeSlot.value}
-                            onPress={() => {
-                              setSelectedTime(timeSlot.value);
-                              setTimeInput(timeSlot.value);
-                            }}
-                            style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
-                          >
-                            <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
-                    {timeSlot.label}
-                  </Text>
-                </TouchableOpacity>
-                        );
-                      })}
+                      {!selectedDate ? (
+                        <View style={styles.pickerTimePlaceholder}>
+                          <Text style={styles.pickerTimePlaceholderText}>
+                            Select a date first. Pickup times will appear here.
+                          </Text>
+                        </View>
+                      ) : timeSlots.length === 0 ? (
+                        <View style={styles.pickerTimePlaceholder}>
+                          <Text style={styles.pickerTimePlaceholderText}>
+                            No pickup times for this day.
+                          </Text>
+                        </View>
+                      ) : (
+                        timeSlots.map((timeSlot) => {
+                          const isSelected = selectedTime === timeSlot.value;
+                          return (
+                            <TouchableOpacity
+                              key={timeSlot.value}
+                              onPress={() => {
+                                setSelectedTime(timeSlot.value);
+                                setTimeInput(timeSlot.value);
+                              }}
+                              style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
+                            >
+                              <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
+                                {timeSlot.label}
+                              </Text>
+                            </TouchableOpacity>
+                          );
+                        })
+                      )}
                     </ScrollView>
                   </View>
                 </View>
@@ -818,6 +821,25 @@ const styles = StyleSheet.create({
     paddingTop: 20, // Reduced top padding to bring items closer to header
     paddingBottom: 100, // Keep bottom padding for scrolling
     paddingHorizontal: 20,
+  },
+  pickerTimePlaceholderScrollContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    minHeight: 200,
+    paddingBottom: 40,
+  },
+  pickerTimePlaceholder: {
+    paddingHorizontal: 12,
+    paddingVertical: 24,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pickerTimePlaceholderText: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.xl,
+    fontFamily: 'OpenSans_400Regular',
+    opacity: 0.4,
+    textAlign: 'center',
   },
   pickerWheelItem: {
     paddingVertical: 20,

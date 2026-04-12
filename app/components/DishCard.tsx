@@ -1,6 +1,6 @@
 import React, { useState } from "react";
 import { View, Text, Image, TouchableOpacity, Pressable, StyleSheet, ViewStyle, StyleProp, Platform } from "react-native";
-import { Link, useRouter } from "expo-router";
+import { Link } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Button } from "../../components/ui/Button";
 import { useCart } from "../../context/CartContext";
@@ -16,7 +16,7 @@ const BRAND_BLACK = '#33393A';
 type DishCardProps = {
   dish: any;
   style?: StyleProp<ViewStyle>;
-  variant?: 'default' | 'explore' | 'homepage';
+  variant?: 'default' | 'explore';
   /** When true (e.g. on chef detail page), show price and rating on same line */
   inlinePriceRating?: boolean;
   /** When true (e.g. on chef detail page), show quantity controls overlayed on bottom of image */
@@ -24,16 +24,12 @@ type DishCardProps = {
 };
 
 export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false }: DishCardProps) {
-  const router = useRouter();
   const avg = typeof dish.rating === 'number' && dish.rating > 0 ? dish.rating : 0;
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
   const [quantity, setQuantity] = useState(1);
   const cartQty = getQty(dish.id);
 
-  const cardImageUri = optimizeDishImageUrl(
-    dish.image ?? null,
-    variant === 'homepage' ? 560 : 480
-  );
+  const cardImageUri = optimizeDishImageUrl(dish.image ?? null, 480);
   const imageEl = (
     <Link href={`/dish/${dish.id}`} asChild>
       <TouchableOpacity
@@ -138,48 +134,6 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
       </View>
     </View>
   );
-
-  if (variant === 'homepage') {
-    return (
-      <Pressable
-        onPress={() => router.push(`/dish/${dish.id}`)}
-        onPressIn={() => prefetchDishWithChef(Number(dish.id))}
-        style={({ pressed }) => StyleSheet.flatten([styles.cardExplore, style, pressed && { opacity: 0.8 }])}
-      >
-        <View style={styles.imageContainerExplore}>
-            <OptimizedImage uri={cardImageUri} style={styles.image} />
-          </View>
-          <View style={[styles.exploreContent, styles.exploreContentHomepage]}>
-            <Text style={[styles.name, styles.nameExplore, styles.nameHomepage]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
-            <View style={styles.chefRatingPriceRowHomepage}>
-              <View style={styles.chefNameLeftHomepage}>
-                {chefDisplayName && (
-                  <Text style={[styles.chefName, styles.homepageMetaText]} numberOfLines={1}>
-                    {chefDisplayName}
-                  </Text>
-                )}
-              </View>
-              {avg > 0 ? (
-                <View style={[styles.ratingRow, styles.ratingRowExplore, styles.ratingCenterHomepage]}>
-                  <Image
-                    source={require('../../assets/star.png')}
-                    style={styles.homepageStarIcon}
-                    tintColor={PRIMARY_COLOR}
-                    resizeMode="contain"
-                  />
-                  <Text style={[styles.ratingText, styles.homepageMetaText]}>{safeToFixed(avg)}</Text>
-                </View>
-              ) : <View style={styles.ratingCenterHomepage} />}
-              <View style={styles.priceRightHomepage}>
-                <Text style={[styles.price, styles.homepageMetaText]} numberOfLines={1}>
-                  {formatCad(Number(dish.price) ?? 0)}
-                </Text>
-              </View>
-            </View>
-          </View>
-        </Pressable>
-    );
-  }
 
   const quantityControlsExplore = (
     <View style={[styles.quantityRowExplore, quantityOnImage && styles.quantityRowExploreOverlay]}>
@@ -396,26 +350,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: theme.spacing.sm,
     paddingBottom: theme.spacing.xs,
   },
-  exploreContentHomepage: {
-    alignItems: 'stretch',
-  },
-  nameHomepage: {
-    textAlign: 'left',
-  },
-  chefNameLeftHomepage: {
-    flex: 1,
-    alignItems: 'flex-start',
-    justifyContent: 'center',
-  },
-  ratingCenterHomepage: {
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  priceRightHomepage: {
-    flex: 1,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
   chefRatingRowExplore: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -444,30 +378,6 @@ const styles = StyleSheet.create({
   priceRatingRowExploreTight: {
     marginTop: 1,
     minHeight: 0,
-  },
-  ratingPriceRowHomepage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    width: '100%',
-    marginTop: 4,
-  },
-  chefRatingPriceRowHomepage: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    width: '100%',
-    marginTop: 4,
-  },
-  homepageMetaText: {
-    fontSize: 14,
-    lineHeight: 18,
-    color: BRAND_BLACK,
-    fontFamily: theme.typography.fontFamily.body,
-    fontWeight: '400',
-  },
-  homepageStarIcon: {
-    width: 12,
-    height: 12,
   },
   priceAndQuantityRowExplore: {
     flexDirection: 'row',

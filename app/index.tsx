@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, startTransition } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType } from "react-native";
+import React, { useEffect, useState, useMemo, startTransition, useCallback } from "react";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
 import { Link, useRouter } from "expo-router";
 
 import { supabase } from "../lib/supabase";
@@ -15,6 +15,10 @@ type Dish = { id: number; name: string; image?: string | null; price?: number | 
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 const FEATURED_CHEFS_LIMIT = 30;
+/** Same batch size as Explore dishes tab infinite scroll */
+const BROWSE_GRID_DISHES_PER_PAGE = 24;
+
+type BrowseGridDish = Record<string, any>;
 
 // Coordinate cache with persistent storage
 const coordinateCache = new Map<string, { lat: number; lon: number } | null>();
@@ -261,6 +265,7 @@ export default function HomePage() {
   const isMobile = width < 768;
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
+  const dishGridColumns = isMobile ? 2 : isTablet ? 3 : 4;
   const { isChef, isAdmin, profile } = useRole();
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [dishes, setDishes] = useState<Dish[]>([]);
@@ -344,6 +349,12 @@ export default function HomePage() {
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
+  const [browseGridDishes, setBrowseGridDishes] = useState<BrowseGridDish[]>([]);
+  const [browseDishPage, setBrowseDishPage] = useState(0);
+  const [hasMoreBrowseDishes, setHasMoreBrowseDishes] = useState(true);
+  const [loadingBrowseGridInitial, setLoadingBrowseGridInitial] = useState(true);
+  const [loadingMoreBrowseGrid, setLoadingMoreBrowseGrid] = useState(false);
+
   const [PLACEHOLDERS, setPLACEHOLDERS] = useState<string[]>([
     "Craving spicy mutton biryani?",
     "Or maybe a classic chicken pulao?",
@@ -545,6 +556,84 @@ export default function HomePage() {
     return () => { mounted = false; };
   }, []);
 
+  // Explore-style dish grid below How it works / Become a chef (infinite scroll via Screen onScroll)
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoadingBrowseGridInitial(true);
+      try {
+        const { data, error } = await supabase
+          .from("dishes")
+          .select(
+            "id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)"
+          )
+          .eq("chefs.status", "active")
+          .eq("chefs.stripe_connect_completed", true)
+          .or("is_active.eq.true,is_active.is.null")
+          .order("created_at", { ascending: false })
+          .range(0, BROWSE_GRID_DISHES_PER_PAGE - 1);
+        if (cancelled) return;
+        if (error) throw error;
+        const rows = (data ?? []) as BrowseGridDish[];
+        setBrowseGridDishes(rows);
+        setBrowseDishPage(0);
+        setHasMoreBrowseDishes(rows.length >= BROWSE_GRID_DISHES_PER_PAGE);
+      } catch (e) {
+        console.error("[home] browse grid initial load:", e);
+        if (!cancelled) {
+          setBrowseGridDishes([]);
+          setHasMoreBrowseDishes(false);
+        }
+      } finally {
+        if (!cancelled) setLoadingBrowseGridInitial(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
+  const loadMoreBrowseGrid = useCallback(async () => {
+    if (loadingMoreBrowseGrid || !hasMoreBrowseDishes || loadingBrowseGridInitial) return;
+    const nextPage = browseDishPage + 1;
+    const from = nextPage * BROWSE_GRID_DISHES_PER_PAGE;
+    const to = from + BROWSE_GRID_DISHES_PER_PAGE - 1;
+    setLoadingMoreBrowseGrid(true);
+    try {
+      const { data, error } = await supabase
+        .from("dishes")
+        .select(
+          "id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)"
+        )
+        .eq("chefs.status", "active")
+        .eq("chefs.stripe_connect_completed", true)
+        .or("is_active.eq.true,is_active.is.null")
+        .order("created_at", { ascending: false })
+        .range(from, to);
+      if (error) throw error;
+      const newDishes = (data ?? []) as BrowseGridDish[];
+      setBrowseGridDishes((prev) => [...prev, ...newDishes]);
+      setBrowseDishPage(nextPage);
+      setHasMoreBrowseDishes(newDishes.length >= BROWSE_GRID_DISHES_PER_PAGE);
+    } catch (err) {
+      console.error("[home] browse grid load more:", err);
+    } finally {
+      setLoadingMoreBrowseGrid(false);
+    }
+  }, [loadingMoreBrowseGrid, hasMoreBrowseDishes, loadingBrowseGridInitial, browseDishPage]);
+
+  const handleHomeScroll = useCallback(
+    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
+      if (!hasMoreBrowseDishes || loadingMoreBrowseGrid || loadingBrowseGridInitial) return;
+      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
+      const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
+      if (distanceFromBottom < 600) {
+        loadMoreBrowseGrid();
+      }
+    },
+    [hasMoreBrowseDishes, loadingMoreBrowseGrid, loadingBrowseGridInitial, loadMoreBrowseGrid]
+  );
+
   // Distance calculation — deferred so it never blocks first paint or user interactions.
   useEffect(() => {
     if (chefs.length === 0) return;
@@ -721,6 +810,8 @@ export default function HomePage() {
         web: 100,
         default: 80,
       })}
+      onScroll={handleHomeScroll}
+      scrollEventThrottle={16}
     >
         <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
           {/* Hero section - matches HTML design */}
@@ -835,7 +926,13 @@ export default function HomePage() {
             >
               {displayDishes.map((dish, index) => (
                 <View key={`${dish.id}-${index}`} style={{ width: CARD_WIDTH }}>
-                  <DishCard dish={dish} variant="homepage" style={{ width: '100%' }} />
+                  <DishCard
+                    dish={dish}
+                    variant="explore"
+                    inlinePriceRating
+                    quantityOnImage
+                    style={{ width: '100%', backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
+                  />
                 </View>
               ))}
             </ScrollView>
@@ -1020,6 +1117,62 @@ export default function HomePage() {
               </View>
             </View>
           )}
+
+          {/* Explore-style dish grid (same card + columns as /browse dishes) */}
+          <View style={[styles.section, styles.homeBrowseGridSection]}>
+            <View style={styles.homeBrowseGridHeader}>
+              <Text
+                style={[
+                  styles.sectionTitle,
+                  styles.homeSectionTitleSmaller,
+                  isMobile && styles.sectionTitleMobile,
+                  isMobile && styles.homeSectionTitleSmallerMobile,
+                  styles.homeBrowseGridHeadingText,
+                ]}
+                numberOfLines={2}
+              >
+                Explore dishes
+              </Text>
+              <Link href="/browse?tab=dishes" asChild>
+                <TouchableOpacity style={styles.homeBrowseGridSeeAll}>
+                  <Text style={styles.homeBrowseGridSeeAllText}>See all</Text>
+                </TouchableOpacity>
+              </Link>
+            </View>
+            {loadingBrowseGridInitial ? (
+              <View style={styles.homeBrowseGridLoading}>
+                <ActivityIndicator size="large" color="#FE734C" />
+              </View>
+            ) : browseGridDishes.length === 0 ? (
+              <Text style={styles.homeBrowseGridEmpty}>No dishes available right now.</Text>
+            ) : (
+              <>
+                <View style={styles.homeBrowseGridOuter}>
+                  <View style={styles.homeBrowseGrid}>
+                    {browseGridDishes.map((dish) => (
+                      <View
+                        key={dish.id}
+                        style={[styles.homeBrowseGridCardWrapper, { width: `${100 / dishGridColumns}%` }]}
+                      >
+                        <DishCard
+                          dish={dish}
+                          variant="explore"
+                          inlinePriceRating
+                          quantityOnImage
+                          style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
+                        />
+                      </View>
+                    ))}
+                  </View>
+                </View>
+                {loadingMoreBrowseGrid && (
+                  <View style={styles.homeBrowseGridFooter}>
+                    <ActivityIndicator size="small" color="#FE734C" />
+                  </View>
+                )}
+              </>
+            )}
+          </View>
         </View>
       </Screen>
 
@@ -1730,6 +1883,65 @@ const styles = StyleSheet.create({
   heroSubtitleMobile: {
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
+  },
+  homeBrowseGridSection: {
+    marginBottom: theme.spacing.lg,
+  },
+  homeBrowseGridHeader: {
+    flexDirection: "row",
+    alignItems: "center",
+    justifyContent: "space-between",
+    paddingHorizontal: theme.spacing.md,
+    paddingBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  homeBrowseGridHeadingText: {
+    flex: 1,
+    minWidth: 0,
+    paddingHorizontal: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+  },
+  homeBrowseGridSeeAll: {
+    paddingVertical: 6,
+    paddingHorizontal: theme.spacing.sm,
+  },
+  homeBrowseGridSeeAllText: {
+    color: "#FE734C",
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: "600" as const,
+  },
+  homeBrowseGridLoading: {
+    paddingVertical: theme.spacing["2xl"],
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  homeBrowseGridEmpty: {
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.lg,
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    color: "#555555",
+    textAlign: "center",
+  },
+  homeBrowseGridOuter: {
+    paddingHorizontal: theme.spacing.md,
+  },
+  homeBrowseGrid: {
+    flexDirection: "row",
+    flexWrap: "wrap",
+    justifyContent: "flex-start",
+    marginHorizontal: -6,
+  },
+  homeBrowseGridCardWrapper: {
+    paddingHorizontal: 6,
+    marginBottom: 16,
+  },
+  homeBrowseGridFooter: {
+    width: "100%",
+    paddingVertical: theme.spacing.lg,
+    alignItems: "center",
   },
   sectionTitleMobile: {
     fontFamily: theme.typography.fontFamily.display,
