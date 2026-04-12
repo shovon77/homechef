@@ -1564,9 +1564,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
     paddingTop: 0,
-    paddingBottom: 0,
+    paddingBottom: theme.spacing.md,
     marginTop: 0,
-    marginBottom: -theme.spacing.xl,
+    marginBottom: theme.spacing.lg,
     gap: theme.spacing.sm,
   },
   becomeChefButton: {
