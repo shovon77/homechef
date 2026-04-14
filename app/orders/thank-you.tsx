@@ -34,6 +34,17 @@ export default function OrderThankYouPage() {
   const [chefName, setChefName] = useState<string | null>(null);
   const [chefId, setChefId] = useState<number | null>(null);
   const [isSummaryExpanded, setIsSummaryExpanded] = useState(true);
+  const [orderTotals, setOrderTotals] = useState<{
+    total_cents: number | null;
+    subtotal_cents: number | null;
+    platform_fee_cents: number | null;
+    tax_cents: number | null;
+  }>({
+    total_cents: null,
+    subtotal_cents: null,
+    platform_fee_cents: null,
+    tax_cents: null,
+  });
 
   useEffect(() => {
     let mounted = true;
@@ -47,12 +58,18 @@ export default function OrderThankYouPage() {
         // Fetch order details
         const { data: orderData, error: orderError } = await supabase
           .from('orders')
-          .select('pickup_at, chef_id')
+          .select('pickup_at, chef_id, total_cents, subtotal_cents, platform_fee_cents, tax_cents')
           .eq('id', Number(params.id))
           .maybeSingle();
         
         if (!orderError && mounted && orderData) {
           setPickupAt(orderData.pickup_at ?? null);
+          setOrderTotals({
+            total_cents: typeof orderData.total_cents === 'number' ? orderData.total_cents : null,
+            subtotal_cents: typeof orderData.subtotal_cents === 'number' ? orderData.subtotal_cents : null,
+            platform_fee_cents: typeof orderData.platform_fee_cents === 'number' ? orderData.platform_fee_cents : null,
+            tax_cents: typeof orderData.tax_cents === 'number' ? orderData.tax_cents : null,
+          });
           
           // Fetch chef name
           if (orderData.chef_id) {
@@ -107,17 +124,20 @@ export default function OrderThankYouPage() {
     };
   }, [params.id]);
 
-  // Calculate totals
-  const subtotalCents = useMemo(
+  // Totals match what was charged at checkout (see create-checkout: subtotal + platform fee; tax_cents is 0 unless enabled later).
+  const itemsSubtotalCents = useMemo(
     () => items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0),
     [items]
   );
-  // Platform service fee: flat $1.50 (150 cents)
-  const platformFeeCents = 150;
-  // Taxes: 13% HST on subtotal only (Ontario rate)
-  const taxesCents = useMemo(() => Math.round(subtotalCents * 0.13), [subtotalCents]);
-  // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not shown to customer
-  const totalCents = useMemo(() => subtotalCents + platformFeeCents + taxesCents, [subtotalCents, platformFeeCents, taxesCents]);
+  const subtotalCents = orderTotals.subtotal_cents ?? itemsSubtotalCents;
+  const platformFeeCents = orderTotals.platform_fee_cents ?? 150;
+  const taxesCents = orderTotals.tax_cents ?? 0;
+  const totalCents = useMemo(() => {
+    if (orderTotals.total_cents != null && Number.isFinite(orderTotals.total_cents)) {
+      return orderTotals.total_cents;
+    }
+    return subtotalCents + platformFeeCents + taxesCents;
+  }, [orderTotals.total_cents, subtotalCents, platformFeeCents, taxesCents]);
 
   if (loading) {
     return (
@@ -189,10 +209,12 @@ export default function OrderThankYouPage() {
                   <Text style={styles.priceLabel}>Platform service fee</Text>
                   <Text style={styles.priceValue}>{cents(platformFeeCents)}</Text>
                 </View>
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Taxes</Text>
-                  <Text style={styles.priceValue}>{cents(taxesCents)}</Text>
-                </View>
+                {taxesCents > 0 ? (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.priceLabel}>Taxes</Text>
+                    <Text style={styles.priceValue}>{cents(taxesCents)}</Text>
+                  </View>
+                ) : null}
                 
                 <View style={styles.divider} />
                 
