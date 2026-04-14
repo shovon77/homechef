@@ -36,13 +36,13 @@ const SECTION_1: StepData[] = [
   },
   {
     title: 'Fill out the chef application',
-    body: 'Go to the chef application page and tell us about yourself \u2014 your name, cuisine style, location, and a short bio. Upload a profile photo so customers can get to know you.',
+    body: 'Go to the homepage \u2014 in the middle of the page you\u2019ll find a button that takes you to the chef application. Tell us about yourself \u2014 your name, cuisine style, location, and a short bio. Upload a profile photo so customers can get to know you. You\u2019ll set your preferred pickup times; customers can only choose from the times you make available. You can update your pickup availability anytime in your profile if your schedule changes.',
     tipText: 'Be detailed in your bio \u2014 customers love knowing the story behind the food.',
     iconSource: require('../../assets/edit.png'),
   },
   {
     title: 'Submit your application',
-    body: 'Review your details and hit submit. You\u2019ll receive a confirmation notification that your application has been received.',
+    body: 'Review your details and hit submit. You\u2019ll receive a confirmation notification that your application has been received. While our team reviews and approves your application, you can keep editing your menu as needed \u2014 add dishes, adjust prices, or update descriptions until you\u2019re happy with it.',
     tipText: 'Make sure your phone number is up to date in your profile so you receive SMS notifications for new orders and updates.',
     iconSource: require('../../assets/success.png'),
   },
