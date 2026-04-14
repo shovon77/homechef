@@ -132,8 +132,7 @@ export default function OrderThankYouPage() {
       scroll
       contentPadding={0}
       style={{ backgroundColor: BG_LIGHT }}
-      compactFooter
-      {...{ contentContainerStyle: styles.scrollContent }}
+      scrollViewContentStyle={styles.scrollContent}
     >
       <View style={styles.container}>
         <Text style={styles.title}>Thank you for your order!</Text>
@@ -226,14 +225,17 @@ export default function OrderThankYouPage() {
 const styles = StyleSheet.create({
   scrollContent: {
     alignItems: 'center',
-    paddingBottom: 16,
     paddingTop: 24,
+    // Room below the in-scroll Footer; Screen also inserts the footer with marginTop: -60 over content above it.
+    paddingBottom: 32,
   },
   container: {
     width: '100%',
     maxWidth: 520,
     paddingHorizontal: 24,
-    paddingVertical: 16,
+    paddingTop: 16,
+    // Keep action buttons above the footer overlap (Screen footer wrapper uses marginTop: -60).
+    paddingBottom: 88,
     alignItems: 'center',
     gap: 16,
   },
@@ -368,6 +370,8 @@ const styles = StyleSheet.create({
   },
   actions: {
     width: '100%',
+    maxWidth: 260,
+    alignSelf: 'center',
     gap: 12,
     marginTop: 8,
   },
@@ -375,25 +379,27 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY,
     borderRadius: 12,
     paddingVertical: 14,
+    paddingHorizontal: 20,
     alignItems: 'center',
   },
   primaryButtonText: {
     color: '#FFFFFF',
     fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '400',
+    fontFamily: 'OpenSans_400Regular',
   },
   secondaryButton: {
     borderRadius: 12,
     borderWidth: 1,
     borderColor: PRIMARY,
     paddingVertical: 14,
+    paddingHorizontal: 20,
     alignItems: 'center',
   },
   secondaryButtonText: {
     color: PRIMARY,
     fontSize: 16,
-    fontWeight: '700',
-    fontFamily: 'OpenSans_700Bold',
+    fontWeight: '400',
+    fontFamily: 'OpenSans_400Regular',
   },
 });
