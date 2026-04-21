@@ -10,7 +10,7 @@ import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import Screen from "../../components/Screen";
 import { formatCad } from "../../lib/money";
-import { optimizeDishImageUrl } from "../../lib/dishImageUrl";
+import { optimizeDishDetailHeroUrl } from "../../lib/dishImageUrl";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -32,6 +32,38 @@ const REVIEWS_PAGE_SIZE = 20;
 const ScreenCmp: any = Screen;
 const ViewCmp: any = View;
 const ImageCmp: any = Image;
+
+/**
+ * Prefer `portion` from DB; if empty, treat a short trailing description line
+ * (e.g. "1lb 12 dollar") as portion so legacy menu text still shows as "Portion size:".
+ */
+function splitDescriptionAndPortion(
+  description: string | null | undefined,
+  portionFromDb: string | null | undefined
+): { descriptionToShow: string; portionToShow: string | null } {
+  const fromDb = portionFromDb?.trim();
+  if (fromDb) {
+    return { descriptionToShow: (description ?? '').trim(), portionToShow: fromDb };
+  }
+  const raw = (description ?? '').trim();
+  if (!raw) return { descriptionToShow: '', portionToShow: null };
+  const lines = raw.split(/\r?\n/);
+  let end = lines.length;
+  while (end > 0 && !(lines[end - 1] ?? '').trim()) end--;
+  if (end === 0) return { descriptionToShow: raw, portionToShow: null };
+  const lastLine = (lines[end - 1] ?? '').trim();
+  const hasMeasureWord =
+    /\b(lb|lbs|oz|g|kg|ml|L|piece|pice|pc|pieces|servings?|serving)\b/i.test(lastLine) ||
+    /\d+(?:\.\d+)?(lb|lbs|oz|g|kg|ml)\b/i.test(lastLine);
+  const looksLikePortionTail =
+    lastLine.length > 0 &&
+    lastLine.length <= 160 &&
+    /\d/.test(lastLine) &&
+    (hasMeasureWord || (/\bdollars?\b/i.test(lastLine) && lastLine.length <= 96));
+  if (!looksLikePortionTail) return { descriptionToShow: raw, portionToShow: null };
+  const body = lines.slice(0, end - 1).join('\n').trim();
+  return { descriptionToShow: body, portionToShow: lastLine };
+}
 
 export default function DishDetail() {
   const router = useRouter();
@@ -418,8 +450,9 @@ export default function DishDetail() {
 
   const chefId = dish.chef_id != null ? Number(dish.chef_id) : null;
   const chefName = chef?.name || dish.chef || 'Chef';
-  const mainImage = optimizeDishImageUrl(dish.image ?? null, imageMaxW);
+  const mainImage = optimizeDishDetailHeroUrl(dish.image ?? null, imageMaxW);
   const chefAvatarUri = chef?.photo || chef?.avatar || null;
+  const { descriptionToShow, portionToShow } = splitDescriptionAndPortion(dish.description, dish.portion);
 
   return (
     <ScreenCmp style={{ backgroundColor: BACKGROUND_LIGHT }} scrollRef={pageScrollRef}>
@@ -474,8 +507,14 @@ export default function DishDetail() {
               </Text>
             </TouchableOpacity>
 
-            {dish.description ? (
-              <Text style={styles.description}>{dish.description}</Text>
+            {descriptionToShow ? (
+              <Text style={styles.description}>{descriptionToShow}</Text>
+            ) : null}
+            {portionToShow ? (
+              <View style={[styles.portionRow, descriptionToShow ? styles.portionAfterDescription : styles.portionStandalone]}>
+                <Text style={styles.portionLabel}>Portion size:</Text>
+                <Text style={styles.portionValue}>{` ${portionToShow}`}</Text>
+              </View>
             ) : null}
 
             <View style={styles.priceAndCartRow}>
@@ -540,7 +579,7 @@ export default function DishDetail() {
             </View>
             </View>
 
-            <View style={styles.notesContainer}>
+            <View style={[styles.notesContainer, isMobile && styles.notesContainerMobile]}>
               <Text style={styles.notesButtonText}>Chef notes</Text>
               <TextInput
                 style={styles.notesInput}
@@ -608,8 +647,14 @@ export default function DishDetail() {
             </TouchableOpacity>
 
             {/* Description */}
-            {dish.description ? (
-              <Text style={styles.description}>{dish.description}</Text>
+            {descriptionToShow ? (
+              <Text style={styles.description}>{descriptionToShow}</Text>
+            ) : null}
+            {portionToShow ? (
+              <View style={[styles.portionRow, descriptionToShow ? styles.portionAfterDescription : styles.portionStandalone]}>
+                <Text style={styles.portionLabel}>Portion size:</Text>
+                <Text style={styles.portionValue}>{` ${portionToShow}`}</Text>
+              </View>
             ) : null}
 
             {/* Price (right-aligned above plus) and Cart quantity (minus / qty / plus) */}
@@ -699,7 +744,7 @@ export default function DishDetail() {
 
         {/* Tabs Section */}
         <View
-          style={styles.tabsSection}
+          style={[styles.tabsSection, isMobile && styles.tabsSectionMobile]}
           nativeID={REVIEWS_SECTION_ID}
           {...(Platform.OS === 'web' ? ({ id: REVIEWS_SECTION_ID } as any) : {})}
           testID={REVIEWS_SECTION_ID}
@@ -1044,6 +1089,33 @@ const styles = StyleSheet.create({
     lineHeight: theme.typography.fontSize.base * 1.5,
     marginTop: theme.spacing.md,
   },
+  portionRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'flex-start',
+  },
+  portionLabel: {
+    color: TEXT_GRAY,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: theme.typography.fontSize.base * 1.5,
+    fontWeight: '400',
+    flexShrink: 0,
+  },
+  portionValue: {
+    color: TEXT_GRAY,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: theme.typography.fontSize.base * 1.5,
+    flex: 1,
+    minWidth: 0,
+  },
+  portionAfterDescription: {
+    marginTop: theme.spacing.sm,
+  },
+  portionStandalone: {
+    marginTop: theme.spacing.md,
+  },
   price: {
     color: TEXT_DARK,
     fontSize: Platform.select({
@@ -1172,6 +1244,10 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     borderTopWidth: 0,
     borderTopColor: 'transparent',
+  },
+  /** Tighter gap below Chef notes on narrow viewports */
+  tabsSectionMobile: {
+    marginTop: theme.spacing.sm,
   },
   tabsContainer: {
     // Two white separator lines with centered tabs
@@ -1481,6 +1557,9 @@ const styles = StyleSheet.create({
     gap: theme.spacing.xs,
     width: '100%',
     paddingHorizontal: theme.spacing.md,
+  },
+  notesContainerMobile: {
+    marginBottom: theme.spacing.sm,
   },
   notesButton: {
     alignSelf: 'flex-start',

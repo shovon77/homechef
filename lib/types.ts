@@ -59,6 +59,8 @@ export type Dish = {
   category: string | null;
   image: string | null; // default URL
   description: string | null;
+  /** Portion size per serving/order (e.g. "500g", "2 servings") */
+  portion?: string | null;
   ingredients: string | null;
   thumbnail: string | null;
   featured: boolean; // default false
