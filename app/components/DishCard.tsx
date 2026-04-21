@@ -6,7 +6,7 @@ import { Button } from "../../components/ui/Button";
 import { useCart } from "../../context/CartContext";
 import { safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
-import { optimizeDishImageUrl } from "../../lib/dishImageUrl";
+import { optimizeDishCardImageUrl } from "../../lib/dishImageUrl";
 import { prefetchDishWithChef } from "../../lib/db";
 import OptimizedImage from "../../components/OptimizedImage";
 
@@ -29,7 +29,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
   const [quantity, setQuantity] = useState(1);
   const cartQty = getQty(dish.id);
 
-  const cardImageUri = optimizeDishImageUrl(dish.image ?? null, 480);
+  const cardImageUri = optimizeDishCardImageUrl(dish.image ?? null, 480);
   const imageEl = (
     <Link href={`/dish/${dish.id}`} asChild>
       <TouchableOpacity

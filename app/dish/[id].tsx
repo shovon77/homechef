@@ -9,6 +9,7 @@ import type { Dish, DishWithChef, DishRating } from "../../lib/types";
 import { useCart } from "../../context/CartContext";
 import { useRole } from "../../hooks/useRole";
 import Screen from "../../components/Screen";
+import OptimizedImage from "../../components/OptimizedImage";
 import { formatCad } from "../../lib/money";
 import { optimizeDishDetailHeroUrl } from "../../lib/dishImageUrl";
 
@@ -464,11 +465,12 @@ export default function DishDetail() {
           <View style={styles.mobileStack}>
             <View style={styles.mobileImageWrap}>
               <View style={[styles.mainImageContainer, styles.mainImageContainerMobile]}>
-                <Image
-                  source={{ uri: mainImage }}
+                <OptimizedImage
+                  uri={mainImage}
                   style={styles.mainImage as any}
                   resizeMode="cover"
-                  {...(Platform.OS === 'web' ? { decoding: 'async', loading: 'eager', fetchpriority: 'high' } as any : {})}
+                  lazy={false}
+                  fetchPriority="high"
                 />
               </View>
             </View>
@@ -601,11 +603,12 @@ export default function DishDetail() {
         <View style={styles.grid}>
           <View style={styles.imageColumn}>
             <View style={styles.mainImageContainer}>
-              <Image
-                source={{ uri: mainImage }}
+              <OptimizedImage
+                uri={mainImage}
                 style={styles.mainImage as any}
                 resizeMode="cover"
-                {...(Platform.OS === 'web' ? { decoding: 'async', loading: 'eager', fetchpriority: 'high' } as any : {})}
+                lazy={false}
+                fetchPriority="high"
               />
             </View>
           </View>

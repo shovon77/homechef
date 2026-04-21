@@ -44,7 +44,8 @@ export function optimizeDishImageUrl(uri: string | null | undefined, maxW: numbe
 }
 
 /**
- * Dish **detail hero** only: bounding-box resize with `contain` (no server-side crop).
+ * Bounding-box resize with `contain` (no server-side `cover` crop).
+ * Used for dish **detail hero** and **DishCard** thumbnails; pass max edge (hero: viewport-based, cards: ~480).
  * The UI still uses `resizeMode="cover"` so the frame is filled on device.
  *
  * Supabase: `width` + `height` + `resize=contain` inside a square box capped by `maxDimension`.
@@ -81,6 +82,9 @@ export function optimizeDishDetailHeroUrl(uri: string | null | undefined, maxDim
 
   return raw;
 }
+
+/** Alias: dish cards on home, browse, and chef pages (`DishCard`). Same URL pipeline as `optimizeDishDetailHeroUrl`. */
+export const optimizeDishCardImageUrl = optimizeDishDetailHeroUrl;
 
 /**
  * Optimize any image URL (chef avatars, general assets) — same logic, different default size.

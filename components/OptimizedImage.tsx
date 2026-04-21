@@ -10,6 +10,8 @@ type Props = {
   resizeMode?: 'cover' | 'contain' | 'stretch' | 'center';
   /** loading="lazy" on web (default true for cards, false for hero/above-fold) */
   lazy?: boolean;
+  /** Web only: hint download priority (use "high" with lazy={false} for LCP heroes) */
+  fetchPriority?: 'high' | 'low' | 'auto';
 };
 
 const PLACEHOLDER_COLOR = '#FFFFFF';
@@ -30,16 +32,28 @@ if (Platform.OS === 'web' && typeof document !== 'undefined') {
  * Image wrapper that:
  * - On web: uses a CSS-animated shimmer (GPU-composited, zero JS overhead even with 50+ instances)
  * - On native: uses Animated.loop (native driver)
- * - Adds `loading="lazy"` + `decoding="async"` on web
+ * - Adds `loading` (lazy vs eager) + `decoding="async"` on web; optional `fetchPriority`
  * - Accepts explicit `width`/`height` for CLS prevention
  */
-export default function OptimizedImage({ uri, style, width, height, resizeMode = 'cover', lazy = true }: Props) {
+export default function OptimizedImage({
+  uri,
+  style,
+  width,
+  height,
+  resizeMode = 'cover',
+  lazy = true,
+  fetchPriority,
+}: Props) {
   const [loaded, setLoaded] = useState(false);
 
   const sizeStyle = width && height ? { width, height } : {};
 
   const webProps = Platform.OS === 'web'
-    ? { loading: lazy ? 'lazy' : 'eager', decoding: 'async' } as any
+    ? ({
+        loading: lazy ? 'lazy' : 'eager',
+        decoding: 'async',
+        ...(fetchPriority ? { fetchPriority } : {}),
+      } as any)
     : {};
 
   if (Platform.OS === 'web') {
