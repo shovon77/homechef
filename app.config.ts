@@ -5,6 +5,15 @@ export default {
     name: 'HomeChef',
     slug: 'homechef',
     scheme: 'homechef',
+    plugins: [
+      [
+        'expo-calendar',
+        {
+          calendarPermission:
+            'HomeChef can add your order pickup to your calendar when you use the calendar button.',
+        },
+      ],
+    ],
     ios: {
       bundleIdentifier: 'com.homechef.app',
       infoPlist: {

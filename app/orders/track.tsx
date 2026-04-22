@@ -11,6 +11,7 @@ declare global {
 import React, { useEffect, useMemo, useState, useRef } from 'react';
 import { ActivityIndicator, Image, Linking, Pressable, StyleSheet, Text, TextInput, TouchableOpacity, View, Modal, ScrollView, Platform, Alert } from 'react-native';
 import { useLocalSearchParams, Link, router } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import { formatLocal } from '../../lib/datetime';
@@ -20,6 +21,18 @@ import { theme } from '../../lib/theme';
 import { uploadToBucket } from '../../lib/upload';
 import { createNotification } from '../../lib/notifications';
 import { formatLocationAddress } from '../../lib/formatAddress';
+import { addPickupToUserCalendar, getPickupWindow } from '../../lib/addPickupCalendarEvent';
+
+/** Build a tel: URL from a stored phone string (digits and optional leading +). */
+function phoneToTelUri(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  const cleaned = raw.trim().replace(/[^\d+]/g, '');
+  if (!cleaned || !cleaned.replace(/\+/g, '')) return null;
+  const normalized = cleaned.startsWith('+')
+    ? `+${cleaned.slice(1).replace(/\+/g, '')}`
+    : cleaned.replace(/\+/g, '');
+  return `tel:${normalized}`;
+}
 
 const BG = '#f6f8f8';
 const CARD_BG = '#FFFFFF';
@@ -966,58 +979,106 @@ export default function TrackOrderPage() {
           <Text style={styles.sectionTitle}>Status</Text>
           <Text style={styles.statusValue}>{stepMeta.label}</Text>
           <View style={styles.statusDetails}>
-            <View style={styles.infoRow}>
-              <Text style={styles.statusInfoLabel}>Pickup scheduled</Text>
-              <Text style={styles.statusInfoValue}>{formatPickupDateTime(order.pickup_at)}</Text>
+            {chef?.phone?.trim() ? (
+              <View style={styles.statusFieldBlock}>
+                <Text style={styles.statusBlockLabel}>Phone number</Text>
+                <View style={styles.statusValueWithIconRow}>
+                  <Text style={styles.statusFieldValue} numberOfLines={3}>
+                    {chef.phone.trim()}
+                  </Text>
+                  <TouchableOpacity
+                    style={styles.callIconButton}
+                    onPress={() => {
+                      const uri = phoneToTelUri(chef.phone);
+                      if (uri) Linking.openURL(uri);
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel={`Call chef at ${chef.phone.trim()}`}
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="call" size={16} color={PRIMARY} />
+                  </TouchableOpacity>
+                </View>
+              </View>
+            ) : null}
+            <View style={styles.statusFieldBlock}>
+              <Text style={styles.statusBlockLabel}>Pickup scheduled</Text>
+              <View style={styles.statusValueWithIconRow}>
+                <Text style={styles.statusFieldValue}>{formatPickupDateTime(order.pickup_at)}</Text>
+                {getPickupWindow(order.pickup_at) ? (
+                  <TouchableOpacity
+                    style={styles.callIconButton}
+                    onPress={() => {
+                      const { street, city, province } = formatLocationAddress(chef?.location);
+                      const locationLine =
+                        [street, city, province].filter(Boolean).join(', ') || (chef?.location ?? '');
+                      void addPickupToUserCalendar({
+                        pickupAt: order.pickup_at,
+                        orderId: order.id,
+                        locationDescription: locationLine,
+                      });
+                    }}
+                    accessibilityRole="button"
+                    accessibilityLabel="Add pickup to calendar"
+                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
+                  >
+                    <Ionicons name="calendar-outline" size={16} color={PRIMARY} />
+                  </TouchableOpacity>
+                ) : null}
+              </View>
             </View>
-            <View style={styles.infoRow}>
-              <Text style={styles.statusInfoLabel}>Pickup location</Text>
-              <View style={styles.locationValueContainer}>
-                {(() => {
-                  const { street, city, province } = formatLocationAddress(chef?.location);
-                  const oneLine = [street, city, province].filter(Boolean).join(', ');
-                  const addressForMaps = chef?.location || oneLine;
-                  return (
-                    <TouchableOpacity
-                      style={styles.pickupLocationLink}
-                      onPress={async () => {
-                        if (addressForMaps) {
-                          const encodedAddress = encodeURIComponent(addressForMaps);
-                          const mapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                          if (Platform.OS === 'web') {
-                            Linking.openURL(mapsWebUrl);
-                            return;
-                          }
-                          const mapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
-                          try {
-                            const canOpen = await Linking.canOpenURL(mapsAppUrl);
-                            if (canOpen) {
-                              await Linking.openURL(mapsAppUrl);
-                            } else {
-                              await Linking.openURL(mapsWebUrl);
-                            }
-                          } catch {
+            <View style={styles.statusFieldBlock}>
+              <Text style={styles.statusBlockLabel}>Pickup location</Text>
+              {(() => {
+                const { street, city, province } = formatLocationAddress(chef?.location);
+                const oneLine = [street, city, province].filter(Boolean).join(', ');
+                const addressForMaps = chef?.location || oneLine;
+                return (
+                  <TouchableOpacity
+                    style={styles.locationMapsPressable}
+                    onPress={async () => {
+                      if (addressForMaps) {
+                        const encodedAddress = encodeURIComponent(addressForMaps);
+                        const mapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                        if (Platform.OS === 'web') {
+                          Linking.openURL(mapsWebUrl);
+                          return;
+                        }
+                        const mapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
+                        try {
+                          const canOpen = await Linking.canOpenURL(mapsAppUrl);
+                          if (canOpen) {
+                            await Linking.openURL(mapsAppUrl);
+                          } else {
                             await Linking.openURL(mapsWebUrl);
                           }
+                        } catch {
+                          await Linking.openURL(mapsWebUrl);
                         }
-                      }}
-                      disabled={!addressForMaps}
-                    >
-                      <Text style={styles.locationAddressLine} numberOfLines={1} ellipsizeMode="tail">
+                      }
+                    }}
+                    disabled={!addressForMaps}
+                  >
+                    <View style={styles.locationRowSameLine}>
+                      <Text
+                        style={styles.locationAddressNested}
+                        numberOfLines={1}
+                        ellipsizeMode="tail"
+                      >
                         {oneLine}
                       </Text>
                       {addressForMaps ? (
                         <Image
                           source={require('../../assets/locationnewicon.png')}
-                          style={styles.pickupLocationIcon}
+                          style={styles.pickupLocationIconInline}
                           tintColor={PRIMARY}
                           resizeMode="contain"
                         />
                       ) : null}
-                    </TouchableOpacity>
-                  );
-                })()}
-              </View>
+                    </View>
+                  </TouchableOpacity>
+                );
+              })()}
             </View>
           </View>
         </View>
@@ -1648,27 +1709,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     fontFamily: theme.typography.fontFamily.body,
   },
-  infoRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'flex-start',
-    marginBottom: 12,
-  },
-  infoLabel: {
-    color: TEXT_MUTED,
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 1,
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  infoValue: {
-    color: TEXT_DARK,
-    fontSize: 14,
-    fontWeight: '600',
-    flex: 2,
-    textAlign: 'right',
-    fontFamily: theme.typography.fontFamily.body,
-  },
   contactButton: {
     marginTop: 12,
     flexDirection: 'row',
@@ -1707,43 +1747,57 @@ const styles = StyleSheet.create({
     marginTop: 8,
     gap: 12,
   },
-  statusInfoLabel: {
+  statusFieldBlock: {
+    gap: 8,
+  },
+  statusBlockLabel: {
     color: TEXT_DARK,
     fontSize: 14,
     fontWeight: '400',
-    flex: 1,
     fontFamily: theme.typography.fontFamily.body,
   },
-  statusInfoValue: {
-    color: TEXT_DARK,
-    fontSize: 14,
-    fontWeight: '400',
-    flex: 2,
-    textAlign: 'right',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  locationValueContainer: {
-    flex: 2,
-    alignItems: 'flex-end',
-    flexShrink: 1,
-    minWidth: 0,
-  },
-  locationAddressLine: {
-    color: TEXT_DARK,
-    fontSize: 14,
-    fontWeight: '400',
-    textAlign: 'right',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  pickupLocationLink: {
+  statusValueWithIconRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'flex-end',
-    gap: 6,
+    gap: 8,
+    minWidth: 0,
+    alignSelf: 'stretch',
+  },
+  statusFieldValue: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
     flexShrink: 1,
     minWidth: 0,
   },
-  pickupLocationIcon: {
+  callIconButton: {
+    width: 16,
+    height: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  locationMapsPressable: {
+    alignSelf: 'stretch',
+    maxWidth: '100%',
+  },
+  locationRowSameLine: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'nowrap',
+    minWidth: 0,
+    maxWidth: '100%',
+  },
+  locationAddressNested: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '400',
+    fontFamily: theme.typography.fontFamily.body,
+    flexShrink: 1,
+    minWidth: 0,
+    paddingRight: 4,
+  },
+  pickupLocationIconInline: {
     width: 16,
     height: 16,
     flexShrink: 0,
