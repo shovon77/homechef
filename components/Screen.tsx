@@ -99,6 +99,7 @@ export default function Screen({
           ]}
           style={{ flex: 1, paddingHorizontal: 0, paddingLeft: 0, paddingRight: 0, paddingTop: 0, backgroundColor: scrollBg, borderTopWidth: 0 }}
           contentInsetAdjustmentBehavior="never"
+          keyboardShouldPersistTaps="always"
           onScroll={onScroll}
           scrollEventThrottle={scrollEventThrottle ?? 16}
         >

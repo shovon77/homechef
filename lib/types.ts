@@ -66,6 +66,9 @@ export type Dish = {
   featured: boolean; // default false
   created_at: string | null; // timestamptz
   is_active?: boolean; // default true; when false, hidden from public listings
+  /** Denormalized aggregate from dish_ratings (see DB trigger) */
+  rating?: number | null;
+  rating_count?: number | null;
 };
 
 export type DishWithChef = Dish & {

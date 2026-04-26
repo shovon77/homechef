@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState, startTransition } from "react";
-import { View, Text, Image, TouchableOpacity, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
+import { View, Text, Image, TouchableOpacity, Pressable, ActivityIndicator, ScrollView, Alert, TextInput, StyleSheet, Platform, useWindowDimensions } from "react-native";
 import { useLocalSearchParams, Link, useRouter } from "expo-router";
 import { supabase } from "../../lib/supabase";
 import { theme, elev } from "../../lib/theme";
@@ -138,9 +138,10 @@ export default function DishDetail() {
 
     (async () => {
       try {
-        const [dishData, reviewsData] = await Promise.all([
+        const [dishData, reviewsData, ratingStats] = await Promise.all([
           getDishWithChef(dishId),
           getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0),
+          getDishRatings(dishId),
         ]);
 
         if (!mounted) return;
@@ -167,19 +168,20 @@ export default function DishDetail() {
         setDish(dishData);
         if (chefData) setChef(chefData);
 
-        // Use inline rating from dish row when available (avoids an extra RPC)
-        const inlineRating = typeof (dishData as any).rating === 'number' && (dishData as any).rating > 0
-          ? (dishData as any).rating : null;
-        if (inlineRating != null) {
-          setAvgRating(inlineRating);
-        } else {
-          getDishRatings(dishId).then((stats) => {
-            if (mounted) {
-              setAvgRating(stats.average);
-              setRatingCount(stats.count);
-            }
-          });
+        // Aggregate for everyone (anon included): RPC is SECURITY DEFINER + granted to anon.
+        // Fallback to denormalized dish columns if RPC/client path returns zeros (e.g. migration lag).
+        let avg = ratingStats.average;
+        let count = ratingStats.count;
+        const inlineRating = Number((dishData as any).rating);
+        const inlineCount = Number((dishData as any).rating_count);
+        if ((avg <= 0 || count <= 0) && Number.isFinite(inlineRating) && inlineRating > 0) {
+          avg = inlineRating;
         }
+        if (count <= 0 && Number.isFinite(inlineCount) && inlineCount > 0) {
+          count = Math.trunc(inlineCount);
+        }
+        setAvgRating(avg);
+        setRatingCount(count);
 
         setReviews(reviewsData);
         setReviewsHasMore(reviewsData.length >= REVIEWS_PAGE_SIZE);
@@ -808,9 +810,19 @@ export default function DishDetail() {
                     <View style={styles.ratingInputContainer}>
                       <Text style={styles.ratingLabel}>Rating (required)</Text>
                       <View style={styles.starsInputRow}>
-                        {[1, 2, 3, 4, 5].map(star => (
-                          <TouchableOpacity key={star} onPress={() => setUserRating(star)}>
+                        {[1, 2, 3, 4, 5].map((star) => (
+                          <Pressable
+                            key={star}
+                            accessibilityRole="button"
+                            accessibilityLabel={`Rate ${star} out of 5`}
+                            onPress={() => setUserRating(star)}
+                            style={({ pressed }) => [
+                              styles.starInputHitTarget,
+                              pressed && styles.starInputHitTargetPressed,
+                            ]}
+                          >
                             <ImageCmp
+                              pointerEvents="none"
                               source={require('../../assets/star.png')}
                               style={[
                                 styles.starInputImage as any,
@@ -819,7 +831,7 @@ export default function DishDetail() {
                               tintColor={PRIMARY_COLOR}
                               resizeMode="contain"
                             />
-                          </TouchableOpacity>
+                          </Pressable>
                         ))}
                       </View>
                     </View>
@@ -1321,7 +1333,29 @@ const styles = StyleSheet.create({
   },
   starsInputRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    ...Platform.select({
+      web: {
+        touchAction: 'manipulation' as any,
+        userSelect: 'none' as any,
+      },
+    }),
+  },
+  starInputHitTarget: {
+    minWidth: 48,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as any,
+        touchAction: 'manipulation' as any,
+      },
+    }),
+  },
+  starInputHitTargetPressed: {
+    opacity: 0.85,
   },
   starInputImage: {
     width: 28,

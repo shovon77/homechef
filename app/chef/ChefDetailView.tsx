@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState, startTransition } from 'react';
+import { useEffect, useMemo, useRef, useState, startTransition } from 'react';
 import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView, unstable_batchedUpdates } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -317,8 +317,27 @@ export default function ChefDetailView() {
   const location = chef?.location || '';
   const bio = chef?.bio ?? chef?.description ?? '';
 
-  const avgRating = Number(chef?.rating ?? 0);
-  const reviewCount = Number(chef?.rating_count ?? reviews.length);
+  /** Prefer denormalized `chefs.rating`; if missing/stale, derive from loaded reviews so the tab and header stay consistent. */
+  const avgRating = useMemo(() => {
+    const fromChef = Number(chef?.rating ?? 0);
+    if (Number.isFinite(fromChef) && fromChef > 0) return fromChef;
+    if (reviews.length > 0) {
+      const nums = reviews
+        .map((r) => Number(r.rating))
+        .filter((n) => Number.isFinite(n) && n >= 1 && n <= 5);
+      if (nums.length === 0) return 0;
+      return nums.reduce((a, b) => a + b, 0) / nums.length;
+    }
+    return 0;
+  }, [chef?.rating, reviews]);
+
+  /** Count for display: trust list length when we have rows; else fall back to chef aggregate. */
+  const reviewCount = useMemo(() => {
+    if (reviews.length > 0) return reviews.length;
+    const c = chef?.rating_count;
+    return c != null && Number.isFinite(Number(c)) ? Number(c) : 0;
+  }, [reviews.length, chef?.rating_count]);
+
   const dishCount = dishes.length;
 
 
@@ -501,7 +520,7 @@ export default function ChefDetailView() {
                 onPress={() => startTransition(() => setActiveTab('reviews'))}
               >
                 <Text style={[styles.tabText, activeTab === 'reviews' && styles.tabTextActive]}>
-                  Reviews
+                  {reviewCount > 0 ? `Reviews (${reviewCount})` : 'Reviews'}
                 </Text>
                     </TouchableOpacity>
             </View>
@@ -572,15 +591,25 @@ export default function ChefDetailView() {
                       <View style={styles.ratingSelector}>
                         <Text style={styles.ratingLabel}>Rating</Text>
                         <View style={styles.starsRow}>
-                          {[1, 2, 3, 4, 5].map(star => (
-                            <TouchableOpacity key={star} onPress={() => setReviewRating(star)}>
-                              <Image 
-                                source={require('../../assets/star.png')} 
+                          {[1, 2, 3, 4, 5].map((star) => (
+                            <Pressable
+                              key={star}
+                              accessibilityRole="button"
+                              accessibilityLabel={`Rate ${star} out of 5`}
+                              onPress={() => setReviewRating(star)}
+                              style={({ pressed }) => [
+                                styles.starHitTarget,
+                                pressed && styles.starHitTargetPressed,
+                              ]}
+                            >
+                              <Image
+                                pointerEvents="none"
+                                source={require('../../assets/star.png')}
                                 style={styles.starButtonImage}
                                 tintColor={star <= reviewRating ? STAR_COLOR : TEXT_MUTED}
-                                resizeMode="contain" 
+                                resizeMode="contain"
                               />
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </View>
                       </View>
@@ -608,6 +637,12 @@ export default function ChefDetailView() {
                     </View>
                   )}
 
+                  {!user ? (
+                    <Text style={styles.signInPrompt}>
+                      Please sign in to leave a review.
+                    </Text>
+                  ) : null}
+
                   {/* Reviews list */}
                   {isFetchingReviews ? (
                     <View style={styles.loader}>
@@ -628,7 +663,9 @@ export default function ChefDetailView() {
                                 tintColor={STAR_COLOR}
                                 resizeMode="contain" 
                               />
-                              <Text style={styles.reviewRatingValue}>{r.rating.toFixed(1)}</Text>
+                              <Text style={styles.reviewRatingValue}>
+                                {(Number.isFinite(Number(r.rating)) ? Number(r.rating) : 0).toFixed(1)}
+                              </Text>
                             </View>
                             {r.user_name ? (
                               <Text style={styles.reviewAuthor}>{r.user_name}</Text>
@@ -1299,14 +1336,36 @@ const styles = StyleSheet.create({
   },
   starsRow: {
     flexDirection: 'row',
-    gap: theme.spacing.sm,
+    alignItems: 'center',
+    gap: theme.spacing.xs,
+    ...Platform.select({
+      web: {
+        touchAction: 'manipulation' as const,
+        userSelect: 'none' as const,
+      },
+    }),
+  },
+  starHitTarget: {
+    minWidth: 48,
+    minHeight: 48,
+    justifyContent: 'center',
+    alignItems: 'center',
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as const,
+        touchAction: 'manipulation' as const,
+      },
+    }),
+  },
+  starHitTargetPressed: {
+    opacity: 0.85,
   },
   starButton: {
     fontSize: 24,
   },
   starButtonImage: {
-    width: 24,
-    height: 24,
+    width: 28,
+    height: 28,
   },
   commentInputContainer: {
     gap: theme.spacing.sm,
@@ -1403,6 +1462,13 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     textAlign: 'center',
     paddingVertical: theme.spacing['4xl'],
+  },
+  signInPrompt: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    textAlign: 'center',
+    paddingVertical: theme.spacing.lg,
   },
   loader: {
     paddingVertical: theme.spacing['4xl'],
