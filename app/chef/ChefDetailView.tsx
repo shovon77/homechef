@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, startTransition } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, Pressable, ActivityIndicator, ScrollView, unstable_batchedUpdates } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, ActivityIndicator, ScrollView, unstable_batchedUpdates } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -139,7 +139,7 @@ export default function ChefDetailView() {
   const [distanceKm, setDistanceKm] = useState<number | null>(null);
   const [bioExpanded, setBioExpanded] = useState(false);
   const { addToCart } = useCart();
-  const [reviewRating, setReviewRating] = useState(5);
+  const [reviewRating, setReviewRating] = useState(0);
   const [reviewComment, setReviewComment] = useState("");
   const [submittingReview, setSubmittingReview] = useState(false);
 
@@ -367,12 +367,18 @@ export default function ChefDetailView() {
       return;
     }
 
+    const trimmedComment = reviewComment.trim();
+    if (!trimmedComment) {
+      Alert.alert("Comment required", "Please share a short comment with your review.");
+      return;
+    }
+
     try {
       setSubmittingReview(true);
       await submitChefReview({
         chefId,
         rating: reviewRating,
-        comment: reviewComment.trim() || undefined,
+        comment: trimmedComment,
       });
 
       const [chefData, updatedReviews] = await Promise.all([
@@ -382,7 +388,7 @@ export default function ChefDetailView() {
       if (chefData) setChef(chefData);
       setReviews(updatedReviews);
 
-      setReviewRating(5);
+      setReviewRating(0);
       setReviewComment("");
       Alert.alert("Success", "Review submitted successfully!");
     } catch (e: any) {
@@ -586,35 +592,44 @@ export default function ChefDetailView() {
                 <View style={styles.reviewsContent}>
                   {/* Review form for signed-in users */}
                   {user && (
-                    <View style={styles.reviewForm}>
+                    <View style={styles.reviewForm} collapsable={false}>
                       <Text style={styles.reviewFormTitle}>Leave a Review</Text>
                       <View style={styles.ratingSelector}>
                         <Text style={styles.ratingLabel}>Rating</Text>
                         <View style={styles.starsRow}>
                           {[1, 2, 3, 4, 5].map((star) => (
-                            <Pressable
+                            <TouchableOpacity
                               key={star}
+                              activeOpacity={0.75}
                               accessibilityRole="button"
                               accessibilityLabel={`Rate ${star} out of 5`}
+                              accessibilityState={{ selected: star === reviewRating }}
                               onPress={() => setReviewRating(star)}
-                              style={({ pressed }) => [
-                                styles.starHitTarget,
-                                pressed && styles.starHitTargetPressed,
-                              ]}
+                              delayPressIn={0}
+                              style={styles.starHitTarget}
                             >
                               <Image
                                 pointerEvents="none"
                                 source={require('../../assets/star.png')}
                                 style={styles.starButtonImage}
-                                tintColor={star <= reviewRating ? STAR_COLOR : TEXT_MUTED}
+                                tintColor={
+                                  reviewRating > 0 && star <= reviewRating
+                                    ? STAR_COLOR
+                                    : TEXT_MUTED
+                                }
                                 resizeMode="contain"
                               />
-                            </Pressable>
+                            </TouchableOpacity>
                           ))}
                         </View>
                       </View>
                       <View style={styles.commentInputContainer}>
-                        <Text style={styles.commentLabel}>Comment (optional)</Text>
+                        <Text style={styles.commentLabel}>
+                          Comment{' '}
+                          <Text style={styles.commentRequiredStar} accessibilityLabel="required">
+                            *
+                          </Text>
+                        </Text>
                         <TextInput
                           value={reviewComment}
                           onChangeText={setReviewComment}
@@ -627,8 +642,18 @@ export default function ChefDetailView() {
                       </View>
                       <TouchableOpacity
                         onPress={handleSubmitReview}
-                        disabled={submittingReview}
-                        style={[styles.submitButton, submittingReview && styles.submitButtonDisabled]}
+                        disabled={
+                          submittingReview ||
+                          reviewRating < 1 ||
+                          !reviewComment.trim()
+                        }
+                        style={[
+                          styles.submitButton,
+                          (submittingReview ||
+                            reviewRating < 1 ||
+                            !reviewComment.trim()) &&
+                            styles.submitButtonDisabled,
+                        ]}
                       >
                         <Text style={styles.submitButtonText}>
                           {submittingReview ? 'Submitting...' : 'Submit Review'}
@@ -1319,6 +1344,11 @@ const styles = StyleSheet.create({
     borderRadius: theme.radius.xl,
     backgroundColor: '#FFFFFF',
     gap: theme.spacing.md,
+    zIndex: 2,
+    ...Platform.select({
+      android: { elevation: 4 },
+      web: { position: 'relative' as const },
+    }),
   },
   reviewFormTitle: {
     color: BRAND_BLACK,
@@ -1338,6 +1368,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
+    zIndex: 3,
     ...Platform.select({
       web: {
         touchAction: 'manipulation' as const,
@@ -1357,9 +1388,6 @@ const styles = StyleSheet.create({
       },
     }),
   },
-  starHitTargetPressed: {
-    opacity: 0.85,
-  },
   starButton: {
     fontSize: 24,
   },
@@ -1374,6 +1402,11 @@ const styles = StyleSheet.create({
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  commentRequiredStar: {
+    color: '#DC2626',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: '700',
   },
   commentInput: {
     borderWidth: 1,
@@ -1400,8 +1433,8 @@ const styles = StyleSheet.create({
   submitButtonText: {
     color: '#FFFFFF',
     fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.normal,
   },
   reviewsList: {
     gap: theme.spacing.md,
