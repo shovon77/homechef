@@ -22,6 +22,7 @@ import { uploadToBucket } from '../../lib/upload';
 import { createNotification } from '../../lib/notifications';
 import { formatLocationAddress } from '../../lib/formatAddress';
 import { addPickupToUserCalendar, getPickupWindow } from '../../lib/addPickupCalendarEvent';
+import * as Clipboard from 'expo-clipboard';
 
 /** Build a tel: URL from a stored phone string (digits and optional leading +). */
 function phoneToTelUri(raw: string | null | undefined): string | null {
@@ -34,7 +35,8 @@ function phoneToTelUri(raw: string | null | undefined): string | null {
   return `tel:${normalized}`;
 }
 
-const BG = '#f6f8f8';
+/** Match NavBar (`BG_LIGHT`) and Footer background */
+const BG = '#F2F0EF';
 const CARD_BG = '#FFFFFF';
 const BG_LIGHT = '#FFFFFF';
 const BORDER = '#E3E7E7';
@@ -43,6 +45,8 @@ const TEXT_DARK = '#33393a';
 const TEXT_MUTED = '#638886';
 const PRIMARY = '#FE734C';
 const ACCENT = '#FE734C';
+/** Deeper orange for map pin asset so tint reads vivid, not washed out */
+const LOCATION_PIN_TINT = '#D13A0F';
 
 const ACTIVE_STATUSES = ['requested', 'pending', 'ready', 'paid'] as const;
 
@@ -110,6 +114,7 @@ export default function TrackOrderPage() {
   const [items, setItems] = useState<(OrderItemRow & { dish?: DishRow | null })[]>([]);
   const [chef, setChef] = useState<ChefRow | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [isStatusExpanded, setIsStatusExpanded] = useState(true);
   const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(false);
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [messages, setMessages] = useState<MessageRow[]>([]);
@@ -132,6 +137,30 @@ export default function TrackOrderPage() {
   const [reportedIssue, setReportedIssue] = useState<any | null>(null);
   const [reportedIssueImages, setReportedIssueImages] = useState<any[]>([]);
   const [isReportedIssueExpanded, setIsReportedIssueExpanded] = useState(true);
+  const [pickupAddressCopied, setPickupAddressCopied] = useState(false);
+  const [phoneNumberCopied, setPhoneNumberCopied] = useState(false);
+  const pickupCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const phoneCopyResetRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  useEffect(() => {
+    setPickupAddressCopied(false);
+    setPhoneNumberCopied(false);
+    if (pickupCopyResetRef.current) {
+      clearTimeout(pickupCopyResetRef.current);
+      pickupCopyResetRef.current = null;
+    }
+    if (phoneCopyResetRef.current) {
+      clearTimeout(phoneCopyResetRef.current);
+      phoneCopyResetRef.current = null;
+    }
+  }, [order?.id]);
+
+  useEffect(() => {
+    return () => {
+      if (pickupCopyResetRef.current) clearTimeout(pickupCopyResetRef.current);
+      if (phoneCopyResetRef.current) clearTimeout(phoneCopyResetRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     let mounted = true;
@@ -976,111 +1005,215 @@ export default function TrackOrderPage() {
         ) : null}
 
         <View style={styles.card}>
-          <Text style={styles.sectionTitle}>Status</Text>
-          <Text style={styles.statusValue}>{stepMeta.label}</Text>
-          <View style={styles.statusDetails}>
-            {chef?.phone?.trim() ? (
-              <View style={styles.statusFieldBlock}>
-                <Text style={styles.statusBlockLabel}>Phone number</Text>
-                <View style={styles.statusValueWithIconRow}>
-                  <Text style={styles.statusFieldValue} numberOfLines={3}>
-                    {chef.phone.trim()}
-                  </Text>
-                  <TouchableOpacity
-                    style={styles.callIconButton}
-                    onPress={() => {
-                      const uri = phoneToTelUri(chef.phone);
-                      if (uri) Linking.openURL(uri);
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel={`Call chef at ${chef.phone.trim()}`}
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="call" size={16} color={PRIMARY} />
-                  </TouchableOpacity>
+          <TouchableOpacity
+            style={styles.statusCardHeader}
+            onPress={() => setIsStatusExpanded(!isStatusExpanded)}
+            accessibilityRole="button"
+            accessibilityState={{ expanded: isStatusExpanded }}
+            accessibilityLabel="Order status"
+          >
+            <Text style={styles.sectionTitle}>Status</Text>
+            <Text style={styles.expandIcon}>{isStatusExpanded ? '−' : '+'}</Text>
+          </TouchableOpacity>
+          {isStatusExpanded ? (
+            <>
+              <Text style={styles.statusValue}>{stepMeta.label}</Text>
+              <View style={styles.statusDetails}>
+                {chef?.phone?.trim() ? (
+                  <View style={styles.statusFieldRow}>
+                    <TouchableOpacity
+                      style={styles.statusFieldIconPressable}
+                      onPress={() => {
+                        const uri = phoneToTelUri(chef.phone);
+                        if (uri) Linking.openURL(uri);
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={`Call chef at ${chef.phone.trim()}`}
+                      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                    >
+                      <Ionicons name="call-outline" size={22} color={PRIMARY} />
+                    </TouchableOpacity>
+                    <View style={styles.statusFieldTextCol}>
+                      <Text style={styles.statusBlockLabel}>Phone number</Text>
+                      <View style={styles.statusInlineValueRow}>
+                        <Text style={styles.statusFieldValue} selectable={false}>
+                          {chef.phone.trim()}
+                        </Text>
+                        <TouchableOpacity
+                          style={styles.locationCopyButton}
+                          onPress={async () => {
+                            const raw = chef.phone.trim();
+                            try {
+                              await Clipboard.setStringAsync(raw);
+                              setPickupAddressCopied(false);
+                              if (pickupCopyResetRef.current) {
+                                clearTimeout(pickupCopyResetRef.current);
+                                pickupCopyResetRef.current = null;
+                              }
+                              if (phoneCopyResetRef.current) {
+                                clearTimeout(phoneCopyResetRef.current);
+                              }
+                              setPhoneNumberCopied(true);
+                              phoneCopyResetRef.current = setTimeout(() => {
+                                setPhoneNumberCopied(false);
+                                phoneCopyResetRef.current = null;
+                              }, 2500);
+                            } catch {
+                              Alert.alert('Copy failed', 'Could not copy the phone number. Please try again.');
+                            }
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel={
+                            phoneNumberCopied ? 'Phone number copied' : 'Copy phone number'
+                          }
+                          accessibilityState={{ selected: phoneNumberCopied }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          {phoneNumberCopied ? (
+                            <Text style={styles.locationCopiedText}>Copied</Text>
+                          ) : (
+                            <Ionicons name="copy-outline" size={18} color={PRIMARY} />
+                          )}
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ) : null}
+                <View style={styles.statusFieldRow}>
+                  {(() => {
+                    const canAddCalendar = !!getPickupWindow(order.pickup_at);
+                    return (
+                      <TouchableOpacity
+                        style={styles.statusFieldIconPressable}
+                        disabled={!canAddCalendar}
+                        onPress={() => {
+                          if (!canAddCalendar) return;
+                          const { street, city, province } = formatLocationAddress(chef?.location);
+                          const locationLine =
+                            [street, city, province].filter(Boolean).join(', ') || (chef?.location ?? '');
+                          void addPickupToUserCalendar({
+                            pickupAt: order.pickup_at,
+                            orderId: order.id,
+                            locationDescription: locationLine,
+                          });
+                        }}
+                        accessibilityRole="button"
+                        accessibilityLabel="Add pickup to calendar"
+                        accessibilityState={{ disabled: !canAddCalendar }}
+                        hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                      >
+                        <Ionicons
+                          name="calendar-outline"
+                          size={22}
+                          color={canAddCalendar ? PRIMARY : TEXT_MUTED}
+                        />
+                      </TouchableOpacity>
+                    );
+                  })()}
+                  <View style={styles.statusFieldTextCol}>
+                    <Text style={styles.statusBlockLabel}>Pickup scheduled</Text>
+                    <Text style={styles.statusFieldValue}>{formatPickupDateTime(order.pickup_at)}</Text>
+                  </View>
+                </View>
+                <View style={styles.statusFieldRow}>
+                  {(() => {
+                    const { street, city, province } = formatLocationAddress(chef?.location);
+                    const oneLine = [street, city, province].filter(Boolean).join(', ');
+                    const addressForMaps = chef?.location || oneLine;
+                    return (
+                      <>
+                        <TouchableOpacity
+                          style={styles.statusFieldIconPressable}
+                          disabled={!addressForMaps}
+                          onPress={async () => {
+                            if (!addressForMaps) return;
+                            const encodedAddress = encodeURIComponent(addressForMaps);
+                            const mapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                            if (Platform.OS === 'web') {
+                              Linking.openURL(mapsWebUrl);
+                              return;
+                            }
+                            const mapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
+                            try {
+                              const canOpen = await Linking.canOpenURL(mapsAppUrl);
+                              if (canOpen) {
+                                await Linking.openURL(mapsAppUrl);
+                              } else {
+                                await Linking.openURL(mapsWebUrl);
+                              }
+                            } catch {
+                              await Linking.openURL(mapsWebUrl);
+                            }
+                          }}
+                          accessibilityRole="button"
+                          accessibilityLabel="Open pickup location in maps"
+                          accessibilityState={{ disabled: !addressForMaps }}
+                          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                        >
+                          <Image
+                            pointerEvents="none"
+                            source={require('../../assets/locationnewicon.png')}
+                            style={styles.statusFieldLeadingIcon}
+                            tintColor={addressForMaps ? LOCATION_PIN_TINT : TEXT_MUTED}
+                            resizeMode="contain"
+                          />
+                        </TouchableOpacity>
+                        <View style={styles.statusFieldTextCol}>
+                          <Text style={styles.statusBlockLabel}>Pickup location</Text>
+                          <View style={styles.statusInlineValueRow}>
+                            <Text
+                              style={styles.locationAddressNested}
+                              numberOfLines={3}
+                              ellipsizeMode="tail"
+                            >
+                              {oneLine || 'Not available'}
+                            </Text>
+                            {addressForMaps ? (
+                              <TouchableOpacity
+                                style={styles.locationCopyButton}
+                                onPress={async () => {
+                                  try {
+                                    await Clipboard.setStringAsync(addressForMaps);
+                                    setPhoneNumberCopied(false);
+                                    if (phoneCopyResetRef.current) {
+                                      clearTimeout(phoneCopyResetRef.current);
+                                      phoneCopyResetRef.current = null;
+                                    }
+                                    if (pickupCopyResetRef.current) {
+                                      clearTimeout(pickupCopyResetRef.current);
+                                    }
+                                    setPickupAddressCopied(true);
+                                    pickupCopyResetRef.current = setTimeout(() => {
+                                      setPickupAddressCopied(false);
+                                      pickupCopyResetRef.current = null;
+                                    }, 2500);
+                                  } catch {
+                                    Alert.alert('Copy failed', 'Could not copy the address. Please try again.');
+                                  }
+                                }}
+                                accessibilityRole="button"
+                                accessibilityLabel={
+                                  pickupAddressCopied ? 'Address copied' : 'Copy pickup address'
+                                }
+                                accessibilityState={{ selected: pickupAddressCopied }}
+                                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                              >
+                                {pickupAddressCopied ? (
+                                  <Text style={styles.locationCopiedText}>Copied</Text>
+                                ) : (
+                                  <Ionicons name="copy-outline" size={18} color={PRIMARY} />
+                                )}
+                              </TouchableOpacity>
+                            ) : null}
+                          </View>
+                        </View>
+                      </>
+                    );
+                  })()}
                 </View>
               </View>
-            ) : null}
-            <View style={styles.statusFieldBlock}>
-              <Text style={styles.statusBlockLabel}>Pickup scheduled</Text>
-              <View style={styles.statusValueWithIconRow}>
-                <Text style={styles.statusFieldValue}>{formatPickupDateTime(order.pickup_at)}</Text>
-                {getPickupWindow(order.pickup_at) ? (
-                  <TouchableOpacity
-                    style={styles.callIconButton}
-                    onPress={() => {
-                      const { street, city, province } = formatLocationAddress(chef?.location);
-                      const locationLine =
-                        [street, city, province].filter(Boolean).join(', ') || (chef?.location ?? '');
-                      void addPickupToUserCalendar({
-                        pickupAt: order.pickup_at,
-                        orderId: order.id,
-                        locationDescription: locationLine,
-                      });
-                    }}
-                    accessibilityRole="button"
-                    accessibilityLabel="Add pickup to calendar"
-                    hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                  >
-                    <Ionicons name="calendar-outline" size={16} color={PRIMARY} />
-                  </TouchableOpacity>
-                ) : null}
-              </View>
-            </View>
-            <View style={styles.statusFieldBlock}>
-              <Text style={styles.statusBlockLabel}>Pickup location</Text>
-              {(() => {
-                const { street, city, province } = formatLocationAddress(chef?.location);
-                const oneLine = [street, city, province].filter(Boolean).join(', ');
-                const addressForMaps = chef?.location || oneLine;
-                return (
-                  <TouchableOpacity
-                    style={styles.locationMapsPressable}
-                    onPress={async () => {
-                      if (addressForMaps) {
-                        const encodedAddress = encodeURIComponent(addressForMaps);
-                        const mapsWebUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                        if (Platform.OS === 'web') {
-                          Linking.openURL(mapsWebUrl);
-                          return;
-                        }
-                        const mapsAppUrl = `comgooglemaps://?q=${encodedAddress}`;
-                        try {
-                          const canOpen = await Linking.canOpenURL(mapsAppUrl);
-                          if (canOpen) {
-                            await Linking.openURL(mapsAppUrl);
-                          } else {
-                            await Linking.openURL(mapsWebUrl);
-                          }
-                        } catch {
-                          await Linking.openURL(mapsWebUrl);
-                        }
-                      }
-                    }}
-                    disabled={!addressForMaps}
-                  >
-                    <View style={styles.locationRowSameLine}>
-                      <Text
-                        style={styles.locationAddressNested}
-                        numberOfLines={1}
-                        ellipsizeMode="tail"
-                      >
-                        {oneLine}
-                      </Text>
-                      {addressForMaps ? (
-                        <Image
-                          source={require('../../assets/locationnewicon.png')}
-                          style={styles.pickupLocationIconInline}
-                          tintColor={PRIMARY}
-                          resizeMode="contain"
-                        />
-                      ) : null}
-                    </View>
-                  </TouchableOpacity>
-                );
-              })()}
-            </View>
-          </View>
+            </>
+          ) : null}
         </View>
 
         <View style={styles.card}>
@@ -1647,7 +1780,7 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     bottom: 0,
-    backgroundColor: 'rgba(246, 248, 248, 0.9)',
+    backgroundColor: 'rgba(242, 240, 239, 0.9)',
     justifyContent: 'center',
     alignItems: 'center',
     zIndex: 1000,
@@ -1735,33 +1868,50 @@ const styles = StyleSheet.create({
     fontWeight: '800',
     fontFamily: theme.typography.fontFamily.display,
   },
+  statusCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    minHeight: 24,
+  },
   statusValue: {
     color: TEXT_DARK,
     fontSize: 16,
-    fontWeight: '400',
+    fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
-    marginTop: 8,
-    marginBottom: 16,
+    marginTop: 4,
+    marginBottom: 12,
   },
   statusDetails: {
-    marginTop: 8,
-    gap: 12,
+    marginTop: 4,
+    gap: 16,
   },
-  statusFieldBlock: {
-    gap: 8,
+  statusFieldRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+  },
+  statusFieldIconPressable: {
+    justifyContent: 'center',
+    alignItems: 'center',
+    minWidth: 40,
+    minHeight: 44,
+    paddingHorizontal: 0,
+  },
+  statusFieldLeadingIcon: {
+    width: 22,
+    height: 22,
+  },
+  statusFieldTextCol: {
+    flex: 1,
+    minWidth: 0,
+    gap: 6,
   },
   statusBlockLabel: {
     color: TEXT_DARK,
     fontSize: 14,
-    fontWeight: '400',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  statusValueWithIconRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minWidth: 0,
-    alignSelf: 'stretch',
+    fontWeight: '800',
+    fontFamily: theme.typography.fontFamily.display,
   },
   statusFieldValue: {
     color: TEXT_DARK,
@@ -1771,23 +1921,6 @@ const styles = StyleSheet.create({
     flexShrink: 1,
     minWidth: 0,
   },
-  callIconButton: {
-    width: 16,
-    height: 16,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  locationMapsPressable: {
-    alignSelf: 'stretch',
-    maxWidth: '100%',
-  },
-  locationRowSameLine: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'nowrap',
-    minWidth: 0,
-    maxWidth: '100%',
-  },
   locationAddressNested: {
     color: TEXT_DARK,
     fontSize: 14,
@@ -1795,12 +1928,25 @@ const styles = StyleSheet.create({
     fontFamily: theme.typography.fontFamily.body,
     flexShrink: 1,
     minWidth: 0,
-    paddingRight: 4,
   },
-  pickupLocationIconInline: {
-    width: 16,
-    height: 16,
+  /** Value + copy hug together (copy immediately after text, not pushed to row end). */
+  statusInlineValueRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: 6,
+    alignSelf: 'flex-start',
+    maxWidth: '100%',
+  },
+  locationCopyButton: {
     flexShrink: 0,
+    paddingVertical: 2,
+  },
+  locationCopiedText: {
+    color: '#15803D',
+    fontSize: 13,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.body,
   },
   orderSummaryHeader: {
     flexDirection: 'row',
