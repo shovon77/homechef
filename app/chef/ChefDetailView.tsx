@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useMemo, useRef, useState, startTransition } from 'react';
-import { View, Text, Image, TouchableOpacity, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, ActivityIndicator, ScrollView, unstable_batchedUpdates } from 'react-native';
+import { View, Text, Image, TouchableOpacity, Pressable, Platform, TextInput, Alert, StyleSheet, useWindowDimensions, ActivityIndicator, ScrollView, unstable_batchedUpdates } from 'react-native';
 import { useLocalSearchParams, useRouter, usePathname, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useCart } from '../../context/CartContext';
@@ -596,30 +596,30 @@ export default function ChefDetailView() {
                       <Text style={styles.reviewFormTitle}>Leave a Review</Text>
                       <View style={styles.ratingSelector}>
                         <Text style={styles.ratingLabel}>Rating</Text>
+                        {/* Match dish detail reviews: Pressable + opacity (reliable on mobile web). */}
                         <View style={styles.starsRow}>
                           {[1, 2, 3, 4, 5].map((star) => (
-                            <TouchableOpacity
+                            <Pressable
                               key={star}
-                              activeOpacity={0.75}
                               accessibilityRole="button"
                               accessibilityLabel={`Rate ${star} out of 5`}
-                              accessibilityState={{ selected: star === reviewRating }}
                               onPress={() => setReviewRating(star)}
-                              delayPressIn={0}
-                              style={styles.starHitTarget}
+                              style={({ pressed }) => [
+                                styles.starHitTarget,
+                                pressed && styles.starHitTargetPressed,
+                              ]}
                             >
                               <Image
                                 pointerEvents="none"
                                 source={require('../../assets/star.png')}
-                                style={styles.starButtonImage}
-                                tintColor={
-                                  reviewRating > 0 && star <= reviewRating
-                                    ? STAR_COLOR
-                                    : TEXT_MUTED
-                                }
+                                style={[
+                                  styles.starButtonImage,
+                                  { opacity: star <= reviewRating ? 1 : 0.25 },
+                                ]}
+                                tintColor={STAR_COLOR}
                                 resizeMode="contain"
                               />
-                            </TouchableOpacity>
+                            </Pressable>
                           ))}
                         </View>
                       </View>
@@ -1368,7 +1368,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: theme.spacing.xs,
-    zIndex: 3,
     ...Platform.select({
       web: {
         touchAction: 'manipulation' as const,
@@ -1384,9 +1383,12 @@ const styles = StyleSheet.create({
     ...Platform.select({
       web: {
         cursor: 'pointer' as const,
-        touchAction: 'manipulation' as const,
+        touchAction: 'manipulation' as any,
       },
     }),
+  },
+  starHitTargetPressed: {
+    opacity: 0.85,
   },
   starButton: {
     fontSize: 24,

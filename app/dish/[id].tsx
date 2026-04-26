@@ -316,8 +316,11 @@ export default function DishDetail() {
       if (userRatingResult.data) {
         const rating = userRatingResult.data.rating ?? userRatingResult.data.stars ?? 0;
         setUserRating(Number(rating));
-        setComment(userRatingResult.data.comment || "");
       }
+
+      // Clear the draft so the field doesn’t keep showing the text that’s already in the list
+      // (avoids looking like a duplicate / unsent review).
+      setComment("");
 
       Alert.alert("Success", "Rating submitted successfully!");
     } catch (e: any) {
