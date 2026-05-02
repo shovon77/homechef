@@ -73,6 +73,12 @@ const TEXT_MUTED = '#6b7280';
 /** Required-field asterisk color */
 const REQ = '#DC2626';
 
+/** Price fields: `numeric` omits `.` on many mobile browsers; decimal pad + inputMode fixes cents. */
+const PRICE_TEXT_INPUT_PROPS = {
+  keyboardType: 'decimal-pad' as const,
+  ...(Platform.OS === 'web' ? ({ inputMode: 'decimal' } as Record<string, string>) : {}),
+};
+
 /**
  * Always reserves space for ` *` and toggles opacity so labels don’t reflow when a field
  * becomes valid (reduces CLS on /auth/chef — Speed Insights).
@@ -2509,9 +2515,9 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
                 <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
               </View>
               <TextInput
+                {...PRICE_TEXT_INPUT_PROPS}
                 value={price}
                 onChangeText={setPrice}
-                keyboardType="numeric"
                 placeholder="19.99"
                 placeholderTextColor={TEXT_MUTED}
                 style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_LIGHT, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16 }, styles.inputNoFocusOutline]}
@@ -2654,9 +2660,9 @@ function DishEditor({ dish, onSave, onDelete, saving }: { dish: { id: string; na
                   <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
                 </View>
                 <TextInput
+                  {...PRICE_TEXT_INPUT_PROPS}
                   value={price}
                   onChangeText={setPrice}
-                  keyboardType="numeric"
                   placeholder="0.00"
                   placeholderTextColor={TEXT_MUTED}
                   style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_LIGHT, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16 }, styles.inputNoFocusOutline]}

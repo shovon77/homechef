@@ -1,12 +1,17 @@
 // app/chef/dashboard.tsx
 'use client'
 import React, { useEffect, useState } from 'react'
-import { View, Text, TextInput, TouchableOpacity, ScrollView, Image } from 'react-native'
+import { View, Text, TextInput, TouchableOpacity, ScrollView, Image, Platform } from 'react-native'
 import { useRouter, Link } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { ensureChefSlug } from '../../lib/db'
 import { uploadToBucket } from '../../lib/upload'
 import FilePicker from '../../components/FilePicker'
+
+const PRICE_TEXT_INPUT_PROPS = {
+  keyboardType: 'decimal-pad' as const,
+  ...(Platform.OS === 'web' ? ({ inputMode: 'decimal' } as Record<string, string>) : {}),
+}
 
 const C = {
   bg: '#F7F9F8',
@@ -229,7 +234,7 @@ function NewDishForm({ onCreate, saving }:{ onCreate:(d:{name:string; price:numb
         </View>
         <View style={{ width:140 }}>
           <L>Price</L>
-          <Input value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="19.99" />
+          <Input value={price} onChangeText={setPrice} {...PRICE_TEXT_INPUT_PROPS} placeholder="19.99" />
         </View>
         <View style={{ minWidth:220, alignItems:'flex-start' }}>
           <L>Photo</L>
@@ -261,7 +266,7 @@ function DishEditor({ dish, onSave, onDelete }:{ dish:DishRow; onSave:(p:{id:num
         </View>
         <View style={{ width:120 }}>
           <L>Price</L>
-          <Input value={price} onChangeText={setPrice} keyboardType="numeric" placeholder="0.00" />
+          <Input value={price} onChangeText={setPrice} {...PRICE_TEXT_INPUT_PROPS} placeholder="0.00" />
         </View>
         <View style={{ minWidth:220, alignItems:'flex-start' }}>
           <L>Replace photo</L>

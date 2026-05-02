@@ -44,6 +44,12 @@ const INPUT_NO_FOCUS_OUTLINE = Platform.select({
   default: {},
 });
 
+/** Price fields: `numeric` omits `.` on many mobile browsers; decimal pad + inputMode fixes cents entry. */
+const PRICE_TEXT_INPUT_PROPS = {
+  keyboardType: 'decimal-pad' as const,
+  ...(Platform.OS === 'web' ? ({ inputMode: 'decimal' } as Record<string, string>) : {}),
+};
+
 type ChefRow = { id: number; name: string; slug?: string | null; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; portion?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number; notes?: string | null }>; user_email?: string; user_name?: string };
@@ -4606,9 +4612,9 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
                 <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
               </View>
               <TextInput
+                {...PRICE_TEXT_INPUT_PROPS}
                 value={price}
                 onChangeText={setPrice}
-                keyboardType="numeric"
                 placeholder="19.99"
                 placeholderTextColor={PLACEHOLDER_GREY}
                 style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
@@ -4786,9 +4792,9 @@ function DishEditor({ dish, onSave, onDeactivate, onActivate, saving }: { dish: 
                 <Text style={{ paddingLeft: 12, color: TEXT_MUTED, fontSize: 16, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>CAD $ </Text>
               </View>
               <TextInput
+                {...PRICE_TEXT_INPUT_PROPS}
                 value={price}
                 onChangeText={setPrice}
-                keyboardType="numeric"
                 placeholder="0.00"
                 placeholderTextColor={PLACEHOLDER_GREY}
                 style={[{ flex: 1, minWidth: 0, backgroundColor: 'transparent', color: TEXT_DARK, paddingVertical: 12, paddingHorizontal: 12, paddingLeft: 4, minHeight: 40, fontSize: 16, fontFamily: theme.typography.fontFamily.body }, INPUT_NO_FOCUS_OUTLINE]}
