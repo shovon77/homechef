@@ -136,15 +136,22 @@ export const handler = async (req: Request) => {
       return j(400, { error: 'This chef has paused their listings and cannot accept orders right now' });
     }
 
-    // 2) Validate pickup window: within next 7 days, between 08:00 and 20:00 (local)
+    // 2) Validate pickup window: within next 7 days (absolute), and 08:00-20:00 in America/Toronto.
+    // Hours are checked in the business timezone, not UTC, so evening slots in EDT/EST are accepted.
     const pickupDate = new Date(body.pickup_at);
     const now = new Date();
     const max = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    if (pickupDate < now || pickupDate > max) {
+    if (pickupDate.getTime() < now.getTime() || pickupDate.getTime() > max.getTime()) {
       return j(400, { error: 'Pickup must be within the next 7 days' });
     }
-    const hour = pickupDate.getHours();
-    if (hour < 8 || hour >= 20) {
+    const torontoHour = Number(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto',
+        hour: '2-digit',
+        hourCycle: 'h23',
+      }).format(pickupDate),
+    );
+    if (!Number.isFinite(torontoHour) || torontoHour < 8 || torontoHour >= 20) {
       return j(400, { error: 'Pickup time must be between 08:00 and 20:00' });
     }
 
