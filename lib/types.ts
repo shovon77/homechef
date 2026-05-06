@@ -45,6 +45,8 @@ export type Chef = {
   latitude?: number | null; // Geocoded latitude for faster distance calculations
   longitude?: number | null; // Geocoded longitude for faster distance calculations
   pickup_availability?: Array<{ day: string; timeWindow: string }> | null;
+  /** IANA timezone for pickup wall-clock at chef location (e.g. America/Toronto) */
+  timezone?: string | null;
 };
 
 // ============================================================================

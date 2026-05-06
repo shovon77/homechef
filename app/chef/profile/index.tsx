@@ -12,6 +12,7 @@ import FilePicker from "../../../components/FilePicker";
 import LocationPicker from "../../../components/LocationPicker";
 import { formatCad } from "../../../lib/money";
 import { formatLocal as formatLocalOrder } from "../../../lib/datetime";
+import { CHEF_TIMEZONE_OPTIONS, DEFAULT_CHEF_TIMEZONE, resolveChefTimezoneId, chefTimezoneLabel } from "../../../lib/chef-timezones";
 import type { Profile, OrderStatus } from "../../../lib/types";
 import { Screen } from "../../../components/Screen";
 
@@ -43,6 +44,8 @@ export default function ChefProfilePage() {
   const [pickupAvailability, setPickupAvailability] = useState<Array<{ day: string; timeWindow: string }>>([]);
   const [showCuisineModal, setShowCuisineModal] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
+  const [chefTimezone, setChefTimezone] = useState(DEFAULT_CHEF_TIMEZONE);
+  const [showChefTimezoneModal, setShowChefTimezoneModal] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
   const [showTermsModal, setShowTermsModal] = useState(false);
@@ -122,7 +125,7 @@ export default function ChefProfilePage() {
       // Load chef data from chefs table
       const { data: chefData } = await supabase
         .from('chefs')
-        .select('name, bio, cuisine, phone, pickup_availability, photo')
+        .select('name, bio, cuisine, phone, pickup_availability, photo, timezone')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -130,6 +133,7 @@ export default function ChefProfilePage() {
         setBrandName(chefData.name || "");
         setBriefDescription(chefData.bio || "");
         setChefLogoUrl(chefData.photo || null);
+        setChefTimezone(resolveChefTimezoneId((chefData as { timezone?: string | null }).timezone));
         
         // Parse cuisine - could be string or array
         if (chefData.cuisine) {
@@ -393,12 +397,14 @@ export default function ChefProfilePage() {
         cuisine: string | null;
         phone: string | null;
         pickup_availability: any;
+        timezone: string;
       } = {
         name: brandName.trim(),
         bio: briefDescription.trim() || null,
         cuisine: cuisineType.length > 0 ? (cuisineType.length === 1 ? cuisineType[0] : JSON.stringify(cuisineType)) : null,
         phone: phone.trim() || null,
         pickup_availability: pickupAvailability.length > 0 ? pickupAvailability : null,
+        timezone: resolveChefTimezoneId(chefTimezone),
       };
       
       const { error: chefError } = await supabase
@@ -899,6 +905,26 @@ export default function ChefProfilePage() {
                   />
                 </View>
 
+                {/* Pickup timezone (IANA) */}
+                <View style={profileStyles.settingsSection}>
+                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>Pickup timezone</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowChefTimezoneModal(true)}
+                    style={[profileStyles.settingsInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                  >
+                    <Text
+                      style={{ color: '#101828', fontFamily: theme.typography.fontFamily.body, flex: 1, paddingRight: 8 }}
+                      numberOfLines={3}
+                    >
+                      {chefTimezoneLabel(chefTimezone)}
+                    </Text>
+                    <Text style={{ color: '#94a3b8', fontFamily: theme.typography.fontFamily.body }}>▼</Text>
+                  </TouchableOpacity>
+                  <Text style={profileStyles.settingsHint}>
+                    Checkout uses this so pickup hours match your local clock (e.g. Manitoba vs Toronto).
+                  </Text>
+                </View>
+
                 {/* Pickup Days & Time */}
                 <View style={profileStyles.settingsSection}>
                   <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>Pickup days & time</Text>
@@ -1075,6 +1101,91 @@ export default function ChefProfilePage() {
             </ScrollView>
             <TouchableOpacity
               onPress={() => setShowCuisineModal(false)}
+              style={{
+                marginTop: 16,
+                paddingVertical: 12,
+                backgroundColor: theme.colors.primary,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Chef pickup timezone (IANA) */}
+      <Modal
+        visible={showChefTimezoneModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowChefTimezoneModal(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+          activeOpacity={1}
+          onPress={() => setShowChefTimezoneModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              padding: 20,
+              width: '100%',
+              maxWidth: 440,
+              maxHeight: '85%',
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>
+              Pickup timezone
+            </Text>
+            <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator>
+              {CHEF_TIMEZONE_OPTIONS.map((opt) => {
+                const sel = resolveChefTimezoneId(chefTimezone) === opt.id;
+                return (
+                  <TouchableOpacity
+                    key={opt.id}
+                    onPress={() => {
+                      setChefTimezone(opt.id);
+                      setShowChefTimezoneModal(false);
+                    }}
+                    style={{
+                      flexDirection: 'row',
+                      alignItems: 'center',
+                      paddingVertical: 12,
+                      paddingHorizontal: 8,
+                      borderBottomWidth: 1,
+                      borderBottomColor: '#EAECF0',
+                      backgroundColor: sel ? theme.colors.primary + '18' : 'transparent',
+                    }}
+                  >
+                    <View
+                      style={{
+                        width: 20,
+                        height: 20,
+                        borderRadius: 4,
+                        borderWidth: 2,
+                        borderColor: theme.colors.primary,
+                        backgroundColor: sel ? theme.colors.primary : 'transparent',
+                        alignItems: 'center',
+                        justifyContent: 'center',
+                        marginRight: 12,
+                      }}
+                    >
+                      {sel ? (
+                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
+                      ) : null}
+                    </View>
+                    <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>{opt.label}</Text>
+                  </TouchableOpacity>
+                );
+              })}
+            </ScrollView>
+            <TouchableOpacity
+              onPress={() => setShowChefTimezoneModal(false)}
               style={{
                 marginTop: 16,
                 paddingVertical: 12,

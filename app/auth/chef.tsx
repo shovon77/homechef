@@ -14,6 +14,7 @@ import LocationPicker from '../../components/LocationPicker';
 import FilePicker from '../../components/FilePicker';
 import { uploadToBucket } from '../../lib/upload';
 import { createNotification, createChefApplicationSubmittedNotification } from '../../lib/notifications';
+import { CHEF_TIMEZONE_OPTIONS, DEFAULT_CHEF_TIMEZONE, resolveChefTimezoneId } from '../../lib/chef-timezones';
 
 // Storage key for chef onboarding form data
 const CHEF_FORM_STORAGE_KEY = 'chef_onboarding_form_data';
@@ -149,6 +150,8 @@ export default function ChefSignup() {
   
   // Step 2 fields - Availability & Pickup
   const [pickupSlots, setPickupSlots] = useState<Array<{ day: string; timeWindow: string }>>([]);
+  const [chefTimezone, setChefTimezone] = useState(DEFAULT_CHEF_TIMEZONE);
+  const [showTimezonePicker, setShowTimezonePicker] = useState(false);
   const [showPickupPicker, setShowPickupPicker] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
@@ -396,6 +399,7 @@ export default function ChefSignup() {
           if (data.address) setAddress(data.address);
           // Password is not restored from storage (security)
           if (data.pickupSlots) setPickupSlots(data.pickupSlots);
+          if (data.chefTimezone) setChefTimezone(resolveChefTimezoneId(data.chefTimezone));
           if (data.dishes) setDishes(data.dishes);
           if (data.bio) setBio(data.bio);
           if (data.location) setLocation(data.location);
@@ -432,6 +436,7 @@ export default function ChefSignup() {
           email,
           address,
           pickupSlots,
+          chefTimezone,
           dishes: dishes.map(d => ({ ...d, file: null })), // Don't save File objects
           bio,
           location,
@@ -450,7 +455,7 @@ export default function ChefSignup() {
       }
     };
     saveData();
-  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, pickupSlots, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
+  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, pickupSlots, chefTimezone, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
 
   const canProceedToStep2 = fullName && brandName && briefDescription && cuisineType.length > 0 && phoneIsValid && emailOk && address;
   const canProceedToStep3 = pickupSlots.length > 0;
@@ -751,6 +756,7 @@ export default function ChefSignup() {
             bio: chefBio,
             cuisine: chefCuisine,
             pickup_availability: pickupSlots.length > 0 ? pickupSlots : null,
+            timezone: resolveChefTimezoneId(chefTimezone),
             status: 'pending', // Deactivated until admin approval
           user_id: session.user.id,
           })
@@ -775,6 +781,7 @@ export default function ChefSignup() {
             bio: chefBio,
             cuisine: chefCuisine,
             pickup_availability: pickupSlots.length > 0 ? pickupSlots : null,
+            timezone: resolveChefTimezoneId(chefTimezone),
             status: 'pending', // Deactivated until admin approval
             user_id: session.user.id,
           })
@@ -1334,7 +1341,29 @@ export default function ChefSignup() {
                       <Text style={styles.dropdownArrow}>▼</Text>
                     </TouchableOpacity>
                     <Text style={styles.hint}>Select the days and time windows when customers can pick up orders.</Text>
-                    
+
+                    <View style={[styles.field, styles.fieldFull, { marginTop: 12 }]}>
+                      <View style={styles.fieldLabel}>
+                        <Text style={styles.label}>Pickup timezone</Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.input, styles.dropdownButton]}
+                        onPress={() => setShowTimezonePicker(true)}
+                      >
+                        <Text
+                          style={styles.dropdownButtonText}
+                          numberOfLines={2}
+                        >
+                          {CHEF_TIMEZONE_OPTIONS.find((o) => o.id === resolveChefTimezoneId(chefTimezone))?.label ??
+                            chefTimezone}
+                        </Text>
+                        <Text style={styles.dropdownArrow}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.hint}>
+                        We use this so checkout matches your local clock (important outside Eastern Ontario).
+                      </Text>
+                    </View>
+
                     {/* Display selected combinations */}
                     {pickupSlots.length > 0 && (
                       <View style={styles.selectedPickupTimes}>
@@ -1541,6 +1570,50 @@ export default function ChefSignup() {
                               Add {selectedTimeWindows.length > 0 ? `${selectedTimeWindows.length} ` : ''}Slot{selectedTimeWindows.length !== 1 ? 's' : ''}
                             </Text>
                           </TouchableOpacity>
+                        </View>
+                      </View>
+                    </Modal>
+
+                    <Modal
+                      visible={showTimezonePicker}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setShowTimezonePicker(false)}
+                    >
+                      <View style={styles.pickerModalOverlay}>
+                        <View style={styles.pickerModalContent}>
+                          <View style={styles.pickerModalHeader}>
+                            <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                              <Text style={styles.pickerModalCancel}>Cancel</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.pickerModalTitle}>Pickup timezone</Text>
+                            <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                              <Text style={styles.pickerModalConfirm}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.pickerWheelContent}>
+                            {CHEF_TIMEZONE_OPTIONS.map((opt) => {
+                              const sel = resolveChefTimezoneId(chefTimezone) === opt.id;
+                              return (
+                                <TouchableOpacity
+                                  key={opt.id}
+                                  onPress={() => {
+                                    setChefTimezone(opt.id);
+                                    setShowTimezonePicker(false);
+                                  }}
+                                  style={[styles.pickerWheelItem, sel && styles.pickerWheelItemSelected]}
+                                >
+                                  <Text
+                                    style={[styles.pickerWheelText, sel && styles.pickerWheelTextSelected]}
+                                    numberOfLines={3}
+                                  >
+                                    {opt.label}
+                                  </Text>
+                                  {sel ? <Text style={styles.pickerWheelCheckmark}>✓</Text> : null}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
                         </View>
                       </View>
                     </Modal>
