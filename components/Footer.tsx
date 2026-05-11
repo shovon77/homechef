@@ -1,21 +1,52 @@
 import React from 'react'
-import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, Image, useWindowDimensions } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Linking, Platform, Image, useWindowDimensions, ImageSourcePropType } from 'react-native'
 import { useRouter, usePathname } from 'expo-router'
 import { theme } from '../lib/theme'
+import { useFooterSocialUrls } from '../hooks/useFooterSocialUrls'
+import type { FooterSocialUrlKey } from '../lib/footerSocialSettings'
 
 export const FOOTER_HEIGHT = 62
+
+const SOCIAL_ICON_W = 32
+const SOCIAL_ICON_H = 32
+
+type SocialDef = {
+  urlKey: FooterSocialUrlKey
+  label: string
+  source: ImageSourcePropType
+}
+
+const SOCIAL_DEFS: SocialDef[] = [
+  { urlKey: 'instagram', label: 'Instagram', source: require('../assets/instagram.png') },
+  { urlKey: 'linkedin', label: 'LinkedIn', source: require('../assets/linkedin.png') },
+  { urlKey: 'facebook', label: 'Facebook', source: require('../assets/facebook-logo.png') },
+  { urlKey: 'whatsapp', label: 'WhatsApp', source: require('../assets/whatsapp.png') },
+  { urlKey: 'youtube', label: 'YouTube', source: require('../assets/youtube.png') },
+]
+
+function openExternalUrl(url: string) {
+  if (!url) return
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.open(url, '_blank', 'noopener,noreferrer')
+  } else {
+    Linking.openURL(url)
+  }
+}
 
 export default function Footer() {
   const router = useRouter()
   const pathname = usePathname?.() || ''
   const { width } = useWindowDimensions()
   const isMobile = width < 768
+  const iconW = isMobile ? 28 : SOCIAL_ICON_W
+  const iconH = isMobile ? 28 : SOCIAL_ICON_H
+  const socialUrls = useFooterSocialUrls()
 
   const handleContact = () => {
     const email = 'thereforyou.yhc@gmail.com'
     const subject = 'Contact YourHomeChef'
     const body = 'Hello YourHomeChef team,'
-    
+
     if (Platform.OS === 'web') {
       window.location.href = `mailto:${email}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`
     } else {
@@ -28,7 +59,7 @@ export default function Footer() {
       <View style={styles.contentWrapper}>
         <View style={styles.inner}>
           <View style={styles.brandContainer} collapsable={false}>
-            <Image 
+            <Image
               key={pathname || 'footer-logo'}
               source={require('../assets/YHC-New-Logo-Only.png')}
               style={[styles.brandLogo, { width: isMobile ? 80 : 108, height: isMobile ? 56 : 74, minWidth: 40, minHeight: 28 }]}
@@ -53,6 +84,31 @@ export default function Footer() {
           <TouchableOpacity onPress={() => router.push('/terms')}>
             <Text style={styles.link}>Legal</Text>
           </TouchableOpacity>
+        </View>
+        <View style={styles.socialRow}>
+          {SOCIAL_DEFS.map(def => {
+            const url = socialUrls[def.urlKey]
+            const hasUrl = url.length > 0
+            return (
+              <TouchableOpacity
+                key={def.urlKey}
+                onPress={() => openExternalUrl(url)}
+                disabled={!hasUrl}
+                style={[styles.socialButton, !hasUrl && styles.socialButtonDisabled]}
+                accessibilityRole="link"
+                accessibilityLabel={def.label}
+                accessibilityState={{ disabled: !hasUrl }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Image
+                  source={def.source}
+                  style={[styles.socialIcon, { width: iconW, height: iconH }]}
+                  resizeMode="contain"
+                  accessibilityIgnoresInvertColors
+                />
+              </TouchableOpacity>
+            )
+          })}
         </View>
         <Text style={styles.legal}>© 2025 YourHomeChef. All rights reserved.</Text>
       </View>
@@ -112,7 +168,7 @@ const styles = StyleSheet.create({
     color: '#33393A',
   },
   brandNameHomeChef: {
-    color: '#FE734C',
+    color: theme.colors.primary,
   },
   copy: {
     color: '#33393A',
@@ -127,10 +183,26 @@ const styles = StyleSheet.create({
     gap: 16,
   },
   link: {
-    color: '#FE734C',
+    color: theme.colors.primary,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal as any,
     fontSize: 14,
+  },
+  socialRow: {
+    marginTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 18,
+  },
+  socialButton: {
+    padding: 4,
+  },
+  socialIcon: {
+    tintColor: theme.colors.primary,
+  },
+  socialButtonDisabled: {
+    opacity: 0.38,
   },
   legal: {
     marginTop: 12,

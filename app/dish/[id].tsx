@@ -209,33 +209,9 @@ export default function DishDetail() {
       return;
     }
 
-    let mounted = true;
-
-    (async () => {
-      try {
-        // Check ownership if chef is loaded (or check against chef_id directly if possible)
-        // We rely on 'chef' state which might be populated by the first effect.
-        // Alternatively, we can re-check ownership here if we have dish data.
-        
-        // Fetch user's existing rating
-        const { data: userRatingData } = await supabase
-          .from("dish_ratings")
-          .select("rating, stars, comment")
-          .eq("dish_id", dishId)
-          .eq("user_id", user.id)
-          .maybeSingle();
-        
-        if (mounted && userRatingData) {
-          const rating = userRatingData.rating ?? userRatingData.stars ?? 0;
-          setUserRating(Number(rating));
-          setComment(userRatingData.comment || "");
-        }
-      } catch (e) {
-        console.error("Error loading user rating:", e);
-      }
-    })();
-
-    return () => { mounted = false; };
+    // Stars + comment always start blank (do not prefill from dish_ratings).
+    setUserRating(0);
+    setComment("");
   }, [dishId, user]);
 
   // Update ownership when chef or user changes
@@ -299,27 +275,12 @@ export default function DishDetail() {
       setRatingCount(summary.count);
       setAvgRating(summary.avg);
       
-      // Refresh reviews + user's own rating in parallel
-      const [updatedReviews, userRatingResult] = await Promise.all([
-        getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0),
-        supabase
-          .from("dish_ratings")
-          .select("rating, stars, comment")
-          .eq("dish_id", dishId)
-          .eq("user_id", user.id)
-          .maybeSingle(),
-      ]);
-
+      const updatedReviews = await getDishReviews(dishId, REVIEWS_PAGE_SIZE, 0);
       setReviews(updatedReviews);
       setReviewsHasMore(updatedReviews.length >= REVIEWS_PAGE_SIZE);
 
-      if (userRatingResult.data) {
-        const rating = userRatingResult.data.rating ?? userRatingResult.data.stars ?? 0;
-        setUserRating(Number(rating));
-      }
-
-      // Clear the draft so the field doesn’t keep showing the text that’s already in the list
-      // (avoids looking like a duplicate / unsent review).
+      // Reset form so it stays blank (same as initial load — no echo of submitted review in inputs).
+      setUserRating(0);
       setComment("");
 
       Alert.alert("Success", "Rating submitted successfully!");
@@ -1400,17 +1361,18 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     alignSelf: 'center',
-    width: '85%',
-    maxWidth: 320,
+    width: '55%',
+    maxWidth: 220,
   },
   submitButtonDisabled: {
     opacity: 0.7,
   },
   submitButtonText: {
     color: '#FFFFFF',
-    fontSize: theme.typography.fontSize.sm,
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold as any,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.normal,
+    letterSpacing: theme.typography.letterSpacing.wide,
   },
   ratingSummary: {
     padding: theme.spacing.md,

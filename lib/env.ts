@@ -10,6 +10,11 @@ const ENV = {
        process.env.EXPO_PUBLIC_STRIPE_PUBLISHABLE_KEY ??
        ''),
   WEB_BASE_URL: process.env.EXPO_PUBLIC_WEB_BASE_URL ?? 'https://yourhomechef.ca',
+  SOCIAL_FACEBOOK_URL: process.env.EXPO_PUBLIC_SOCIAL_FACEBOOK_URL ?? '',
+  SOCIAL_INSTAGRAM_URL: process.env.EXPO_PUBLIC_SOCIAL_INSTAGRAM_URL ?? '',
+  SOCIAL_LINKEDIN_URL: process.env.EXPO_PUBLIC_SOCIAL_LINKEDIN_URL ?? '',
+  SOCIAL_WHATSAPP_URL: process.env.EXPO_PUBLIC_SOCIAL_WHATSAPP_URL ?? '',
+  SOCIAL_YOUTUBE_URL: process.env.EXPO_PUBLIC_SOCIAL_YOUTUBE_URL ?? '',
 };
 
 export function validateEnv() {

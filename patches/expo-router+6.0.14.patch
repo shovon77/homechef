@@ -1,0 +1,14 @@
+diff --git a/node_modules/expo-router/build/static/renderStaticContent.js b/node_modules/expo-router/build/static/renderStaticContent.js
+index 1a4ea15..dfb215d 100644
+--- a/node_modules/expo-router/build/static/renderStaticContent.js
++++ b/node_modules/expo-router/build/static/renderStaticContent.js
+@@ -55,7 +55,8 @@ const getRootComponent_1 = require("./getRootComponent");
+ const _ctx_1 = require("../../_ctx");
+ const ExpoRoot_1 = require("../ExpoRoot");
+ const head_1 = require("../head");
+-const debug = require('debug')('expo:router:renderStaticContent');
++// Patched: Metro static export could not resolve `debug` from this path; noop preserves behavior.
++const debug = () => {};
+ react_native_web_1.AppRegistry.registerComponent('App', () => ExpoRoot_1.ExpoRoot);
+ function resetReactNavigationContexts() {
+     // https://github.com/expo/router/discussions/588

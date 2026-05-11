@@ -1,61 +1,9 @@
 {
   "name": "homechef",
   "version": "1.0.0",
-  "author": "650 Industries, Inc.",
+  "private": true,
   "license": "MIT",
   "main": "expo-router/entry",
-  "types": "build/index.d.ts",
-  "sideEffects": [
-    "rsc/entry.js",
-    "entry-classic.js",
-    "entry.js"
-  ],
-  "files": [
-    "link",
-    "assets",
-    "build",
-    "vendor",
-    "!src",
-    "_ctx-html.js",
-    "_ctx-shared.js",
-    "_ctx.*",
-    "_error.js",
-    "app.plugin.js",
-    "babel.js",
-    "doctor.js",
-    "drawer.d.ts",
-    "drawer.js",
-    "entry-classic.js",
-    "entry.js",
-    "expo-module.config.json",
-    "head.d.ts",
-    "head.js",
-    "html.d.ts",
-    "html.js",
-    "index.d.ts",
-    "ios",
-    "unstable-native-tabs.js",
-    "unstable-native-tabs.d.ts",
-    "node",
-    "plugin",
-    "rsc",
-    "server.d.ts",
-    "server.js",
-    "stack.d.ts",
-    "stack.js",
-    "tabs.js",
-    "types",
-    "tabs.d.ts",
-    "ui.js",
-    "ui.d.ts",
-    "testing-library.js",
-    "testing-library.d.ts",
-    "_async-server-import.js"
-  ],
-  "bugs": {
-    "url": "https://github.com/expo/expo/issues"
-  },
-  "homepage": "https://docs.expo.dev/routing/introduction/",
   "scripts": {
     "start": "expo start",
     "android": "expo start --android",
@@ -65,49 +13,8 @@
     "test:e2e": "playwright test",
     "test:e2e:headed": "playwright test --headed",
     "test:e2e:ui": "playwright test --ui",
-    "test:e2e:report": "playwright show-report e2e-results/html"
-  },
-  "keywords": [
-    "react-native",
-    "expo"
-  ],
-  "peerDependencies": {
-    "@expo/metro-runtime": "^6.1.2",
-    "@react-navigation/drawer": "^7.5.0",
-    "@testing-library/react-native": ">= 12.0.0",
-    "expo": "^54.0.22",
-    "expo-constants": "^18.0.10",
-    "expo-linking": "^8.0.8",
-    "react": "^19.2.0",
-    "react-native": "*",
-    "react-native-gesture-handler": "*",
-    "react-native-reanimated": "*",
-    "react-native-safe-area-context": ">= 5.4.0",
-    "react-native-screens": "*",
-    "react-server-dom-webpack": ">= 19.0.0"
-  },
-  "peerDependenciesMeta": {
-    "@testing-library/react-native": {
-      "optional": true
-    },
-    "react-dom": {
-      "optional": true
-    },
-    "react-native-gesture-handler": {
-      "optional": true
-    },
-    "react-native-reanimated": {
-      "optional": true
-    },
-    "react-native-web": {
-      "optional": true
-    },
-    "react-server-dom-webpack": {
-      "optional": true
-    },
-    "@react-navigation/drawer": {
-      "optional": true
-    }
+    "test:e2e:report": "playwright show-report e2e-results/html",
+    "postinstall": "patch-package && node scripts/ensure-nested-tslib.js"
   },
   "devDependencies": {
     "@playwright/test": "^1.58.1",
@@ -121,6 +28,7 @@
     "babel-plugin-module-resolver": "^5.0.2",
     "dotenv": "^17.2.3",
     "immer": "^10.1.1",
+    "patch-package": "^8.0.1",
     "react-server-dom-webpack": "19.0.1",
     "tsd": "^0.28.1",
     "typescript": "~5.9.2"
@@ -146,7 +54,7 @@
     "expo-font": "~14.0.10",
     "expo-image-picker": "~17.0.8",
     "expo-linear-gradient": "~15.0.8",
-    "expo-router": "~6.0.14",
+    "expo-router": "^6.0.14",
     "expo-server": "^1.0.3",
     "expo-splash-screen": "~31.0.12",
     "fast-deep-equal": "^3.1.3",
@@ -169,10 +77,12 @@
     "sf-symbols-typescript": "^2.1.0",
     "shallowequal": "^1.1.0",
     "stripe": "^20.1.0",
+    "tslib": "^2.8.1",
     "use-latest-callback": "^0.2.1",
     "vaul": "^1.1.2",
-    "y": "^0.3.2"
-  },
-  "gitHead": "f1475b7bd0e8fdec0c0027be89c4c8d650d10805",
-  "private": true
+    "y": "^0.3.2",
+    "expo": "~54.0.22",
+    "react": "19.2.0",
+    "react-native": "0.82.1"
+  }
 }

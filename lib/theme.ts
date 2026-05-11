@@ -36,6 +36,8 @@ export const theme = {
     
     // Primary brand
     primary: '#FE734C', // Was #3E6A55
+    /** Same family as primary, higher chroma — reads stronger on tinted PNGs (e.g. footer social) */
+    primaryVivid: '#FF552E',
     primaryContrast: '#FFFFFF', // White text on primary
     primaryLight: 'rgba(254, 115, 76, 0.1)', // Primary with opacity
     

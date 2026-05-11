@@ -15,6 +15,11 @@ import { formatEst } from '../../lib/datetime';
 import { cents } from '../../lib/money';
 import { theme } from '../../lib/theme';
 import { createNotification } from '../../lib/notifications';
+import {
+  FOOTER_SOCIAL_SETTING_KEYS,
+  mergeSocialUrlsWithDb,
+  type FooterSocialUrlKey,
+} from '../../lib/footerSocialSettings';
 
 const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
@@ -38,6 +43,36 @@ const palette = {
   neutralBg: '#E2E8F0',
   neutralText: '#475569',
 };
+
+const FOOTER_SOCIAL_URL_PREFIX = 'https://';
+
+const FOOTER_SOCIAL_FORM_FIELDS: { key: FooterSocialUrlKey; label: string; placeholder: string; hint?: string }[] = [
+  { key: 'instagram', label: 'Instagram', placeholder: 'www.instagram.com/yourhandle' },
+  { key: 'linkedin', label: 'LinkedIn', placeholder: 'www.linkedin.com/company/yourcompany' },
+  { key: 'facebook', label: 'Facebook', placeholder: 'www.facebook.com/yourpage' },
+  {
+    key: 'whatsapp',
+    label: 'WhatsApp',
+    placeholder: 'wa.me/15551234567',
+    hint: 'Use wa.me with country code and number (digits only, no +). https:// is added automatically.',
+  },
+  { key: 'youtube', label: 'YouTube', placeholder: 'www.youtube.com/@yourchannel' },
+];
+
+function footerSocialInputDisplay(stored: string) {
+  const t = (stored ?? '').trim();
+  return t.length === 0 ? FOOTER_SOCIAL_URL_PREFIX : stored;
+}
+
+/** Ensure saved URLs are absolute; paths typed after the default https:// get a scheme. */
+function footerSocialUrlForSave(raw: string) {
+  let v = (raw ?? '').trim();
+  if (!v) return '';
+  if (!/^https?:\/\//i.test(v)) v = FOOTER_SOCIAL_URL_PREFIX + v.replace(/^\/+/, '');
+  v = v.trim();
+  if (v === 'https://' || v === 'http://') return '';
+  return v;
+}
 
 // Use theme fonts like rest of app - display for bold/headings, body for regular text
 
@@ -91,6 +126,11 @@ export default function AdminPage() {
   const [searchPlaceholders, setSearchPlaceholders] = useState<string[]>(['', '', '', '', '']);
   const [originalSearchPlaceholders, setOriginalSearchPlaceholders] = useState<string[]>(['', '', '', '', '']);
   const [savingPlaceholders, setSavingPlaceholders] = useState(false);
+  const [socialUrls, setSocialUrls] = useState<Record<FooterSocialUrlKey, string>>(() => mergeSocialUrlsWithDb([]));
+  const [originalSocialUrls, setOriginalSocialUrls] = useState<Record<FooterSocialUrlKey, string>>(() =>
+    mergeSocialUrlsWithDb([]),
+  );
+  const [savingSocialUrls, setSavingSocialUrls] = useState(false);
   const [issueActions, setIssueActions] = useState<{ [issueId: number]: string }>({});
   const [pendingIssuesCount, setPendingIssuesCount] = useState(0);
   const [pendingChefApplicationsCount, setPendingChefApplicationsCount] = useState(0);
@@ -477,6 +517,15 @@ export default function AdminPage() {
         setSearchPlaceholders(defaults);
         setOriginalSearchPlaceholders(defaults);
       }
+
+      const socialSettingKeys = Object.values(FOOTER_SOCIAL_SETTING_KEYS);
+      const { data: socialSettingsRows } = await supabase
+        .from('app_settings')
+        .select('key, value')
+        .in('key', socialSettingKeys);
+      const mergedSocial = mergeSocialUrlsWithDb(socialSettingsRows ?? []);
+      setSocialUrls(mergedSocial);
+      setOriginalSocialUrls({ ...mergedSocial });
 
       // Load order issues with related data
       const { data: issuesData } = await supabase
@@ -3197,6 +3246,33 @@ export default function AdminPage() {
     }
   }
 
+  async function updateSocialUrls() {
+    setSavingSocialUrls(true);
+    try {
+      for (const logical of Object.keys(FOOTER_SOCIAL_SETTING_KEYS) as FooterSocialUrlKey[]) {
+        const key = FOOTER_SOCIAL_SETTING_KEYS[logical];
+        const v = footerSocialUrlForSave(socialUrls[logical]);
+        if (!v) {
+          const { error: delErr } = await supabase.from('app_settings').delete().eq('key', key);
+          if (delErr) throw delErr;
+        } else {
+          const { error: upErr } = await supabase.from('app_settings').upsert({ key, value: v }, { onConflict: 'key' });
+          if (upErr) throw upErr;
+        }
+      }
+      const socialSettingKeys = Object.values(FOOTER_SOCIAL_SETTING_KEYS);
+      const { data: refreshed } = await supabase.from('app_settings').select('key, value').in('key', socialSettingKeys);
+      const merged = mergeSocialUrlsWithDb(refreshed ?? []);
+      setSocialUrls(merged);
+      setOriginalSocialUrls({ ...merged });
+      Alert.alert('Success', 'Footer social links updated. Cleared fields fall back to env after save.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to save footer social links. Ensure app_settings exists and you are an admin.');
+    } finally {
+      setSavingSocialUrls(false);
+    }
+  }
+
   function formatNotificationType(type: string): string {
     return (type || '')
       .split('_')
@@ -3444,6 +3520,55 @@ export default function AdminPage() {
               </Text>
             </TouchableOpacity>
           )}
+        </View>
+      </View>
+
+      <View style={styles.chartCard}>
+        <View style={styles.chartHeader}>
+          <Text style={styles.chartTitle}>Footer social links</Text>
+          <Text style={styles.chartSubtitle}>
+            URLs for the footer social icons (under About / FAQ / Contact / Legal). Saved URLs override EXPO_PUBLIC_* env values. Clear a field and save to remove the override and use env again.
+          </Text>
+        </View>
+        <View style={styles.searchWrapper}>
+          {FOOTER_SOCIAL_FORM_FIELDS.map((field) => (
+            <View key={field.key} style={{ marginBottom: 16 }}>
+              <Text style={{ fontWeight: '600', marginBottom: 8, color: palette.text, fontFamily: theme.typography.fontFamily.body }}>
+                {field.label}
+              </Text>
+              <TextInput
+                value={footerSocialInputDisplay(socialUrls[field.key])}
+                onChangeText={(text) => {
+                  const trimmed = text.trim();
+                  if (!trimmed || trimmed === 'https://' || trimmed === 'http://') {
+                    setSocialUrls((prev) => ({ ...prev, [field.key]: '' }));
+                  } else {
+                    setSocialUrls((prev) => ({ ...prev, [field.key]: text }));
+                  }
+                }}
+                placeholder={field.placeholder}
+                placeholderTextColor="#94a3b8"
+                style={[styles.searchInput, { minHeight: 44 }]}
+                autoCapitalize="none"
+                autoCorrect={false}
+                keyboardType="url"
+              />
+              {field.hint ? (
+                <Text style={{ marginTop: 6, fontSize: 12, color: palette.muted, fontFamily: theme.typography.fontFamily.body }}>
+                  {field.hint}
+                </Text>
+              ) : null}
+            </View>
+          ))}
+          {JSON.stringify(socialUrls) !== JSON.stringify(originalSocialUrls) ? (
+            <TouchableOpacity
+              onPress={updateSocialUrls}
+              disabled={savingSocialUrls}
+              style={[styles.primaryButton, savingSocialUrls && styles.disabledButton, { marginTop: 8 }]}
+            >
+              <Text style={styles.primaryButtonText}>{savingSocialUrls ? 'Saving…' : 'Save social links'}</Text>
+            </TouchableOpacity>
+          ) : null}
         </View>
       </View>
 
