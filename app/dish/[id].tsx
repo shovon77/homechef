@@ -12,6 +12,7 @@ import Screen from "../../components/Screen";
 import OptimizedImage from "../../components/OptimizedImage";
 import { formatCad } from "../../lib/money";
 import { optimizeDishDetailHeroUrl } from "../../lib/dishImageUrl";
+import { Ionicons } from "@expo/vector-icons";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -772,7 +773,12 @@ export default function DishDetail() {
                     <Text style={styles.reviewFormTitle}>Share a review</Text>
                     
                     <View style={styles.ratingInputContainer}>
-                      <Text style={styles.ratingLabel}>Rating (required)</Text>
+                      <View style={styles.ratingLabelRow}>
+                        <Text style={styles.ratingLabel}>Rating</Text>
+                        <Text style={styles.ratingRequiredMark} accessibilityLabel="required">
+                          *
+                        </Text>
+                      </View>
                       <View style={styles.starsInputRow}>
                         {[1, 2, 3, 4, 5].map((star) => (
                           <Pressable
@@ -785,15 +791,11 @@ export default function DishDetail() {
                               pressed && styles.starInputHitTargetPressed,
                             ]}
                           >
-                            <ImageCmp
+                            <Ionicons
                               pointerEvents="none"
-                              source={require('../../assets/star.png')}
-                              style={[
-                                styles.starInputImage as any,
-                                { opacity: star <= userRating ? 1 : 0.25 },
-                              ]}
-                              tintColor={PRIMARY_COLOR}
-                              resizeMode="contain"
+                              name={star <= userRating ? "star" : "star-outline"}
+                              size={28}
+                              color={star <= userRating ? PRIMARY_COLOR : "#D4D4D8"}
                             />
                           </Pressable>
                         ))}
@@ -801,7 +803,7 @@ export default function DishDetail() {
                     </View>
 
                     <View style={styles.commentInputContainer}>
-                      <Text style={styles.commentLabel}>Comment (optional)</Text>
+                      <Text style={styles.commentLabel}>Comment</Text>
                       <TextInput
                         value={comment}
                         onChangeText={setComment}
@@ -1290,10 +1292,22 @@ const styles = StyleSheet.create({
   ratingInputContainer: {
     gap: theme.spacing.sm,
   },
+  ratingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   ratingLabel: {
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  ratingRequiredMark: {
+    color: theme.colors.error,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    lineHeight: theme.typography.fontSize.sm * 1.2,
   },
   starsInputRow: {
     flexDirection: 'row',

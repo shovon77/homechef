@@ -11,6 +11,7 @@ import type { Chef, Dish, ChefReview } from '../../lib/types';
 import Screen from '../../components/Screen';
 import DishCard from '../components/DishCard';
 import { theme, elev } from '../../lib/theme';
+import { Ionicons } from '@expo/vector-icons';
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -368,17 +369,13 @@ export default function ChefDetailView() {
     }
 
     const trimmedComment = reviewComment.trim();
-    if (!trimmedComment) {
-      Alert.alert("Comment required", "Please share a short comment with your review.");
-      return;
-    }
 
     try {
       setSubmittingReview(true);
       await submitChefReview({
         chefId,
         rating: reviewRating,
-        comment: trimmedComment,
+        comment: trimmedComment || undefined,
       });
 
       const [chefData, updatedReviews] = await Promise.all([
@@ -595,8 +592,12 @@ export default function ChefDetailView() {
                     <View style={styles.reviewForm} collapsable={false}>
                       <Text style={styles.reviewFormTitle}>Leave a Review</Text>
                       <View style={styles.ratingSelector}>
-                        <Text style={styles.ratingLabel}>Rating</Text>
-                        {/* Match dish detail reviews: Pressable + opacity (reliable on mobile web). */}
+                        <View style={styles.ratingLabelRow}>
+                          <Text style={styles.ratingLabel}>Rating</Text>
+                          <Text style={styles.ratingRequiredMark} accessibilityLabel="required">
+                            *
+                          </Text>
+                        </View>
                         <View style={styles.starsRow}>
                           {[1, 2, 3, 4, 5].map((star) => (
                             <Pressable
@@ -609,27 +610,18 @@ export default function ChefDetailView() {
                                 pressed && styles.starHitTargetPressed,
                               ]}
                             >
-                              <Image
+                              <Ionicons
                                 pointerEvents="none"
-                                source={require('../../assets/star.png')}
-                                style={[
-                                  styles.starButtonImage,
-                                  { opacity: star <= reviewRating ? 1 : 0.25 },
-                                ]}
-                                tintColor={STAR_COLOR}
-                                resizeMode="contain"
+                                name={star <= reviewRating ? 'star' : 'star-outline'}
+                                size={28}
+                                color={star <= reviewRating ? STAR_COLOR : '#D4D4D8'}
                               />
                             </Pressable>
                           ))}
                         </View>
                       </View>
                       <View style={styles.commentInputContainer}>
-                        <Text style={styles.commentLabel}>
-                          Comment{' '}
-                          <Text style={styles.commentRequiredStar} accessibilityLabel="required">
-                            *
-                          </Text>
-                        </Text>
+                        <Text style={styles.commentLabel}>Comment</Text>
                         <TextInput
                           value={reviewComment}
                           onChangeText={setReviewComment}
@@ -642,17 +634,10 @@ export default function ChefDetailView() {
                       </View>
                       <TouchableOpacity
                         onPress={handleSubmitReview}
-                        disabled={
-                          submittingReview ||
-                          reviewRating < 1 ||
-                          !reviewComment.trim()
-                        }
+                        disabled={submittingReview || reviewRating < 1}
                         style={[
                           styles.submitButton,
-                          (submittingReview ||
-                            reviewRating < 1 ||
-                            !reviewComment.trim()) &&
-                            styles.submitButtonDisabled,
+                          (submittingReview || reviewRating < 1) && styles.submitButtonDisabled,
                         ]}
                       >
                         <Text style={styles.submitButtonText}>
@@ -1359,10 +1344,22 @@ const styles = StyleSheet.create({
   ratingSelector: {
     gap: theme.spacing.sm,
   },
+  ratingLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 2,
+  },
   ratingLabel: {
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  ratingRequiredMark: {
+    color: theme.colors.error,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: theme.typography.fontWeight.bold as any,
+    lineHeight: theme.typography.fontSize.sm * 1.2,
   },
   starsRow: {
     flexDirection: 'row',
@@ -1390,13 +1387,6 @@ const styles = StyleSheet.create({
   starHitTargetPressed: {
     opacity: 0.85,
   },
-  starButton: {
-    fontSize: 24,
-  },
-  starButtonImage: {
-    width: 28,
-    height: 28,
-  },
   commentInputContainer: {
     gap: theme.spacing.sm,
   },
@@ -1404,11 +1394,6 @@ const styles = StyleSheet.create({
     color: BRAND_BLACK,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
-  },
-  commentRequiredStar: {
-    color: '#DC2626',
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: '700',
   },
   commentInput: {
     borderWidth: 1,
@@ -1428,6 +1413,9 @@ const styles = StyleSheet.create({
     backgroundColor: PRIMARY_COLOR,
     justifyContent: 'center',
     alignItems: 'center',
+    alignSelf: 'center',
+    width: '55%',
+    maxWidth: 220,
   },
   submitButtonDisabled: {
     opacity: 0.7,
