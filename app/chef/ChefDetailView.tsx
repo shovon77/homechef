@@ -510,22 +510,30 @@ export default function ChefDetailView() {
           <View style={[styles.mainContent, styles.mainContentFullWidth]}>
             {/* Tab Navigation */}
             <View style={styles.tabContainer}>
-                <TouchableOpacity
-                style={[styles.tab, activeTab === 'dishes' && styles.tabActive]}
+              <Pressable
                 onPress={() => startTransition(() => setActiveTab('dishes'))}
+                style={({ pressed }) => [
+                  styles.tab,
+                  activeTab === 'dishes' && styles.tabActive,
+                  Platform.OS !== 'web' && pressed && styles.tabPressed,
+                ]}
               >
                 <Text style={[styles.tabText, activeTab === 'dishes' && styles.tabTextActive]}>
                   Dishes
                 </Text>
-                </TouchableOpacity>
-                    <TouchableOpacity
-                style={[styles.tab, activeTab === 'reviews' && styles.tabActive]}
+              </Pressable>
+              <Pressable
                 onPress={() => startTransition(() => setActiveTab('reviews'))}
+                style={({ pressed }) => [
+                  styles.tab,
+                  activeTab === 'reviews' && styles.tabActive,
+                  Platform.OS !== 'web' && pressed && styles.tabPressed,
+                ]}
               >
                 <Text style={[styles.tabText, activeTab === 'reviews' && styles.tabTextActive]}>
                   {reviewCount > 0 ? `Reviews (${reviewCount})` : 'Reviews'}
                 </Text>
-                    </TouchableOpacity>
+              </Pressable>
             </View>
 
             {/* Content based on active tab */}
@@ -1047,19 +1055,29 @@ const styles = StyleSheet.create({
     paddingVertical: theme.spacing.sm,
     paddingHorizontal: theme.spacing.lg,
     borderRadius: theme.radius.lg,
+    ...Platform.select({
+      web: {
+        cursor: 'pointer' as const,
+      },
+    }),
   },
   tabActive: {
     backgroundColor: PRIMARY_COLOR,
   },
+  tabPressed: {
+    opacity: 0.92,
+  },
+  /** Match submit review label: body, regular weight (not display / bold). */
   tabText: {
     color: BRAND_BLACK,
-    fontSize: 16,
+    fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
-    letterSpacing: 0.015,
   },
   tabTextActive: {
     color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
   },
   sectionBlock: {
