@@ -3,5 +3,7 @@ design/
 docs/
 .backups/
 *.sh
-scripts/
+# Do not ignore scripts/ — postinstall runs scripts/ensure-nested-tslib.js (pnpm install on Vercel).
+# Ignore heavy SQL-only assets under scripts if desired (optional size trim):
+scripts/**/*.sql
 
