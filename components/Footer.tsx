@@ -16,12 +16,13 @@ type SocialDef = {
   source: ImageSourcePropType
 }
 
+/** Order: FB → IG → YT → WA → LI */
 const SOCIAL_DEFS: SocialDef[] = [
-  { urlKey: 'instagram', label: 'Instagram', source: require('../assets/instagram.png') },
-  { urlKey: 'linkedin', label: 'LinkedIn', source: require('../assets/linkedin.png') },
   { urlKey: 'facebook', label: 'Facebook', source: require('../assets/facebook-logo.png') },
-  { urlKey: 'whatsapp', label: 'WhatsApp', source: require('../assets/whatsapp.png') },
+  { urlKey: 'instagram', label: 'Instagram', source: require('../assets/instagram.png') },
   { urlKey: 'youtube', label: 'YouTube', source: require('../assets/youtube.png') },
+  { urlKey: 'whatsapp', label: 'WhatsApp', source: require('../assets/whatsapp.png') },
+  { urlKey: 'linkedin', label: 'LinkedIn', source: require('../assets/linkedin.png') },
 ]
 
 function openExternalUrl(url: string) {
@@ -193,7 +194,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flexWrap: 'wrap',
-    gap: 18,
+    gap: 10,
   },
   socialButton: {
     padding: 4,

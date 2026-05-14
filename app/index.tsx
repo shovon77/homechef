@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, startTransition, useCallback } from "react";
+import React, { useEffect, useState, useMemo, startTransition, useCallback, useRef, lazy, Suspense } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
 import { Link, useRouter } from "expo-router";
 
@@ -8,173 +8,18 @@ import Screen from "../components/Screen";
 import ChefCard from "./components/ChefCard";
 import DishCard from "./components/DishCard";
 import { toFiniteNumberOrNull } from "../lib/number";
+import { getBannerPictureSources } from "../lib/bannerSources";
+import { HomeHeroBannerWeb } from "../components/HomeHeroBannerWeb";
 import { useRole } from "../hooks/useRole";
+import type { HomeBrowseGridSectionHandle } from "./components/HomeBrowseGridSection";
+
+const HomeBrowseGridSectionLazy = lazy(() => import("./components/HomeBrowseGridSection"));
 
 type Chef = Record<string, any>;
 type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null; chef?: string | null };
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 const FEATURED_CHEFS_LIMIT = 30;
-/** Same batch size as Explore dishes tab infinite scroll */
-const BROWSE_GRID_DISHES_PER_PAGE = 24;
-
-type BrowseGridDish = Record<string, any>;
-
-// Coordinate cache with persistent storage
-const coordinateCache = new Map<string, { lat: number; lon: number } | null>();
-// In-memory cache for chef coords from profiles (faster than geocoding)
-const chefProfileCoordCache = new Map<string, { lat: number; lon: number } | null>();
-
-// Load cache from localStorage on initialization
-if (Platform.OS === 'web' && typeof window !== 'undefined') {
-  try {
-    const cached = localStorage.getItem('geocode_cache');
-    if (cached) {
-      const parsed = JSON.parse(cached);
-      Object.entries(parsed).forEach(([key, value]: [string, any]) => {
-        if (value) {
-          coordinateCache.set(key, value);
-        }
-      });
-    }
-  } catch (e) {
-    console.warn('Failed to load geocode cache:', e);
-  }
-}
-
-// Save cache to localStorage
-function saveCacheToStorage() {
-  if (Platform.OS === 'web' && typeof window !== 'undefined') {
-    try {
-      const cacheObj: Record<string, { lat: number; lon: number } | null> = {};
-      coordinateCache.forEach((value, key) => {
-        cacheObj[key] = value;
-      });
-      localStorage.setItem('geocode_cache', JSON.stringify(cacheObj));
-    } catch (e) {
-      console.warn('Failed to save geocode cache:', e);
-    }
-  }
-}
-
-// Geocode an address — single attempt, no retries, no delays.
-// Distance display is non-critical; never worth blocking INP for seconds.
-async function geocodeAddress(address: string): Promise<{ lat: number; lon: number } | null> {
-  if (!address) return null;
-
-  if (coordinateCache.has(address)) {
-    return coordinateCache.get(address) ?? null;
-  }
-
-  try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000);
-
-    const response = await fetch(
-      `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(address)}&limit=1&addressdetails=0`,
-      { headers: { 'User-Agent': 'YourHomeChef/1.0' }, signal: controller.signal }
-    );
-    clearTimeout(timeoutId);
-
-    if (!response.ok) return null;
-    const data = await response.json();
-    if (data?.[0]) {
-      const coords = { lat: parseFloat(data[0].lat), lon: parseFloat(data[0].lon) };
-      if (!isNaN(coords.lat) && !isNaN(coords.lon)) {
-        coordinateCache.set(address, coords);
-        saveCacheToStorage();
-        return coords;
-      }
-    }
-  } catch {
-    // timeout or network error — skip silently
-  }
-
-  coordinateCache.set(address, null);
-  return null;
-}
-
-// Calculate distance using Haversine formula
-function calculateDistanceFromCoords(userCoords: { lat: number; lon: number }, chefCoords: { lat: number; lon: number }): number {
-  const R = 6371; // Earth's radius in km
-  const dLat = (chefCoords.lat - userCoords.lat) * Math.PI / 180;
-  const dLon = (chefCoords.lon - userCoords.lon) * Math.PI / 180;
-  const a = 
-    Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(userCoords.lat * Math.PI / 180) * Math.cos(chefCoords.lat * Math.PI / 180) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2);
-  const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
-  return R * c;
-}
-
-// Calculate distance between two addresses (with caching)
-async function getDistance(userLocation: string | null, chefLocation: string | null): Promise<number | null> {
-  if (!userLocation || !chefLocation) return null;
-  
-  try {
-    const [userCoords, chefCoords] = await Promise.all([
-      geocodeAddress(userLocation),
-      geocodeAddress(chefLocation)
-    ]);
-
-    if (!userCoords || !chefCoords) return null;
-
-    return calculateDistanceFromCoords(userCoords, chefCoords);
-  } catch (error) {
-    console.warn('Distance calculation error:', error);
-    return null;
-  }
-}
-
-// Batch calculate distances for all chefs (optimized with parallel processing and caching)
-async function calculateAllDistances(userLocation: string | null, chefs: Chef[]): Promise<Map<string, number>> {
-  const distances = new Map<string, number>();
-  
-  if (!userLocation) return distances;
-
-  try {
-    // Geocode user location once (check cache first)
-    const userCoords = await geocodeAddress(userLocation);
-    if (!userCoords) return distances;
-
-    // Filter chefs with locations and batch geocode in parallel (with concurrency limit)
-    const chefsWithLocations = chefs.filter(chef => chef.location);
-    
-    // Process in batches of 5 to avoid overwhelming the API
-    const BATCH_SIZE = 5;
-    for (let i = 0; i < chefsWithLocations.length; i += BATCH_SIZE) {
-      const batch = chefsWithLocations.slice(i, i + BATCH_SIZE);
-      
-      const batchPromises = batch.map(async (chef) => {
-        const coords = await geocodeAddress(chef.location!);
-        return { chefId: normalizeId(chef.id), coords };
-      });
-
-      const batchResults = await Promise.all(batchPromises);
-
-      // Calculate distances for this batch
-      batchResults.forEach(({ chefId, coords }) => {
-        if (coords) {
-          const distance = calculateDistanceFromCoords(userCoords, coords);
-          distances.set(chefId, distance);
-        }
-      });
-    }
-  } catch (error) {
-    console.warn('Batch distance calculation error:', error);
-  }
-
-  return distances;
-}
-
-// Normalize a location string for "same place" checks.
-function normalizeLocationKey(loc: any): string {
-  return String(loc || '')
-    .trim()
-    .toLowerCase()
-    .replace(/\s+/g, ' ')
-    .replace(/,+/g, ',');
-}
 
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
@@ -209,15 +54,6 @@ const formatCuisine = (cuisine: any): string => {
 // Primary color from design: #2C4E4B
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
-
-/** Resize googleusercontent banner URLs to match viewport (2x for retina, capped at 3000). */
-function sizeBannerUrl(url: string, viewportWidth: number): string {
-  if (!url.includes('googleusercontent.com')) return url;
-  const px = Math.min(Math.ceil(viewportWidth * 2), 3000);
-  if (url.match(/=s\d+$/)) return url.replace(/=s\d+$/, `=s${px}`);
-  if (!url.includes('=')) return `${url}=s${px}`;
-  return url;
-}
 
 const CONTENT_MAX_WIDTH = 1280;
 
@@ -272,7 +108,17 @@ export default function HomePage() {
   const [loading, setLoading] = useState(true);
   const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
   const [bannerUrlRaw, setBannerUrlRaw] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
-  const bannerUrl = useMemo(() => sizeBannerUrl(bannerUrlRaw, width), [bannerUrlRaw, width]);
+  const [bannerUrlWebpOpt, setBannerUrlWebpOpt] = useState<string | null>(null);
+  const [bannerUrlAvifOpt, setBannerUrlAvifOpt] = useState<string | null>(null);
+  const bannerSources = useMemo(
+    () =>
+      getBannerPictureSources(bannerUrlRaw, width, {
+        explicitWebp: bannerUrlWebpOpt,
+        explicitAvif: bannerUrlAvifOpt,
+      }),
+    [bannerUrlRaw, width, bannerUrlWebpOpt, bannerUrlAvifOpt]
+  );
+  const bannerUrl = bannerSources.fallback;
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [heroLayout, setHeroLayout] = useState<{ width: number; height: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -345,15 +191,11 @@ export default function HomePage() {
 
   // Track last location used for distance calc to skip redundant work
   const lastDistanceLocationRef = React.useRef<string | null>(null);
-  
+  const browseGridRef = React.useRef<HomeBrowseGridSectionHandle | null>(null);
+
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
   const fadeAnim = React.useRef(new Animated.Value(1)).current;
-  const [browseGridDishes, setBrowseGridDishes] = useState<BrowseGridDish[]>([]);
-  const [browseDishPage, setBrowseDishPage] = useState(0);
-  const [hasMoreBrowseDishes, setHasMoreBrowseDishes] = useState(true);
-  const [loadingBrowseGridInitial, setLoadingBrowseGridInitial] = useState(true);
-  const [loadingMoreBrowseGrid, setLoadingMoreBrowseGrid] = useState(false);
 
   const [PLACEHOLDERS, setPLACEHOLDERS] = useState<string[]>([
     "Craving spicy mutton biryani?",
@@ -386,7 +228,7 @@ export default function HomePage() {
     return () => clearInterval(interval);
   }, [PLACEHOLDERS.length]);
 
-  // Load image dimensions for native fill-height-fit-width behavior
+  // Native hero: intrinsic size for height-fill + horizontal crop (cover) inside rounded box
   useEffect(() => {
     if (Platform.OS === 'web' || !bannerUrl) return;
     Image.getSize(
@@ -518,12 +360,18 @@ export default function HomePage() {
       setLoading(true);
 
       // Single query for all app_settings (banner + placeholders) — saves one round-trip
-      supabase.from('app_settings').select('key, value').in('key', ['banner_url', 'search_placeholders'])
+      supabase.from('app_settings').select('key, value').in('key', ['banner_url', 'banner_url_webp', 'banner_url_avif', 'search_placeholders'])
         .then(({ data }) => {
           if (!mounted || !data) return;
+          let nextWebp: string | null = null;
+          let nextAvif: string | null = null;
           for (const row of data) {
             if (row.key === 'banner_url' && row.value) {
               setBannerUrlRaw(row.value);
+            } else if (row.key === 'banner_url_webp' && row.value) {
+              nextWebp = String(row.value).trim();
+            } else if (row.key === 'banner_url_avif' && row.value) {
+              nextAvif = String(row.value).trim();
             } else if (row.key === 'search_placeholders' && row.value) {
               try {
                 const parsed = JSON.parse(row.value);
@@ -533,6 +381,8 @@ export default function HomePage() {
               } catch {}
             }
           }
+          setBannerUrlWebpOpt(nextWebp);
+          setBannerUrlAvifOpt(nextAvif);
         })
         .catch(() => {});
 
@@ -556,191 +406,155 @@ export default function HomePage() {
     return () => { mounted = false; };
   }, []);
 
-  // Explore-style dish grid below How it works / Become a chef (infinite scroll via Screen onScroll)
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      setLoadingBrowseGridInitial(true);
-      try {
-        const { data, error } = await supabase
-          .from("dishes")
-          .select(
-            "id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)"
-          )
-          .eq("chefs.status", "active")
-          .eq("chefs.stripe_connect_completed", true)
-          .or("is_active.eq.true,is_active.is.null")
-          .order("created_at", { ascending: false })
-          .range(0, BROWSE_GRID_DISHES_PER_PAGE - 1);
-        if (cancelled) return;
-        if (error) throw error;
-        const rows = (data ?? []) as BrowseGridDish[];
-        setBrowseGridDishes(rows);
-        setBrowseDishPage(0);
-        setHasMoreBrowseDishes(rows.length >= BROWSE_GRID_DISHES_PER_PAGE);
-      } catch (e) {
-        console.error("[home] browse grid initial load:", e);
-        if (!cancelled) {
-          setBrowseGridDishes([]);
-          setHasMoreBrowseDishes(false);
-        }
-      } finally {
-        if (!cancelled) setLoadingBrowseGridInitial(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
+  const handleHomeScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
+    browseGridRef.current?.onParentScroll(event);
   }, []);
 
-  const loadMoreBrowseGrid = useCallback(async () => {
-    if (loadingMoreBrowseGrid || !hasMoreBrowseDishes || loadingBrowseGridInitial) return;
-    const nextPage = browseDishPage + 1;
-    const from = nextPage * BROWSE_GRID_DISHES_PER_PAGE;
-    const to = from + BROWSE_GRID_DISHES_PER_PAGE - 1;
-    setLoadingMoreBrowseGrid(true);
-    try {
-      const { data, error } = await supabase
-        .from("dishes")
-        .select(
-          "id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)"
-        )
-        .eq("chefs.status", "active")
-        .eq("chefs.stripe_connect_completed", true)
-        .or("is_active.eq.true,is_active.is.null")
-        .order("created_at", { ascending: false })
-        .range(from, to);
-      if (error) throw error;
-      const newDishes = (data ?? []) as BrowseGridDish[];
-      setBrowseGridDishes((prev) => [...prev, ...newDishes]);
-      setBrowseDishPage(nextPage);
-      setHasMoreBrowseDishes(newDishes.length >= BROWSE_GRID_DISHES_PER_PAGE);
-    } catch (err) {
-      console.error("[home] browse grid load more:", err);
-    } finally {
-      setLoadingMoreBrowseGrid(false);
-    }
-  }, [loadingMoreBrowseGrid, hasMoreBrowseDishes, loadingBrowseGridInitial, browseDishPage]);
-
-  const handleHomeScroll = useCallback(
-    (event: NativeSyntheticEvent<NativeScrollEvent>) => {
-      if (!hasMoreBrowseDishes || loadingMoreBrowseGrid || loadingBrowseGridInitial) return;
-      const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-      const distanceFromBottom = contentSize.height - layoutMeasurement.height - contentOffset.y;
-      if (distanceFromBottom < 600) {
-        loadMoreBrowseGrid();
-      }
-    },
-    [hasMoreBrowseDishes, loadingMoreBrowseGrid, loadingBrowseGridInitial, loadMoreBrowseGrid]
-  );
-
-  // Distance calculation — deferred so it never blocks first paint or user interactions.
+  // Distance calculation — deferred; geocode + Nominatim live in a separate chunk.
   useEffect(() => {
     if (chefs.length === 0) return;
 
     const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
     const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
     const hasProfileCoords = profileLat !== null && profileLon !== null;
-    const locKey = normalizeLocationKey((profile as any)?.location) || `${profileLat},${profileLon}`;
+    const locationStr = String((profile as any)?.location ?? "").trim();
+    const hasUserLocation = hasProfileCoords || locationStr.length > 0;
 
-    if (chefDistances.size > 0 && lastDistanceLocationRef.current === locKey) return;
-    lastDistanceLocationRef.current = locKey;
+    if (!hasUserLocation) {
+      lastDistanceLocationRef.current = null;
+      startTransition(() => setChefDistances(new Map()));
+      return;
+    }
 
     let mounted = true;
+    const timerRef: { id?: ReturnType<typeof setTimeout> } = {};
 
-    // Defer distance work so initial render / scroll is never blocked (P0).
-    const timerId = setTimeout(async () => {
-      let userCoords: { lat: number; lon: number } | null = null;
-      if (hasProfileCoords) {
-        userCoords = { lat: profileLat!, lon: profileLon! };
-      } else if ((profile as any)?.location) {
-        userCoords = await geocodeAddress(String((profile as any).location));
-      }
-      if (!mounted || !userCoords) return;
+    void (async () => {
+      const geo = await import('../lib/homepageGeocode');
+      if (!mounted || chefs.length === 0) return;
 
-      const userLocationKey = normalizeLocationKey((profile as any)?.location);
-      const next = new Map<string, number>();
+      const locKey =
+        geo.normalizeLocationKey((profile as any)?.location) || `${profileLat},${profileLon}`;
+      if (chefDistances.size > 0 && lastDistanceLocationRef.current === locKey) return;
+      lastDistanceLocationRef.current = locKey;
 
-      // P5: fast path — compute distances purely from DB coords (no network)
-      let allHaveCoords = true;
-      for (const chef of chefs) {
-        const chefId = normalizeId((chef as any)?.id);
-        const chefLat = toFiniteNumberOrNull((chef as any)?.latitude);
-        const chefLon = toFiniteNumberOrNull((chef as any)?.longitude);
-        const chefLocationKey = normalizeLocationKey((chef as any)?.location);
+      const {
+        geocodeAddress,
+        calculateDistanceFromCoords,
+        chefProfileCoordCache,
+        asyncPool,
+        CHEF_ADDRESS_GEOCODE_POOL,
+      } = geo;
 
-        if (userLocationKey && chefLocationKey && userLocationKey === chefLocationKey) {
-          next.set(chefId, 0);
-        } else if (chefLat !== null && chefLon !== null) {
-          const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
-          if (Number.isFinite(d)) next.set(chefId, d);
-        } else {
-          allHaveCoords = false;
+      timerRef.id = setTimeout(async () => {
+        if (!mounted) return;
+        let userCoords: { lat: number; lon: number } | null = null;
+        if (hasProfileCoords) {
+          userCoords = { lat: profileLat!, lon: profileLon! };
+        } else if (locationStr.length > 0) {
+          userCoords = await geocodeAddress(locationStr);
         }
-      }
+        if (!mounted || !userCoords) return;
 
-      // If every chef already had coords, apply immediately — no geocoding needed.
-      if (allHaveCoords) {
-        if (mounted) startTransition(() => setChefDistances(next));
-        return;
-      }
+        const userLocationKey = geo.normalizeLocationKey((profile as any)?.location);
+        const next = new Map<string, number>();
 
-      // Slow path: fetch profile coords + geocode for chefs missing coords
-      try {
-        const missingChefs = chefs.filter((c) => {
-          const lat = toFiniteNumberOrNull((c as any)?.latitude);
-          const lon = toFiniteNumberOrNull((c as any)?.longitude);
-          return lat === null || lon === null;
-        });
-
-        const missingUserIds = [...new Set(missingChefs.map((c) => String((c as any)?.user_id || '')).filter(Boolean))]
-          .filter((uid) => !chefProfileCoordCache.has(uid));
-
-        if (missingUserIds.length > 0) {
-          const { data: rows, error } = await supabase
-            .from('profiles')
-            .select('id, latitude, longitude')
-            .in('id', missingUserIds);
-          if (!error && Array.isArray(rows)) {
-            missingUserIds.forEach((uid) => chefProfileCoordCache.set(uid, null));
-            rows.forEach((r: any) => {
-              const lat = toFiniteNumberOrNull(r?.latitude);
-              const lon = toFiniteNumberOrNull(r?.longitude);
-              if (lat !== null && lon !== null) chefProfileCoordCache.set(String(r.id), { lat, lon });
-            });
-          }
-        }
-
-        for (const chef of missingChefs) {
-          if (!mounted) return;
+        let allHaveCoords = true;
+        for (const chef of chefs) {
           const chefId = normalizeId((chef as any)?.id);
-          if (next.has(chefId)) continue;
+          const chefLat = toFiniteNumberOrNull((chef as any)?.latitude);
+          const chefLon = toFiniteNumberOrNull((chef as any)?.longitude);
+          const chefLocationKey = geo.normalizeLocationKey((chef as any)?.location);
 
-          const chefUserId = String((chef as any)?.user_id || '');
-          const profCoords = chefUserId ? chefProfileCoordCache.get(chefUserId) : null;
-          if (profCoords) {
-            const d = calculateDistanceFromCoords(userCoords, profCoords);
+          if (userLocationKey && chefLocationKey && userLocationKey === chefLocationKey) {
+            next.set(chefId, 0);
+          } else if (chefLat !== null && chefLon !== null) {
+            const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
             if (Number.isFinite(d)) next.set(chefId, d);
-            continue;
+          } else {
+            allHaveCoords = false;
           }
+        }
 
-          const chefLoc = (chef as any)?.location;
-          if (chefLoc) {
-            const coords = await geocodeAddress(String(chefLoc));
-            if (coords) {
-              const d = calculateDistanceFromCoords(userCoords, coords);
-              if (Number.isFinite(d)) next.set(chefId, d);
+        if (allHaveCoords) {
+          if (mounted) startTransition(() => setChefDistances(next));
+          return;
+        }
+
+        try {
+          const missingChefs = chefs.filter((c) => {
+            const lat = toFiniteNumberOrNull((c as any)?.latitude);
+            const lon = toFiniteNumberOrNull((c as any)?.longitude);
+            return lat === null || lon === null;
+          });
+
+          const missingUserIds = [...new Set(missingChefs.map((c) => String((c as any)?.user_id || '')).filter(Boolean))]
+            .filter((uid) => !chefProfileCoordCache.has(uid));
+
+          if (missingUserIds.length > 0) {
+            const { data: rows, error } = await supabase
+              .from('profiles')
+              .select('id, latitude, longitude')
+              .in('id', missingUserIds);
+            if (!error && Array.isArray(rows)) {
+              missingUserIds.forEach((uid) => chefProfileCoordCache.set(uid, null));
+              rows.forEach((r: any) => {
+                const lat = toFiniteNumberOrNull(r?.latitude);
+                const lon = toFiniteNumberOrNull(r?.longitude);
+                if (lat !== null && lon !== null) chefProfileCoordCache.set(String(r.id), { lat, lon });
+              });
             }
           }
+
+          const addressToChefIds = new Map<string, string[]>();
+
+          for (const chef of missingChefs) {
+            if (!mounted) return;
+            const chefId = normalizeId((chef as any)?.id);
+            if (next.has(chefId)) continue;
+
+            const chefUserId = String((chef as any)?.user_id || '');
+            const profCoords = chefUserId ? chefProfileCoordCache.get(chefUserId) : null;
+            if (profCoords) {
+              const d = calculateDistanceFromCoords(userCoords, profCoords);
+              if (Number.isFinite(d)) next.set(chefId, d);
+              continue;
+            }
+
+            const chefLoc = (chef as any)?.location;
+            if (!chefLoc) continue;
+            const addrKey = String(chefLoc).trim();
+            if (!addrKey) continue;
+            const ids = addressToChefIds.get(addrKey) ?? [];
+            ids.push(chefId);
+            addressToChefIds.set(addrKey, ids);
+          }
+
+          const uniqueAddresses = [...addressToChefIds.keys()];
+          await asyncPool(CHEF_ADDRESS_GEOCODE_POOL, uniqueAddresses, async (addr) => {
+            if (!mounted) return;
+            const coords = await geocodeAddress(addr);
+            if (!mounted || !coords) return;
+            const chefIds = addressToChefIds.get(addr);
+            if (!chefIds) return;
+            const d = calculateDistanceFromCoords(userCoords, coords);
+            if (!Number.isFinite(d)) return;
+            for (const chefId of chefIds) {
+              next.set(chefId, d);
+            }
+          });
+        } catch {
+          // non-critical
         }
-      } catch {
-        // non-critical
-      }
 
-      if (mounted) startTransition(() => setChefDistances(next));
-    }, 0);
+        if (mounted) startTransition(() => setChefDistances(next));
+      }, 0);
+    })();
 
-    return () => { mounted = false; clearTimeout(timerId); };
+    return () => {
+      mounted = false;
+      if (timerRef.id !== undefined) clearTimeout(timerRef.id);
+    };
   }, [profile, chefs]);
 
   const handleSearch = () => {
@@ -822,25 +636,12 @@ export default function HomePage() {
               onLayout={(e) => Platform.OS !== 'web' && setHeroLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
             >
               {Platform.OS === 'web' ? (
-                <>
-                  <View
-                    style={[
-                      styles.heroBackgroundImage,
-                      {
-                        backgroundImage: `url(${bannerUrl})`,
-                        backgroundSize: 'cover',
-                        backgroundPosition: isMobile ? 'left center' : 'center',
-                        backgroundRepeat: 'no-repeat',
-                      } as any,
-                    ]}
-                  />
-                  {/* Hidden img for LCP: fetchpriority=high + eager loading so browser starts early */}
-                  <Image
-                    source={{ uri: bannerUrl }}
-                    style={{ position: 'absolute', width: 1, height: 1, opacity: 0 } as any}
-                    {...{ fetchpriority: 'high', loading: 'eager', decoding: 'async' } as any}
-                  />
-                </>
+                <HomeHeroBannerWeb
+                  fallbackSrc={bannerSources.fallback}
+                  webpSrc={bannerSources.webp}
+                  avifSrc={bannerSources.avif}
+                  isMobile={isMobile}
+                />
               ) : imageSize && heroLayout ? (
                 <View style={[styles.heroBackgroundImage, styles.heroImageFillHeightWrapper, isMobile && styles.heroImageFillHeightWrapperLeft]}>
                   <Image
@@ -1118,61 +919,18 @@ export default function HomePage() {
             </View>
           )}
 
-          {/* Explore-style dish grid (same card + columns as /browse dishes) */}
-          <View style={[styles.section, styles.homeBrowseGridSection]}>
-            <View style={styles.homeBrowseGridHeader}>
-              <Text
-                style={[
-                  styles.sectionTitle,
-                  styles.homeSectionTitleSmaller,
-                  isMobile && styles.sectionTitleMobile,
-                  isMobile && styles.homeSectionTitleSmallerMobile,
-                  styles.homeBrowseGridHeadingText,
-                ]}
-                numberOfLines={2}
-              >
-                Explore dishes
-              </Text>
-              <Link href="/browse?tab=dishes" asChild>
-                <TouchableOpacity style={styles.homeBrowseGridSeeAll}>
-                  <Text style={styles.homeBrowseGridSeeAllText}>See all</Text>
-                </TouchableOpacity>
-              </Link>
-            </View>
-            {loadingBrowseGridInitial ? (
-              <View style={styles.homeBrowseGridLoading}>
-                <ActivityIndicator size="large" color="#FE734C" />
-              </View>
-            ) : browseGridDishes.length === 0 ? (
-              <Text style={styles.homeBrowseGridEmpty}>No dishes available right now.</Text>
-            ) : (
-              <>
-                <View style={styles.homeBrowseGridOuter}>
-                  <View style={styles.homeBrowseGrid}>
-                    {browseGridDishes.map((dish) => (
-                      <View
-                        key={dish.id}
-                        style={[styles.homeBrowseGridCardWrapper, { width: `${100 / dishGridColumns}%` }]}
-                      >
-                        <DishCard
-                          dish={dish}
-                          variant="explore"
-                          inlinePriceRating
-                          quantityOnImage
-                          style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
-                        />
-                      </View>
-                    ))}
-                  </View>
+          {/* Explore-style dish grid — lazy-loaded chunk (DishCard + grid fetch) */}
+          <Suspense
+            fallback={
+              <View style={[styles.section, styles.homeBrowseGridSection]}>
+                <View style={styles.homeBrowseGridSuspenseFallback}>
+                  <ActivityIndicator size="large" color="#FE734C" />
                 </View>
-                {loadingMoreBrowseGrid && (
-                  <View style={styles.homeBrowseGridFooter}>
-                    <ActivityIndicator size="small" color="#FE734C" />
-                  </View>
-                )}
-              </>
-            )}
-          </View>
+              </View>
+            }
+          >
+            <HomeBrowseGridSectionLazy ref={browseGridRef} dishGridColumns={dishGridColumns} />
+          </Suspense>
         </View>
       </Screen>
 
@@ -1887,61 +1645,11 @@ const styles = StyleSheet.create({
   homeBrowseGridSection: {
     marginBottom: theme.spacing.lg,
   },
-  homeBrowseGridHeader: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    gap: theme.spacing.sm,
-  },
-  homeBrowseGridHeadingText: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
-  },
-  homeBrowseGridSeeAll: {
-    paddingVertical: 6,
-    paddingHorizontal: theme.spacing.sm,
-  },
-  homeBrowseGridSeeAllText: {
-    color: "#FE734C",
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.sm,
-    fontWeight: "600" as const,
-  },
-  homeBrowseGridLoading: {
+  homeBrowseGridSuspenseFallback: {
     paddingVertical: theme.spacing["2xl"],
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  homeBrowseGridEmpty: {
-    paddingHorizontal: theme.spacing.md,
-    paddingVertical: theme.spacing.lg,
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: theme.typography.fontSize.sm,
-    color: "#555555",
-    textAlign: "center",
-  },
-  homeBrowseGridOuter: {
-    paddingHorizontal: theme.spacing.md,
-  },
-  homeBrowseGrid: {
-    flexDirection: "row",
-    flexWrap: "wrap",
-    justifyContent: "flex-start",
-    marginHorizontal: -6,
-  },
-  homeBrowseGridCardWrapper: {
-    paddingHorizontal: 6,
-    marginBottom: 16,
-  },
-  homeBrowseGridFooter: {
-    width: "100%",
-    paddingVertical: theme.spacing.lg,
-    alignItems: "center",
+    alignItems: 'center',
+    justifyContent: 'center',
+    minHeight: 160,
   },
   sectionTitleMobile: {
     fontFamily: theme.typography.fontFamily.display,
