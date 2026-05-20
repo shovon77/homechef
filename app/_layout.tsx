@@ -15,7 +15,7 @@ import { LocationModalProvider } from '../context/LocationModalContext';
 import { isInAppBrowser, isAuthOrOnboardingPath } from '../lib/inAppBrowser';
 import {
   authErrorToLoginMessage,
-  getPkceCodeFromUrl,
+  buildAuthCallbackUrl,
   parseSupabaseAuthUrlErrors,
 } from '../lib/authUrlErrors';
 import { 
@@ -80,11 +80,10 @@ export default function RootLayout() {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
     const href = window.location.href;
-    const code = getPkceCodeFromUrl(href);
-    if (code && !pathname?.startsWith('/auth/callback')) {
-      const next = `/auth/callback?code=${encodeURIComponent(code)}`;
+    const callbackPath = buildAuthCallbackUrl(href);
+    if (callbackPath && !pathname?.startsWith('/auth/callback')) {
       window.history.replaceState({}, '', pathname || '/');
-      router.replace(next as any);
+      router.replace(callbackPath as any);
       return;
     }
 

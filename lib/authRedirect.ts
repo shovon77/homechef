@@ -2,6 +2,7 @@
 import { Platform } from 'react-native';
 import * as Linking from 'expo-linking';
 import { router } from 'expo-router';
+import { markPendingPasswordReset } from './passwordResetSession';
 
 /**
  * Get the auth redirect URL for OAuth flows (Google, Facebook, etc.)
@@ -41,10 +42,16 @@ export const PASSWORD_RESET_PATH = '/login?mode=reset';
 /**
  * Redirect URL for Supabase password-reset emails.
  * Must match an entry in Supabase Auth → Redirect URLs exactly (no extra query params).
- * Callback detects PASSWORD_RECOVERY and sends users to PASSWORD_RESET_PATH.
+ * Callback reads `type=recovery` and PASSWORD_RECOVERY, then sends users to PASSWORD_RESET_PATH.
  */
 export function getPasswordResetRedirect(): string {
   return getAuthRedirect();
+}
+
+/** After auth callback confirms a recovery link, route here before entering the app. */
+export function goToPasswordResetScreen(): void {
+  markPendingPasswordReset();
+  router.replace(PASSWORD_RESET_PATH as any);
 }
 
 export type RoleInfo = {

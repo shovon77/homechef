@@ -4,7 +4,12 @@ import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Im
 import { useRouter, Link, usePathname, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
-import { getAuthRedirect, getPasswordResetRedirect, redirectAfterLogin } from '../../lib/authRedirect';
+import { getAuthRedirect, getPasswordResetRedirect, goToPasswordResetScreen, redirectAfterLogin } from '../../lib/authRedirect';
+import {
+  clearPendingPasswordReset,
+  hasPendingPasswordReset,
+  markPendingPasswordReset,
+} from '../../lib/passwordResetSession';
 import Screen from '../../components/Screen';
 import { useRole } from '../../hooks/useRole';
 import { theme } from '../../lib/theme';
@@ -61,7 +66,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
     if (initialMode !== 'signin') return false;
     const raw = searchParams.mode;
     const value = Array.isArray(raw) ? raw[0] : raw;
-    return value === 'reset';
+    return value === 'reset' || hasPendingPasswordReset();
   }, [initialMode, searchParams.mode]);
   const emailIsValid = useMemo(
     () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalized),
@@ -157,7 +162,8 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
       if (event === 'PASSWORD_RECOVERY' && initialMode === 'signin') {
-        router.replace('/login?mode=reset');
+        markPendingPasswordReset();
+        goToPasswordResetScreen();
       }
     });
     return () => subscription.unsubscribe();
@@ -290,6 +296,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
       }
       const { error } = await supabase.auth.updateUser({ password });
       if (error) throw error;
+      clearPendingPasswordReset();
       const res = await ensureUser();
       if (res?.error) console.warn('ensureUser:', res.error);
       Alert.alert('Password updated', 'Your password has been saved. Taking you to the app…', [

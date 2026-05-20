@@ -6,7 +6,8 @@ import { supabase } from '../../lib/supabase';
 import { theme } from '../../constants/theme';
 import { ensureProfile } from '../../lib/ensureProfile';
 import { isLocalAdmin } from '../../lib/admin';
-import { PASSWORD_RESET_PATH } from '../../lib/authRedirect';
+import { goToPasswordResetScreen } from '../../lib/authRedirect';
+import { isPasswordRecoveryFromUrl } from '../../lib/authUrlErrors';
 import { exchangeCodeForSessionWithRecovery } from '../../lib/authCallbackRecovery';
 
 function normalizeParam(value: string | string[] | undefined): string | undefined {
@@ -33,8 +34,9 @@ function normalizeParam(value: string | string[] | undefined): string | undefine
  */
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string; redirect?: string }>();
+  const params = useLocalSearchParams<{ code?: string; redirect?: string; type?: string }>();
   const redirectTarget = normalizeParam(params.redirect);
+  const authType = normalizeParam(params.type);
   const [msg, setMsg] = useState('Signing you in…');
   const [error, setError] = useState<string | null>(null);
 
@@ -156,8 +158,15 @@ export default function AuthCallback() {
         if (Platform.OS === 'web' && params.code) {
           const code = Array.isArray(params.code) ? params.code[0] : params.code;
           
+          const recoveryFromUrl =
+            authType === 'recovery' ||
+            authType === 'PASSWORD_RECOVERY' ||
+            (typeof window !== 'undefined' && isPasswordRecoveryFromUrl(window.location.href));
+
           setMsg('Exchanging code for session…');
-          const { error: exchangeError, isRecovery } = await exchangeCodeForSessionWithRecovery(code);
+          const { error: exchangeError, isRecovery } = await exchangeCodeForSessionWithRecovery(code, {
+            recoveryHint: recoveryFromUrl,
+          });
 
           if (exchangeError) {
             throw exchangeError;
@@ -176,9 +185,9 @@ export default function AuthCallback() {
             console.warn('ensureProfile error (non-blocking):', err);
           });
 
-          if (isRecovery) {
+          if (isRecovery || recoveryFromUrl) {
             setMsg('Confirm your new password…');
-            router.replace(PASSWORD_RESET_PATH as any);
+            goToPasswordResetScreen();
             return;
           }
 
