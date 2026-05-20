@@ -38,6 +38,21 @@ const TEXT_MUTED = '#555555';
 const PLACEHOLDER_GREY = '#9CA3AF'; // Lighter grey for placeholders (app grey)
 const BORDER_LIGHT = '#EAECF0';
 
+const TAB_ICON_ACTIVE = '#FFFFFF';
+const TAB_ICON_INACTIVE = '#33393A';
+
+/** PNG tab icons: tintColor is flaky on web — use CSS filter there for reliable active/inactive colors. */
+function getChefTabIconStyle(active: boolean) {
+  if (Platform.OS === 'web') {
+    return {
+      filter: active
+        ? 'brightness(0) invert(1)'
+        : 'brightness(0) saturate(100%) invert(24%) sepia(6%) saturate(800%) hue-rotate(169deg) brightness(95%) contrast(88%)',
+    } as any;
+  }
+  return { tintColor: active ? TAB_ICON_ACTIVE : TAB_ICON_INACTIVE };
+}
+
 // Remove orange/default focus outline on web when typing in inputs
 const INPUT_NO_FOCUS_OUTLINE = Platform.select({
   web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any },
@@ -1935,10 +1950,10 @@ export default function ChefDashboard() {
 
   const navItems = [
     { key: 'dashboard' as const, label: 'Overview', iconSource: require('../../assets/controls.png') },
-    { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
-    { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
-    { key: 'reviews' as const, label: 'Reviews', iconSource: require('../../assets/edit.png') },
     { key: 'payouts' as const, label: 'Payment', iconSource: require('../../assets/credit-card.png') },
+    { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
+    { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
+    { key: 'reviews' as const, label: 'Reviews', iconSource: require('../../assets/edit.png') },
   ];
 
   const footerNavItems = [
@@ -2094,39 +2109,42 @@ export default function ChefDashboard() {
         onScroll={handleTabBarScroll}
         scrollEventThrottle={16}
       >
-        {navItems.map(item => (
-          <TouchableOpacity
-            key={item.key}
-            onPress={() => {
-              userInitiatedTabChange.current = true;
-              startTransition(() => setActiveTab(item.key));
-            }}
-            style={[styles.tab, activeTab === item.key && styles.tabActive]}
-            onLayout={(event) => {
-              const { x, width: tabWidth } = event.nativeEvent.layout;
-              // Only record position if we have valid dimensions
-              if (tabWidth > 0 && x >= 0) {
-                tabPositions.current[item.key] = { x, width: tabWidth };
-                // When the active tab's layout is measured, trigger scroll
-                if (item.key === activeTab) {
-                  setTimeout(() => setTabLayoutReady(true), 150);
+        {navItems.map(item => {
+          const isActive = activeTab === item.key;
+          return (
+            <TouchableOpacity
+              key={item.key}
+              onPress={() => {
+                userInitiatedTabChange.current = true;
+                setActiveTab(item.key);
+              }}
+              style={[styles.tab, isActive && styles.tabActive]}
+              accessibilityRole="tab"
+              accessibilityState={{ selected: isActive }}
+              onLayout={(event) => {
+                const { x, width: tabWidth } = event.nativeEvent.layout;
+                if (tabWidth > 0 && x >= 0) {
+                  tabPositions.current[item.key] = { x, width: tabWidth };
+                  if (item.key === activeTab) {
+                    setTimeout(() => setTabLayoutReady(true), 150);
+                  }
                 }
-              }
-            }}
-          >
-            <View style={styles.tabContent}>
-              <Image 
-                source={item.iconSource} 
-                style={styles.tabIcon} 
-                tintColor={activeTab === item.key ? '#FFFFFF' : '#33393A'}
-                resizeMode="contain" 
-              />
-              <Text style={[styles.tabText, activeTab === item.key && styles.tabTextActive]}>
-                {item.label}
-              </Text>
-            </View>
-          </TouchableOpacity>
-        ))}
+              }}
+            >
+              <View style={styles.tabContent}>
+                <Image
+                  key={`${item.key}-${isActive ? 'active' : 'inactive'}`}
+                  source={item.iconSource}
+                  style={[styles.tabIcon, getChefTabIconStyle(isActive)]}
+                  resizeMode="contain"
+                />
+                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
+                  {item.label}
+                </Text>
+              </View>
+            </TouchableOpacity>
+          );
+        })}
       </ScrollView>
     </View>
   );

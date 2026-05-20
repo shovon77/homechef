@@ -14,7 +14,6 @@ interface ConnectStatus {
   payouts_enabled?: boolean;
   details_submitted?: boolean;
   requirements?: { currently_due?: string[] } | null;
-  capabilities?: Record<string, unknown> | null;
   loginLink?: string | null;
   error?: string;
 }
@@ -207,22 +206,6 @@ export default function PayoutSettings({ onStatusChange }: Props) {
           <View style={styles.detailRow}>
             <Text style={styles.detailLabel}>Charges</Text>
             <Text style={styles.detailValue}>{status?.charges_enabled ? 'Enabled' : 'Pending'}</Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Transfers</Text>
-            <Text style={styles.detailValue}>
-              {status?.capabilities && typeof status.capabilities === 'object'
-                ? (status.capabilities as any).transfers?.status ?? 'unknown'
-                : 'unknown'}
-            </Text>
-          </View>
-          <View style={styles.detailRow}>
-            <Text style={styles.detailLabel}>Card payments</Text>
-            <Text style={styles.detailValue}>
-              {status?.capabilities && typeof status.capabilities === 'object'
-                ? (status.capabilities as any).card_payments?.status ?? 'unknown'
-                : 'unknown'}
-            </Text>
           </View>
           <View style={styles.buttonRow}>
             <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
