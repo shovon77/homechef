@@ -38,7 +38,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
   const isMobile = width < 768;
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useLocalSearchParams<{ mode?: string; auth_error?: string; auth_message?: string }>();
+  const searchParams = useLocalSearchParams<{ mode?: string; auth_error?: string; auth_message?: string; reset_success?: string }>();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
   const [confirmPassword, setConfirmPassword] = useState('');
   const [recoveryChecked, setRecoveryChecked] = useState(false);
@@ -50,6 +50,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState<string|null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
   const [resettingPassword, setResettingPassword] = useState(false);
   const [resetSentTo, setResetSentTo] = useState<string | null>(null);
   const [googleLoading, setGoogleLoading] = useState(false);
@@ -141,6 +142,15 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
       setErr(decodeURIComponent(message));
     }
   }, [searchParams.auth_message]);
+
+  useEffect(() => {
+    const raw = searchParams.reset_success;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    if (value === '1' || value === 'true') {
+      setSuccessMsg('Your password was updated. Sign in with your new password.');
+      setErr(null);
+    }
+  }, [searchParams.reset_success]);
 
   useEffect(() => {
     if (!isPasswordResetMode) {
@@ -299,11 +309,25 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
       clearPendingPasswordReset();
       const res = await ensureUser();
       if (res?.error) console.warn('ensureUser:', res.error);
-      Alert.alert('Password updated', 'Your password has been saved. Taking you to the app…', [
-        {
-          text: 'OK',
-          onPress: () => redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role }),
-        },
+
+      await supabase.auth.signOut();
+
+      const goToLogin = () => {
+        if (Platform.OS === 'web' && typeof window !== 'undefined') {
+          window.location.replace('/login?reset_success=1');
+          return;
+        }
+        router.replace('/login?reset_success=1' as any);
+      };
+
+      // Web Alert callbacks are unreliable; redirect immediately after save.
+      if (Platform.OS === 'web') {
+        goToLogin();
+        return;
+      }
+
+      Alert.alert('Password updated', 'You can now sign in with your new password.', [
+        { text: 'OK', onPress: goToLogin },
       ]);
     } catch (e: any) {
       setErr(e.message || String(e));
@@ -700,6 +724,9 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
           </>
         )}
 
+        {successMsg ? (
+          <Text style={{ color: '#2e7d32', marginTop: 4, fontFamily: theme.typography.fontFamily.body }}>{successMsg}</Text>
+        ) : null}
         {err ? <Text style={{ color:'tomato', marginTop:4, fontFamily: theme.typography.fontFamily.body }}>{err}</Text> : null}
       </Animated.View>
     </Screen>
