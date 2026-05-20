@@ -12,8 +12,12 @@ import Footer from '../components/Footer';
 import { CartProvider } from '../context/CartContext';
 import { AuthProvider } from '../context/AuthContext';
 import { LocationModalProvider } from '../context/LocationModalContext';
-import { redirectAfterLogin } from '../lib/authRedirect';
 import { isInAppBrowser, isAuthOrOnboardingPath } from '../lib/inAppBrowser';
+import {
+  authErrorToLoginMessage,
+  getPkceCodeFromUrl,
+  parseSupabaseAuthUrlErrors,
+} from '../lib/authUrlErrors';
 import { 
   useFonts, 
   OpenSans_300Light,
@@ -70,6 +74,27 @@ export default function RootLayout() {
       document.head.appendChild(appleLink);
     }
   }, []);
+
+  // Supabase may land PKCE codes or errors on Site URL (/) when redirect URL is missing or link expired
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+
+    const href = window.location.href;
+    const code = getPkceCodeFromUrl(href);
+    if (code && !pathname?.startsWith('/auth/callback')) {
+      const next = `/auth/callback?code=${encodeURIComponent(code)}`;
+      window.history.replaceState({}, '', pathname || '/');
+      router.replace(next as any);
+      return;
+    }
+
+    const authError = parseSupabaseAuthUrlErrors(href);
+    if (authError && pathname !== '/login') {
+      const message = authErrorToLoginMessage(authError);
+      window.history.replaceState({}, '', pathname || '/');
+      router.replace(`/login?auth_error=${encodeURIComponent(authError.error_code || authError.error)}&auth_message=${encodeURIComponent(message)}` as any);
+    }
+  }, [pathname, router]);
 
   // When opened inside Messenger/Facebook/Instagram in-app browser on auth/onboarding pages, send user to /open-in-browser (required for Google sign-in)
   useEffect(() => {

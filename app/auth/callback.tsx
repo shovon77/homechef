@@ -6,6 +6,19 @@ import { supabase } from '../../lib/supabase';
 import { theme } from '../../constants/theme';
 import { ensureProfile } from '../../lib/ensureProfile';
 import { isLocalAdmin } from '../../lib/admin';
+import { PASSWORD_RESET_PATH } from '../../lib/authRedirect';
+import { exchangeCodeForSessionWithRecovery } from '../../lib/authCallbackRecovery';
+
+function normalizeParam(value: string | string[] | undefined): string | undefined {
+  if (value == null) return undefined;
+  const raw = Array.isArray(value) ? value[0] : value;
+  if (!raw) return undefined;
+  try {
+    return decodeURIComponent(raw);
+  } catch {
+    return raw;
+  }
+}
 
 /**
  * Auth callback handler for both web (PKCE) and native flows
@@ -21,12 +34,19 @@ import { isLocalAdmin } from '../../lib/admin';
 export default function AuthCallback() {
   const router = useRouter();
   const params = useLocalSearchParams<{ code?: string; redirect?: string }>();
+  const redirectTarget = normalizeParam(params.redirect);
   const [msg, setMsg] = useState('Signing you in…');
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     let mounted = true;
     let redirectTimeout: NodeJS.Timeout | null = null;
+
+    function goToRedirectTarget() {
+      if (!redirectTarget) return false;
+      router.replace(redirectTarget as any);
+      return true;
+    }
 
     async function determineRoleAndRedirect(sessionUser: any) {
       if (!sessionUser) {
@@ -137,7 +157,7 @@ export default function AuthCallback() {
           const code = Array.isArray(params.code) ? params.code[0] : params.code;
           
           setMsg('Exchanging code for session…');
-          const { error: exchangeError } = await supabase.auth.exchangeCodeForSession(code);
+          const { error: exchangeError, isRecovery } = await exchangeCodeForSessionWithRecovery(code);
 
           if (exchangeError) {
             throw exchangeError;
@@ -156,11 +176,13 @@ export default function AuthCallback() {
             console.warn('ensureProfile error (non-blocking):', err);
           });
 
-          // If we have a redirect param, use it
-          if (params.redirect) {
-            router.replace(params.redirect);
+          if (isRecovery) {
+            setMsg('Confirm your new password…');
+            router.replace(PASSWORD_RESET_PATH as any);
             return;
           }
+
+          if (goToRedirectTarget()) return;
 
           // Determine role and redirect accordingly
           setMsg('Signed in! Redirecting…');
@@ -192,11 +214,7 @@ export default function AuthCallback() {
             console.warn('ensureProfile error (non-blocking):', err);
           });
 
-          // If we have a redirect param, use it
-          if (params.redirect) {
-            router.replace(params.redirect);
-            return;
-          }
+          if (goToRedirectTarget()) return;
 
           // Determine role and redirect accordingly
           setMsg('Signed in! Redirecting…');
@@ -244,6 +262,10 @@ export default function AuthCallback() {
       if (mounted) {
         console.warn('Auth callback fallback: redirecting after timeout');
         try {
+          if (redirectTarget) {
+            router.replace(redirectTarget as any);
+            return;
+          }
           const { data: { session } } = await supabase.auth.getSession();
           if (session?.user) {
             // Quick check: if admin from email, redirect immediately
@@ -261,7 +283,7 @@ export default function AuthCallback() {
             router.replace('/intro');
           }
         } catch {
-          router.replace('/intro');
+          router.replace(redirectTarget || '/intro');
         }
       }
     }, 2000);
@@ -271,7 +293,7 @@ export default function AuthCallback() {
       if (redirectTimeout) clearTimeout(redirectTimeout);
       clearTimeout(fallbackTimeout);
     };
-  }, [router, params.code, params.redirect]);
+  }, [router, params.code, redirectTarget]);
 
   return (
     <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: '#F2F0EF'}}>

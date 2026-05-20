@@ -35,6 +35,18 @@ export function getEmailRedirect(): string {
   return getAuthRedirect();
 }
 
+/** Where users land after clicking the password-reset link in email. */
+export const PASSWORD_RESET_PATH = '/login?mode=reset';
+
+/**
+ * Redirect URL for Supabase password-reset emails.
+ * Must match an entry in Supabase Auth → Redirect URLs exactly (no extra query params).
+ * Callback detects PASSWORD_RECOVERY and sends users to PASSWORD_RESET_PATH.
+ */
+export function getPasswordResetRedirect(): string {
+  return getAuthRedirect();
+}
+
 export type RoleInfo = {
   is_admin?: boolean | null;
   is_chef?: boolean | null;

@@ -1,11 +1,10 @@
 'use client';
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, Platform, Animated, Easing, Image, Alert, useWindowDimensions } from 'react-native';
-import { useRouter, Link, usePathname } from 'expo-router';
+import { useRouter, Link, usePathname, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { ensureUser } from '../../lib/ensureUser';
-import { getAuthRedirect, getEmailRedirect } from '../../lib/authRedirect';
-import { redirectAfterLogin } from '../../lib/authRedirect';
+import { getAuthRedirect, getPasswordResetRedirect, redirectAfterLogin } from '../../lib/authRedirect';
 import Screen from '../../components/Screen';
 import { useRole } from '../../hooks/useRole';
 import { theme } from '../../lib/theme';
@@ -34,7 +33,11 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
   const isMobile = width < 768;
   const router = useRouter();
   const pathname = usePathname();
+  const searchParams = useLocalSearchParams<{ mode?: string; auth_error?: string; auth_message?: string }>();
   const [mode, setMode] = useState<'signin' | 'signup'>(initialMode);
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [recoveryChecked, setRecoveryChecked] = useState(false);
+  const [hasRecoverySession, setHasRecoverySession] = useState(false);
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phone, setPhone] = useState('');
@@ -54,6 +57,12 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
 
   const normalizeEmail = (v: string) => String(v || '').trim().toLowerCase();
   const emailNormalized = useMemo(() => normalizeEmail(email), [email]);
+  const isPasswordResetMode = useMemo(() => {
+    if (initialMode !== 'signin') return false;
+    const raw = searchParams.mode;
+    const value = Array.isArray(raw) ? raw[0] : raw;
+    return value === 'reset';
+  }, [initialMode, searchParams.mode]);
   const emailIsValid = useMemo(
     () => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailNormalized),
     [emailNormalized]
@@ -120,6 +129,40 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
     setMode(initialMode);
   }, [initialMode]);
 
+  useEffect(() => {
+    const rawMsg = searchParams.auth_message;
+    const message = Array.isArray(rawMsg) ? rawMsg[0] : rawMsg;
+    if (message) {
+      setErr(decodeURIComponent(message));
+    }
+  }, [searchParams.auth_message]);
+
+  useEffect(() => {
+    if (!isPasswordResetMode) {
+      setRecoveryChecked(false);
+      setHasRecoverySession(false);
+      return;
+    }
+    let cancelled = false;
+    supabase.auth.getSession().then(({ data: { session } }) => {
+      if (cancelled) return;
+      setHasRecoverySession(Boolean(session?.user));
+      setRecoveryChecked(true);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [isPasswordResetMode]);
+
+  useEffect(() => {
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
+      if (event === 'PASSWORD_RECOVERY' && initialMode === 'signin') {
+        router.replace('/login?mode=reset');
+      }
+    });
+    return () => subscription.unsubscribe();
+  }, [initialMode, router]);
+
   // Only redirect if user is logged in AND we're actually on the auth page
   // This prevents background redirects when token refreshes occur
   useEffect(() => {
@@ -132,7 +175,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
       '/signup/',
     ]);
     const isOnAuthPage = pathname != null && customerAuthPaths.has(pathname);
-    if (!loading && user && isOnAuthPage) {
+    if (!loading && user && isOnAuthPage && !isPasswordResetMode) {
       // Always check session exists before redirecting to avoid logout loop
       // This prevents redirecting during logout when context still has cached user
       // Add a delay to give time for logout to complete
@@ -155,7 +198,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
       
       return () => clearTimeout(timeoutId);
     }
-  }, [loading, user, isChef, isAdmin, role, pathname]);
+  }, [loading, user, isChef, isAdmin, role, pathname, isPasswordResetMode]);
 
   async function doGoogle() {
     setErr(null);
@@ -233,8 +276,37 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
     }
   }
 
+  async function doUpdatePassword() {
+    setErr(null);
+    setBusy(true);
+    try {
+      if (!passwordPolicy.meets) {
+        setErr('Please choose a stronger password that meets the requirements below.');
+        return;
+      }
+      if (password !== confirmPassword) {
+        setErr('Passwords do not match.');
+        return;
+      }
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) throw error;
+      const res = await ensureUser();
+      if (res?.error) console.warn('ensureUser:', res.error);
+      Alert.alert('Password updated', 'Your password has been saved. Taking you to the app…', [
+        {
+          text: 'OK',
+          onPress: () => redirectAfterLogin({ is_admin: isAdmin, is_chef: isChef, role }),
+        },
+      ]);
+    } catch (e: any) {
+      setErr(e.message || String(e));
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function doResetPassword() {
-    if (!email || !email.includes('@')) {
+    if (!emailIsValid) {
       Alert.alert('Error', 'Please enter a valid email address first.');
       return;
     }
@@ -242,9 +314,9 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
     setResettingPassword(true);
     setErr(null);
     try {
-      const redirectTo = getEmailRedirect();
-      const { error } = await supabase.auth.resetPasswordForEmail(email, {
-        redirectTo: redirectTo,
+      const redirectTo = getPasswordResetRedirect();
+      const { error } = await supabase.auth.resetPasswordForEmail(emailNormalized, {
+        redirectTo,
       });
       
       if (error) throw error;
@@ -265,10 +337,24 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
     }
   }
 
-  if (loading && !user) {
+  if (loading && !user && !isPasswordResetMode) {
     // Initial load state, keep blank or spinner
-    return null; 
+    return null;
   }
+
+  const inputStyle = {
+    backgroundColor: '#FAFCFB' as const,
+    borderWidth: 1,
+    borderColor: C.border,
+    color: C.text,
+    padding: 12,
+    borderRadius: 12,
+    fontFamily: theme.typography.fontFamily.body,
+    ...Platform.select({
+      web: { outlineStyle: 'none' as any, outlineWidth: 0, outlineColor: 'transparent', boxShadow: 'none' as any },
+      default: {},
+    }),
+  };
 
   return (
     <Screen 
@@ -287,6 +373,94 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
         marginBottom: 8,
         gap:16
       }}>
+        {isPasswordResetMode ? (
+          <View style={{ gap: 16 }}>
+            <Text style={{ color: C.text, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 2 }}>
+              Set a new password
+            </Text>
+            <Text style={{ color: C.subtext, fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>
+              Choose a strong password for your account.
+            </Text>
+
+            {!recoveryChecked ? null : !hasRecoverySession ? (
+              <View style={{ gap: 12 }}>
+                <Text style={{ color: C.subtext, fontFamily: theme.typography.fontFamily.body }}>
+                  This reset link is invalid or has expired. Request a new link from the login page.
+                </Text>
+                <TouchableOpacity
+                  testID="auth-reset-back"
+                  onPress={() => router.replace('/login')}
+                  style={{ alignSelf: 'center', paddingVertical: 10 }}
+                >
+                  <Text style={{ color: C.primary, fontFamily: theme.typography.fontFamily.body }}>Back to login</Text>
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <View style={{ gap: 10 }}>
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: C.subtext, fontWeight: '700', fontFamily: theme.typography.fontFamily.display }}>New password</Text>
+                  <TextInput
+                    testID="auth-reset-password"
+                    value={password}
+                    onChangeText={setPassword}
+                    onFocus={() => setPasswordFocused(true)}
+                    onBlur={() => setPasswordFocused(false)}
+                    placeholder={passwordFocused ? '' : '••••••••'}
+                    secureTextEntry
+                    style={inputStyle}
+                  />
+                </View>
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: C.subtext, fontWeight: '700', fontFamily: theme.typography.fontFamily.display }}>Confirm password</Text>
+                  <TextInput
+                    testID="auth-reset-confirm"
+                    value={confirmPassword}
+                    onChangeText={setConfirmPassword}
+                    placeholder="••••••••"
+                    secureTextEntry
+                    style={inputStyle}
+                  />
+                </View>
+                <View style={{ gap: 6 }}>
+                  <Text style={{ color: C.subtext, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                    Use at least 8 characters, including an uppercase letter, lowercase letter, number, and symbol.
+                  </Text>
+                  <View style={{ height: 8, borderRadius: 999, backgroundColor: '#E5E7EB', overflow: 'hidden' }}>
+                    <View style={{ height: '100%', width: `${passwordStrength.pct}%`, backgroundColor: passwordStrength.color }} />
+                  </View>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
+                    <Text style={{ color: passwordStrength.color, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                      {passwordStrength.label ? `Strength: ${passwordStrength.label}` : ' '}
+                    </Text>
+                    <Text style={{ color: C.subtext, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
+                      {passwordPolicy.len > 0 ? `${passwordStrength.count}/5` : ' '}
+                    </Text>
+                  </View>
+                </View>
+                <View style={{ alignItems: 'center', paddingVertical: 10 }}>
+                  <TouchableOpacity
+                    testID="auth-reset-submit"
+                    onPress={doUpdatePassword}
+                    disabled={busy || passwordStrength.count < 5}
+                    style={{
+                      backgroundColor: busy ? '#FFCCBC' : passwordStrength.count < 5 ? '#D1D5DB' : C.primary,
+                      paddingVertical: 13,
+                      paddingHorizontal: 24,
+                      borderRadius: 12,
+                      alignItems: 'center',
+                      minWidth: 160,
+                    }}
+                  >
+                    <Text style={{ color: passwordStrength.count < 5 ? '#6B7280' : '#FFFFFF', fontWeight: '300' as any, fontFamily: theme.typography.fontFamily.body }}>
+                      {busy ? 'Saving…' : 'Save password'}
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            )}
+          </View>
+        ) : (
+          <>
         {/* Welcome Text */}
         <Text style={{ color:C.text, fontSize:28, fontWeight:'900', fontFamily: theme.typography.fontFamily.display, marginBottom: 2 }}>
           {mode === 'signin' ? (
@@ -426,7 +600,7 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
 
           {mode === 'signin' && (
             <View style={{ alignItems: 'flex-end', justifyContent: 'center', minHeight: 28 }}>
-              <TouchableOpacity onPress={doResetPassword} disabled={resettingPassword}>
+              <TouchableOpacity testID="auth-forgot-password" onPress={doResetPassword} disabled={resettingPassword}>
                 <Text style={{ color: C.brandBlack, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>
                   {resettingPassword ? 'Sending...' : 'Forgot password?'}
                 </Text>
@@ -516,6 +690,8 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
             .
           </Text>
         </View>
+          </>
+        )}
 
         {err ? <Text style={{ color:'tomato', marginTop:4, fontFamily: theme.typography.fontFamily.body }}>{err}</Text> : null}
       </Animated.View>
