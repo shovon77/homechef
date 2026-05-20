@@ -4,7 +4,7 @@ import { Link } from "expo-router";
 import { theme, cardStyle } from "../../lib/theme";
 import { Button } from "../../components/ui/Button";
 import { useCart } from "../../context/CartContext";
-import { safeToFixed } from "../../lib/number";
+import { safeToFixed, toNumber } from "../../lib/number";
 import { formatCad } from "../../lib/money";
 import { optimizeDishCardImageUrl } from "../../lib/dishImageUrl";
 import { prefetchDishWithChef } from "../../lib/db";
@@ -24,7 +24,8 @@ type DishCardProps = {
 };
 
 export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false }: DishCardProps) {
-  const avg = typeof dish.rating === 'number' && dish.rating > 0 ? dish.rating : 0;
+  const avg = toNumber(dish.rating, 0);
+  const showRating = avg > 0;
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
   const [quantity, setQuantity] = useState(1);
   const cartQty = getQty(dish.id);
@@ -49,7 +50,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
       {chefDisplayName}
     </Text>
   ) : null;
-  const ratingEl = avg > 0 && (
+  const ratingEl = showRating && (
     <View style={styles.ratingRow}>
       <Image
         source={require('../../assets/star.png')}
@@ -237,14 +238,14 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
     const textBlock = (
       <View style={[styles.exploreContent, inlinePriceRating && styles.exploreContentTight]}>
         <Text style={[styles.name, styles.nameExplore, inlinePriceRating && styles.nameExploreTight]} numberOfLines={1}>{dish.name || 'Dish'}</Text>
-        {(chefDisplayName || (avg > 0 && !inlinePriceRating)) && (
+        {(chefDisplayName || (showRating && !inlinePriceRating)) && (
           <View style={styles.chefRatingRowExplore}>
             {chefDisplayName ? (
               <Text style={[styles.chefName, styles.chefNameExplore, styles.chefNameExploreFlex]} numberOfLines={1}>
                 {chefDisplayName}
               </Text>
             ) : null}
-            {avg > 0 && !inlinePriceRating && (
+            {showRating && !inlinePriceRating && (
               <View style={[styles.ratingRow, styles.ratingRowExplore]}>
                 <Image
                   source={require('../../assets/star.png')}
@@ -261,7 +262,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
           <Text style={[styles.price, styles.priceExplore, inlinePriceRating && styles.priceInlineMatch]} numberOfLines={1}>
             {formatCad(Number(dish.price) ?? 0)}
           </Text>
-          {inlinePriceRating && avg > 0 && (
+          {inlinePriceRating && showRating && (
             <View style={[styles.ratingRow, styles.ratingRowExplore]}>
               <Image
                 source={require('../../assets/star.png')}

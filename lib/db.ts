@@ -314,7 +314,12 @@ export async function getDishRatings(dishId: number): Promise<DishRatingStats> {
     return { average: 0, count: 0 };
   }
 
-  const ratings = data.map((row: any) => row.rating ?? row.stars ?? 0).filter((n: number) => n > 0);
+  const ratings = data
+    .map((row: any) => {
+      const n = Number(row.rating ?? row.stars);
+      return Number.isFinite(n) && n >= 1 && n <= 5 ? n : null;
+    })
+    .filter((n): n is number => n !== null);
   if (ratings.length === 0) return { average: 0, count: 0 };
 
   const sum = ratings.reduce((acc, r) => acc + r, 0);

@@ -81,7 +81,7 @@ export async function submitDishRating({
     }
   }
 
-  // Return updated summary
+  await recalculateDishRating(dishId);
   return getDishRatingSummary(dishId);
 }
 
@@ -304,8 +304,36 @@ export async function getChefRatingSummary(chefId: number): Promise<ChefRatingSu
   return { avg, count };
 }
 
-function roundChefRating(avg: number): number {
+function roundRating(avg: number): number {
   return Math.round(avg * 10) / 10;
+}
+
+/**
+ * Recalculate and update dish rating from all dish_ratings rows.
+ * Prefer the DB trigger (migrations/add_dish_rating_recalc_trigger.sql); this is a client fallback.
+ */
+export async function recalculateDishRating(dishId: number): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const summary = await getDishRatingSummary(dishId);
+
+    const { error } = await supabase
+      .from('dishes')
+      .update({
+        rating: summary.count > 0 ? roundRating(summary.avg) : 0,
+        rating_count: summary.count,
+      })
+      .eq('id', dishId);
+
+    if (error) {
+      console.error('Error updating dish rating:', error);
+      return { ok: false, error: error.message };
+    }
+
+    return { ok: true };
+  } catch (e: any) {
+    console.error('Error recalculating dish rating:', e);
+    return { ok: false, error: e?.message || String(e) };
+  }
 }
 
 /**
@@ -319,7 +347,7 @@ export async function recalculateChefRating(chefId: number): Promise<{ ok: boole
     const { error } = await supabase
       .from('chefs')
       .update({
-        rating: summary.count > 0 ? roundChefRating(summary.avg) : null,
+        rating: summary.count > 0 ? roundRating(summary.avg) : null,
         rating_count: summary.count,
       })
       .eq('id', chefId);
