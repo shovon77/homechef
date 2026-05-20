@@ -51,6 +51,11 @@ export function getPasswordResetRedirect(): string {
 /** After auth callback confirms a recovery link, route here before entering the app. */
 export function goToPasswordResetScreen(): void {
   markPendingPasswordReset();
+  // Full navigation on web so `code` is removed from the address bar (avoids reload loops).
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    window.location.replace(PASSWORD_RESET_PATH);
+    return;
+  }
   router.replace(PASSWORD_RESET_PATH as any);
 }
 

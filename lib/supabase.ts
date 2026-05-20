@@ -34,8 +34,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
-    // Web: parse access tokens / codes from callback URLs automatically.
-    detectSessionInUrl: Platform.OS === 'web',
+    // Callback route exchanges manually; auto-detect races with our handler and can reload-loop.
+    detectSessionInUrl: false,
     flowType: 'pkce',
   },
 });

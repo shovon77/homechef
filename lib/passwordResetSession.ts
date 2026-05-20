@@ -20,3 +20,21 @@ export function hasPendingPasswordReset(): boolean {
   }
   return false;
 }
+
+/** True when the URL still has Supabase auth params (code / token_hash). */
+export function urlHasAuthCallbackParams(href?: string): boolean {
+  try {
+    const raw = href ?? (typeof window !== 'undefined' ? window.location.href : '');
+    if (!raw) return false;
+    const url = new URL(raw);
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+    return Boolean(
+      url.searchParams.get('code') ||
+      url.searchParams.get('token_hash') ||
+      hash.get('code') ||
+      hash.get('token_hash')
+    );
+  } catch {
+    return false;
+  }
+}

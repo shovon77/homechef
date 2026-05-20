@@ -18,6 +18,7 @@ import {
   buildAuthCallbackUrl,
   parseSupabaseAuthUrlErrors,
 } from '../lib/authUrlErrors';
+import { hasPendingPasswordReset } from '../lib/passwordResetSession';
 import { 
   useFonts, 
   OpenSans_300Light,
@@ -75,22 +76,29 @@ export default function RootLayout() {
     }
   }, []);
 
-  // Supabase may land PKCE codes or errors on Site URL (/) when redirect URL is missing or link expired
+  // Supabase may land PKCE codes on Site URL (/) — forward once to /auth/callback (never from /login).
   useEffect(() => {
     if (Platform.OS !== 'web' || typeof window === 'undefined') return;
 
     const href = window.location.href;
+    const path = pathname ?? '/';
+    const onCallback = path.startsWith('/auth/callback');
+    const onLogin = path === '/login' || path.startsWith('/login/');
+
+    if (hasPendingPasswordReset() || onLogin) {
+      return;
+    }
+
     const callbackPath = buildAuthCallbackUrl(href);
-    if (callbackPath && !pathname?.startsWith('/auth/callback')) {
-      // Full navigation so Supabase can read callback params + stored PKCE verifier reliably.
+    if (callbackPath && !onCallback) {
       window.location.replace(callbackPath);
       return;
     }
 
     const authError = parseSupabaseAuthUrlErrors(href);
-    if (authError && pathname !== '/login') {
+    if (authError && !onLogin) {
       const message = authErrorToLoginMessage(authError);
-      window.history.replaceState({}, '', pathname || '/');
+      window.history.replaceState({}, '', path);
       router.replace(`/login?auth_error=${encodeURIComponent(authError.error_code || authError.error)}&auth_message=${encodeURIComponent(message)}` as any);
     }
   }, [pathname, router]);

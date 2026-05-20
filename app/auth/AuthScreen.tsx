@@ -161,13 +161,13 @@ export default function AuthScreen({ initialMode }: AuthScreenProps) {
 
   useEffect(() => {
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event) => {
-      if (event === 'PASSWORD_RECOVERY' && initialMode === 'signin') {
-        markPendingPasswordReset();
-        goToPasswordResetScreen();
-      }
+      if (event !== 'PASSWORD_RECOVERY' || initialMode !== 'signin') return;
+      if (hasPendingPasswordReset()) return;
+      markPendingPasswordReset();
+      goToPasswordResetScreen();
     });
     return () => subscription.unsubscribe();
-  }, [initialMode, router]);
+  }, [initialMode]);
 
   // Only redirect if user is logged in AND we're actually on the auth page
   // This prevents background redirects when token refreshes occur

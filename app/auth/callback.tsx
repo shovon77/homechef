@@ -1,5 +1,5 @@
 'use client';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useState } from 'react';
 import { View, Text, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
@@ -9,6 +9,7 @@ import { isLocalAdmin } from '../../lib/admin';
 import { goToPasswordResetScreen } from '../../lib/authRedirect';
 import { isPasswordRecoveryFromUrl } from '../../lib/authUrlErrors';
 import { completeAuthFromUrl } from '../../lib/authCallbackRecovery';
+import { hasPendingPasswordReset } from '../../lib/passwordResetSession';
 
 function normalizeParam(value: string | string[] | undefined): string | undefined {
   if (value == null) return undefined;
@@ -21,149 +22,131 @@ function normalizeParam(value: string | string[] | undefined): string | undefine
   }
 }
 
+function readCallbackParams(routeParams: {
+  code?: string;
+  type?: string;
+  token_hash?: string;
+}) {
+  if (Platform.OS === 'web' && typeof window !== 'undefined') {
+    const url = new URL(window.location.href);
+    const hash = new URLSearchParams(url.hash.replace(/^#/, ''));
+    const get = (key: string) => url.searchParams.get(key) || hash.get(key) || undefined;
+    return {
+      code: get('code') ?? normalizeParam(routeParams.code),
+      type: get('type') ?? normalizeParam(routeParams.type),
+      token_hash: get('token_hash') ?? normalizeParam(routeParams.token_hash),
+    };
+  }
+  return {
+    code: normalizeParam(routeParams.code),
+    type: normalizeParam(routeParams.type),
+    token_hash: normalizeParam(routeParams.token_hash),
+  };
+}
+
+function isRecoveryType(type: string | undefined, href: string): boolean {
+  return (
+    type === 'recovery' ||
+    type === 'PASSWORD_RECOVERY' ||
+    (Platform.OS === 'web' && isPasswordRecoveryFromUrl(href))
+  );
+}
+
 /**
  * Auth callback handler for both web (PKCE) and native flows
- * 
- * Verification:
- * - Web: Extracts `code` from URL, exchanges for session via exchangeCodeForSession
- * - Native: Calls getSession() to check for established session
- * - Both: Redirect to appropriate dashboard based on role:
- *         - Admins -> /admin
- *         - Chefs -> /chef
- *         - Regular users -> /intro
  */
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string; redirect?: string; type?: string; token_hash?: string }>();
-  const redirectTarget = normalizeParam(params.redirect);
-  const authType = normalizeParam(params.type);
-  const tokenHash = normalizeParam(params.token_hash);
-  const authCode = normalizeParam(params.code);
+  const routeParams = useLocalSearchParams<{ code?: string; redirect?: string; type?: string; token_hash?: string }>();
+  const redirectTarget = normalizeParam(routeParams.redirect);
   const [msg, setMsg] = useState('Signing you in…');
   const [error, setError] = useState<string | null>(null);
-  const finishedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
 
-    function goToRedirectTarget() {
-      if (!redirectTarget) return false;
-      router.replace(redirectTarget as any);
-      return true;
+    function finishRecovery() {
+      if (!mounted) return;
+      setMsg('Confirm your new password…');
+      goToPasswordResetScreen();
+    }
+
+    function finishWithError(message: string) {
+      if (!mounted) return;
+      setError(message);
+      setMsg('Could not complete sign-in');
     }
 
     async function determineRoleAndRedirect(sessionUser: any) {
       if (!sessionUser) {
-        console.log('No session user, redirecting to intro');
-        router.replace('/intro');
+        if (Platform.OS === 'web') window.location.replace('/intro');
+        else router.replace('/intro');
         return;
       }
 
-      // Check admin status from email first (instant, no DB query needed)
-      const isAdminFromEmail = isLocalAdmin(sessionUser);
-      if (isAdminFromEmail) {
-        console.log('Admin detected from email, redirecting to /admin');
-        // Use window.location for web to force immediate redirect
-        if (Platform.OS === 'web' && typeof window !== 'undefined') {
-          window.location.href = '/admin';
-        } else {
-          router.replace('/admin');
-        }
+      if (isLocalAdmin(sessionUser)) {
+        if (Platform.OS === 'web') window.location.replace('/admin');
+        else router.replace('/admin');
         return;
       }
 
       try {
-        // Fetch profile and chef data in parallel with timeout
         const roleCheckPromise = Promise.all([
-          supabase
-            .from('profiles')
-            .select('is_admin, is_chef')
-            .eq('id', sessionUser.id)
-            .maybeSingle(),
+          supabase.from('profiles').select('is_admin, is_chef').eq('id', sessionUser.id).maybeSingle(),
           sessionUser.email
-            ? supabase
-                .from('chefs')
-                .select('status, is_active')
-                .eq('email', sessionUser.email)
-                .maybeSingle()
-            : Promise.resolve({ data: null })
+            ? supabase.from('chefs').select('status, is_active').eq('email', sessionUser.email).maybeSingle()
+            : Promise.resolve({ data: null }),
+        ]);
+        const result = await Promise.race([
+          roleCheckPromise,
+          new Promise((resolve) => setTimeout(() => resolve(null), 1500)),
         ]);
 
-        // Add timeout to role check (1.5 seconds max)
-        const timeoutPromise = new Promise((resolve) => 
-          setTimeout(() => resolve(null), 1500)
-        );
-
-        const result = await Promise.race([roleCheckPromise, timeoutPromise]);
-
         if (!mounted) return;
-
-        // If timeout, redirect to intro (let intro page handle role detection)
         if (!result) {
-          console.warn('Role check timed out, redirecting to intro');
-          router.replace('/intro');
+          if (Platform.OS === 'web') window.location.replace('/intro');
+          else router.replace('/intro');
           return;
         }
 
         const [profileResult, chefResult] = result as any;
         const profile = profileResult?.data;
         const chefData = chefResult?.data;
-
-        // Check if admin (from profile)
-        const isAdminFromProfile = profile?.is_admin === true;
-        const isAdmin = isAdminFromProfile || isAdminFromEmail;
-
-        // Check if chef
+        const isAdmin = profile?.is_admin === true || isLocalAdmin(sessionUser);
         let isChef = profile?.is_chef === true;
         if (isChef && chefData) {
-          const chefIsInactive = chefData.status === 'inactive' || chefData.is_active === false;
-          if (chefIsInactive) {
-            isChef = false;
-          }
+          const inactive = chefData.status === 'inactive' || chefData.is_active === false;
+          if (inactive) isChef = false;
         } else if (!isChef && chefData) {
-          const chefIsActive = chefData.status !== 'inactive' && chefData.is_active !== false;
-          if (chefIsActive) {
-            isChef = true;
-          }
+          const active = chefData.status !== 'inactive' && chefData.is_active !== false;
+          if (active) isChef = true;
         }
 
-        // Redirect based on role
         if (isAdmin) {
-          console.log('Admin detected, redirecting to /admin');
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            window.location.href = '/admin';
-          } else {
-            router.replace('/admin');
-          }
+          if (Platform.OS === 'web') window.location.replace('/admin');
+          else router.replace('/admin');
         } else if (isChef) {
-          console.log('Chef detected, redirecting to /chef');
-          if (Platform.OS === 'web' && typeof window !== 'undefined') {
-            window.location.href = '/chef';
-          } else {
-            router.replace('/chef');
-          }
+          if (Platform.OS === 'web') window.location.replace('/chef');
+          else router.replace('/chef');
         } else {
-          console.log('Regular user, redirecting to /intro');
-          router.replace('/intro');
+          if (Platform.OS === 'web') window.location.replace('/intro');
+          else router.replace('/intro');
         }
-      } catch (err) {
-        console.warn('Error determining role, redirecting to intro:', err);
+      } catch {
         if (mounted) {
-          router.replace('/intro');
+          if (Platform.OS === 'web') window.location.replace('/intro');
+          else router.replace('/intro');
         }
       }
     }
 
     async function handleAuth() {
+      const href = typeof window !== 'undefined' ? window.location.href : '';
+      const { code, type, token_hash: tokenHash } = readCallbackParams(routeParams);
+      const recovery = isRecoveryType(type, href);
+      const hasUrlAuthParams = Boolean(code || tokenHash);
+
       try {
-        const recoveryFromUrl =
-          authType === 'recovery' ||
-          authType === 'PASSWORD_RECOVERY' ||
-          (typeof window !== 'undefined' && isPasswordRecoveryFromUrl(window.location.href));
-
-        const hasUrlAuthParams = Boolean(authCode || tokenHash);
-
-        // Web: token_hash (email) or PKCE code in callback URL
         if (Platform.OS === 'web' && hasUrlAuthParams) {
           setMsg(tokenHash ? 'Verifying reset link…' : 'Exchanging code for session…');
 
@@ -171,145 +154,93 @@ export default function AuthCallback() {
 
           if (!sessionData?.session) {
             const { error: authError, isRecovery: recovered } = await completeAuthFromUrl({
-              href: typeof window !== 'undefined' ? window.location.href : undefined,
-              code: authCode,
-              type: authType,
+              href,
+              code,
+              type,
               token_hash: tokenHash,
             });
-
-            if (authError) {
-              throw authError;
-            }
-
+            if (authError) throw authError;
             ({ data: sessionData } = await supabase.auth.getSession());
             if (!sessionData?.session) {
               throw new Error('Session not established. Please request a new reset link.');
             }
-
-            if (recovered || recoveryFromUrl) {
-              finishedRef.current = true;
-              setMsg('Confirm your new password…');
-              goToPasswordResetScreen();
+            if (recovered || recovery) {
+              finishRecovery();
               return;
             }
+          } else if (recovery || hasPendingPasswordReset()) {
+            finishRecovery();
+            return;
           }
 
           if (!sessionData?.session) {
             throw new Error('Session not established. Please request a new reset link.');
           }
 
-          if (!mounted) return;
+          ensureProfile().catch(() => {});
 
-          ensureProfile().catch((err) => {
-            console.warn('ensureProfile error (non-blocking):', err);
-          });
-
-          if (recoveryFromUrl) {
-            finishedRef.current = true;
-            setMsg('Confirm your new password…');
-            goToPasswordResetScreen();
+          if (recovery) {
+            finishRecovery();
             return;
           }
 
-          finishedRef.current = true;
-          if (goToRedirectTarget()) return;
+          if (redirectTarget) {
+            if (Platform.OS === 'web') window.location.replace(redirectTarget);
+            else router.replace(redirectTarget as any);
+            return;
+          }
 
           setMsg('Signed in! Redirecting…');
-          determineRoleAndRedirect(sessionData!.session!.user).catch((err) => {
-            console.error('Redirect error:', err);
-            if (mounted) router.replace('/intro');
-          });
+          await determineRoleAndRedirect(sessionData.session.user);
           return;
         }
 
-        // Native or web without code: check for existing session
-        // (Native deep links establish session automatically)
         setMsg('Checking session…');
         const { data: sessionData, error: sessionError } = await supabase.auth.getSession();
-
-        if (sessionError) {
-          throw sessionError;
-        }
-
-        if (!mounted) return;
+        if (sessionError) throw sessionError;
 
         if (sessionData?.session) {
-          ensureProfile().catch((err) => {
-            console.warn('ensureProfile error (non-blocking):', err);
-          });
-
-          if (recoveryFromUrl) {
-            finishedRef.current = true;
-            goToPasswordResetScreen();
+          ensureProfile().catch(() => {});
+          if (recovery || hasPendingPasswordReset()) {
+            finishRecovery();
             return;
           }
-
-          finishedRef.current = true;
-          if (goToRedirectTarget()) return;
-
+          if (redirectTarget) {
+            router.replace(redirectTarget as any);
+            return;
+          }
           setMsg('Signed in! Redirecting…');
-          determineRoleAndRedirect(sessionData.session.user).catch((err) => {
-            console.error('Redirect error:', err);
-            if (mounted) router.replace('/intro');
-          });
+          await determineRoleAndRedirect(sessionData.session.user);
         } else {
-          finishedRef.current = true;
-          setError('No active session. Try signing in again.');
-          setMsg('Authentication failed');
+          finishWithError('No active session. Try signing in again.');
         }
       } catch (e: any) {
-        if (!mounted) return;
-        finishedRef.current = true;
-        const errorMsg = e?.message || 'Authentication failed';
-        setError(errorMsg);
-        setMsg('Could not complete sign-in');
+        finishWithError(e?.message || 'Authentication failed');
         console.error('Auth callback error:', e);
       }
     }
 
-    handleAuth();
-
-    // Fallback only when auth did not finish (avoid redirect loop on errors)
-    const fallbackTimeout = setTimeout(async () => {
-      if (!mounted || finishedRef.current) return;
-      console.warn('Auth callback fallback: redirecting after timeout');
-      try {
-        if (redirectTarget) {
-          router.replace(redirectTarget as any);
-          return;
-        }
-        const { data: { session } } = await supabase.auth.getSession();
-        if (session?.user) {
-          if (isLocalAdmin(session.user)) {
-            if (Platform.OS === 'web' && typeof window !== 'undefined') {
-              window.location.href = '/admin';
-            } else {
-              router.replace('/admin');
-            }
-          } else {
-            router.replace('/intro');
-          }
-        }
-      } catch {
-        // Stay on page; user can use Back to login
-      }
-    }, 4000);
+    void handleAuth();
 
     return () => {
       mounted = false;
-      clearTimeout(fallbackTimeout);
     };
-  }, [router, authCode, tokenHash, authType, redirectTarget]);
+    // Run once per full page load; auth params come from window.location on web.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   return (
-    <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: '#F2F0EF'}}>
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 16, backgroundColor: '#F2F0EF' }}>
       <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginBottom: 16 }} />
-      <Text style={{color: theme.colors.text, fontSize: 16, marginBottom: 8}}>Loading</Text>
+      <Text style={{ color: theme.colors.text, fontSize: 16, marginBottom: 8 }}>{msg}</Text>
       {error ? (
         <View style={{ alignItems: 'center', gap: 12, marginTop: 8, maxWidth: 360 }}>
           <Text style={{ color: '#ef4444', fontSize: 14, textAlign: 'center' }}>{error}</Text>
           <TouchableOpacity
-            onPress={() => router.replace('/login' as any)}
+            onPress={() => {
+              if (Platform.OS === 'web') window.location.replace('/login');
+              else router.replace('/login' as any);
+            }}
             style={{ paddingVertical: 10, paddingHorizontal: 16 }}
           >
             <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>Back to login</Text>
@@ -319,4 +250,3 @@ export default function AuthCallback() {
     </View>
   );
 }
-
