@@ -34,7 +34,8 @@ export const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
     storage: authStorage,
     autoRefreshToken: true,
     persistSession: true,
-    detectSessionInUrl: false,
-    flowType: 'pkce', // Use PKCE flow for better security
+    // Web: parse access tokens / codes from callback URLs automatically.
+    detectSessionInUrl: Platform.OS === 'web',
+    flowType: 'pkce',
   },
 });

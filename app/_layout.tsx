@@ -82,8 +82,8 @@ export default function RootLayout() {
     const href = window.location.href;
     const callbackPath = buildAuthCallbackUrl(href);
     if (callbackPath && !pathname?.startsWith('/auth/callback')) {
-      window.history.replaceState({}, '', pathname || '/');
-      router.replace(callbackPath as any);
+      // Full navigation so Supabase can read callback params + stored PKCE verifier reliably.
+      window.location.replace(callbackPath);
       return;
     }
 

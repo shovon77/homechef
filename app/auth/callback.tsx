@@ -1,6 +1,6 @@
 'use client';
-import { useEffect, useState } from 'react';
-import { View, Text, ActivityIndicator, Platform } from 'react-native';
+import { useEffect, useRef, useState } from 'react';
+import { View, Text, ActivityIndicator, Platform, TouchableOpacity } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { theme } from '../../constants/theme';
@@ -8,7 +8,7 @@ import { ensureProfile } from '../../lib/ensureProfile';
 import { isLocalAdmin } from '../../lib/admin';
 import { goToPasswordResetScreen } from '../../lib/authRedirect';
 import { isPasswordRecoveryFromUrl } from '../../lib/authUrlErrors';
-import { exchangeCodeForSessionWithRecovery } from '../../lib/authCallbackRecovery';
+import { completeAuthFromUrl } from '../../lib/authCallbackRecovery';
 
 function normalizeParam(value: string | string[] | undefined): string | undefined {
   if (value == null) return undefined;
@@ -34,15 +34,17 @@ function normalizeParam(value: string | string[] | undefined): string | undefine
  */
 export default function AuthCallback() {
   const router = useRouter();
-  const params = useLocalSearchParams<{ code?: string; redirect?: string; type?: string }>();
+  const params = useLocalSearchParams<{ code?: string; redirect?: string; type?: string; token_hash?: string }>();
   const redirectTarget = normalizeParam(params.redirect);
   const authType = normalizeParam(params.type);
+  const tokenHash = normalizeParam(params.token_hash);
+  const authCode = normalizeParam(params.code);
   const [msg, setMsg] = useState('Signing you in…');
   const [error, setError] = useState<string | null>(null);
+  const finishedRef = useRef(false);
 
   useEffect(() => {
     let mounted = true;
-    let redirectTimeout: NodeJS.Timeout | null = null;
 
     function goToRedirectTarget() {
       if (!redirectTarget) return false;
@@ -154,54 +156,68 @@ export default function AuthCallback() {
 
     async function handleAuth() {
       try {
-        // Web: Handle PKCE flow with code exchange
-        if (Platform.OS === 'web' && params.code) {
-          const code = Array.isArray(params.code) ? params.code[0] : params.code;
-          
-          const recoveryFromUrl =
-            authType === 'recovery' ||
-            authType === 'PASSWORD_RECOVERY' ||
-            (typeof window !== 'undefined' && isPasswordRecoveryFromUrl(window.location.href));
+        const recoveryFromUrl =
+          authType === 'recovery' ||
+          authType === 'PASSWORD_RECOVERY' ||
+          (typeof window !== 'undefined' && isPasswordRecoveryFromUrl(window.location.href));
 
-          setMsg('Exchanging code for session…');
-          const { error: exchangeError, isRecovery } = await exchangeCodeForSessionWithRecovery(code, {
-            recoveryHint: recoveryFromUrl,
-          });
+        const hasUrlAuthParams = Boolean(authCode || tokenHash);
 
-          if (exchangeError) {
-            throw exchangeError;
+        // Web: token_hash (email) or PKCE code in callback URL
+        if (Platform.OS === 'web' && hasUrlAuthParams) {
+          setMsg(tokenHash ? 'Verifying reset link…' : 'Exchanging code for session…');
+
+          let { data: sessionData } = await supabase.auth.getSession();
+
+          if (!sessionData?.session) {
+            const { error: authError, isRecovery: recovered } = await completeAuthFromUrl({
+              href: typeof window !== 'undefined' ? window.location.href : undefined,
+              code: authCode,
+              type: authType,
+              token_hash: tokenHash,
+            });
+
+            if (authError) {
+              throw authError;
+            }
+
+            ({ data: sessionData } = await supabase.auth.getSession());
+            if (!sessionData?.session) {
+              throw new Error('Session not established. Please request a new reset link.');
+            }
+
+            if (recovered || recoveryFromUrl) {
+              finishedRef.current = true;
+              setMsg('Confirm your new password…');
+              goToPasswordResetScreen();
+              return;
+            }
           }
 
-          // Verify session was created
-          const { data: sessionData } = await supabase.auth.getSession();
           if (!sessionData?.session) {
-            throw new Error('Session not established after code exchange');
+            throw new Error('Session not established. Please request a new reset link.');
           }
 
           if (!mounted) return;
 
-          // Start profile creation in background (non-blocking)
           ensureProfile().catch((err) => {
             console.warn('ensureProfile error (non-blocking):', err);
           });
 
-          if (isRecovery || recoveryFromUrl) {
+          if (recoveryFromUrl) {
+            finishedRef.current = true;
             setMsg('Confirm your new password…');
             goToPasswordResetScreen();
             return;
           }
 
+          finishedRef.current = true;
           if (goToRedirectTarget()) return;
 
-          // Determine role and redirect accordingly
           setMsg('Signed in! Redirecting…');
-          const redirectPromise = determineRoleAndRedirect(sessionData.session.user);
-          // Don't await - let it run but don't block
-          redirectPromise.catch((err) => {
+          determineRoleAndRedirect(sessionData!.session!.user).catch((err) => {
             console.error('Redirect error:', err);
-            if (mounted) {
-              router.replace('/intro');
-            }
+            if (mounted) router.replace('/intro');
           });
           return;
         }
@@ -218,99 +234,88 @@ export default function AuthCallback() {
         if (!mounted) return;
 
         if (sessionData?.session) {
-          // Start profile creation in background (non-blocking)
           ensureProfile().catch((err) => {
             console.warn('ensureProfile error (non-blocking):', err);
           });
 
+          if (recoveryFromUrl) {
+            finishedRef.current = true;
+            goToPasswordResetScreen();
+            return;
+          }
+
+          finishedRef.current = true;
           if (goToRedirectTarget()) return;
 
-          // Determine role and redirect accordingly
           setMsg('Signed in! Redirecting…');
-          const redirectPromise = determineRoleAndRedirect(sessionData.session.user);
-          // Don't await - let it run but don't block
-          redirectPromise.catch((err) => {
+          determineRoleAndRedirect(sessionData.session.user).catch((err) => {
             console.error('Redirect error:', err);
-            if (mounted) {
-              router.replace('/intro');
-            }
+            if (mounted) router.replace('/intro');
           });
         } else {
+          finishedRef.current = true;
           setError('No active session. Try signing in again.');
           setMsg('Authentication failed');
         }
       } catch (e: any) {
         if (!mounted) return;
+        finishedRef.current = true;
         const errorMsg = e?.message || 'Authentication failed';
         setError(errorMsg);
-        setMsg('Error');
+        setMsg('Could not complete sign-in');
         console.error('Auth callback error:', e);
-        
-        // Even on error, try to redirect after a delay (user might still be authenticated)
-        redirectTimeout = setTimeout(async () => {
-          if (mounted) {
-            try {
-              const { data: { session } } = await supabase.auth.getSession();
-              if (session?.user) {
-                await determineRoleAndRedirect(session.user);
-              } else {
-                router.replace('/intro');
-              }
-            } catch {
-              router.replace('/intro');
-            }
-          }
-        }, 2000);
       }
     }
 
     handleAuth();
 
-    // Fallback: redirect after 2 seconds no matter what (in case something goes wrong)
+    // Fallback only when auth did not finish (avoid redirect loop on errors)
     const fallbackTimeout = setTimeout(async () => {
-      if (mounted) {
-        console.warn('Auth callback fallback: redirecting after timeout');
-        try {
-          if (redirectTarget) {
-            router.replace(redirectTarget as any);
-            return;
-          }
-          const { data: { session } } = await supabase.auth.getSession();
-          if (session?.user) {
-            // Quick check: if admin from email, redirect immediately
-            if (isLocalAdmin(session.user)) {
-              if (Platform.OS === 'web' && typeof window !== 'undefined') {
-                window.location.href = '/admin';
-              } else {
-                router.replace('/admin');
-              }
+      if (!mounted || finishedRef.current) return;
+      console.warn('Auth callback fallback: redirecting after timeout');
+      try {
+        if (redirectTarget) {
+          router.replace(redirectTarget as any);
+          return;
+        }
+        const { data: { session } } = await supabase.auth.getSession();
+        if (session?.user) {
+          if (isLocalAdmin(session.user)) {
+            if (Platform.OS === 'web' && typeof window !== 'undefined') {
+              window.location.href = '/admin';
             } else {
-              // Otherwise let intro page handle it
-              router.replace('/intro');
+              router.replace('/admin');
             }
           } else {
             router.replace('/intro');
           }
-        } catch {
-          router.replace(redirectTarget || '/intro');
         }
+      } catch {
+        // Stay on page; user can use Back to login
       }
-    }, 2000);
+    }, 4000);
 
     return () => {
       mounted = false;
-      if (redirectTimeout) clearTimeout(redirectTimeout);
       clearTimeout(fallbackTimeout);
     };
-  }, [router, params.code, redirectTarget]);
+  }, [router, authCode, tokenHash, authType, redirectTarget]);
 
   return (
     <View style={{flex:1, alignItems:'center', justifyContent:'center', padding:16, backgroundColor: '#F2F0EF'}}>
       <ActivityIndicator size="large" color={theme.colors.primary} style={{ marginBottom: 16 }} />
       <Text style={{color: theme.colors.text, fontSize: 16, marginBottom: 8}}>Loading</Text>
-      {error && (
-        <Text style={{color: '#ef4444', fontSize: 14, textAlign: 'center', marginTop: 8}}>{error}</Text>
-      )}
+      {error ? (
+        <View style={{ alignItems: 'center', gap: 12, marginTop: 8, maxWidth: 360 }}>
+          <Text style={{ color: '#ef4444', fontSize: 14, textAlign: 'center' }}>{error}</Text>
+          <TouchableOpacity
+            onPress={() => router.replace('/login' as any)}
+            style={{ paddingVertical: 10, paddingHorizontal: 16 }}
+          >
+            <Text style={{ color: theme.colors.primary, fontWeight: '700' }}>Back to login</Text>
+          </TouchableOpacity>
+        </View>
+      ) : null}
     </View>
   );
 }

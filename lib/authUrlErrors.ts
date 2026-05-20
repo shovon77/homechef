@@ -49,12 +49,27 @@ export function isPasswordRecoveryFromUrl(href: string): boolean {
   return type === 'recovery' || type === 'PASSWORD_RECOVERY';
 }
 
-/** Build `/auth/callback` preserving PKCE `code` and optional `type` (e.g. recovery). */
+/** `token_hash` from email recovery links (no PKCE verifier required). */
+export function getTokenHashFromUrl(href: string): string | null {
+  try {
+    const url = new URL(href);
+    const hashParams = new URLSearchParams(url.hash.replace(/^#/, ''));
+    return url.searchParams.get('token_hash') || hashParams.get('token_hash');
+  } catch {
+    return null;
+  }
+}
+
+/** Build `/auth/callback` preserving auth params from the landing URL. */
 export function buildAuthCallbackUrl(href: string): string | null {
   const code = getPkceCodeFromUrl(href);
-  if (!code) return null;
-  const params = new URLSearchParams({ code });
+  const tokenHash = getTokenHashFromUrl(href);
   const type = getAuthTypeFromUrl(href);
+  if (!code && !tokenHash) return null;
+
+  const params = new URLSearchParams();
+  if (code) params.set('code', code);
+  if (tokenHash) params.set('token_hash', tokenHash);
   if (type) params.set('type', type);
   return `/auth/callback?${params.toString()}`;
 }
