@@ -32,3 +32,10 @@ export function toFiniteNumberOrNull(value: unknown): number | null {
   const n = Number(value);
   return Number.isFinite(n) ? n : null;
 }
+
+/** Valid 1–5 star value, or null if missing/invalid. */
+export function toStarRatingOrNull(value: unknown): number | null {
+  const n = toFiniteNumberOrNull(value);
+  if (n === null || n < 1 || n > 5) return null;
+  return n;
+}

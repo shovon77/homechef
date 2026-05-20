@@ -5,6 +5,7 @@
 
 import { supabase } from './supabase';
 import type { DishRating, ChefReview } from './types';
+import { toStarRatingOrNull } from './number';
 
 export type DishRatingSummary = {
   avg: number;
@@ -100,8 +101,8 @@ export async function getDishRatingSummary(dishId: number): Promise<DishRatingSu
   }
 
   const ratings = (data || [])
-    .map(r => r.rating ?? r.stars ?? 0)
-    .filter(n => typeof n === 'number' && n >= 1 && n <= 5);
+    .map((r) => toStarRatingOrNull(r.rating ?? r.stars))
+    .filter((n): n is number => n !== null);
 
   const count = ratings.length;
   const avg = count > 0 ? ratings.reduce((sum, r) => sum + r, 0) / count : 0;
@@ -294,8 +295,8 @@ export async function getChefRatingSummary(chefId: number): Promise<ChefRatingSu
   }
 
   const ratings = (data || [])
-    .map(r => r.rating)
-    .filter(n => typeof n === 'number' && n >= 1 && n <= 5);
+    .map((r) => toStarRatingOrNull(r.rating))
+    .filter((n): n is number => n !== null);
 
   const count = ratings.length;
   const avg = count > 0 ? ratings.reduce((sum, r) => sum + r, 0) / count : 0;
@@ -303,18 +304,22 @@ export async function getChefRatingSummary(chefId: number): Promise<ChefRatingSu
   return { avg, count };
 }
 
+function roundChefRating(avg: number): number {
+  return Math.round(avg * 10) / 10;
+}
+
 /**
- * Recalculate and update chef rating from all reviews
- * This should be called after reviews are added/updated/deleted
+ * Recalculate and update chef rating from all reviews.
+ * Prefer the DB trigger (migrations/add_chef_rating_recalc_trigger.sql); this is a client fallback.
  */
 export async function recalculateChefRating(chefId: number): Promise<{ ok: boolean; error?: string }> {
   try {
     const summary = await getChefRatingSummary(chefId);
-    
+
     const { error } = await supabase
       .from('chefs')
       .update({
-        rating: summary.count > 0 ? summary.avg : null,
+        rating: summary.count > 0 ? roundChefRating(summary.avg) : null,
         rating_count: summary.count,
       })
       .eq('id', chefId);

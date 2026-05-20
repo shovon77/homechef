@@ -1172,7 +1172,7 @@ export default function BrowsePage() {
             {chefs.slice(0, visibleChefCount).map((chef) => (
               <View key={chef.id} style={[styles.cardWrapper, { width: `${100 / gridColumns}%` }]}>
                 <ChefCard 
-                  chef={{ ...chef, rating: typeof chef.rating === 'number' ? chef.rating : null }} 
+                  chef={{ ...chef, rating: toFiniteNumberOrNull(chef.rating) }} 
                   style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                   ratingColor="#FE734C"
                   compact={!isMobile}

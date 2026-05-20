@@ -3,6 +3,7 @@ import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator,
 import { useLocalSearchParams, Link } from "expo-router";
 import { supabase } from "../../../lib/supabase";
 import { getChefByIdOrSlug } from "../../../lib/db";
+import { submitChefReview } from "../../../lib/reviews";
 import { theme } from "../../../constants/theme";
 import Stars from "../../components/Stars";
 
@@ -62,31 +63,26 @@ export default function ChefReviewsPage() {
     const chefId = chef.id;
     try {
       setSaving(true);
-      const { error: insErr } = await supabase.from("chef_reviews").insert({
-        chef_id: chefId,
-        user_name: userName || null,
+      await submitChefReview({
+        chefId,
         rating: stars,
-        comment: comment || null
+        comment: comment.trim() || undefined,
       });
-      if (insErr) { Alert.alert("Error", insErr.message); setSaving(false); return; }
 
-      const { data: revData, error: rErr } = await supabase
-        .from("chef_reviews").select("*").eq("chef_id", chefId).order("created_at", { ascending: false });
-      if (rErr) { Alert.alert("Error", rErr.message); setSaving(false); return; }
-      setReviews((revData as any) || []);
-
-      const total = (revData || []).reduce((a: number, r: any) => a + (Number(r.rating) || 0), 0);
-      const count = (revData || []).length;
-      const newAvg = count > 0 ? total / count : null;
-
-      const { error: upErr } = await supabase
-        .from("chefs")
-        .update({ rating: newAvg, rating_count: count })
-        .eq("id", chefId);
-      if (upErr) {
-        console.error("chef rating update error", upErr);
-        Alert.alert("Warning", "Review submitted but rating update failed. Please refresh.");
+      const [chefData, { data: revData, error: rErr }] = await Promise.all([
+        getChefByIdOrSlug(slugOrId),
+        supabase
+          .from("chef_reviews")
+          .select("*")
+          .eq("chef_id", chefId)
+          .order("created_at", { ascending: false }),
+      ]);
+      if (rErr) {
+        Alert.alert("Error", rErr.message);
+        return;
       }
+      if (chefData) setChef(chefData as Chef);
+      setReviews((revData as any) || []);
 
       setUserName("");
       setStars(5);

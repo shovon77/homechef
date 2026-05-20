@@ -770,7 +770,7 @@ export default function HomePage() {
                       chef={{
                         ...chef,
                         id: normalizeId(chef.id),
-                        rating: typeof chef.rating === "number" ? chef.rating : null,
+                        rating: toFiniteNumberOrNull(chef.rating),
                       }}
                       style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
                       ratingColor="#FE734C"
@@ -792,7 +792,7 @@ export default function HomePage() {
                       chef={{
                         ...chef,
                         id: normalizeId(chef.id),
-                        rating: typeof chef.rating === "number" ? chef.rating : null,
+                        rating: toFiniteNumberOrNull(chef.rating),
                       }}
                       style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
                       ratingColor="#FE734C"
