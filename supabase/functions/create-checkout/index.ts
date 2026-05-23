@@ -6,7 +6,7 @@ import { resolveChefTimezoneId } from '../_shared/chef-timezone.ts';
 
 // Flat platform service fee: $1.50 (150 cents)
 const PLATFORM_FEE_CENTS = 150;
-// Platform commission: 10% of subtotal
+// Platform commission: 10% of subtotal (food only)
 const PLATFORM_COMMISSION_RATE = 0.10;
 // Tax is no longer charged (previously 13% HST)
 
@@ -194,7 +194,6 @@ export const handler = async (req: Request) => {
     // Flat platform service fee: $1.50
     const platformFeeCents = PLATFORM_FEE_CENTS;
 
-    // Calculate 10% platform commission on subtotal
     const platformCommissionCents = Math.round(total_cents * PLATFORM_COMMISSION_RATE);
 
     // No tax charged on orders

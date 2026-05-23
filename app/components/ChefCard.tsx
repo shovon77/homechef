@@ -1,4 +1,4 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
 import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle, Platform } from "react-native";
 import { Link } from "expo-router";
 import { theme } from "../../lib/theme";
@@ -51,6 +51,17 @@ const formatLocationCityState = (location: string | null | undefined): string =>
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
 const BRAND_BLACK = '#33393A';
+const CHEF_PHOTO_PLACEHOLDER_BG = theme.colors.primary;
+
+function chefInitials(name: string): string {
+  const label = name?.trim() || "Chef";
+  return label
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+}
 
 type Chef = {
   id: number | string;
@@ -77,10 +88,12 @@ type Props = {
 };
 
 export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default', compact = false }: Props) {
-  const avatar =
-    chef?.photo ||
-    chef?.avatar ||
-    `https://i.pravatar.cc/300?u=chef-${encodeURIComponent(String(chef?.id ?? ""))}`;
+  const avatarUri = (chef?.photo || chef?.avatar || "").trim();
+  const [imageError, setImageError] = useState(false);
+
+  useEffect(() => {
+    setImageError(false);
+  }, [avatarUri, chef?.id]);
 
   const ratingVal = toNumber(chef?.rating, 0);
   const starTint = ratingColor ?? ACCENT_COLOR;
@@ -104,12 +117,26 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
     <View style={cardStyle}>
       <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
         <Pressable style={pressableStyle} activeOpacity={0.9}>
-          <Image
-            source={{ uri: avatar }}
-            style={avatarStyle}
-            resizeMode="cover"
-            {...(Platform.OS === 'web' ? { loading: 'lazy', decoding: 'async' } as any : {})}
-          />
+          {avatarUri && !imageError ? (
+            <Image
+              source={{ uri: avatarUri }}
+              style={avatarStyle}
+              resizeMode="cover"
+              onError={() => setImageError(true)}
+              {...(Platform.OS === 'web' ? { loading: 'lazy', decoding: 'async' } as any : {})}
+            />
+          ) : (
+            <View style={[avatarStyle, styles.avatarPlaceholder]}>
+              <Text
+                style={StyleSheet.flatten([
+                  styles.avatarInitials,
+                  compact && styles.avatarInitialsCompact,
+                ])}
+              >
+                {chefInitials(chef.name)}
+              </Text>
+            </View>
+          )}
           <View style={infoStyle}>
             <Text style={StyleSheet.flatten([styles.name, compact && styles.nameCompact, nameColor ? { color: nameColor } : undefined])} numberOfLines={1}>{chef.name}</Text>
             <Text style={StyleSheet.flatten([styles.cuisine, compact && styles.cuisineCompact])} numberOfLines={1}>{formatCuisine(chef.cuisine)}</Text>
@@ -232,6 +259,20 @@ const styles = StyleSheet.create({
     borderTopLeftRadius: theme.radius.xl,
     borderBottomLeftRadius: theme.radius.xl,
     backgroundColor: theme.colors.surface,
+  },
+  avatarPlaceholder: {
+    backgroundColor: CHEF_PHOTO_PLACEHOLDER_BG,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  avatarInitials: {
+    color: theme.colors.primaryContrast,
+    fontSize: 24,
+    fontFamily: theme.typography.fontFamily.display,
+    fontWeight: theme.typography.fontWeight.bold,
+  },
+  avatarInitialsCompact: {
+    fontSize: 18,
   },
   info: {
     flex: 1,

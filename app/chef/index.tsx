@@ -20,15 +20,24 @@ import { updateOrderStatus } from '../../lib/orders';
 import { callFn } from '../../lib/fn';
 import PayoutSettings from '../../components/chef/PayoutSettings';
 import { formatCad, cents } from '../../lib/money';
+import {
+  getChefNetSalesCents,
+  getChefPlatformCommissionCents,
+  getOrderSubtotalCents,
+} from '../../lib/orderFinancials';
 import { useRole } from '../../hooks/useRole';
 import type { Profile, OrderStatus } from '../../lib/types';
 import FilePicker from '../../components/FilePicker';
 import { createNotification, createOrderRejectedNotification } from '../../lib/notifications';
 import { ensureChefSlug } from '../../lib/db';
-import { Stars } from '../../components/ui/Stars';
-
 // Colors matching homepage
 const PRIMARY_COLOR = '#FE734C';
+const STORE_ACTIVE_GREEN = '#88B361';
+const STRIPE_INCOMPLETE_RED = '#E84343';
+const WELCOME_HEADING_FONT_SIZE = 22;
+/** Matches financial metric labels (Sales, Fees, Profit) */
+const WELCOME_ACTION_FONT_SIZE = 16;
+const WELCOME_ACTION_FONT_SIZE_MOBILE = 14;
 const ACCENT_COLOR = '#FFA500';
 const BG_LIGHT = '#FFFFFF';
 const BG_PAGE = '#F2F0EF';
@@ -37,21 +46,8 @@ const TEXT_DARK = '#33393A';
 const TEXT_MUTED = '#555555';
 const PLACEHOLDER_GREY = '#9CA3AF'; // Lighter grey for placeholders (app grey)
 const BORDER_LIGHT = '#EAECF0';
-
-const TAB_ICON_ACTIVE = '#FFFFFF';
-const TAB_ICON_INACTIVE = '#33393A';
-
-/** PNG tab icons: tintColor is flaky on web — use CSS filter there for reliable active/inactive colors. */
-function getChefTabIconStyle(active: boolean) {
-  if (Platform.OS === 'web') {
-    return {
-      filter: active
-        ? 'brightness(0) invert(1)'
-        : 'brightness(0) saturate(100%) invert(24%) sepia(6%) saturate(800%) hue-rotate(169deg) brightness(95%) contrast(88%)',
-    } as any;
-  }
-  return { tintColor: active ? TAB_ICON_ACTIVE : TAB_ICON_INACTIVE };
-}
+/** Matches welcome header / Store button horizontal inset */
+const CHEF_DASHBOARD_EDGE_PADDING = 32;
 
 // Remove orange/default focus outline on web when typing in inputs
 const INPUT_NO_FOCUS_OUTLINE = Platform.select({
@@ -65,9 +61,154 @@ const PRICE_TEXT_INPUT_PROPS = {
   ...(Platform.OS === 'web' ? ({ inputMode: 'decimal' } as Record<string, string>) : {}),
 };
 
-type ChefRow = { id: number; name: string; slug?: string | null; email?: string | null; bio?: string | null; photo?: string | null; location?: string | null; status?: string | null };
+type ChefRow = {
+  id: number;
+  name: string;
+  slug?: string | null;
+  email?: string | null;
+  bio?: string | null;
+  photo?: string | null;
+  location?: string | null;
+  status?: string | null;
+  stripe_connect_completed?: boolean | null;
+};
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; portion?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
 type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number; notes?: string | null }>; user_email?: string; user_name?: string };
+
+type ChefDashboardTab = 'menu' | 'orders' | 'payouts';
+const CHEF_DASHBOARD_TABS: ChefDashboardTab[] = ['menu', 'orders', 'payouts'];
+
+function normalizeChefDashboardTab(value: string | undefined): ChefDashboardTab | null {
+  if (value === 'dashboard') return 'orders';
+  if (value && CHEF_DASHBOARD_TABS.includes(value as ChefDashboardTab)) {
+    return value as ChefDashboardTab;
+  }
+  return null;
+}
+
+type StripeConnectStatus = {
+  hasAccount: boolean;
+  charges_enabled?: boolean;
+  payouts_enabled?: boolean;
+  accountId?: string;
+  chef_status?: string | null;
+};
+
+function stripeConnectIsComplete(status: StripeConnectStatus | null): boolean {
+  if (!status) return false;
+  return Boolean(
+    status.hasAccount && status.charges_enabled === true && status.payouts_enabled === true
+  );
+}
+
+function applyStripeConnectStatusToChef(
+  chef: ChefRow,
+  status: StripeConnectStatus | null,
+  setters?: {
+    setChargesEnabled: (v: boolean) => void;
+    setPayoutsEnabled: (v: boolean) => void;
+    setStripeAccountId: (v: string | null) => void;
+  }
+): ChefRow {
+  if (!status) {
+    return { ...chef, stripe_connect_completed: false };
+  }
+  if (setters) {
+    if (typeof status.charges_enabled === 'boolean') setters.setChargesEnabled(status.charges_enabled);
+    if (typeof status.payouts_enabled === 'boolean') setters.setPayoutsEnabled(status.payouts_enabled);
+    if (status.accountId) setters.setStripeAccountId(status.accountId);
+  }
+  return {
+    ...chef,
+    stripe_connect_completed: stripeConnectIsComplete(status),
+    ...(status.chef_status != null ? { status: status.chef_status } : {}),
+  };
+}
+
+function FinancialInfoButton({
+  title,
+  message,
+  onInfo,
+}: {
+  title: string;
+  message: string;
+  onInfo: (infoTitle: string, infoMessage: string) => void;
+}) {
+  return (
+    <TouchableOpacity
+      onPress={() => onInfo(title, message)}
+      style={{ padding: 2 }}
+      hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+    >
+      <View
+        style={{
+          width: 16,
+          height: 16,
+          borderRadius: 8,
+          borderWidth: 1.5,
+          borderColor: PRIMARY_COLOR,
+          alignItems: 'center',
+          justifyContent: 'center',
+        }}
+      >
+        <Text style={{ color: PRIMARY_COLOR, fontSize: 10, fontWeight: '700', lineHeight: 12, fontFamily: theme.typography.fontFamily.body }}>i</Text>
+      </View>
+    </TouchableOpacity>
+  );
+}
+
+function FinancialStatCell({
+  value,
+  label,
+  infoTitle,
+  infoMessage,
+  onInfo,
+  valueColor = TEXT_DARK,
+  compact = false,
+}: {
+  value: string;
+  label: string;
+  infoTitle: string;
+  infoMessage: string;
+  onInfo: (infoTitle: string, infoMessage: string) => void;
+  valueColor?: string;
+  compact?: boolean;
+}) {
+  return (
+    <View style={[styles.financialStatBox, compact && styles.financialStatBoxCompact]}>
+      <Text
+        style={{
+          color: valueColor,
+          fontSize: compact ? 20 : 28,
+          fontWeight: '900',
+          fontFamily: theme.typography.fontFamily.display,
+          textAlign: 'center',
+          width: '100%',
+        }}
+        numberOfLines={1}
+        adjustsFontSizeToFit
+        minimumFontScale={0.65}
+      >
+        {value}
+      </Text>
+      <View style={styles.financialStatLabelRow}>
+        <Text
+          style={{
+            color: TEXT_MUTED,
+            fontSize: compact ? 14 : 16,
+            fontWeight: '600',
+            fontFamily: theme.typography.fontFamily.body,
+            textAlign: 'center',
+          }}
+          numberOfLines={1}
+        >
+          {label}
+        </Text>
+        <FinancialInfoButton title={infoTitle} message={infoMessage} onInfo={onInfo} />
+      </View>
+    </View>
+  );
+}
 
 export default function ChefDashboard() {
   const router = useRouter();
@@ -81,20 +222,18 @@ export default function ChefDashboard() {
   const [orders, setOrders] = useState<OrderRow[]>([]);
   
   // Initialize activeTab from localStorage or default
-  const getInitialTab = (): 'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts' => {
+  const getInitialTab = (): ChefDashboardTab => {
     try {
       if (typeof window !== 'undefined') {
         const saved = window.localStorage.getItem('chef_dashboard_active_tab');
-        if (saved && ['dashboard', 'menu', 'orders', 'reviews', 'payouts'].includes(saved)) {
-          return saved as any;
-        }
+        const normalized = normalizeChefDashboardTab(saved ?? undefined);
+        if (normalized) return normalized;
       }
     } catch {}
-    // Default to dashboard
-    return 'dashboard';
+    return 'payouts';
   };
   
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'menu' | 'orders' | 'reviews' | 'payouts'>(getInitialTab());
+  const [activeTab, setActiveTab] = useState<ChefDashboardTab>(getInitialTab());
   const tabBarScrollRef = useRef<ScrollView>(null);
   const tabPositions = useRef<{ [key: string]: { x: number; width: number } }>({});
   const [tabLayoutReady, setTabLayoutReady] = useState(false);
@@ -105,9 +244,8 @@ export default function ChefDashboard() {
 
   // Update tab from URL param if present (URL param takes precedence over localStorage)
   useEffect(() => {
-    if (tab && typeof tab === 'string' && ['dashboard', 'menu', 'orders', 'reviews', 'payouts'].includes(tab)) {
-      setActiveTab(tab as any);
-    }
+    const normalized = normalizeChefDashboardTab(typeof tab === 'string' ? tab : undefined);
+    if (normalized) setActiveTab(normalized);
   }, [tab]);
 
   // Save activeTab to localStorage whenever it changes
@@ -300,16 +438,10 @@ export default function ChefDashboard() {
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
   const [earningsRange, setEarningsRange] = useState<'week' | 'month'>('week');
-  const [reviews, setReviews] = useState<Array<{ id: number; rating: number; comment: string | null; created_at: string; user_email?: string; user_name?: string; user_id?: string; images?: any; type?: 'chef_review' }>>([]);
-  const [reviewsLoading, setReviewsLoading] = useState(false);
-  const [reviewSearch, setReviewSearch] = useState('');
-  const [reviewSort, setReviewSort] = useState<'newest' | 'oldest' | 'highest' | 'lowest'>('newest');
-  const [dishRatings, setDishRatings] = useState<Array<{ id: number; dish_id: number; rating: number; comment: string | null; created_at: string; user_id?: string; user_name?: string; user_email?: string; dish_name?: string; type?: 'dish_rating' }>>([]);
-  const [dishRatingsLoading, setDishRatingsLoading] = useState(false);
-  const [reviewsPage, setReviewsPage] = useState(1);
-  const reviewsPerPage = 5;
   const [menuPage, setMenuPage] = useState(1);
   const menuPerPage = 5;
+  const [menuHideInactive, setMenuHideInactive] = useState(true);
+  const [menuSearchQuery, setMenuSearchQuery] = useState('');
   const [showMessageModal, setShowMessageModal] = useState(false);
   const [showInfoModal, setShowInfoModal] = useState(false);
   const [infoModalTitle, setInfoModalTitle] = useState('');
@@ -323,16 +455,6 @@ export default function ChefDashboard() {
   const [isRecording, setIsRecording] = useState(false);
   const [selectedOrderUserEmail, setSelectedOrderUserEmail] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
-  const [financialDateFilter, setFinancialDateFilter] = useState<'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime'>('alltime');
-  const [showFinancialDropdown, setShowFinancialDropdown] = useState(false);
-  const [showReviewReplyModal, setShowReviewReplyModal] = useState(false);
-  const [selectedReviewId, setSelectedReviewId] = useState<number | null>(null);
-  const [selectedReviewUserId, setSelectedReviewUserId] = useState<string | null>(null);
-  const [reviewReplyText, setReviewReplyText] = useState('');
-  const [sendingReviewReply, setSendingReviewReply] = useState(false);
-  const [isRecordingReviewReply, setIsRecordingReviewReply] = useState(false);
-  const reviewReplyRecognitionRef = useRef<any>(null);
-
   // Update pickup date/time modal
   const [showPickupUpdateModal, setShowPickupUpdateModal] = useState(false);
   const [pickupUpdateOrderId, setPickupUpdateOrderId] = useState<number | null>(null);
@@ -455,15 +577,6 @@ export default function ChefDashboard() {
     setShowInfoModal(true);
   };
 
-  const formatReviewDate = (dateString: string): string => {
-    const date = new Date(dateString);
-    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    const month = months[date.getMonth()];
-    const day = date.getDate();
-    const year = date.getFullYear();
-    return `${month} ${day}, ${year}`;
-  };
-  
   type MessageWithUser = {
     id: number;
     order_id: number;
@@ -533,22 +646,8 @@ export default function ChefDashboard() {
           if (!profileRow.error) {
             setChargesEnabled(profileRow.data?.charges_enabled ?? false);
             setStripeAccountId(profileRow.data?.stripe_account_id ?? null);
-            setPayoutsEnabled(profileRow.data?.charges_enabled ?? false);
+            setPayoutsEnabled(false);
           }
-
-          // Fetch Stripe Connect status in background (don't block dashboard load - can hang if edge fn is slow)
-          callFn<{ hasAccount: boolean; charges_enabled?: boolean; payouts_enabled?: boolean; accountId?: string; chef_status?: string | null }>('get-connect-status', {})
-            .then((connectStatus) => {
-              if (connectStatus) {
-                if (typeof connectStatus.charges_enabled === 'boolean') setChargesEnabled(connectStatus.charges_enabled);
-                if (typeof connectStatus.payouts_enabled === 'boolean') setPayoutsEnabled(connectStatus.payouts_enabled);
-                if (connectStatus.accountId) setStripeAccountId(connectStatus.accountId);
-                if (connectStatus.chef_status != null) {
-                  setChef((prev) => (prev ? { ...prev, status: connectStatus!.chef_status! } : prev));
-                }
-              }
-            })
-            .catch(() => { /* non-blocking */ });
 
           me = (await supabase.from('chefs').select('*').eq('email', email).maybeSingle()).data as ChefRow | null;
           if (!me) {
@@ -559,25 +658,36 @@ export default function ChefDashboard() {
             const slug = await ensureChefSlug(me.id, defaultName);
             if (slug) me = { ...me, slug };
           }
-          // chef_status updated in background when get-connect-status resolves
         }
 
-        setChef(me);
+        const connectStatusPromise = isViewingAsChef
+          ? Promise.resolve(null)
+          : callFn<StripeConnectStatus>('get-connect-status', {}).catch(() => null);
+
         setName(me.name || '');
         setBio(me.bio || '');
         setPhoto(me.photo || undefined);
         setLocation(me.location || '');
 
-        // Load dishes + orders in parallel (reviews deferred to tab switch)
-        const [dishesRes] = await Promise.all([
+        // Load dishes, orders, and Stripe Connect status in parallel so tab styling is correct on first paint
+        const [dishesRes, , connectStatus] = await Promise.all([
           supabase.from('dishes')
             .select('id,chef_id,name,price,description,portion,ingredients,image,thumbnail,chef,is_active')
             .eq('chef_id', me.id)
-            .order('id', { ascending: true }),
+            .order('id', { ascending: false }),
           refreshOrdersForChef(me.id),
+          connectStatusPromise,
         ]);
         if (dishesRes.error) throw dishesRes.error;
         setDishes((dishesRes.data || []) as DishRow[]);
+
+        setChef(
+          applyStripeConnectStatusToChef(me, connectStatus, {
+            setChargesEnabled,
+            setPayoutsEnabled,
+            setStripeAccountId,
+          })
+        );
 
       } catch (e: any) {
         setErr(e.message || String(e));
@@ -586,15 +696,6 @@ export default function ChefDashboard() {
       }
     })();
   }, [isViewingAsChef, viewAsChefId]);
-
-  // Lazy-load reviews only when Reviews tab is first opened (P2)
-  const reviewsLoadedForChefRef = useRef<number | null>(null);
-  useEffect(() => {
-    if (activeTab === 'reviews' && chef && reviewsLoadedForChefRef.current !== chef.id) {
-      reviewsLoadedForChefRef.current = chef.id;
-      loadReviews(chef.id);
-    }
-  }, [activeTab, chef]);
 
   const refetchChef = useCallback(async () => {
     if (!chef) return;
@@ -832,7 +933,7 @@ export default function ChefDashboard() {
         created.thumbnail = publicUrl;
       }
 
-      setDishes(p => [...p, created]);
+      setDishes((p) => [created, ...p]);
       // Reset to first page when new dish is added
       setMenuPage(1);
       setMsg('Dish created ✓');
@@ -1265,83 +1366,29 @@ export default function ChefDashboard() {
       .reduce((sum, order) => sum + Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)), 0);
   }, [orders]);
 
-  // Calculate financial metrics for the first widget
+  // All-time financial metrics (paid orders with a transfer)
   const financialMetrics = useMemo(() => {
-    const now = new Date();
-    let startDate: Date | null = null;
+    const completedOrders = orders.filter(order => !!order.stripe_transfer_id);
     
-    if (financialDateFilter === 'today') {
-      startDate = new Date(now);
-      startDate.setHours(0, 0, 0, 0);
-    } else if (financialDateFilter === 'last7days') {
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 7);
-    } else if (financialDateFilter === 'last15days') {
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 15);
-    } else if (financialDateFilter === 'last30days') {
-      startDate = new Date(now);
-      startDate.setDate(now.getDate() - 30);
-    } else if (financialDateFilter === 'last3months') {
-      startDate = new Date(now);
-      startDate.setMonth(now.getMonth() - 3);
-    } else if (financialDateFilter === 'last6months') {
-      startDate = new Date(now);
-      startDate.setMonth(now.getMonth() - 6);
-    }
-    
-    const completedOrders = orders.filter(order => {
-      if (!order.stripe_transfer_id) return false;
-      if (startDate) {
-        const orderDate = new Date(order.created_at);
-        return orderDate >= startDate;
-      }
-      return true;
-    });
-    
-    // Gross sales = food-only amount (subtotal). total_cents = subtotal + platform_fee, so fallback: total - fee
-    const grossSales = completedOrders.reduce((sum, order) => {
-      const subtotal = order.subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0));
-      return sum + subtotal;
-    }, 0);
-    // Platform commission = 10% of subtotal. Use stored platform_commission_cents when available
-    const platformCommission = completedOrders.reduce((sum, order) => {
-      const stored = order.platform_commission_cents;
-      if (typeof stored === 'number' && stored >= 0) return sum + stored;
-      const subtotal = order.subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0));
-      return sum + Math.round(subtotal * 0.10);
-    }, 0);
-    const netEarnings = grossSales - platformCommission;
+    const grossSales = completedOrders.reduce(
+      (sum, order) => sum + getOrderSubtotalCents(order),
+      0,
+    );
+    const platformCommission = completedOrders.reduce(
+      (sum, order) => sum + getChefPlatformCommissionCents(order),
+      0,
+    );
+    const netEarnings = completedOrders.reduce(
+      (sum, order) => sum + getChefNetSalesCents(order),
+      0,
+    );
     
     return {
       grossSales,
       platformCommission,
       netEarnings,
     };
-  }, [orders, financialDateFilter]);
-
-  const getDateFilterLabel = (filter: typeof financialDateFilter) => {
-    const labels: Record<typeof filter, string> = {
-      'today': 'Today',
-      'last7days': 'Last 7 days',
-      'last15days': 'Last 15 days',
-      'last30days': 'Last 30 days',
-      'last3months': 'Last 3 months',
-      'last6months': 'Last 6 months',
-      'alltime': 'All time',
-    };
-    return labels[filter];
-  };
-
-  const dateFilterOptions: Array<{ value: typeof financialDateFilter; label: string }> = [
-    { value: 'today', label: 'Today' },
-    { value: 'last7days', label: 'Last 7 days' },
-    { value: 'last15days', label: 'Last 15 days' },
-    { value: 'last30days', label: 'Last 30 days' },
-    { value: 'last3months', label: 'Last 3 months' },
-    { value: 'last6months', label: 'Last 6 months' },
-    { value: 'alltime', label: 'All time' },
-  ];
+  }, [orders]);
 
   const filteredDashboardOrders = useMemo(() => {
     if (dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected') {
@@ -1350,28 +1397,10 @@ export default function ChefDashboard() {
     return orders.filter(o => o.status === dashboardOrderStatusFilter);
   }, [orders, dashboardOrderStatusFilter]);
 
-  const topSellingDishes = useMemo(() => {
-    // Get all completed orders
-    const completedOrders = orders.filter(o => o.status === 'completed');
-    
-    // Aggregate dish sales
-    const dishSales = new Map<string, { name: string; totalQuantity: number; totalPriceCents: number }>();
-    
-    completedOrders.forEach(order => {
-      order.order_items?.forEach(item => {
-        const dishName = item.dish_name || 'Unknown Dish';
-        const existing = dishSales.get(dishName) || { name: dishName, totalQuantity: 0, totalPriceCents: 0 };
-        existing.totalQuantity += item.quantity;
-        existing.totalPriceCents += item.quantity * item.unit_price_cents;
-        dishSales.set(dishName, existing);
-      });
-    });
-    
-    // Convert to array and sort by quantity (descending)
-    return Array.from(dishSales.values())
-      .sort((a, b) => b.totalQuantity - a.totalQuantity)
-      .slice(0, 10); // Top 10
-  }, [orders]);
+  const openOrdersCount = useMemo(
+    () => orders.filter((o) => ['requested', 'pending', 'ready'].includes(o.status)).length,
+    [orders],
+  );
 
   // Open message modal for an order
   const handleOpenMessageModal = async (orderId: number, userEmail: string) => {
@@ -1606,294 +1635,67 @@ export default function ChefDashboard() {
     }
   };
 
-  const handleStartReviewReplyVoiceInput = () => {
-    if (Platform.OS !== 'web') {
-      Alert.alert('Info', 'Voice dictation is currently only available on web');
-      return;
-    }
-
-    if (!('webkitSpeechRecognition' in window || 'SpeechRecognition' in window)) {
-      Alert.alert('Not Supported', 'Voice dictation is not supported in this browser');
-      return;
-    }
-
-    const SpeechRecognition = (window as any).webkitSpeechRecognition || (window as any).SpeechRecognition;
-    const recognition = new SpeechRecognition();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-US';
-
-    recognition.onstart = () => {
-      setIsRecordingReviewReply(true);
-    };
-
-    recognition.onresult = (event: any) => {
-      const transcript = event.results[0][0].transcript;
-      setReviewReplyText(prev => prev + (prev ? ' ' : '') + transcript);
-      setIsRecordingReviewReply(false);
-      recognition.stop();
-    };
-
-    recognition.onerror = (event: any) => {
-      console.error('Speech recognition error:', event.error);
-      setIsRecordingReviewReply(false);
-      recognition.stop();
-    };
-
-    recognition.onend = () => {
-      setIsRecordingReviewReply(false);
-    };
-
-    recognition.start();
-    reviewReplyRecognitionRef.current = recognition;
-  };
-
-  const handleStopReviewReplyVoiceInput = () => {
-    if (reviewReplyRecognitionRef.current) {
-      reviewReplyRecognitionRef.current.stop();
-      setIsRecordingReviewReply(false);
-    }
-  };
-
-  const handleSendReviewReply = async () => {
-    if (!selectedReviewId || !chef || !reviewReplyText.trim()) return;
-    
-    setSendingReviewReply(true);
-    try {
-      // Insert reply into chef_review_replies table
-      const { error: replyError } = await supabase
-        .from('chef_review_replies')
-        .insert({
-          review_id: selectedReviewId,
-          chef_id: chef.id,
-          reply_text: reviewReplyText.trim(),
-          created_at: new Date().toISOString(),
-        });
-
-      if (replyError) {
-        // Check if the error is because the table doesn't exist
-        if (replyError.message?.includes('does not exist') || replyError.code === '42P01') {
-          Alert.alert(
-            'Database Setup Required',
-            'The chef_review_replies table has not been created yet. Please run the migration script in Supabase first. See docs/SUPABASE_REVIEW_CHANGES.md for instructions.'
-          );
-        } else {
-          console.error('Error saving review reply:', replyError);
-          Alert.alert('Error', 'Failed to send reply. Please try again.');
-        }
-        return;
-      }
-
-      // Create notification for the user
-      if (selectedReviewUserId) {
-        try {
-          await createNotification(
-            selectedReviewUserId,
-            'review_reply',
-            'Chef Replied to Your Review',
-            `The chef has replied to your review.`,
-            selectedReviewId,
-            'review'
-          );
-        } catch (notifError) {
-          console.error('Error creating notification for review reply:', notifError);
-        }
-      }
-
-      Alert.alert('Success', 'Reply sent successfully!');
-      setShowReviewReplyModal(false);
-      setReviewReplyText('');
-      setSelectedReviewId(null);
-      setSelectedReviewUserId(null);
-      
-      // Refresh reviews to show the reply
-      if (chef) {
-        await loadReviews(chef.id);
-      }
-    } catch (err: any) {
-      console.error('Error sending review reply:', err);
-      Alert.alert('Error', err?.message || 'Failed to send reply. Please try again.');
-    } finally {
-      setSendingReviewReply(false);
-    }
-  };
-
-  async function loadReviews(chefId: number) {
-    setReviewsLoading(true);
-    setDishRatingsLoading(true);
-    try {
-      // Load chef reviews
-      const { data: reviewsData, error } = await supabase
-        .from('chef_reviews')
-        .select('id, rating, comment, created_at, user_id, images')
-        .eq('chef_id', chefId)
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        console.error('Error loading reviews:', error);
-        throw error;
-      }
-
-      console.log(`Loaded ${reviewsData?.length || 0} reviews for chef ${chefId}`);
-
-      // Load all dishes for this chef
-      const { data: dishesData, error: dishesError } = await supabase
-        .from('dishes')
-        .select('id, name')
-        .eq('chef_id', chefId);
-
-      if (dishesError) {
-        console.error('Error loading dishes:', dishesError);
-      }
-
-      const dishIds = (dishesData || []).map(d => d.id);
-      console.log(`Found ${dishIds.length} dishes for chef ${chefId}`);
-
-      // Load dish ratings for all dishes
-      let allDishRatings: any[] = [];
-      if (dishIds.length > 0) {
-        const { data: dishRatingsData, error: dishRatingsError } = await supabase
-          .from('dish_ratings')
-          .select('id, dish_id, rating, stars, comment, created_at, user_id')
-          .in('dish_id', dishIds)
-          .order('created_at', { ascending: false });
-
-        if (dishRatingsError) {
-          console.error('Error loading dish ratings:', dishRatingsError);
-        } else {
-          allDishRatings = dishRatingsData || [];
-          console.log(`Loaded ${allDishRatings.length} dish ratings`);
-        }
-      }
-
-      // Get all user IDs from both reviews and dish ratings
-      const allUserIds = [
-        ...(reviewsData || []).map((r: any) => r.user_id),
-        ...allDishRatings.map((r: any) => r.user_id)
-      ].filter((id): id is string => Boolean(id));
-      const uniqueUserIds = [...new Set(allUserIds)];
-
-      // Load user profiles
-      const { data: profilesData } = uniqueUserIds.length > 0
-        ? await supabase.from('profiles').select('id, email, name').in('id', uniqueUserIds)
-        : { data: [], error: null };
-      const emailMap = new Map((profilesData || []).map((p: any) => [p.id, p.email || '']));
-      const nameMap = new Map((profilesData || []).map((p: any) => [p.id, p.name || null]));
-
-      // Process chef reviews
-      const reviewsWithUsers = (reviewsData || []).map((r: any) => {
-        const email = r.user_id ? (emailMap.get(r.user_id) || '') : '';
-        const name = r.user_id ? (nameMap.get(r.user_id) || null) : null;
-        return {
-          id: r.id,
-          rating: r.rating,
-          comment: r.comment,
-          created_at: r.created_at,
-          user_id: r.user_id,
-          user_email: email || undefined,
-          user_name: name || email || 'Anonymous',
-          images: r.images,
-          type: 'chef_review' as const,
-        };
-      });
-
-      // Process dish ratings
-      const dishMap = new Map((dishesData || []).map((d: any) => [d.id, d.name]));
-      const dishRatingsWithUsers = allDishRatings.map((r: any) => {
-        const rating = r.rating ?? r.stars ?? 0;
-        const email = r.user_id ? (emailMap.get(r.user_id) || '') : '';
-        const name = r.user_id ? (nameMap.get(r.user_id) || null) : null;
-        return {
-          id: r.id,
-          dish_id: r.dish_id,
-          rating: rating,
-          comment: r.comment,
-          created_at: r.created_at,
-          user_id: r.user_id,
-          user_email: email || undefined,
-          user_name: name || email || 'Anonymous',
-          dish_name: dishMap.get(r.dish_id) || 'Unknown Dish',
-          type: 'dish_rating' as const,
-        };
-      });
-
-      console.log(`Processed ${reviewsWithUsers.length} chef reviews and ${dishRatingsWithUsers.length} dish ratings`);
-      setReviews(reviewsWithUsers);
-      setDishRatings(dishRatingsWithUsers);
-    } catch (e: any) {
-      console.error('loadReviews error', e);
-      setReviews([]);
-      setDishRatings([]);
-    } finally {
-      setReviewsLoading(false);
-      setDishRatingsLoading(false);
-    }
-  }
-
-  const reviewStats = useMemo(() => {
-    const allRatings = [
-      ...reviews.map(r => r.rating),
-      ...dishRatings.map(r => r.rating)
-    ];
-    if (allRatings.length === 0) return { avg: 0, count: 0 };
-    const sum = allRatings.reduce((acc, r) => acc + r, 0);
-    return { avg: sum / allRatings.length, count: allRatings.length };
-  }, [reviews, dishRatings]);
-
-  const filteredAndSortedReviews = useMemo(() => {
-    // Combine chef reviews and dish ratings
-    const allItems = [
-      ...reviews.map(r => ({ ...r, type: 'chef_review' as const })),
-      ...dishRatings.map(r => ({ ...r, type: 'dish_rating' as const }))
-    ];
-    
-    let filtered = allItems;
-    
-    if (reviewSearch.trim()) {
-      const searchLower = reviewSearch.toLowerCase();
-      filtered = filtered.filter(r => 
-        r.comment?.toLowerCase().includes(searchLower) ||
-        r.user_name?.toLowerCase().includes(searchLower) ||
-        r.user_email?.toLowerCase().includes(searchLower) ||
-        (r.type === 'dish_rating' && (r as any).dish_name?.toLowerCase().includes(searchLower))
-      );
-    }
-
-    // Always sort by newest to oldest
-    const sorted = [...filtered];
-    sorted.sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime());
-    return sorted;
-  }, [reviews, dishRatings, reviewSearch]);
-
-  const paginatedReviews = useMemo(() => {
-    const startIndex = (reviewsPage - 1) * reviewsPerPage;
-    const endIndex = startIndex + reviewsPerPage;
-    return filteredAndSortedReviews.slice(startIndex, endIndex);
-  }, [filteredAndSortedReviews, reviewsPage, reviewsPerPage]);
-
-  const totalPages = Math.ceil(filteredAndSortedReviews.length / reviewsPerPage);
-
-  // Reset to page 1 when search changes
-  useEffect(() => {
-    setReviewsPage(1);
-  }, [reviewSearch]);
-
   // ── S1: Memoize tab content so inactive-tab state changes don't rebuild JSX ──
+
+  const menuVisibleDishes = useMemo(() => {
+    let list = menuHideInactive ? dishes.filter((d) => d.is_active !== false) : [...dishes];
+    const q = menuSearchQuery.trim().toLowerCase();
+    if (q) {
+      list = list.filter((d) => {
+        const haystack = [d.name, d.description, d.portion, d.ingredients, d.chef]
+          .filter(Boolean)
+          .join(' ')
+          .toLowerCase();
+        return haystack.includes(q);
+      });
+    }
+    return list.sort((a, b) => b.id - a.id);
+  }, [dishes, menuHideInactive, menuSearchQuery]);
 
   const menuTabContent = useMemo(() => (
     <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 32, paddingBottom: 120, paddingTop: 0 }}>
       <NewDishForm onCreate={createDish} saving={saving} />
+      {dishes.length > 0 ? (
+        <View style={styles.menuFilterRow}>
+          <TextInput
+            value={menuSearchQuery}
+            onChangeText={setMenuSearchQuery}
+            placeholder="Search dishes"
+            placeholderTextColor={PLACEHOLDER_GREY}
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            style={[styles.menuSearchInput, INPUT_NO_FOCUS_OUTLINE]}
+          />
+          <View style={styles.menuFilterToggle}>
+            <Text style={styles.menuFilterLabel}>Hide inactive</Text>
+            <Switch
+              value={menuHideInactive}
+              onValueChange={setMenuHideInactive}
+              trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
+              thumbColor="#FFFFFF"
+              {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
+            />
+          </View>
+        </View>
+      ) : null}
       <View style={{ gap: 24 }}>
         {dishes.length === 0 ? (
           <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No dishes yet. Add your first dish above.</Text>
+        ) : menuVisibleDishes.length === 0 ? (
+          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+            {menuSearchQuery.trim()
+              ? 'No dishes match your search.'
+              : 'No active dishes. Turn off Hide inactive to see hidden dishes.'}
+          </Text>
         ) : (
-          dishes.map(d => (
+          menuVisibleDishes.map((d) => (
             <DishEditor key={d.id} dish={d} onSave={updateDish} onDeactivate={deactivateDish} onActivate={activateDish} saving={saving} />
           ))
         )}
       </View>
     </ScrollView>
-  ), [dishes, saving, createDish, updateDish, deactivateDish, activateDish]);
+  ), [dishes, menuVisibleDishes, menuHideInactive, menuSearchQuery, saving, createDish, updateDish, deactivateDish, activateDish]);
 
   const payoutsTabContent = useMemo(() => {
     const pending = (chef as any)?.status === 'pending';
@@ -1905,12 +1707,20 @@ export default function ChefDashboard() {
           </Text>
         ) : (
           <PayoutSettings
-            onStatusChange={async (nextStatus: any) => {
-              setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
-              if (typeof nextStatus?.charges_enabled === 'boolean') setChargesEnabled(nextStatus.charges_enabled);
-              if (nextStatus?.accountId) setStripeAccountId(nextStatus.accountId);
-              if (chef && nextStatus?.chef_status != null) {
-                setChef((prev) => prev ? { ...prev, status: nextStatus!.chef_status! } : prev);
+            onStatusChange={async (nextStatus, hasAccount) => {
+              const status: StripeConnectStatus | null = nextStatus
+                ? { ...nextStatus, hasAccount: nextStatus.hasAccount ?? hasAccount }
+                : null;
+              if (chef) {
+                setChef((prev) =>
+                  prev
+                    ? applyStripeConnectStatusToChef(prev, status, {
+                        setChargesEnabled,
+                        setPayoutsEnabled,
+                        setStripeAccountId,
+                      })
+                    : prev
+                );
               } else {
                 await refetchChef();
               }
@@ -1949,11 +1759,9 @@ export default function ChefDashboard() {
   }
 
   const navItems = [
-    { key: 'dashboard' as const, label: 'Overview', iconSource: require('../../assets/controls.png') },
-    { key: 'payouts' as const, label: 'Payment', iconSource: require('../../assets/credit-card.png') },
-    { key: 'menu' as const, label: 'Menu', iconSource: require('../../assets/notebook.png') },
-    { key: 'orders' as const, label: 'Orders', iconSource: require('../../assets/add.png') },
-    { key: 'reviews' as const, label: 'Reviews', iconSource: require('../../assets/edit.png') },
+    { key: 'menu' as const, label: 'Menu' },
+    { key: 'orders' as const, label: 'Orders' },
+    { key: 'payouts' as const, label: 'Stripe' },
   ];
 
   const footerNavItems = [
@@ -2029,7 +1837,14 @@ export default function ChefDashboard() {
   const chefStatus = chef?.status ?? 'pending';
   const isChefActive = chefStatus === 'active';
   const isApplicationPending = chefStatus === 'pending';
-  const isPendingStripeConnect = !isApplicationPending && (!chargesEnabled || !stripeAccountId || !payoutsEnabled);
+  const stripeConnectCompleted = chef?.stripe_connect_completed === true;
+  const isPendingStripeConnect = !isApplicationPending && !stripeConnectCompleted;
+  const storeButtonBackground = isPendingStripeConnect
+    ? STRIPE_INCOMPLETE_RED
+    : isChefActive
+      ? STORE_ACTIVE_GREEN
+      : PRIMARY_COLOR;
+  const isStripeSetupComplete = !isApplicationPending && stripeConnectCompleted;
   const canToggleStatus = chefStatus === 'active' || chefStatus === 'paused';
 
   const handleToggleChefStatus = async () => {
@@ -2050,6 +1865,38 @@ export default function ChefDashboard() {
     }
   };
 
+  const FinancialMetricsWidget = (
+    <View style={[styles.financialMetricsRow, isMobile && styles.financialMetricsRowMobile]}>
+      <FinancialStatCell
+        compact={isMobile}
+        value={formatCad(financialMetrics.grossSales / 100)}
+        label="Sales"
+        infoTitle="Sales"
+        infoMessage="The full amount customers paid for your food"
+        onInfo={showInfo}
+      />
+      <FinancialStatCell
+        compact={isMobile}
+        value={formatCad(financialMetrics.platformCommission / 100)}
+        label="Fees"
+        infoTitle="Fees"
+        infoMessage="10% of your food sales (subtotal). Does not include the customer service fee or card processing."
+        onInfo={showInfo}
+      />
+      <FinancialStatCell
+        compact={isMobile}
+        value={formatCad(financialMetrics.netEarnings / 100)}
+        label="Profit"
+        infoTitle="Profit"
+        infoMessage="What you take home after fees are removed"
+        onInfo={showInfo}
+        valueColor={PRIMARY_COLOR}
+      />
+    </View>
+  );
+
+  const welcomeActionFontSize = isMobile ? WELCOME_ACTION_FONT_SIZE_MOBILE : WELCOME_ACTION_FONT_SIZE;
+
   const WelcomeHeader = (
     <View style={styles.welcomeHeader}>
       {isViewingAsChef && chef && (
@@ -2063,603 +1910,125 @@ export default function ChefDashboard() {
         </View>
       )}
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
-      <Text style={styles.welcomeSubtitle}>Your sales at a glance</Text>
-      {chef ? (
-        <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
-          <TouchableOpacity style={styles.viewStoreButton}>
-            <Text style={styles.viewStoreButtonText}>View my store page</Text>
-          </TouchableOpacity>
-        </Link>
-      ) : null}
-      {isApplicationPending ? (
-        <View style={styles.statusToggleRow}>
-          <Text style={[styles.statusToggleText, styles.statusToggleTextPaused]}>Pending</Text>
-        </View>
-      ) : isPendingStripeConnect ? (
-        <View style={styles.statusToggleRow}>
-          <Text style={[styles.statusToggleText, styles.statusToggleTextPaused]}>Pending Stripe Connect setup</Text>
-        </View>
-      ) : (
-        <View style={[styles.statusToggleRow, (!canToggleStatus || isViewingAsChef) && styles.statusToggleDisabled]}>
-          <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused]}>
-            {isChefActive ? 'Active' : 'Paused'}
-          </Text>
-          <Switch
-            value={isChefActive}
-            onValueChange={() => handleToggleChefStatus()}
-            disabled={!canToggleStatus || saving || isViewingAsChef}
-            trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
-            thumbColor="#FFFFFF"
-            {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
-          />
-        </View>
-      )}
-    </View>
-  );
-
-  // TabBar component - render directly (not memoized) so it always has access to current activeTab
-  // The ScrollView will stay mounted because it's always in the same position with the same ref
-  const TabBar = (
-    <View style={styles.tabBarWrapper} key="tab-bar-stable">
-      <ScrollView 
-        ref={tabBarScrollRef}
-        horizontal 
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.tabBarContent}
-        onScroll={handleTabBarScroll}
-        scrollEventThrottle={16}
-      >
-        {navItems.map(item => {
-          const isActive = activeTab === item.key;
-          return (
+      <View style={styles.welcomeActionsRow}>
+        <View style={styles.welcomeActionsLeft}>
+          {chef ? (
             <TouchableOpacity
-              key={item.key}
-              onPress={() => {
-                userInitiatedTabChange.current = true;
-                setActiveTab(item.key);
-              }}
-              style={[styles.tab, isActive && styles.tabActive]}
-              accessibilityRole="tab"
-              accessibilityState={{ selected: isActive }}
-              onLayout={(event) => {
-                const { x, width: tabWidth } = event.nativeEvent.layout;
-                if (tabWidth > 0 && x >= 0) {
-                  tabPositions.current[item.key] = { x, width: tabWidth };
-                  if (item.key === activeTab) {
-                    setTimeout(() => setTabLayoutReady(true), 150);
-                  }
-                }
-              }}
+              style={StyleSheet.flatten([styles.viewStoreButton, { backgroundColor: storeButtonBackground }])}
+              onPress={() => router.push(`/chef/${chef.slug ?? chef.id}` as any)}
+              accessibilityRole="link"
             >
-              <View style={styles.tabContent}>
-                <Image
-                  key={`${item.key}-${isActive ? 'active' : 'inactive'}`}
-                  source={item.iconSource}
-                  style={[styles.tabIcon, getChefTabIconStyle(isActive)]}
-                  resizeMode="contain"
-                />
-                <Text style={[styles.tabText, isActive && styles.tabTextActive]}>
-                  {item.label}
-                </Text>
-              </View>
+              <Text style={styles.viewStoreButtonText}>Store</Text>
             </TouchableOpacity>
-          );
-        })}
-      </ScrollView>
-    </View>
-  );
-
-  const DashboardTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
-      {msg && (
-        <View style={{ backgroundColor: PRIMARY_COLOR + '20', borderLeftWidth: 4, borderLeftColor: PRIMARY_COLOR, padding: 12, borderRadius: 8, flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <Image source={require('../../assets/success.png')} style={{ width: 24, height: 24 }} tintColor={PRIMARY_COLOR} />
-          <Text style={{ color: TEXT_DARK, fontWeight: '700', flex: 1, fontFamily: theme.typography.fontFamily.body }}>{msg}</Text>
-        </View>
-      )}
-      {err && (
-        <View style={{ backgroundColor: '#ef444420', borderLeftWidth: 4, borderLeftColor: '#ef4444', padding: 12, borderRadius: 8 }}>
-          <Text style={{ color: '#ef4444', fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>{err}</Text>
-        </View>
-      )}
-
-      <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-        {/* Financial Metrics Card */}
-        <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-          <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 24 }}>
-            <View style={{ position: 'relative' }}>
-              <TouchableOpacity
-                style={{
-                  backgroundColor: '#FFFFFF',
-                  borderWidth: 1,
-                  borderColor: PRIMARY_COLOR,
-                  borderRadius: 8,
-                  paddingVertical: 8,
-                  paddingHorizontal: 10,
-                  minWidth: 90,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                }}
-                onPress={() => setShowFinancialDropdown(!showFinancialDropdown)}
-              >
-                <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>
-                  {getDateFilterLabel(financialDateFilter)}
-                </Text>
-              </TouchableOpacity>
-              {showFinancialDropdown && (
-                <>
-                  {isMobile ? (
-                    <Modal
-                      visible={showFinancialDropdown}
-                      transparent
-                      animationType="fade"
-                      onRequestClose={() => setShowFinancialDropdown(false)}
-                    >
-                      <TouchableOpacity
-                        style={{
-                          flex: 1,
-                          backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                          justifyContent: 'center',
-                          alignItems: 'center',
-                        }}
-                        activeOpacity={1}
-                        onPress={() => setShowFinancialDropdown(false)}
-                      >
-                        <TouchableOpacity
-                          activeOpacity={1}
-                          onPress={(e) => e.stopPropagation()}
-                        >
-                          <ScrollView
-                            style={{
-                              backgroundColor: '#FFFFFF',
-                              borderRadius: 8,
-                              maxHeight: 400,
-                              minWidth: 200,
-                              shadowColor: '#000',
-                              shadowOffset: { width: 0, height: 2 },
-                              shadowOpacity: 0.25,
-                              shadowRadius: 8,
-                              elevation: 5,
-                            }}
-                            contentContainerStyle={{ paddingVertical: 4 }}
-                            showsVerticalScrollIndicator={true}
-                          >
-                            {dateFilterOptions.map((option, index) => (
-                              <TouchableOpacity
-                                key={option.value}
-                                style={{
-                                  paddingVertical: 12,
-                                  paddingHorizontal: 16,
-                                  borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
-                                  borderBottomColor: BORDER_LIGHT,
-                                  backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
-                                }}
-                                onPress={() => {
-                                  setFinancialDateFilter(option.value);
-                                  setShowFinancialDropdown(false);
-                                }}
-                              >
-                                <Text style={{
-                                  color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
-                                  fontSize: 14,
-                                  fontWeight: '400',
-                                  fontFamily: theme.typography.fontFamily.body,
-                                }}>
-                                  {option.label}
-                                </Text>
-                              </TouchableOpacity>
-                            ))}
-                          </ScrollView>
-                        </TouchableOpacity>
-                      </TouchableOpacity>
-                    </Modal>
-                  ) : (
-                    <>
-                      <TouchableOpacity
-                        style={{
-                          position: 'absolute',
-                          top: 0,
-                          left: 0,
-                          right: 0,
-                          bottom: 0,
-                          zIndex: 99998,
-                          ...Platform.select({
-                            web: {
-                              position: 'fixed' as any,
-                            },
-                          }),
-                        }}
-                        activeOpacity={1}
-                        onPress={() => setShowFinancialDropdown(false)}
-                      />
-                      <View style={{
-                        position: 'absolute',
-                        top: '100%',
-                        right: 0,
-                        marginTop: 4,
-                        backgroundColor: '#FFFFFF',
-                        borderRadius: 8,
-                        borderWidth: 1,
-                        borderColor: BORDER_LIGHT,
-                        shadowColor: '#000',
-                        shadowOffset: { width: 0, height: 2 },
-                        shadowOpacity: 0.25,
-                        shadowRadius: 8,
-                        elevation: 5,
-                        zIndex: 99999,
-                        minWidth: 180,
-                        overflow: 'hidden',
-                      }}>
-                        {dateFilterOptions.map((option, index) => (
-                          <TouchableOpacity
-                            key={option.value}
-                            style={{
-                              paddingVertical: 12,
-                              paddingHorizontal: 16,
-                              borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
-                              borderBottomColor: BORDER_LIGHT,
-                              backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
-                            }}
-                            onPress={() => {
-                              setFinancialDateFilter(option.value);
-                              setShowFinancialDropdown(false);
-                            }}
-                          >
-                            <Text style={{
-                              color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
-                              fontSize: 14,
-                              fontWeight: '400',
-                              fontFamily: theme.typography.fontFamily.body,
-                            }}>
-                              {option.label}
-                            </Text>
-                          </TouchableOpacity>
-                        ))}
-                      </View>
-                    </>
-                  )}
-                </>
-              )}
+          ) : null}
+          {isApplicationPending ? (
+            <View style={styles.statusToggleRow}>
+              <Text style={[styles.statusToggleText, styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>Pending</Text>
             </View>
-          </View>
-          <View>
-            {/* Gross Sales */}
-            <View style={{ marginBottom: 32 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Gross sales</Text>
-                <TouchableOpacity
-                  onPress={() => showInfo('Gross sales', 'The full amount customers paid for your food')}
-                  style={{ padding: 4 }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {formatCad(financialMetrics.grossSales / 100)} CAD
-              </Text>
+          ) : isPendingStripeConnect ? (
+            <View style={styles.statusToggleRow}>
+              <Text style={[styles.statusToggleText, styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>Go live by activating Stripe</Text>
             </View>
-            
-            {/* Platform Commission */}
-            <View style={{ marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
-                <TouchableOpacity
-                  onPress={() => showInfo('Platform commission', 'We keep a 10% service fee per successful order')}
-                  style={{ padding: 4 }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {formatCad(financialMetrics.platformCommission / 100)} CAD
-              </Text>
-            </View>
-            
-            {/* Net Earnings */}
-            <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Your net earnings</Text>
-                <TouchableOpacity
-                  onPress={() => showInfo('Your net earnings', 'What you take home after the 10% fee is removed')}
-                  style={{ padding: 4 }}
-                  hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                >
-                  <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                    <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
-                  </View>
-                </TouchableOpacity>
-              </View>
-              <Text style={{ color: PRIMARY_COLOR, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {formatCad(financialMetrics.netEarnings / 100)} CAD
-              </Text>
-            </View>
-          </View>
-        </View>
-
-        {/* Order Status Card */}
-        <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-          <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
-            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Requested</Text>
-              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {orders.filter(o => o.status === 'requested').length}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Pending</Text>
-              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {orders.filter(o => o.status === 'pending').length}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Ready</Text>
-              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {orders.filter(o => o.status === 'ready').length}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Sold</Text>
-              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {orders.filter(o => o.status === 'completed').length}
-              </Text>
-            </View>
-            <View style={{ flex: 1, minWidth: 100, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, marginBottom: 8 }}>Declined</Text>
-              <Text style={{ color: TEXT_DARK, fontSize: 24, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                {orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length}
-              </Text>
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Order Management */}
-      <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
-        <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 2, minWidth: '100%', marginBottom: 16 }}>
-          {(['requested', 'pending', 'ready', 'completed'] as const).map(status => {
-            const statusLabel = status === 'completed' ? 'Sold' : status.charAt(0).toUpperCase() + status.slice(1);
-            const count = orders.filter(o => o.status === status).length;
-            const isActive = dashboardOrderStatusFilter === status;
-            return (
-              <TouchableOpacity
-                key={status}
-                onPress={() => setDashboardOrderStatusFilter(status)}
-                style={{
-                  paddingVertical: 6,
-                  paddingHorizontal: 6,
-                  borderRadius: 6,
-                  backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
-                  minWidth: 50,
-                }}
-              >
-                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          {statusLabel}
-                          {count > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {count}</Text>
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {(() => {
-                    const declinedCount = orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length;
-                    const isActive = dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected';
-                    return (
-                      <TouchableOpacity
-                        key="declined"
-                        onPress={() => setDashboardOrderStatusFilter('cancelled')}
-                        style={{
-                          paddingVertical: 6,
-                          paddingHorizontal: 6,
-                          borderRadius: 6,
-                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
-                          minWidth: 50,
-                        }}
-                      >
-                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 15, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          Declined
-                          {declinedCount > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {declinedCount}</Text>
-                          )}
-                        </Text>
-              </TouchableOpacity>
-            );
-          })()}
-        </ScrollView>
-        {/* Orders in Card Style */}
-        <View style={{ gap: 12 }}>
-          {filteredDashboardOrders.length > 0 ? (
-            filteredDashboardOrders.map(order => (
-              <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
-                <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
-                  <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
-                </View>
-                {order.status === 'pending' && (
-                  <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
-                )}
-                {order.status === 'ready' && (
-                  <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
-                )}
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
-                  {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}${item.notes?.trim() ? ` — ${item.notes.trim()}` : ''}`).join(', ') || 'No items'}
-                </Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_email || 'Unknown'}</Text>
-                <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
-                <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                  {order.status === 'requested' ? (
-                    <>
-                      {(() => {
-                        const transferSent = Boolean(order.stripe_transfer_id);
-                        const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
-                        return (
-                          <TouchableOpacity
-                            onPress={async () => {
-                              if (!canAccept) {
-                                if (!chargesEnabled || !stripeAccountId) {
-                                  Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
-                                } else if (transferSent) {
-                                  Alert.alert('Order already accepted', 'This order has already been accepted.');
-                                }
-                                return;
-                              }
-                              try {
-                                await callFn('accept-order', { orderId: order.id });
-                                Alert.alert('Success', 'Order accepted! Payment has been captured.');
-                                await refreshOrdersForChef(chef!.id);
-                              } catch (err: any) {
-                                Alert.alert('Accept failed', err?.message || 'Unable to accept order');
-                              }
-                            }}
-                            style={{
-                              backgroundColor: PRIMARY_COLOR,
-                              paddingVertical: 8,
-                              paddingHorizontal: 16,
-                              borderRadius: 8,
-                              opacity: canAccept ? 1 : 0.5,
-                            }}
-                          >
-                            <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
-                          </TouchableOpacity>
-                        );
-                      })()}
-                      <TouchableOpacity
-                        onPress={async () => {
-                          try {
-                            await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
-                            await createOrderRejectedNotification(order.user_id, order.id);
-                            await refreshOrdersForChef(chef!.id);
-                          } catch (err: any) {
-                            Alert.alert('Reject failed', err?.message || 'Unable to reject order');
-                          }
-                        }}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E84343', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                      >
-                        <Text style={{ color: '#E84343', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
-                      </TouchableOpacity>
-                    </>
-                  ) : order.status === 'pending' ? (
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <TouchableOpacity
-                        onPress={async () => {
-                          try {
-                            await handleOrderStatus(order.id, 'ready', order.user_id);
-                            Alert.alert('Success', 'Order marked as ready!');
-                          } catch (err: any) {
-                            Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                          }
-                        }}
-                        style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                      >
-                        <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
-                      >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : order.status === 'ready' ? (
-                    <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
-                      <TouchableOpacity
-                        onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                      >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                      </TouchableOpacity>
-                      <TouchableOpacity
-                        onPress={() => handleOpenPickupUpdateModal(order)}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                      >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                      </TouchableOpacity>
-                    </View>
-                  ) : null}
-                  {['requested', 'pending'].includes(order.status) && (
-                    <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
-                      <TouchableOpacity
-                        onPress={() => handleOpenPickupUpdateModal(order)}
-                        style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                      >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              </View>
-            ))
           ) : (
-            <View style={{ padding: 32, alignItems: 'center' }}>
-              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
+            <View style={[styles.statusToggleRow, (!canToggleStatus || isViewingAsChef) && styles.statusToggleDisabled]}>
+              <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>
+                {isChefActive ? 'Active' : 'Paused'}
+              </Text>
+              <Switch
+                value={isChefActive}
+                onValueChange={() => handleToggleChefStatus()}
+                disabled={!canToggleStatus || saving || isViewingAsChef}
+                trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
+                thumbColor="#FFFFFF"
+                {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
+              />
             </View>
           )}
         </View>
+        {chef && !isViewingAsChef ? (
+          <TouchableOpacity
+            onPress={handleProfileNavigation}
+            style={styles.welcomeProfileButton}
+            accessibilityRole="button"
+            accessibilityLabel="Profile and settings"
+            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+          >
+            <Text style={[styles.welcomeProfileLabel, { fontSize: welcomeActionFontSize }]}>Profile</Text>
+            <Image
+              source={require('../../assets/user.png')}
+              style={styles.welcomeProfileIcon}
+              tintColor={PRIMARY_COLOR}
+              resizeMode="contain"
+            />
+          </TouchableOpacity>
+        ) : null}
       </View>
+      {FinancialMetricsWidget}
+    </View>
+  );
 
-      {/* Top-selling dishes */}
-      <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 12, fontFamily: theme.typography.fontFamily.display }}>Top-selling dishes</Text>
-        <TouchableOpacity
-          onPress={() => startTransition(() => setActiveTab('menu'))}
-          style={{
-            backgroundColor: PRIMARY_COLOR,
-            paddingVertical: 8,
-            paddingHorizontal: 16,
-            borderRadius: 8,
-            alignSelf: 'flex-start',
-            marginBottom: 16,
-          }}
-        >
-          <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
-        </TouchableOpacity>
-        {topSellingDishes.length > 0 ? (
-          <ScrollView horizontal showsHorizontalScrollIndicator={true}>
-            <View style={{ borderWidth: 1, borderColor: BORDER_LIGHT, borderRadius: 8, overflow: 'hidden', minWidth: 500 }}>
-              {/* Table Header */}
-              <View style={{ flexDirection: 'row', alignItems: 'center', paddingVertical: 12, paddingLeft: 12, paddingRight: 6, borderBottomWidth: 1, borderBottomColor: BORDER_LIGHT, backgroundColor: '#F8FAFC' }}>
-                <View style={{ flex: 2, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Dish name</Text>
-                </View>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>Quantity</Text>
-                </View>
-                <View style={{ flex: 1, flexDirection: 'row', alignItems: 'center', paddingHorizontal: 4 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body, textAlign: 'right' }}>Price</Text>
-                </View>
-              </View>
-              {/* Table Rows */}
-              {topSellingDishes.map((dish, index) => (
-                <View key={index} style={{ flexDirection: 'row', backgroundColor: index % 2 === 0 ? BG_LIGHT : '#FAFAFA', borderBottomWidth: index < topSellingDishes.length - 1 ? 1 : 0, borderBottomColor: BORDER_LIGHT }}>
-                  <View style={{ flex: 2, paddingVertical: 12, paddingHorizontal: 16, borderRightWidth: 1, borderRightColor: BORDER_LIGHT }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }}>{dish.name}</Text>
-                  </View>
-                  <View style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 16, borderRightWidth: 1, borderRightColor: BORDER_LIGHT }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>{dish.totalQuantity}</Text>
-                  </View>
-                  <View style={{ flex: 1, paddingVertical: 12, paddingHorizontal: 16 }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body, textAlign: 'right' }}>{formatCad(dish.totalPriceCents / 100)} CAD</Text>
-                  </View>
-                </View>
-              ))}
+  const renderDashboardTab = (item: (typeof navItems)[number]) => {
+    const isActive = activeTab === item.key;
+    const showOrderBadge = item.key === 'orders' && !isActive && openOrdersCount > 0;
+    const stripeTabNeedsSetup = item.key === 'payouts' && !isStripeSetupComplete;
+    const tabLabelStyle = [
+      styles.tabText,
+      stripeTabNeedsSetup
+        ? styles.tabTextStripeIncomplete
+        : isActive
+          ? styles.tabTextActive
+          : item.key === 'payouts' && { color: TEXT_DARK },
+    ];
+    return (
+      <TouchableOpacity
+        key={item.key}
+        onPress={() => {
+          userInitiatedTabChange.current = true;
+          setActiveTab(item.key);
+        }}
+        style={[
+          styles.tab,
+          stripeTabNeedsSetup ? styles.tabStripeIncomplete : isActive && styles.tabActive,
+        ]}
+        accessibilityRole="tab"
+        accessibilityState={{ selected: isActive }}
+        accessibilityLabel={
+          showOrderBadge ? `${item.label}, ${openOrdersCount} open orders` : item.label
+        }
+        onLayout={(event) => {
+          const { x, width: tabWidth } = event.nativeEvent.layout;
+          if (tabWidth > 0 && x >= 0) {
+            tabPositions.current[item.key] = { x, width: tabWidth };
+            if (item.key === activeTab) {
+              setTimeout(() => setTabLayoutReady(true), 150);
+            }
+          }
+        }}
+      >
+        {showOrderBadge ? (
+          <View style={styles.tabLabelWithBadge}>
+            <Text style={tabLabelStyle}>{item.label}</Text>
+            <View style={styles.tabOrderBadge}>
+              <Text style={styles.tabOrderBadgeText}>
+                {openOrdersCount > 99 ? '99+' : openOrdersCount}
+              </Text>
             </View>
-          </ScrollView>
-        ) : (
-          <View style={{ padding: 32, alignItems: 'center' }}>
-            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Your top dishes will appear once you get orders</Text>
           </View>
+        ) : (
+          <Text style={tabLabelStyle}>{item.label}</Text>
         )}
+      </TouchableOpacity>
+    );
+  };
+
+  const TabBar = (
+    <View style={styles.tabBarWrapper} key="tab-bar-stable">
+      <View style={styles.tabBarRow}>
+        <View style={styles.tabBarSlotStart}>{renderDashboardTab(navItems[0])}</View>
+        <View style={styles.tabBarSlotCenter}>{renderDashboardTab(navItems[1])}</View>
+        <View style={styles.tabBarSlotEnd}>{renderDashboardTab(navItems[2])}</View>
       </View>
-    </ScrollView>
+    </View>
   );
 
   const MenuTab = (
@@ -2739,146 +2108,24 @@ export default function ChefDashboard() {
     </ScrollView>
   );
 
-  const ReviewsTab = (
-    <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120 }}>
-      {/* Rating Summary Card */}
-      <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Reviews summary</Text>
-        <View>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Image source={require('../../assets/star.png')} style={{ width: 24, height: 24 }} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-            <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '400', fontFamily: theme.typography.fontFamily.display }}>
-              {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
-            </Text>
-          </View>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, marginTop: 4, fontFamily: theme.typography.fontFamily.body }}>
-              Based on {reviewStats.count} {reviewStats.count === 1 ? 'review' : 'reviews'}
-            </Text>
-        </View>
-      </View>
-
-      {/* Search and Sort */}
-      <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, justifyContent: 'space-between', alignItems: Platform.OS === 'web' ? 'center' : 'stretch' }}>
-        <View style={{ flex: Platform.OS === 'web' ? 1 : 1, position: 'relative', maxWidth: Platform.OS === 'web' ? 400 : '100%' }}>
-          <Text style={{ position: 'absolute', left: 12, top: 12, color: TEXT_MUTED, zIndex: 1, fontFamily: theme.typography.fontFamily.body }}>🔍</Text>
-          <TextInput
-            value={reviewSearch}
-            onChangeText={setReviewSearch}
-            placeholder="Search reviews..."
-            placeholderTextColor={TEXT_MUTED}
-            style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }, INPUT_NO_FOCUS_OUTLINE]}
-          />
-        </View>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>Sort by:</Text>
-          <View style={{ backgroundColor: BG_LIGHT, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 4 }}>
-            <View style={{ flexDirection: 'row', gap: 4 }}>
-              {(['newest', 'oldest', 'highest', 'lowest'] as const).map(sort => (
-                <TouchableOpacity
-                  key={sort}
-                  onPress={() => setReviewSort(sort)}
-                  style={{
-                    paddingVertical: 6,
-                    paddingHorizontal: 12,
-                    borderRadius: 6,
-                    backgroundColor: reviewSort === sort ? PRIMARY_COLOR + '20' : 'transparent',
-                  }}
-                >
-                  <Text style={{ color: reviewSort === sort ? PRIMARY_COLOR : TEXT_MUTED, fontSize: 12, fontWeight: reviewSort === sort ? '700' : '500', fontFamily: theme.typography.fontFamily.body }}>
-                    {sort === 'newest' ? 'Newest' : sort === 'oldest' ? 'Oldest' : sort === 'highest' ? 'Highest' : 'Lowest'}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-        </View>
-      </View>
-
-      {/* Reviews List */}
-      {reviewsLoading ? (
-        <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-          <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-          <Text style={{ color: TEXT_MUTED, marginTop: 16, fontFamily: theme.typography.fontFamily.body }}>Loading reviews...</Text>
-        </View>
-      ) : filteredAndSortedReviews.length === 0 ? (
-        <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 32, alignItems: 'center' }}>
-          <Text style={{ color: TEXT_MUTED, fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>
-            {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
-          </Text>
-        </View>
-      ) : (
-        <View style={{ gap: 16 }}>
-          {filteredAndSortedReviews.map((review) => {
-            return (
-              <View key={review.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                <View style={{ gap: 12 }}>
-                  {/* Stars at top left - show only filled stars */}
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                    {Array.from({ length: Math.floor(review.rating) }).map((_, i) => (
-                      <Image key={i} source={require('../../assets/star.png')} style={{ width: 16, height: 16 }} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                    ))}
-                  </View>
-                  
-                  {/* Comment */}
-                  {review.comment && (
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20, fontFamily: theme.typography.fontFamily.body }}>"{review.comment}"</Text>
-                  )}
-                  
-                  {/* Review images if any */}
-                  {(review as any).images && Array.isArray((review as any).images) && (review as any).images.length > 0 && (
-                    <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                      {(review as any).images.map((imageUrl: string, idx: number) => (
-                        <Image
-                          key={idx}
-                          source={{ uri: imageUrl }}
-                          style={{ width: 80, height: 80, borderRadius: 8 }}
-                          resizeMode="cover"
-                        />
-                      ))}
-                    </View>
-                  )}
-                  
-                  {/* Reply button */}
-                  <View style={{ flexDirection: 'row', gap: 16, marginTop: 8 }}>
-                    <TouchableOpacity
-                      onPress={() => {
-                        setSelectedReviewId(review.id);
-                        setSelectedReviewUserId(review.user_id || null);
-                        setReviewReplyText('');
-                        setShowReviewReplyModal(true);
-                      }}
-                    >
-                      <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reply</Text>
-                    </TouchableOpacity>
-                  </View>
-                  
-                  {/* Name and date at bottom */}
-                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8, paddingTop: 12, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-                    <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body }}>{review.user_name || review.user_email || 'Anonymous'}</Text>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>{formatReviewDate(review.created_at)}</Text>
-                  </View>
-                </View>
-              </View>
-            );
-          })}
-        </View>
-      )}
-    </ScrollView>
-  );
 
   const PayoutsTab = (
     <View style={{ flex: 1, backgroundColor: BG_PAGE }}>
       <PayoutSettings
-        onStatusChange={async (nextStatus: { chef_status?: string | null } | null) => {
-          setPayoutsEnabled(Boolean(nextStatus?.payouts_enabled || nextStatus?.charges_enabled));
-          if (typeof nextStatus?.charges_enabled === 'boolean') {
-            setChargesEnabled(nextStatus.charges_enabled);
-          }
-          if (nextStatus?.accountId) {
-            setStripeAccountId(nextStatus.accountId);
-          }
-          if (chef && nextStatus?.chef_status != null) {
-            setChef((prev) => prev ? { ...prev, status: nextStatus!.chef_status! } : prev);
+        onStatusChange={async (nextStatus, hasAccount) => {
+          const status: StripeConnectStatus | null = nextStatus
+            ? { ...nextStatus, hasAccount: nextStatus.hasAccount ?? hasAccount }
+            : null;
+          if (chef) {
+            setChef((prev) =>
+              prev
+                ? applyStripeConnectStatusToChef(prev, status, {
+                    setChargesEnabled,
+                    setPayoutsEnabled,
+                    setStripeAccountId,
+                  })
+                : prev
+            );
           } else {
             await refetchChef();
           }
@@ -2893,459 +2140,11 @@ export default function ChefDashboard() {
         {isMobile ? Sidebar : null}
         <View style={styles.content}>
           {/* Render TabBar once at the top level to prevent reloading - use literal hex so web never shows white */}
-          <View style={{ backgroundColor: '#F2F0EF', paddingTop: 12, paddingHorizontal: 32, paddingBottom: 0, borderTopWidth: 0, borderTopColor: 'transparent' }} data-testid="chef-dashboard-header-area">
+          <View style={styles.chefDashboardHeaderArea} data-testid="chef-dashboard-header-area">
             {WelcomeHeader}
             {TabBar}
           </View>
           {/* Tab content without WelcomeHeader and TabBar */}
-          {activeTab === 'dashboard' && (
-            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
-              <View style={{ flexDirection: 'row', gap: 16, flexWrap: 'wrap' }}>
-                {/* Financial Metrics Card */}
-                <View style={{ flex: 1, minWidth: 300, backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                  <View style={{ flexDirection: 'row', justifyContent: 'flex-start', alignItems: 'center', marginBottom: 24 }}>
-                    <View style={{ position: 'relative' }}>
-                      <TouchableOpacity
-                        style={{
-                          backgroundColor: '#FFFFFF',
-                          borderWidth: 1,
-                          borderColor: PRIMARY_COLOR,
-                          borderRadius: 8,
-                          paddingVertical: 8,
-                          paddingHorizontal: 10,
-                          minWidth: 90,
-                          alignItems: 'center',
-                          justifyContent: 'center',
-                        }}
-                        onPress={() => setShowFinancialDropdown(!showFinancialDropdown)}
-                      >
-                        <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '600', fontFamily: theme.typography.fontFamily.body, textAlign: 'center' }}>
-                          {getDateFilterLabel(financialDateFilter)}
-                        </Text>
-                      </TouchableOpacity>
-                      {showFinancialDropdown && (
-                        <>
-                          {isMobile ? (
-                            <Modal
-                              visible={showFinancialDropdown}
-                              transparent
-                              animationType="fade"
-                              onRequestClose={() => setShowFinancialDropdown(false)}
-                            >
-                              <TouchableOpacity
-                                style={{
-                                  flex: 1,
-                                  backgroundColor: 'rgba(0, 0, 0, 0.5)',
-                                  justifyContent: 'center',
-                                  alignItems: 'center',
-                                }}
-                                activeOpacity={1}
-                                onPress={() => setShowFinancialDropdown(false)}
-                              >
-                                <TouchableOpacity
-                                  activeOpacity={1}
-                                  onPress={(e) => e.stopPropagation()}
-                                >
-                                  <ScrollView
-                                    style={{
-                                      backgroundColor: '#FFFFFF',
-                                      borderRadius: 8,
-                                      maxHeight: 400,
-                                      minWidth: 200,
-                                      shadowColor: '#000',
-                                      shadowOffset: { width: 0, height: 2 },
-                                      shadowOpacity: 0.25,
-                                      shadowRadius: 8,
-                                      elevation: 5,
-                                    }}
-                                    contentContainerStyle={{ paddingVertical: 4 }}
-                                    showsVerticalScrollIndicator={true}
-                                  >
-                                    {dateFilterOptions.map((option, index) => (
-                                      <TouchableOpacity
-                                        key={option.value}
-                                        style={{
-                                          paddingVertical: 12,
-                                          paddingHorizontal: 16,
-                                          borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
-                                          borderBottomColor: BORDER_LIGHT,
-                                          backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
-                                        }}
-                                        onPress={() => {
-                                          setFinancialDateFilter(option.value);
-                                          setShowFinancialDropdown(false);
-                                        }}
-                                      >
-                                        <Text style={{
-                                          color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
-                                          fontSize: 14,
-                                          fontWeight: '400',
-                                          fontFamily: theme.typography.fontFamily.body,
-                                        }}>
-                                          {option.label}
-                                        </Text>
-                                      </TouchableOpacity>
-                                    ))}
-                                  </ScrollView>
-                                </TouchableOpacity>
-                              </TouchableOpacity>
-                            </Modal>
-                          ) : (
-                            <>
-                              <TouchableOpacity
-                                style={{
-                                  position: 'absolute',
-                                  top: 0,
-                                  left: 0,
-                                  right: 0,
-                                  bottom: 0,
-                                  zIndex: 99998,
-                                  ...Platform.select({
-                                    web: {
-                                      position: 'fixed' as any,
-                                    },
-                                  }),
-                                }}
-                                activeOpacity={1}
-                                onPress={() => setShowFinancialDropdown(false)}
-                              />
-                              <View style={{
-                                position: 'absolute',
-                                top: '100%',
-                                right: 0,
-                                marginTop: 4,
-                                backgroundColor: '#FFFFFF',
-                                borderRadius: 8,
-                                borderWidth: 1,
-                                borderColor: BORDER_LIGHT,
-                                shadowColor: '#000',
-                                shadowOffset: { width: 0, height: 2 },
-                                shadowOpacity: 0.25,
-                                shadowRadius: 8,
-                                elevation: 5,
-                                zIndex: 99999,
-                                minWidth: 180,
-                                overflow: 'hidden',
-                              }}>
-                                {dateFilterOptions.map((option, index) => (
-                                  <TouchableOpacity
-                                    key={option.value}
-                                    style={{
-                                      paddingVertical: 12,
-                                      paddingHorizontal: 16,
-                                      borderBottomWidth: index === dateFilterOptions.length - 1 ? 0 : 1,
-                                      borderBottomColor: BORDER_LIGHT,
-                                      backgroundColor: financialDateFilter === option.value ? '#FE734C20' : 'transparent',
-                                    }}
-                                    onPress={() => {
-                                      setFinancialDateFilter(option.value);
-                                      setShowFinancialDropdown(false);
-                                    }}
-                                  >
-                                    <Text style={{
-                                      color: financialDateFilter === option.value ? PRIMARY_COLOR : TEXT_DARK,
-                                      fontSize: 14,
-                                      fontWeight: '400',
-                                      fontFamily: theme.typography.fontFamily.body,
-                                    }}>
-                                      {option.label}
-                                    </Text>
-                                  </TouchableOpacity>
-                                ))}
-                              </View>
-                            </>
-                          )}
-                        </>
-                      )}
-                    </View>
-                  </View>
-                  <View>
-                    {/* Gross Sales */}
-                    <View style={{ marginBottom: 32 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Gross sales</Text>
-                        <TouchableOpacity
-                          onPress={() => showInfo('Gross sales', 'The full amount customers paid for your food')}
-                          style={{ padding: 4 }}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                        {formatCad(financialMetrics.grossSales / 100)} CAD
-                      </Text>
-                    </View>
-                    
-                    {/* Platform Commission */}
-                    <View style={{ marginBottom: 16 }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Platform commission</Text>
-                        <TouchableOpacity
-                          onPress={() => showInfo('Platform commission', 'We keep a 10% service fee per successful order')}
-                          style={{ padding: 4 }}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                        {formatCad(financialMetrics.platformCommission / 100)} CAD
-                      </Text>
-                    </View>
-                    
-                    {/* Net Earnings */}
-                    <View style={{ paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-                      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 8 }}>
-                        <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Your net earnings</Text>
-                        <TouchableOpacity
-                          onPress={() => showInfo('Your net earnings', 'What you take home after the 10% fee is removed')}
-                          style={{ padding: 4 }}
-                          hitSlop={{ top: 10, bottom: 10, left: 10, right: 10 }}
-                        >
-                          <View style={{ width: 18, height: 18, borderRadius: 9, borderWidth: 1.5, borderColor: PRIMARY_COLOR, alignItems: 'center', justifyContent: 'center', backgroundColor: 'transparent' }}>
-                            <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '700', lineHeight: 14, fontFamily: theme.typography.fontFamily.body }}>i</Text>
-                          </View>
-                        </TouchableOpacity>
-                      </View>
-                      <Text style={{ color: PRIMARY_COLOR, fontSize: 32, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>
-                        {formatCad(financialMetrics.netEarnings / 100)} CAD
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Order Management Table */}
-              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 16, fontFamily: theme.typography.fontFamily.display }}>Order status</Text>
-                <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ flexDirection: 'row', gap: 2, minWidth: '100%', marginBottom: 16 }}>
-                  {(['requested', 'pending', 'ready', 'completed'] as const).map(status => {
-                    const statusLabel = status === 'completed' ? 'Sold' : status.charAt(0).toUpperCase() + status.slice(1);
-                    const count = orders.filter(o => o.status === status).length;
-                    const isActive = dashboardOrderStatusFilter === status;
-                    return (
-                      <TouchableOpacity
-                        key={status}
-                        onPress={() => setDashboardOrderStatusFilter(status)}
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 6,
-                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
-                          minWidth: 80,
-                        }}
-                      >
-                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          {statusLabel}
-                          {count > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {count}</Text>
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })}
-                  {(() => {
-                    const declinedCount = orders.filter(o => ['cancelled', 'rejected'].includes(o.status)).length;
-                    const isActive = dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected';
-                    return (
-                      <TouchableOpacity
-                        key="declined"
-                        onPress={() => setDashboardOrderStatusFilter('cancelled')}
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 12,
-                          borderRadius: 6,
-                          backgroundColor: isActive ? PRIMARY_COLOR : 'transparent',
-                          minWidth: 80,
-                        }}
-                      >
-                        <Text style={{ color: isActive ? '#FFFFFF' : TEXT_MUTED, fontSize: 12, fontWeight: '400', textAlign: 'center', fontFamily: theme.typography.fontFamily.body }}>
-                          Declined
-                          {declinedCount > 0 && (
-                            <Text style={{ color: isActive ? '#FFFFFF' : PRIMARY_COLOR, fontFamily: theme.typography.fontFamily.body }}> {declinedCount}</Text>
-                          )}
-                        </Text>
-                      </TouchableOpacity>
-                    );
-                  })()}
-                </ScrollView>
-                {/* Orders in Card Style */}
-                <View style={{ gap: 12 }}>
-                  {filteredDashboardOrders.length > 0 ? (
-                    filteredDashboardOrders.map(order => (
-                      <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
-                        <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
-                          <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
-                        </View>
-                        {order.status === 'pending' && (
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
-                        )}
-                        {order.status === 'ready' && (
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
-                        )}
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
-            {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}${item.notes?.trim() ? ` — ${item.notes.trim()}` : ''}`).join(', ') || 'No items'}
-                        </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
-                        <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
-                          {order.status === 'requested' ? (
-                            <>
-                              {(() => {
-                                const transferSent = Boolean(order.stripe_transfer_id);
-                                const canAccept = chargesEnabled && !!stripeAccountId && !transferSent;
-                                return (
-                                  <TouchableOpacity
-                                    onPress={async () => {
-                                      if (!canAccept) {
-                                        if (!chargesEnabled || !stripeAccountId) {
-                                          Alert.alert('Cannot accept order', 'Please complete payouts onboarding first.');
-                                        } else if (transferSent) {
-                                          Alert.alert('Order already accepted', 'This order has already been accepted.');
-                                        }
-                                        return;
-                                      }
-                                      try {
-                                        await callFn('accept-order', { orderId: order.id });
-                                        Alert.alert('Success', 'Order accepted! Payment has been captured.');
-                                        await refreshOrdersForChef(chef!.id);
-                                      } catch (err: any) {
-                                        Alert.alert('Accept failed', err?.message || 'Unable to accept order');
-                                      }
-                                    }}
-                                    style={{
-                                      backgroundColor: PRIMARY_COLOR,
-                                      paddingVertical: 8,
-                                      paddingHorizontal: 16,
-                                      borderRadius: 8,
-                                      opacity: canAccept ? 1 : 0.5,
-                                    }}
-                                  >
-                                    <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>{transferSent ? 'Accepted' : 'Accept'}</Text>
-                                  </TouchableOpacity>
-                                );
-                              })()}
-                              <TouchableOpacity
-                                onPress={async () => {
-                                  try {
-                                    await callFn('cancel-payment', { orderId: order.id, reason: 'chef_rejected' });
-                                    await createOrderRejectedNotification(order.user_id, order.id);
-                                    await refreshOrdersForChef(chef!.id);
-                                  } catch (err: any) {
-                                    Alert.alert('Reject failed', err?.message || 'Unable to reject order');
-                                  }
-                                }}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: '#E84343', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                              >
-                                <Text style={{ color: '#E84343', fontSize: 12, fontWeight: '800', fontFamily: theme.typography.fontFamily.body }}>Reject</Text>
-                              </TouchableOpacity>
-                            </>
-                          ) : order.status === 'pending' ? (
-                            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                              <TouchableOpacity
-                                onPress={async () => {
-                                  try {
-                                    await handleOrderStatus(order.id, 'ready', order.user_id);
-                                    Alert.alert('Success', 'Order marked as ready!');
-                                  } catch (err: any) {
-                                    Alert.alert('Update failed', err?.message || 'Unable to mark order as ready');
-                                  }
-                                }}
-                                style={{ backgroundColor: '#FE734C', paddingVertical: 8, paddingHorizontal: 16, borderRadius: 8 }}
-                              >
-                                <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Mark as ready</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 6, borderRadius: 8 }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : order.status === 'ready' ? (
-                            <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
-                              <TouchableOpacity
-                                onPress={() => handleOpenMessageModal(order.id, order.user_email || 'Customer')}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleOpenPickupUpdateModal(order)}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                              </TouchableOpacity>
-                            </View>
-                          ) : null}
-                          {['requested', 'pending'].includes(order.status) && (
-                            <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
-                              <TouchableOpacity
-                                onPress={() => handleOpenPickupUpdateModal(order)}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-                        </View>
-                      </View>
-                    ))
-                  ) : (
-                    <View style={{ padding: 32, alignItems: 'center' }}>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
-                    </View>
-                  )}
-                </View>
-              </View>
-
-              {/* Top-selling dishes */}
-              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', marginBottom: 12, fontFamily: theme.typography.fontFamily.display }}>Top-selling dishes</Text>
-                <TouchableOpacity
-                  onPress={() => startTransition(() => setActiveTab('menu'))}
-                  style={{
-                    backgroundColor: PRIMARY_COLOR,
-                    paddingVertical: 8,
-                    paddingHorizontal: 16,
-                    borderRadius: 8,
-                    alignSelf: 'flex-start',
-                    marginBottom: 16,
-                  }}
-                >
-                  <Text style={{ color: '#FFFFFF', fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Add or edit your dishes</Text>
-                </TouchableOpacity>
-        {topSellingDishes.length > 0 ? (
-          <View style={{ gap: 8 }}>
-            {topSellingDishes.map((dish, index) => (
-              <View key={index} style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingVertical: 8 }}>
-                <View style={{ flex: 1, paddingRight: 8 }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }} numberOfLines={1}>{dish.name}</Text>
-                </View>
-                <View style={{ width: 60, alignItems: 'center' }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }}>{dish.totalQuantity}</Text>
-                </View>
-                <View style={{ width: 80, alignItems: 'flex-end' }}>
-                  <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '500', fontFamily: theme.typography.fontFamily.body }}>{formatCad(dish.totalPriceCents / 100)}</Text>
-                </View>
-              </View>
-            ))}
-          </View>
-                ) : (
-                  <View style={{ padding: 32, alignItems: 'center' }}>
-                    <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>No sales data available</Text>
-                  </View>
-                )}
-              </View>
-            </ScrollView>
-          )}
           {activeTab === 'menu' && menuTabContent}
           {activeTab === 'orders' && (
             <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 16, paddingBottom: 120, paddingTop: 0 }}>
@@ -3536,172 +2335,6 @@ export default function ChefDashboard() {
               </View>
             </ScrollView>
           )}
-          {activeTab === 'reviews' && (
-            <ScrollView style={{ flex: 1, backgroundColor: BG_PAGE }} contentContainerStyle={{ padding: 32, gap: 24, paddingBottom: 120, paddingTop: 0 }}>
-              {/* Rating Summary Card */}
-              <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '900', fontFamily: theme.typography.fontFamily.display, marginBottom: 16 }}>Reviews summary</Text>
-                <View>
-                  <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                      <Image source={require('../../assets/star.png')} style={{ width: 24, height: 24 }} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                      <Text style={{ color: TEXT_DARK, fontSize: 28, fontWeight: '400', fontFamily: theme.typography.fontFamily.display }}>
-                        {reviewStats.count > 0 ? reviewStats.avg.toFixed(1) : '0.0'}
-                      </Text>
-                    </View>
-                    <View style={{ flex: 1, gap: 4 }}>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                        {reviewStats.count} total {reviewStats.count === 1 ? 'rating' : 'ratings'}
-                      </Text>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                        {dishRatings.length} dish {dishRatings.length === 1 ? 'rating' : 'ratings'}
-                      </Text>
-                      <Text style={{ color: TEXT_MUTED, fontSize: 14 }}>
-                        {reviews.length} chef {reviews.length === 1 ? 'review' : 'reviews'}
-                      </Text>
-                    </View>
-                  </View>
-                </View>
-              </View>
-
-              {/* Search */}
-              <View style={{ flexDirection: Platform.OS === 'web' ? 'row' : 'column', gap: 16, justifyContent: 'space-between', alignItems: Platform.OS === 'web' ? 'center' : 'stretch' }}>
-                <View style={{ flex: Platform.OS === 'web' ? 1 : 1, position: 'relative', maxWidth: Platform.OS === 'web' ? 400 : '100%' }}>
-                  <View style={{ position: 'absolute', left: 12, top: 12, zIndex: 1, width: 24, height: 24, justifyContent: 'center', alignItems: 'center' }}>
-                    <Image 
-                      source={require('../../assets/search.png')} 
-                      style={{ width: 24, height: 24 }}
-                      tintColor={PRIMARY_COLOR}
-                      resizeMode="contain"
-                    />
-                  </View>
-                  <TextInput
-                    value={reviewSearch}
-                    onChangeText={setReviewSearch}
-                    placeholder="Search reviews..."
-                    placeholderTextColor={TEXT_MUTED}
-                    style={[{ backgroundColor: BG_LIGHT, color: TEXT_DARK, borderColor: BORDER_LIGHT, borderWidth: 1, borderRadius: 8, padding: 12, paddingLeft: 40, minHeight: 44 }, INPUT_NO_FOCUS_OUTLINE]}
-                  />
-                </View>
-              </View>
-
-              {/* Reviews List */}
-              {(reviewsLoading || dishRatingsLoading) ? (
-                <View style={{ alignItems: 'center', justifyContent: 'center', padding: 32 }}>
-                  <ActivityIndicator size="large" color={PRIMARY_COLOR} />
-                  <Text style={{ color: TEXT_MUTED, marginTop: 16, fontFamily: theme.typography.fontFamily.body }}>Loading reviews...</Text>
-                </View>
-              ) : filteredAndSortedReviews.length === 0 ? (
-                <View style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 32, alignItems: 'center' }}>
-                  <Text style={{ color: TEXT_MUTED, fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>
-                    {reviewSearch ? 'No reviews match your search' : 'No reviews yet'}
-                  </Text>
-                </View>
-              ) : (
-                <View style={{ gap: 16 }}>
-                  {paginatedReviews.map((item) => {
-                    const isDishRating = item.type === 'dish_rating';
-                    return (
-                      <View key={`${item.type}-${item.id}`} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24 }}>
-                        <View style={{ gap: 12 }}>
-                          {/* Stars at top left - show only filled stars */}
-                          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2 }}>
-                            {Array.from({ length: Math.floor(item.rating) }).map((_, i) => (
-                              <Image key={i} source={require('../../assets/star.png')} style={{ width: 16, height: 16 }} tintColor={PRIMARY_COLOR} resizeMode="contain" />
-                            ))}
-                          </View>
-                          
-                          {/* Dish name for dish ratings */}
-                          {isDishRating && (item as any).dish_name && (
-                            <Text style={{ color: TEXT_MUTED, fontSize: 12, fontWeight: '600' }}>
-                              {(item as any).dish_name}
-                            </Text>
-                          )}
-                          
-                          {/* Comment */}
-                          {item.comment && (
-                            <Text style={{ color: TEXT_DARK, fontSize: 14, lineHeight: 20 }}>"{item.comment}"</Text>
-                          )}
-                          
-                          {/* Review images if any (only for chef reviews) */}
-                          {!isDishRating && (item as any).images && Array.isArray((item as any).images) && (item as any).images.length > 0 && (
-                            <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8, marginTop: 8 }}>
-                              {(item as any).images.map((imageUrl: string, idx: number) => (
-                                <Image
-                                  key={idx}
-                                  source={{ uri: imageUrl }}
-                                  style={{ width: 80, height: 80, borderRadius: 8 }}
-                                  resizeMode="cover"
-                                />
-                              ))}
-                            </View>
-                          )}
-                          
-                          {/* Name, date, and reply button at bottom */}
-                          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 4, paddingTop: 8, borderTopWidth: 1, borderTopColor: BORDER_LIGHT }}>
-                            <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>
-                              - {item.user_name || item.user_email || 'Anonymous'} • {formatReviewDate(item.created_at)}
-                            </Text>
-                            {!isDishRating && (
-                              <TouchableOpacity
-                                onPress={() => {
-                                  setSelectedReviewId(item.id);
-                                  setSelectedReviewUserId(item.user_id || null);
-                                  setReviewReplyText('');
-                                  setShowReviewReplyModal(true);
-                                }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '700', fontFamily: theme.typography.fontFamily.body }}>Reply</Text>
-                              </TouchableOpacity>
-                            )}
-                          </View>
-                        </View>
-                      </View>
-                    );
-                  })}
-                  
-                  {/* Pagination Controls */}
-                  {totalPages > 1 && (
-                    <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 16, paddingTop: 16, borderTopWidth: 1, borderTopColor: BORDER_LIGHT, position: 'relative' }}>
-                      <TouchableOpacity
-                        onPress={() => setReviewsPage(prev => Math.max(1, prev - 1))}
-                        disabled={reviewsPage === 1}
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 16,
-                          borderRadius: 8,
-                          backgroundColor: reviewsPage === 1 ? BORDER_LIGHT : PRIMARY_COLOR,
-                          opacity: reviewsPage === 1 ? 0.5 : 1,
-                        }}
-                      >
-                        <Text style={{ color: reviewsPage === 1 ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Previous</Text>
-                      </TouchableOpacity>
-                      
-                      <View style={{ position: 'absolute', left: 0, right: 0, alignItems: 'center', justifyContent: 'center', pointerEvents: 'none' }}>
-                        <Text style={{ color: TEXT_DARK, fontSize: 14, fontWeight: '600' }}>
-                          Page {reviewsPage} of {totalPages}
-                        </Text>
-                      </View>
-                      
-                      <TouchableOpacity
-                        onPress={() => setReviewsPage(prev => Math.min(totalPages, prev + 1))}
-                        disabled={reviewsPage === totalPages}
-                        style={{
-                          paddingVertical: 8,
-                          paddingHorizontal: 16,
-                          borderRadius: 8,
-                          backgroundColor: reviewsPage === totalPages ? BORDER_LIGHT : PRIMARY_COLOR,
-                          opacity: reviewsPage === totalPages ? 0.5 : 1,
-                        }}
-                      >
-                        <Text style={{ color: reviewsPage === totalPages ? TEXT_MUTED : '#FFFFFF', fontSize: 14, fontWeight: '700' }}>Next</Text>
-                      </TouchableOpacity>
-                    </View>
-                  )}
-                </View>
-              )}
-            </ScrollView>
-          )}
           {activeTab === 'payouts' && payoutsTabContent}
           {/* Toast in Modal so it always shows on top (works on mobile); blocks scroll for ~3s then auto-dismisses */}
           {(msg || err) && (
@@ -3854,74 +2487,6 @@ export default function ChefDashboard() {
       </View>
       </Modal>
 
-      {/* Review Reply Modal */}
-      <Modal
-        visible={showReviewReplyModal}
-        animationType="fade"
-        transparent={true}
-        onRequestClose={() => {
-          setShowReviewReplyModal(false);
-          setReviewReplyText('');
-          handleStopReviewReplyVoiceInput();
-        }}
-      >
-        <View style={messageModalStyles.modalOverlay}>
-          <View style={messageModalStyles.modalContent}>
-            <View style={messageModalStyles.modalHeader}>
-              <View style={messageModalStyles.modalTitleContainer}>
-                <Text style={messageModalStyles.modalTitle}>Reply to Review</Text>
-                <Text style={messageModalStyles.modalSubtitle}>Review #{selectedReviewId}</Text>
-              </View>
-              <TouchableOpacity
-                onPress={() => {
-                  setShowReviewReplyModal(false);
-                  setReviewReplyText('');
-                  handleStopReviewReplyVoiceInput();
-                }}
-                style={messageModalStyles.modalCloseButton}
-              >
-                <Text style={messageModalStyles.modalCloseText}>✕</Text>
-              </TouchableOpacity>
-            </View>
-            <View style={messageModalStyles.modalBody}>
-              <View style={messageModalStyles.messageInputContainer}>
-                <TextInput
-                  style={messageModalStyles.messageInput}
-                  placeholder="Type your reply..."
-                  placeholderTextColor={TEXT_MUTED}
-                  value={reviewReplyText}
-                  onChangeText={setReviewReplyText}
-                  multiline
-                />
-                <View style={messageModalStyles.messageInputActions}>
-                  <TouchableOpacity
-                    style={[messageModalStyles.micButton, isRecordingReviewReply && messageModalStyles.micButtonActive]}
-                    onPress={isRecordingReviewReply ? handleStopReviewReplyVoiceInput : handleStartReviewReplyVoiceInput}
-                  >
-                    <Image 
-                      source={require('../../assets/microphone.png')} 
-                      style={messageModalStyles.micIconImage}
-                      tintColor={PRIMARY_COLOR}
-                      resizeMode="contain"
-                    />
-                  </TouchableOpacity>
-                  <TouchableOpacity
-                    style={[messageModalStyles.sendButton, (!reviewReplyText.trim() || sendingReviewReply) && messageModalStyles.sendButtonDisabled]}
-                    onPress={handleSendReviewReply}
-                    disabled={!reviewReplyText.trim() || sendingReviewReply}
-                  >
-                    {sendingReviewReply ? (
-                      <ActivityIndicator size="small" color="#FFFFFF" />
-                    ) : (
-                      <Text style={messageModalStyles.sendButtonIcon}>➤</Text>
-                    )}
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          </View>
-        </View>
-      </Modal>
 
       {/* Update Pickup Date/Time Modal */}
       <Modal
@@ -4151,7 +2716,7 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
   welcomeHeader: {
-    marginBottom: theme.spacing.md,
+    marginBottom: 0,
   },
   viewingAsBanner: {
     flexDirection: 'row',
@@ -4175,82 +2740,252 @@ const styles = StyleSheet.create({
   },
   welcomeTitle: {
     color: TEXT_DARK,
-    fontSize: 28,
+    fontSize: WELCOME_HEADING_FONT_SIZE,
     fontWeight: '900',
     fontFamily: theme.typography.fontFamily.display,
   },
-  welcomeSubtitle: {
-    color: TEXT_MUTED,
+  welcomeActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    marginTop: 8,
+    gap: 12,
+  },
+  welcomeActionsLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    flex: 1,
+    minWidth: 0,
+    gap: 12,
+  },
+  financialMetricsRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    justifyContent: 'flex-start',
+    gap: 16,
+    marginTop: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
+    width: '100%',
+  },
+  financialMetricsRowMobile: {
+    gap: 8,
+  },
+  financialStatBox: {
+    flex: 1,
+    minWidth: 0,
+    backgroundColor: BG_LIGHT,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    paddingVertical: 20,
+    paddingHorizontal: 16,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  financialStatBoxCompact: {
+    paddingVertical: 14,
+    paddingHorizontal: 10,
+  },
+  financialStatLabelRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 4,
+    marginTop: 8,
+    width: '100%',
+  },
+  menuFilterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    flexWrap: 'wrap',
+    gap: 12,
+  },
+  menuSearchInput: {
+    flex: 1,
+    minWidth: 160,
+    backgroundColor: BG_LIGHT,
+    color: TEXT_DARK,
+    borderColor: BORDER_LIGHT,
+    borderWidth: 1,
+    borderRadius: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 12,
     fontSize: 16,
-    marginTop: 4,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  menuFilterToggle: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    flexShrink: 0,
+  },
+  menuFilterLabel: {
+    color: TEXT_DARK,
+    fontSize: 14,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  newDishCard: {
+    backgroundColor: BG_LIGHT,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: BORDER_LIGHT,
+    padding: 24,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  newDishCardCollapsed: {
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+  },
+  newDishHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+    minHeight: 0,
+  },
+  newDishHeaderTitle: {
+    color: TEXT_DARK,
+    fontSize: 20,
+    fontWeight: '700',
+    fontFamily: theme.typography.fontFamily.display,
+    flex: 1,
+  },
+  newDishHeaderTitleCollapsed: {
+    fontSize: 18,
+    lineHeight: 22,
+  },
+  newDishToggleIcon: {
+    width: 22,
+    height: 22,
+    flexShrink: 0,
+  },
+  newDishToggleIconCollapsed: {
+    width: 18,
+    height: 18,
   },
   viewStoreButton: {
-    paddingTop: 0,
-    paddingBottom: 12,
-    paddingRight: 16,
-    paddingLeft: 0,
-    alignSelf: 'flex-start',
-    marginTop: 4,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
+    minHeight: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+    borderRadius: 8,
+    flexShrink: 0,
   },
   viewStoreButtonText: {
-    color: PRIMARY_COLOR,
-    fontWeight: '400',
-    fontSize: 16,
+    color: '#FFFFFF',
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.normal,
+    letterSpacing: theme.typography.letterSpacing.wide,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  welcomeProfileButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 44,
+    height: 44,
+    paddingHorizontal: 4,
+    borderRadius: 8,
+    justifyContent: 'center',
+    alignSelf: 'center',
+    flexShrink: 0,
+    marginLeft: 'auto',
+  },
+  welcomeProfileLabel: {
+    color: TEXT_DARK,
+    fontWeight: '600',
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  welcomeProfileIcon: {
+    width: 28,
+    height: 28,
   },
   statusToggleRow: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
     gap: 12,
-    marginTop: 12,
-    alignSelf: 'flex-start',
+    minHeight: 44,
   },
   statusToggleDisabled: {
     opacity: 0.6,
   },
   statusToggleText: {
     color: TEXT_DARK,
-    fontSize: 16,
-    fontWeight: '400',
+    fontWeight: '600',
     fontFamily: theme.typography.fontFamily.body,
   },
   statusToggleTextPaused: {
     color: PRIMARY_COLOR,
   },
+  chefDashboardHeaderArea: {
+    backgroundColor: '#F2F0EF',
+    paddingTop: 12,
+    paddingHorizontal: CHEF_DASHBOARD_EDGE_PADDING,
+    paddingBottom: 0,
+    borderTopWidth: 0,
+    borderTopColor: 'transparent',
+  },
   tabBarWrapper: {
     marginBottom: theme.spacing.lg,
-    marginTop: theme.spacing.md,
+    marginTop: 0,
     backgroundColor: '#F2F0EF',
     paddingVertical: theme.spacing.md,
-    paddingHorizontal: theme.spacing.md,
+    paddingHorizontal: 0,
     borderRadius: 8,
   },
-  tabBarContent: {
+  tabBarRow: {
     flexDirection: 'row',
-    gap: theme.spacing.md,
-    paddingHorizontal: 4,
+    alignItems: 'center',
+    width: '100%',
+  },
+  tabBarSlotStart: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-start',
+    alignItems: 'center',
+  },
+  tabBarSlotCenter: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  tabBarSlotEnd: {
+    flex: 1,
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    alignItems: 'center',
   },
   tab: {
     paddingVertical: theme.spacing.md,
     paddingHorizontal: theme.spacing.lg,
-    position: 'relative',
     minHeight: 44,
     justifyContent: 'center',
     alignItems: 'center',
     borderRadius: 8,
   },
-  tabActive: {
-    backgroundColor: '#FE734C',
-  },
-  tabContent: {
+  tabLabelWithBadge: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  tabIcon: {
-    width: 20,
-    height: 20,
+  tabActive: {
+    backgroundColor: '#FE734C',
+  },
+  tabStripeIncomplete: {
+    backgroundColor: '#E84343',
+  },
+  tabTextStripeIncomplete: {
+    color: '#FFFFFF',
   },
   tabText: {
     color: '#33393A',
@@ -4262,6 +2997,23 @@ const styles = StyleSheet.create({
   tabTextActive: {
     color: '#FFFFFF',
     fontWeight: theme.typography.fontWeight.normal,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  tabOrderBadge: {
+    backgroundColor: PRIMARY_COLOR,
+    borderRadius: 10,
+    minWidth: 18,
+    height: 18,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 4,
+    flexShrink: 0,
+  },
+  tabOrderBadgeText: {
+    color: '#FFFFFF',
+    fontSize: 10,
+    fontWeight: '900',
+    lineHeight: 12,
     fontFamily: theme.typography.fontFamily.body,
   },
   sidebarSectionFooter: {
@@ -4599,6 +3351,7 @@ const messageModalStyles = StyleSheet.create({
 function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price: number; description?: string; portion?: string; ingredients?: string; file?: File | null; preview?: string }) => void; saving: boolean }) {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
+  const [expanded, setExpanded] = useState(false);
   const [name, setName] = useState('');
   const [price, setPrice] = useState('');
   const [description, setDescription] = useState('');
@@ -4608,9 +3361,31 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
   const [preview, setPreview] = useState<string | null>(null);
   const valid = name.trim().length > 0 && Number(price) > 0;
 
+  const toggleExpanded = () => setExpanded((v) => !v);
+
   return (
-    <View style={{ backgroundColor: BG_LIGHT, borderRadius: 8, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 24, shadowColor: '#000', shadowOffset: { width: 0, height: 1 }, shadowOpacity: 0.05, shadowRadius: 2, elevation: 1 }}>
-      <Text style={{ color: TEXT_DARK, fontSize: 20, fontWeight: '700', marginBottom: 16 }}>Add a new dish</Text>
+    <View style={[styles.newDishCard, !expanded && styles.newDishCardCollapsed]}>
+      <Pressable
+        onPress={toggleExpanded}
+        style={({ pressed }) => [
+          styles.newDishHeader,
+          { marginBottom: expanded ? 16 : 0 },
+          pressed && { opacity: 0.85 },
+        ]}
+        accessibilityRole="button"
+        accessibilityLabel={expanded ? 'Collapse add dish form' : 'Expand add dish form'}
+      >
+        <Text style={[styles.newDishHeaderTitle, !expanded && styles.newDishHeaderTitleCollapsed]}>
+          Add a new dish
+        </Text>
+        <Image
+          source={expanded ? require('../../assets/minus.png') : require('../../assets/add (1).png')}
+          style={[styles.newDishToggleIcon, !expanded && styles.newDishToggleIconCollapsed]}
+          tintColor={PRIMARY_COLOR}
+          resizeMode="contain"
+        />
+      </Pressable>
+      {expanded ? (
       <View style={{ gap: 16 }}>
         <View style={{ flexDirection: isMobile ? 'column' : 'row', gap: 16, alignItems: isMobile ? 'stretch' : 'flex-end' }}>
           <View style={{ flex: isMobile ? undefined : 2, minWidth: isMobile ? undefined : 200 }}>
@@ -4725,6 +3500,7 @@ function NewDishForm({ onCreate, saving }: { onCreate: (d: { name: string; price
           </TouchableOpacity>
         </View>
       </View>
+      ) : null}
     </View>
   );
 }

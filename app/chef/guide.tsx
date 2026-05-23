@@ -69,8 +69,8 @@ const SECTION_2: StepData[] = [
 
 const SECTION_3: StepData[] = [
   {
-    title: 'Go to the Payment tab',
-    body: 'In your chef dashboard, tap the Payment tab. You\u2019ll see a prompt to set up your Stripe Connect account. This is how you\u2019ll receive payouts for your orders.',
+    title: 'Go to the Stripe tab',
+    body: 'In your chef dashboard, tap the Stripe tab. You\u2019ll see a prompt to set up your Stripe Connect account. This is how you\u2019ll receive payouts for your orders.',
     iconSource: require('../../assets/credit-card.png'),
   },
   {
@@ -113,7 +113,7 @@ const SECTION_4: StepData[] = [
   },
   {
     title: 'Customer picks up',
-    body: 'The customer comes to your location to collect their order. Once picked up, the order is marked as completed and your earnings appear in the Payment section.',
+    body: 'The customer comes to your location to collect their order. Once picked up, the order is marked as completed and your earnings appear in the Stripe section.',
     iconSource: require('../../assets/shopping-cart.png'),
   },
 ];
