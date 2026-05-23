@@ -94,6 +94,11 @@ type StripeConnectStatus = {
   chef_status?: string | null;
 };
 
+function formatChefFinancialMetric(centsValue: number): string {
+  if (!centsValue) return '$--';
+  return formatCad(centsValue / 100);
+}
+
 function stripeConnectIsComplete(status: StripeConnectStatus | null): boolean {
   if (!status) return false;
   return Boolean(
@@ -103,16 +108,13 @@ function stripeConnectIsComplete(status: StripeConnectStatus | null): boolean {
 
 function applyStripeConnectStatusToChef(
   chef: ChefRow,
-  status: StripeConnectStatus | null,
+  status: StripeConnectStatus,
   setters?: {
     setChargesEnabled: (v: boolean) => void;
     setPayoutsEnabled: (v: boolean) => void;
     setStripeAccountId: (v: string | null) => void;
   }
 ): ChefRow {
-  if (!status) {
-    return { ...chef, stripe_connect_completed: false };
-  }
   if (setters) {
     if (typeof status.charges_enabled === 'boolean') setters.setChargesEnabled(status.charges_enabled);
     if (typeof status.payouts_enabled === 'boolean') setters.setPayoutsEnabled(status.payouts_enabled);
@@ -437,6 +439,8 @@ export default function ChefDashboard() {
   const [chargesEnabled, setChargesEnabled] = useState<boolean>(false);
   const [stripeAccountId, setStripeAccountId] = useState<string | null>(null);
   const [payoutsEnabled, setPayoutsEnabled] = useState<boolean>(false);
+  /** Live Stripe Connect readiness from get-connect-status (not stale DB flag). */
+  const [stripeConnectReady, setStripeConnectReady] = useState(false);
   const [earningsRange, setEarningsRange] = useState<'week' | 'month'>('week');
   const [menuPage, setMenuPage] = useState(1);
   const menuPerPage = 5;
@@ -612,9 +616,6 @@ export default function ChefDashboard() {
           if (!Number.isFinite(chefId)) throw new Error('Invalid chef ID');
           me = (await supabase.from('chefs').select('*').eq('id', chefId).maybeSingle()).data as ChefRow | null;
           if (!me) throw new Error('Chef not found');
-          setChargesEnabled(false);
-          setStripeAccountId(null);
-          setPayoutsEnabled(false);
           // If chefs.status is 'pending' but chef has an approved application, treat as approved
           if ((me as any).status === 'pending') {
             let hasApproved = false;
@@ -661,7 +662,7 @@ export default function ChefDashboard() {
         }
 
         const connectStatusPromise = isViewingAsChef
-          ? Promise.resolve(null)
+          ? callFn<StripeConnectStatus>('get-connect-status', { chef_id: me.id }).catch(() => null)
           : callFn<StripeConnectStatus>('get-connect-status', {}).catch(() => null);
 
         setName(me.name || '');
@@ -681,8 +682,11 @@ export default function ChefDashboard() {
         if (dishesRes.error) throw dishesRes.error;
         setDishes((dishesRes.data || []) as DishRow[]);
 
+        const effectiveConnectStatus: StripeConnectStatus = connectStatus ?? { hasAccount: false };
+        const connectReady = stripeConnectIsComplete(effectiveConnectStatus);
+        setStripeConnectReady(connectReady);
         setChef(
-          applyStripeConnectStatusToChef(me, connectStatus, {
+          applyStripeConnectStatusToChef(me, effectiveConnectStatus, {
             setChargesEnabled,
             setPayoutsEnabled,
             setStripeAccountId,
@@ -1707,10 +1711,12 @@ export default function ChefDashboard() {
           </Text>
         ) : (
           <PayoutSettings
+            connectStatusChefId={isViewingAsChef ? chef?.id : undefined}
             onStatusChange={async (nextStatus, hasAccount) => {
-              const status: StripeConnectStatus | null = nextStatus
+              const status: StripeConnectStatus = nextStatus
                 ? { ...nextStatus, hasAccount: nextStatus.hasAccount ?? hasAccount }
-                : null;
+                : { hasAccount: false };
+              setStripeConnectReady(stripeConnectIsComplete(status));
               if (chef) {
                 setChef((prev) =>
                   prev
@@ -1729,7 +1735,7 @@ export default function ChefDashboard() {
         )}
       </View>
     );
-  }, [chef, refetchChef]);
+  }, [chef, refetchChef, isViewingAsChef]);
 
   if (loading) {
     return (
@@ -1837,14 +1843,13 @@ export default function ChefDashboard() {
   const chefStatus = chef?.status ?? 'pending';
   const isChefActive = chefStatus === 'active';
   const isApplicationPending = chefStatus === 'pending';
-  const stripeConnectCompleted = chef?.stripe_connect_completed === true;
-  const isPendingStripeConnect = !isApplicationPending && !stripeConnectCompleted;
+  const isPendingStripeConnect = !isApplicationPending && !stripeConnectReady;
   const storeButtonBackground = isPendingStripeConnect
     ? STRIPE_INCOMPLETE_RED
     : isChefActive
       ? STORE_ACTIVE_GREEN
       : PRIMARY_COLOR;
-  const isStripeSetupComplete = !isApplicationPending && stripeConnectCompleted;
+  const isStripeSetupComplete = !isApplicationPending && stripeConnectReady;
   const canToggleStatus = chefStatus === 'active' || chefStatus === 'paused';
 
   const handleToggleChefStatus = async () => {
@@ -1869,7 +1874,7 @@ export default function ChefDashboard() {
     <View style={[styles.financialMetricsRow, isMobile && styles.financialMetricsRowMobile]}>
       <FinancialStatCell
         compact={isMobile}
-        value={formatCad(financialMetrics.grossSales / 100)}
+        value={formatChefFinancialMetric(financialMetrics.grossSales)}
         label="Sales"
         infoTitle="Sales"
         infoMessage="The full amount customers paid for your food"
@@ -1877,7 +1882,7 @@ export default function ChefDashboard() {
       />
       <FinancialStatCell
         compact={isMobile}
-        value={formatCad(financialMetrics.platformCommission / 100)}
+        value={formatChefFinancialMetric(financialMetrics.platformCommission)}
         label="Fees"
         infoTitle="Fees"
         infoMessage="10% of your food sales (subtotal). Does not include the customer service fee or card processing."
@@ -1885,7 +1890,7 @@ export default function ChefDashboard() {
       />
       <FinancialStatCell
         compact={isMobile}
-        value={formatCad(financialMetrics.netEarnings / 100)}
+        value={formatChefFinancialMetric(financialMetrics.netEarnings)}
         label="Profit"
         infoTitle="Profit"
         infoMessage="What you take home after fees are removed"
@@ -1911,57 +1916,38 @@ export default function ChefDashboard() {
       )}
       <Text style={styles.welcomeTitle}>Welcome, {chef?.name?.split(' ')[0] || 'Chef'}!</Text>
       <View style={styles.welcomeActionsRow}>
-        <View style={styles.welcomeActionsLeft}>
-          {chef ? (
-            <TouchableOpacity
-              style={StyleSheet.flatten([styles.viewStoreButton, { backgroundColor: storeButtonBackground }])}
-              onPress={() => router.push(`/chef/${chef.slug ?? chef.id}` as any)}
-              accessibilityRole="link"
-            >
-              <Text style={styles.viewStoreButtonText}>Store</Text>
-            </TouchableOpacity>
-          ) : null}
-          {isApplicationPending ? (
-            <View style={styles.statusToggleRow}>
-              <Text style={[styles.statusToggleText, styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>Pending</Text>
-            </View>
-          ) : isPendingStripeConnect ? (
-            <View style={styles.statusToggleRow}>
-              <Text style={[styles.statusToggleText, styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>Go live by activating Stripe</Text>
-            </View>
-          ) : (
-            <View style={[styles.statusToggleRow, (!canToggleStatus || isViewingAsChef) && styles.statusToggleDisabled]}>
-              <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>
-                {isChefActive ? 'Active' : 'Paused'}
-              </Text>
-              <Switch
-                value={isChefActive}
-                onValueChange={() => handleToggleChefStatus()}
-                disabled={!canToggleStatus || saving || isViewingAsChef}
-                trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
-                thumbColor="#FFFFFF"
-                {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
-              />
-            </View>
-          )}
-        </View>
-        {chef && !isViewingAsChef ? (
+        {chef ? (
           <TouchableOpacity
-            onPress={handleProfileNavigation}
-            style={styles.welcomeProfileButton}
-            accessibilityRole="button"
-            accessibilityLabel="Profile and settings"
-            hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+            style={StyleSheet.flatten([styles.viewStoreButton, { backgroundColor: storeButtonBackground }])}
+            onPress={() => router.push(`/chef/${chef.slug ?? chef.id}` as any)}
+            accessibilityRole="link"
           >
-            <Text style={[styles.welcomeProfileLabel, { fontSize: welcomeActionFontSize }]}>Profile</Text>
-            <Image
-              source={require('../../assets/user.png')}
-              style={styles.welcomeProfileIcon}
-              tintColor={PRIMARY_COLOR}
-              resizeMode="contain"
-            />
+            <Text style={styles.viewStoreButtonText}>Store</Text>
           </TouchableOpacity>
         ) : null}
+        {isApplicationPending ? (
+          <View style={styles.statusToggleRow}>
+            <Text style={[styles.statusToggleText, styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>Pending</Text>
+          </View>
+        ) : isPendingStripeConnect ? (
+          <View style={styles.statusToggleRow}>
+            <Text style={[styles.statusToggleText, styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>Go live by activating Stripe</Text>
+          </View>
+        ) : (
+          <View style={[styles.statusToggleRow, (!canToggleStatus || isViewingAsChef) && styles.statusToggleDisabled]}>
+            <Text style={[styles.statusToggleText, !isChefActive && styles.statusToggleTextPaused, { fontSize: welcomeActionFontSize }]}>
+              {isChefActive ? 'Active' : 'Paused'}
+            </Text>
+            <Switch
+              value={isChefActive}
+              onValueChange={() => handleToggleChefStatus()}
+              disabled={!canToggleStatus || saving || isViewingAsChef}
+              trackColor={{ false: '#E5E7EB', true: PRIMARY_COLOR + '80' }}
+              thumbColor="#FFFFFF"
+              {...(Platform.OS === 'web' && { activeThumbColor: PRIMARY_COLOR, activeTrackColor: PRIMARY_COLOR + '80' } as any)}
+            />
+          </View>
+        )}
       </View>
       {FinancialMetricsWidget}
     </View>
@@ -2113,9 +2099,10 @@ export default function ChefDashboard() {
     <View style={{ flex: 1, backgroundColor: BG_PAGE }}>
       <PayoutSettings
         onStatusChange={async (nextStatus, hasAccount) => {
-          const status: StripeConnectStatus | null = nextStatus
+          const status: StripeConnectStatus = nextStatus
             ? { ...nextStatus, hasAccount: nextStatus.hasAccount ?? hasAccount }
-            : null;
+            : { hasAccount: false };
+          setStripeConnectReady(stripeConnectIsComplete(status));
           if (chef) {
             setChef((prev) =>
               prev
@@ -2747,17 +2734,9 @@ const styles = StyleSheet.create({
   welcomeActionsRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    flexWrap: 'wrap',
     width: '100%',
     marginTop: 8,
-    gap: 12,
-  },
-  welcomeActionsLeft: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    flexWrap: 'wrap',
-    flex: 1,
-    minWidth: 0,
     gap: 12,
   },
   financialMetricsRow: {
@@ -2885,28 +2864,6 @@ const styles = StyleSheet.create({
     fontWeight: theme.typography.fontWeight.normal,
     letterSpacing: theme.typography.letterSpacing.wide,
     fontFamily: theme.typography.fontFamily.body,
-  },
-  welcomeProfileButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 8,
-    minHeight: 44,
-    height: 44,
-    paddingHorizontal: 4,
-    borderRadius: 8,
-    justifyContent: 'center',
-    alignSelf: 'center',
-    flexShrink: 0,
-    marginLeft: 'auto',
-  },
-  welcomeProfileLabel: {
-    color: TEXT_DARK,
-    fontWeight: '600',
-    fontFamily: theme.typography.fontFamily.body,
-  },
-  welcomeProfileIcon: {
-    width: 28,
-    height: 28,
   },
   statusToggleRow: {
     flexDirection: 'row',

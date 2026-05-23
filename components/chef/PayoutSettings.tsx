@@ -19,10 +19,12 @@ interface ConnectStatus {
 }
 
 interface Props {
+  /** When an admin views a chef dashboard, load Stripe status for this chef. */
+  connectStatusChefId?: number;
   onStatusChange?: (status: ConnectStatus | null, hasAccount: boolean) => void;
 }
 
-export default function PayoutSettings({ onStatusChange }: Props) {
+export default function PayoutSettings({ connectStatusChefId, onStatusChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
   const [status, setStatus] = useState<ConnectStatus | null>(null);
@@ -40,14 +42,17 @@ export default function PayoutSettings({ onStatusChange }: Props) {
         return;
       }
 
-      const profileAccountId = (await supabase
-        .from('profiles')
-        .select('stripe_account_id')
-        .eq('id', user.id)
-        .maybeSingle()).data?.stripe_account_id ?? null;
+      const connectBody = connectStatusChefId != null ? { chef_id: connectStatusChefId } : {};
+      const profileAccountId = connectStatusChefId != null
+        ? null
+        : (await supabase
+            .from('profiles')
+            .select('stripe_account_id')
+            .eq('id', user.id)
+            .maybeSingle()).data?.stripe_account_id ?? null;
 
       try {
-        const remoteStatus = await callFn<ConnectStatus>('get-connect-status', {});
+        const remoteStatus = await callFn<ConnectStatus>('get-connect-status', connectBody);
         setStatus(remoteStatus);
         const hasAccount = remoteStatus?.hasAccount ?? Boolean(profileAccountId);
         onStatusChangeRef.current?.(remoteStatus, hasAccount);
@@ -63,11 +68,11 @@ export default function PayoutSettings({ onStatusChange }: Props) {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [connectStatusChefId]);
 
   useEffect(() => {
     fetchStatus();
-  }, [fetchStatus, params?.onboarding]);
+  }, [fetchStatus, params?.onboarding, connectStatusChefId]);
 
   const openExternal = (url: string) => {
     if (Platform.OS === 'web') {

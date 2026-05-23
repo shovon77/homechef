@@ -1,4 +1,4 @@
-import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { createClient, type SupabaseClient } from 'jsr:@supabase/supabase-js@2';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL');
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY');
@@ -50,11 +50,124 @@ const corsHeaders = {
 /** Test chef user ID – bypass Stripe Connect check so dishes stay visible in production */
 const TEST_CHEF_USER_ID = 'fb2f513f-fa0c-48d5-828a-086d2f241463';
 
+type StripeSubject = {
+  profile: { id: string; stripe_account_id: string | null } | null;
+  chefEmail: string | null;
+  viewedChefId: number | null;
+};
+
 function respond(status: number, payload: Record<string, unknown>) {
   return new Response(JSON.stringify(payload), {
     status,
     headers: { 'Content-Type': 'application/json', ...corsHeaders },
   });
+}
+
+async function parseJsonBody(req: Request): Promise<{ chef_id?: number }> {
+  try {
+    const text = await req.text();
+    if (!text.trim()) return {};
+    const parsed = JSON.parse(text);
+    const chefId = parsed?.chef_id;
+    if (chefId == null) return {};
+    const n = Number(chefId);
+    return Number.isFinite(n) ? { chef_id: n } : {};
+  } catch {
+    return {};
+  }
+}
+
+async function resolveStripeSubject(
+  supabase: SupabaseClient,
+  authUserId: string,
+  chefIdParam?: number,
+): Promise<StripeSubject> {
+  if (chefIdParam == null) {
+    const { data: profile, error } = await supabase
+      .from('profiles')
+      .select('id, stripe_account_id')
+      .eq('id', authUserId)
+      .maybeSingle();
+    if (error) throw error;
+    return { profile, chefEmail: null, viewedChefId: null };
+  }
+
+  const { data: caller, error: callerErr } = await supabase
+    .from('profiles')
+    .select('is_admin')
+    .eq('id', authUserId)
+    .maybeSingle();
+  if (callerErr) throw callerErr;
+  if (!caller?.is_admin) {
+    throw new Error('Forbidden');
+  }
+
+  const { data: chef, error: chefErr } = await supabase
+    .from('chefs')
+    .select('id, user_id, email')
+    .eq('id', chefIdParam)
+    .maybeSingle();
+  if (chefErr || !chef) {
+    throw new Error('Chef not found');
+  }
+
+  let profile: StripeSubject['profile'] = null;
+  if (chef.user_id) {
+    const { data: p } = await supabase
+      .from('profiles')
+      .select('id, stripe_account_id')
+      .eq('id', chef.user_id)
+      .maybeSingle();
+    profile = p;
+  } else if (chef.email) {
+    const { data: p } = await supabase
+      .from('profiles')
+      .select('id, stripe_account_id')
+      .eq('email', chef.email)
+      .maybeSingle();
+    profile = p;
+  }
+
+  return {
+    profile,
+    chefEmail: chef.email ?? null,
+    viewedChefId: chef.id,
+  };
+}
+
+async function fetchChefStatus(
+  supabase: SupabaseClient,
+  subject: StripeSubject,
+  fallbackAuthEmail: string | null,
+): Promise<string | null> {
+  try {
+    if (subject.viewedChefId != null) {
+      const { data: byId } = await supabase
+        .from('chefs')
+        .select('status')
+        .eq('id', subject.viewedChefId)
+        .maybeSingle();
+      if (byId?.status) return byId.status;
+    }
+    if (subject.profile?.id) {
+      const { data: r } = await supabase
+        .from('chefs')
+        .select('status')
+        .eq('user_id', subject.profile.id)
+        .maybeSingle();
+      if (r?.status) return r.status;
+    }
+    const email = subject.chefEmail ?? fallbackAuthEmail;
+    if (email) {
+      const { data: re } = await supabase
+        .from('chefs')
+        .select('status')
+        .eq('email', email)
+        .maybeSingle();
+      return re?.status ?? null;
+    }
+  } catch (_) { /* non-blocking */ }
+  return null;
 }
 
 export const handler = async (req: Request) => {
@@ -80,41 +193,49 @@ export const handler = async (req: Request) => {
       return respond(401, { error: 'Unauthorized' });
     }
 
-    const { data: profile, error: profileErr } = await supabase
-      .from('profiles')
-      .select('id, stripe_account_id')
-      .eq('id', user.id)
-      .maybeSingle();
-
-    if (profileErr) {
-      console.error('get-connect-status profile error', profileErr);
-      throw profileErr;
-    }
+    const body = await parseJsonBody(req);
+    const subject = await resolveStripeSubject(supabase, user.id, body.chef_id);
+    const profile = subject.profile;
+    const chefEmail = subject.chefEmail ?? user.email ?? null;
 
     if (!profile?.stripe_account_id) {
-      // Test chef bypass: ensure stripe_connect_completed = true so dishes stay visible
       if (profile?.id === TEST_CHEF_USER_ID) {
         try {
           await supabase
             .from('chefs')
             .update({ stripe_connect_completed: true })
             .eq('user_id', profile.id);
-          if (user?.email) {
-            await supabase.from('chefs').update({ stripe_connect_completed: true }).eq('email', user.email);
+          if (chefEmail) {
+            await supabase.from('chefs').update({ stripe_connect_completed: true }).eq('email', chefEmail);
           }
         } catch (e) {
           console.warn('get-connect-status test chef bypass (no account)', e);
         }
-      }
-      let chefStatusNoAccount: string | null = null;
-      try {
-        const { data: r } = await supabase.from('chefs').select('status').eq('user_id', profile.id).maybeSingle();
-        chefStatusNoAccount = r?.status ?? null;
-        if (!chefStatusNoAccount && user?.email) {
-          const { data: re } = await supabase.from('chefs').select('status').eq('email', user.email).maybeSingle();
-          chefStatusNoAccount = re?.status ?? null;
+      } else {
+        try {
+          if (profile?.id) {
+            await supabase
+              .from('chefs')
+              .update({ stripe_connect_completed: false })
+              .eq('user_id', profile.id);
+          }
+          if (chefEmail) {
+            await supabase
+              .from('chefs')
+              .update({ stripe_connect_completed: false })
+              .eq('email', chefEmail);
+          }
+          if (subject.viewedChefId != null) {
+            await supabase
+              .from('chefs')
+              .update({ stripe_connect_completed: false })
+              .eq('id', subject.viewedChefId);
+          }
+        } catch (e) {
+          console.warn('get-connect-status chef mark incomplete (no account)', e);
         }
-      } catch (_) { /* non-blocking */ }
+      }
+      const chefStatusNoAccount = await fetchChefStatus(supabase, subject, user.email ?? null);
       return respond(200, { hasAccount: false, chef_status: chefStatusNoAccount });
     }
 
@@ -135,7 +256,6 @@ export const handler = async (req: Request) => {
     const requirements = account.requirements ?? null;
     const capabilities = account.capabilities ?? null;
 
-    // Update charges_enabled flag (stripe_payouts_enabled doesn't exist in schema)
     try {
       await supabase
         .from('profiles')
@@ -145,18 +265,13 @@ export const handler = async (req: Request) => {
         .eq('id', profile.id);
     } catch (err) {
       console.error('get-connect-status profile update error', err);
-      // Don't fail the request if update fails
     }
 
-    // Update chefs: stripe_connect_completed = true only when BOTH charges AND payouts enabled (else listings hidden)
-    // Test chef bypass: always treat as connected so dishes stay visible in production
     const canAcceptPayments = profile.id === TEST_CHEF_USER_ID
       ? true
       : Boolean(account.charges_enabled && account.payouts_enabled);
     try {
       const updatePayload: Record<string, unknown> = { stripe_connect_completed: canAcceptPayments };
-      // Only set status='paused' when first completing Connect (stripe_connect_completed false->true).
-      // Do NOT overwrite status on every load, or we'd reset Active to Paused.
       const { data: existingChef } = await supabase
         .from('chefs')
         .select('stripe_connect_completed')
@@ -171,35 +286,25 @@ export const handler = async (req: Request) => {
         .update(updatePayload)
         .eq('user_id', profile.id);
       if (chefByUserErr) console.warn('get-connect-status chef update by user_id', chefByUserErr);
-      if (user.email) {
+      if (chefEmail) {
         const { error: chefByEmailErr } = await supabase
           .from('chefs')
           .update({ stripe_connect_completed: canAcceptPayments })
-          .eq('email', user.email);
+          .eq('email', chefEmail);
         if (chefByEmailErr) console.warn('get-connect-status chef update by email', chefByEmailErr);
+      }
+      if (subject.viewedChefId != null) {
+        const { error: chefByIdErr } = await supabase
+          .from('chefs')
+          .update({ stripe_connect_completed: canAcceptPayments })
+          .eq('id', subject.viewedChefId);
+        if (chefByIdErr) console.warn('get-connect-status chef update by id', chefByIdErr);
       }
     } catch (err) {
       console.warn('get-connect-status chef update error', err);
     }
 
-    // Fetch updated chef status for client
-    let chefStatus: string | null = null;
-    try {
-      const { data: chefRow } = await supabase
-        .from('chefs')
-        .select('status')
-        .eq('user_id', profile.id)
-        .maybeSingle();
-      chefStatus = chefRow?.status ?? null;
-      if (!chefStatus && user.email) {
-        const { data: byEmail } = await supabase
-          .from('chefs')
-          .select('status')
-          .eq('email', user.email)
-          .maybeSingle();
-        chefStatus = byEmail?.status ?? null;
-      }
-    } catch (_) { /* non-blocking */ }
+    const chefStatus = await fetchChefStatus(supabase, subject, user.email ?? null);
 
     return respond(200, {
       hasAccount: true,
@@ -216,7 +321,10 @@ export const handler = async (req: Request) => {
     });
   } catch (err: any) {
     console.error('get-connect-status error', err);
-    return respond(400, { error: err?.message ?? String(err) });
+    const message = err?.message ?? String(err);
+    if (message === 'Forbidden') return respond(403, { error: message });
+    if (message === 'Chef not found') return respond(404, { error: message });
+    return respond(400, { error: message });
   }
 };
 
