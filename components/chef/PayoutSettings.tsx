@@ -128,6 +128,7 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
   const hasAccount = Boolean(status?.hasAccount);
   const onboardingComplete = hasAccount && !needsMoreInfo;
   const needsVerification = hasAccount && needsMoreInfo;
+  const stripeLoginLink = status?.loginLink ?? null;
 
   const pageTitle = onboardingComplete
     ? 'Your bank is connected'
@@ -174,32 +175,34 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
           <Text style={styles.cardTitle}>{STORE_SETUP_CARD_TITLE}</Text>
           <Text style={styles.cardBody}>{STORE_SETUP_CARD_BODY}</Text>
           <View style={styles.buttonRow}>
-            <Pressable
-              style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && { opacity: 0.8 }]}
-              onPress={openStripeLink}
-              disabled={busy}
-              hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
-            >
-              {busy ? (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color={theme.colors.primaryContrast} />
-                  <Text style={styles.primaryBtnText}>Opening…</Text>
-                </View>
-              ) : (
-                <Text style={styles.primaryBtnText}>Connect my bank</Text>
-              )}
-            </Pressable>
+            {stripeLoginLink ? (
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => openExternal(stripeLoginLink)}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                <Text style={styles.primaryBtnText}>Open Stripe</Text>
+              </Pressable>
+            ) : (
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && { opacity: 0.8 }]}
+                onPress={openStripeLink}
+                disabled={busy}
+                hitSlop={{ top: 12, bottom: 12, left: 12, right: 12 }}
+              >
+                {busy ? (
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+                    <ActivityIndicator size="small" color={theme.colors.primaryContrast} />
+                    <Text style={styles.primaryBtnText}>Opening…</Text>
+                  </View>
+                ) : (
+                  <Text style={styles.primaryBtnText}>Connect my bank</Text>
+                )}
+              </Pressable>
+            )}
             <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
               <Text style={styles.secondaryBtnText}>Refresh</Text>
             </Pressable>
-            {status?.loginLink && (
-              <Pressable
-                style={styles.secondaryBtn}
-                onPress={() => openExternal(status.loginLink!)}
-              >
-                <Text style={styles.secondaryBtnText}>Open Stripe</Text>
-              </Pressable>
-            )}
           </View>
         </View>
       )}
@@ -232,8 +235,11 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
             <Text style={styles.detailValue}>{status?.charges_enabled ? 'Enabled' : 'Pending'}</Text>
           </View>
           <View style={styles.buttonRow}>
-            {status?.loginLink ? (
-              <Pressable style={styles.primaryBtn} onPress={() => openExternal(status.loginLink!)}>
+            {stripeLoginLink ? (
+              <Pressable
+                style={({ pressed }) => [styles.primaryBtn, pressed && { opacity: 0.8 }]}
+                onPress={() => openExternal(stripeLoginLink)}
+              >
                 <Text style={styles.primaryBtnText}>Open Stripe</Text>
               </Pressable>
             ) : null}
