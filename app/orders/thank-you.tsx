@@ -7,6 +7,9 @@ import Screen from '../../components/Screen';
 import { supabase } from '../../lib/supabase';
 import { formatLocal } from '../../lib/datetime';
 import { cents } from '../../lib/money';
+import { isDeliveryOrder } from '../../lib/chef-fulfillment';
+import { formatLocationDisplay } from '../../lib/formatAddress';
+import { formatPhone } from '../../lib/formatPhone';
 const BG_LIGHT = '#F2F0EF';
 const PRIMARY = '#FE734C';
 const TEXT_GRAY = '#4F4F4F';
@@ -29,7 +32,11 @@ type DishRow = {
 export default function OrderThankYouPage() {
   const params = useLocalSearchParams<{ id?: string }>();
   const [loading, setLoading] = useState(true);
-  const [pickupAt, setPickupAt] = useState<string | null>(null);
+  const [isDelivery, setIsDelivery] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState<string | null>(null);
+  const [deliveryPhone, setDeliveryPhone] = useState<string | null>(null);
+  const [deliveryFeeCents, setDeliveryFeeCents] = useState<number | null>(null);
   const [items, setItems] = useState<(OrderItemRow & { dish?: DishRow | null })[]>([]);
   const [chefName, setChefName] = useState<string | null>(null);
   const [chefId, setChefId] = useState<number | null>(null);
@@ -58,12 +65,25 @@ export default function OrderThankYouPage() {
         // Fetch order details
         const { data: orderData, error: orderError } = await supabase
           .from('orders')
-          .select('pickup_at, chef_id, total_cents, subtotal_cents, platform_fee_cents, tax_cents')
+          .select(
+            'pickup_at, delivery_at, fulfillment_method, delivery_address, delivery_phone, delivery_fee_cents, chef_id, total_cents, subtotal_cents, platform_fee_cents, tax_cents'
+          )
           .eq('id', Number(params.id))
           .maybeSingle();
         
         if (!orderError && mounted && orderData) {
-          setPickupAt(orderData.pickup_at ?? null);
+          const deliveryOrder = isDeliveryOrder(orderData);
+          setIsDelivery(deliveryOrder);
+          if (deliveryOrder) {
+            setScheduledAt(orderData.delivery_at ?? null);
+            setDeliveryAddress(orderData.delivery_address?.trim() || null);
+            setDeliveryPhone(orderData.delivery_phone?.trim() || null);
+            if (typeof orderData.delivery_fee_cents === 'number') {
+              setDeliveryFeeCents(orderData.delivery_fee_cents);
+            }
+          } else {
+            setScheduledAt(orderData.pickup_at ?? null);
+          }
           setOrderTotals({
             total_cents: typeof orderData.total_cents === 'number' ? orderData.total_cents : null,
             subtotal_cents: typeof orderData.subtotal_cents === 'number' ? orderData.subtotal_cents : null,
@@ -132,12 +152,16 @@ export default function OrderThankYouPage() {
   const subtotalCents = orderTotals.subtotal_cents ?? itemsSubtotalCents;
   const platformFeeCents = orderTotals.platform_fee_cents ?? 150;
   const taxesCents = orderTotals.tax_cents ?? 0;
+  const deliveryFee = isDelivery ? (deliveryFeeCents ?? 0) : 0;
   const totalCents = useMemo(() => {
     if (orderTotals.total_cents != null && Number.isFinite(orderTotals.total_cents)) {
       return orderTotals.total_cents;
     }
-    return subtotalCents + platformFeeCents + taxesCents;
-  }, [orderTotals.total_cents, subtotalCents, platformFeeCents, taxesCents]);
+    return subtotalCents + platformFeeCents + taxesCents + deliveryFee;
+  }, [orderTotals.total_cents, subtotalCents, platformFeeCents, taxesCents, deliveryFee]);
+
+  const showFulfillmentCard =
+    Boolean(scheduledAt) || (isDelivery && (deliveryAddress || deliveryPhone));
 
   if (loading) {
     return (
@@ -160,10 +184,40 @@ export default function OrderThankYouPage() {
           Enjoy your delicious, home-cooked meal! Your support means the world to our local chefs.
         </Text>
         
-        {pickupAt ? (
-          <View style={styles.pickupCard}>
-            <Text style={styles.pickupLabel}>Pickup time</Text>
-            <Text style={styles.pickupValue}>{formatLocal(pickupAt)}</Text>
+        {showFulfillmentCard ? (
+          <View style={[styles.pickupCard, isDelivery && styles.fulfillmentCardDelivery]}>
+            {isDelivery ? (
+              <>
+                <Text style={styles.fulfillmentCardTitle}>Delivery details</Text>
+                {deliveryPhone ? (
+                  <View style={styles.fulfillmentDetailRow}>
+                    <Text style={styles.detailSubLabel}>Phone</Text>
+                    <Text style={styles.detailSubValue}>
+                      {formatPhone(deliveryPhone) || deliveryPhone}
+                    </Text>
+                  </View>
+                ) : null}
+                {deliveryAddress ? (
+                  <View style={styles.fulfillmentDetailRow}>
+                    <Text style={styles.detailSubLabel}>Address</Text>
+                    <Text style={styles.detailSubValue}>
+                      {formatLocationDisplay(deliveryAddress)}
+                    </Text>
+                  </View>
+                ) : null}
+                {scheduledAt ? (
+                  <View style={styles.fulfillmentDetailRow}>
+                    <Text style={styles.detailSubLabel}>Time</Text>
+                    <Text style={styles.detailSubValue}>{formatLocal(scheduledAt)}</Text>
+                  </View>
+                ) : null}
+              </>
+            ) : (
+              <>
+                <Text style={styles.pickupLabel}>Pickup time</Text>
+                <Text style={styles.pickupValue}>{formatLocal(scheduledAt!)}</Text>
+              </>
+            )}
           </View>
         ) : null}
 
@@ -209,6 +263,12 @@ export default function OrderThankYouPage() {
                   <Text style={styles.priceLabel}>Platform service fee</Text>
                   <Text style={styles.priceValue}>{cents(platformFeeCents)}</Text>
                 </View>
+                {isDelivery && deliveryFee > 0 ? (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.priceLabel}>Delivery fee</Text>
+                    <Text style={styles.priceValue}>{cents(deliveryFee)}</Text>
+                  </View>
+                ) : null}
                 {taxesCents > 0 ? (
                   <View style={styles.priceRow}>
                     <Text style={styles.priceLabel}>Taxes</Text>
@@ -285,6 +345,31 @@ const styles = StyleSheet.create({
     width: '100%',
     alignItems: 'center',
     gap: 4,
+  },
+  fulfillmentCardDelivery: {
+    alignItems: 'stretch',
+    gap: 12,
+  },
+  fulfillmentCardTitle: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontWeight: '700',
+    fontFamily: 'OpenSans_700Bold',
+    width: '100%',
+  },
+  fulfillmentDetailRow: {
+    width: '100%',
+    gap: 4,
+  },
+  detailSubLabel: {
+    color: TEXT_GRAY,
+    fontSize: 14,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  detailSubValue: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontFamily: 'OpenSans_400Regular',
   },
   pickupLabel: {
     color: TEXT_GRAY,

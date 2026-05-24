@@ -32,6 +32,7 @@ import type { Profile, OrderStatus } from '../../lib/types';
 import FilePicker from '../../components/FilePicker';
 import { createNotification, createOrderRejectedNotification } from '../../lib/notifications';
 import { ensureChefSlug } from '../../lib/db';
+import { isDeliveryOrder } from '../../lib/chef-fulfillment';
 // Colors matching homepage
 const PRIMARY_COLOR = '#FE734C';
 const STORE_ACTIVE_GREEN = '#88B361';
@@ -94,13 +95,6 @@ type OrderRow = {
   user_email?: string;
   user_name?: string;
 };
-
-function isDeliveryOrder(order: Pick<OrderRow, 'fulfillment_method' | 'delivery_address'>): boolean {
-  const method = (order.fulfillment_method ?? '').trim();
-  if (method === 'delivery') return true;
-  if (method === 'pickup') return false;
-  return Boolean(order.delivery_address?.trim());
-}
 
 type ChefDashboardTab = 'menu' | 'orders' | 'payouts';
 const CHEF_DASHBOARD_TABS: ChefDashboardTab[] = ['menu', 'orders', 'payouts'];

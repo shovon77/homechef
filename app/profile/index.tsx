@@ -14,6 +14,9 @@ import Screen from "../../components/Screen";
 import { formatLocal } from "../../lib/datetime";
 import { safeToFixed } from "../../lib/number";
 import { formatCad } from "../../lib/money";
+import { isDeliveryOrder } from "../../lib/chef-fulfillment";
+import { formatLocationDisplay } from "../../lib/formatAddress";
+import { formatPhone } from "../../lib/formatPhone";
 
 type UserOrderSummary = {
   id: number;
@@ -21,6 +24,10 @@ type UserOrderSummary = {
   total_cents: number;
   created_at: string;
   pickup_at: string | null;
+  fulfillment_method?: string | null;
+  delivery_address?: string | null;
+  delivery_phone?: string | null;
+  delivery_at?: string | null;
   chef_id: number | null;
   chef_name?: string | null;
   chef_location?: string | null;
@@ -113,7 +120,7 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('id,status,total_cents,created_at,pickup_at,chef_id')
+        .select('id,status,total_cents,created_at,pickup_at,fulfillment_method,delivery_address,delivery_phone,delivery_at,chef_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -181,6 +188,10 @@ export default function ProfilePage() {
           total_cents: row.total_cents ?? 0,
           created_at: row.created_at,
           pickup_at: row.pickup_at ?? null,
+          fulfillment_method: row.fulfillment_method ?? null,
+          delivery_address: row.delivery_address ?? null,
+          delivery_phone: row.delivery_phone ?? null,
+          delivery_at: row.delivery_at ?? null,
           chef_id: row.chef_id ?? null,
           chef_name: chefInfo?.name ?? null,
           chef_location: chefInfo?.location ?? null,
@@ -502,14 +513,14 @@ export default function ProfilePage() {
     );
   }
 
-  function getStatusInfo(status: OrderStatus | string) {
+  function getStatusInfo(status: OrderStatus | string, isDelivery?: boolean) {
     switch (status) {
       case 'requested':
         return { label: 'Requested', icon: '⏳', color: '#3E6A55' };
       case 'pending':
         return { label: 'Preparing', icon: '👨‍🍳', color: '#D97706' };
       case 'ready':
-        return { label: 'Ready for Pickup', icon: '🛍️', color: '#2D6966' };
+        return { label: isDelivery ? 'Ready for Delivery' : 'Ready for Pickup', icon: '🛍️', color: '#2D6966' };
       case 'paid':
         return { label: 'Awaiting Pickup', icon: '🚚', color: '#3E6A55' };
       case 'completed':
@@ -712,7 +723,8 @@ export default function ProfilePage() {
                 ) : (
                   <View style={styles.ordersListContent}>
                     {filteredOrders.map((order) => {
-                      const statusInfo = getStatusInfo(order.status);
+                      const deliveryOrder = isDeliveryOrder(order);
+                      const statusInfo = getStatusInfo(order.status, deliveryOrder);
                       return (
                         <View key={order.id} style={styles.orderCard}>
                           <View style={styles.orderContent}>
@@ -724,11 +736,33 @@ export default function ProfilePage() {
                                   {order.total_quantity ? ` × ${order.total_quantity}` : ''}
                                 </Text>
                               )}
-                              {order.chef_location && (
-                                <Text style={styles.orderLocation}>Pickup location: {order.chef_location}</Text>
-                              )}
-                              {order.pickup_at && (
-                                <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                              {deliveryOrder ? (
+                                <>
+                                  {order.delivery_phone ? (
+                                    <Text style={styles.orderDishName}>
+                                      Phone: {formatPhone(order.delivery_phone) || order.delivery_phone}
+                                    </Text>
+                                  ) : null}
+                                  {order.delivery_address ? (
+                                    <Text style={styles.orderLocation}>
+                                      Address: {formatLocationDisplay(order.delivery_address)}
+                                    </Text>
+                                  ) : null}
+                                  {order.delivery_at ? (
+                                    <Text style={styles.orderDishName}>
+                                      Delivery: {formatLocal(order.delivery_at)}
+                                    </Text>
+                                  ) : null}
+                                </>
+                              ) : (
+                                <>
+                                  {order.chef_location ? (
+                                    <Text style={styles.orderLocation}>Pickup location: {order.chef_location}</Text>
+                                  ) : null}
+                                  {order.pickup_at ? (
+                                    <Text style={styles.orderDishName}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                                  ) : null}
+                                </>
                               )}
                               <Text style={styles.orderChef}>Placed: {formatLocal(order.created_at)}</Text>
                               <View style={styles.orderStatus}>

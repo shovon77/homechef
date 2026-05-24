@@ -35,3 +35,14 @@ export function chefFulfillmentIncludesPickup(mode: string | null | undefined): 
   const resolved = resolveChefFulfillmentMode(mode);
   return resolved === 'pickup_only' || resolved === 'pickup_and_delivery';
 }
+
+/** Whether an order was placed for delivery (vs pickup). */
+export function isDeliveryOrder(order: {
+  fulfillment_method?: string | null;
+  delivery_address?: string | null;
+}): boolean {
+  const method = (order.fulfillment_method ?? '').trim();
+  if (method === 'delivery') return true;
+  if (method === 'pickup') return false;
+  return Boolean(order.delivery_address?.trim());
+}

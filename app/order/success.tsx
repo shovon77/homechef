@@ -11,6 +11,8 @@ import { cents } from '../../lib/money';
 import { uploadToBucket } from '../../lib/upload';
 import { createNotification } from '../../lib/notifications';
 import { formatLocationDisplay } from '../../lib/formatAddress';
+import { isDeliveryOrder } from '../../lib/chef-fulfillment';
+import { formatPhone } from '../../lib/formatPhone';
 
 const TEXT_DARK = '#111827';
 const TEXT_MUTED = '#6B7280';
@@ -23,14 +25,19 @@ export default function OrderSuccessPage() {
   const { width } = useWindowDimensions();
   const isMobile = width < 768;
   const [paymentConfirmed, setPaymentConfirmed] = useState(false);
-  const [pickupAt, setPickupAt] = useState<string | null>(null);
-  const [chefLocation, setChefLocation] = useState<string | null>(null);
+  const [isDelivery, setIsDelivery] = useState(false);
+  const [scheduledAt, setScheduledAt] = useState<string | null>(null);
+  const [fulfillmentLocation, setFulfillmentLocation] = useState<string | null>(null);
+  const [deliveryPhone, setDeliveryPhone] = useState<string | null>(null);
+  const [deliveryFeeCents, setDeliveryFeeCents] = useState<number | null>(null);
+  const [orderSubtotalCents, setOrderSubtotalCents] = useState<number | null>(null);
   const [items, setItems] = useState<Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }>>([]);
   const [chef, setChef] = useState<{ id: number; name: string; photo?: string | null } | null>(null);
   const [orderTotalCents, setOrderTotalCents] = useState<number | null>(null);
   const [isOrderSummaryExpanded, setIsOrderSummaryExpanded] = useState(false);
   const [isPickupAddressExpanded, setIsPickupAddressExpanded] = useState(false);
   const [isPickupDateTimeExpanded, setIsPickupDateTimeExpanded] = useState(false);
+  const [isDeliveryDetailsExpanded, setIsDeliveryDetailsExpanded] = useState(false);
   const [showReportIssueModal, setShowReportIssueModal] = useState(false);
   const [issueType, setIssueType] = useState<string>('');
   const [additionalDetails, setAdditionalDetails] = useState('');
@@ -107,7 +114,9 @@ export default function OrderSuccessPage() {
         // Verify the order exists (double-check)
         const { data: order } = await supabase
           .from('orders')
-          .select('id, payment_status, checkout_session_id, pickup_at, chef_id')
+          .select(
+            'id, payment_status, checkout_session_id, pickup_at, delivery_at, chef_id, fulfillment_method, delivery_address, delivery_phone, delivery_fee_cents, subtotal_cents, total_cents'
+          )
           .eq('id', orderId)
           .maybeSingle();
         
@@ -116,26 +125,46 @@ export default function OrderSuccessPage() {
         if (order) {
           clearCart();
           setPaymentConfirmed(true);
-          
-          // Fetch pickup info
-          if (order.pickup_at) {
-            setPickupAt(order.pickup_at);
+
+          const deliveryOrder = isDeliveryOrder(order);
+          setIsDelivery(deliveryOrder);
+
+          if (typeof order.subtotal_cents === 'number') {
+            setOrderSubtotalCents(order.subtotal_cents);
+          }
+          if (typeof order.total_cents === 'number') {
+            setOrderTotalCents(order.total_cents);
+          }
+          if (typeof order.delivery_fee_cents === 'number') {
+            setDeliveryFeeCents(order.delivery_fee_cents);
+          }
+
+          if (deliveryOrder) {
+            if (order.delivery_at) setScheduledAt(order.delivery_at);
+            if (order.delivery_address?.trim()) {
+              setFulfillmentLocation(order.delivery_address.trim());
+            }
+            if (order.delivery_phone?.trim()) {
+              setDeliveryPhone(order.delivery_phone.trim());
+            }
+          } else if (order.pickup_at) {
+            setScheduledAt(order.pickup_at);
           }
           
-          // Fetch chef location and name
+          // Fetch chef location (pickup) and name
           if (order.chef_id) {
-            const { data: chef } = await supabase
+            const { data: chefData } = await supabase
               .from('chefs')
               .select('id, location, name, photo')
               .eq('id', order.chef_id)
               .maybeSingle();
             
-            if (chef) {
-              if (chef.location) {
-                setChefLocation(chef.location);
+            if (chefData) {
+              if (!deliveryOrder && chefData.location) {
+                setFulfillmentLocation(chefData.location);
               }
-              if (chef.name && chef.id) {
-                setChef({ id: chef.id, name: chef.name, photo: chef.photo || null });
+              if (chefData.name && chefData.id) {
+                setChef({ id: chefData.id, name: chefData.name, photo: chefData.photo || null });
               }
             }
           }
@@ -162,17 +191,6 @@ export default function OrderSuccessPage() {
             
             setItems(itemsWithDishes);
           }
-          
-          // Fetch order total
-          const { data: orderWithTotal } = await supabase
-            .from('orders')
-            .select('total_cents')
-            .eq('id', orderId)
-            .maybeSingle();
-          
-          if (orderWithTotal?.total_cents) {
-            setOrderTotalCents(orderWithTotal.total_cents);
-          }
         }
       })();
     } else if (!orderId && !paymentConfirmed) {
@@ -183,11 +201,11 @@ export default function OrderSuccessPage() {
     }
   }, [orderId, paymentConfirmed, clearCart]);
   
-  // Format pickup date/time
-  const formatPickupDateTime = (pickupAt: string | null): string => {
-    if (!pickupAt) return 'Not available';
+  // Format scheduled date/time (pickup or delivery window)
+  const formatScheduledDateTime = (at: string | null): string => {
+    if (!at) return 'Not available';
     try {
-      const date = new Date(pickupAt);
+      const date = new Date(at);
       if (Number.isNaN(date.getTime())) return 'Not available';
       
       // Format date as "January 1, 2025"
@@ -220,12 +238,14 @@ export default function OrderSuccessPage() {
   };
   
   // Calculate order summary values
-  const subtotalCents = useMemo(
+  const itemsSubtotalCents = useMemo(
     () => items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0),
     [items]
   );
+  const subtotalCents = orderSubtotalCents ?? itemsSubtotalCents;
   const platformFeeCents = 150; // $1.50 flat fee
-  const calculatedTotalCents = subtotalCents + platformFeeCents;
+  const deliveryFee = isDelivery ? (deliveryFeeCents ?? 0) : 0;
+  const calculatedTotalCents = subtotalCents + platformFeeCents + (isDelivery ? deliveryFee : 0);
   const totalCents = orderTotalCents !== null ? orderTotalCents : calculatedTotalCents;
 
   // Voice input handlers for messaging
@@ -579,59 +599,118 @@ export default function OrderSuccessPage() {
               </>
             ) : null}
             
-            {/* Pickup Info */}
-            {(pickupAt || chefLocation) && (
+            {/* Pickup or delivery details */}
+            {(scheduledAt || fulfillmentLocation || (isDelivery && deliveryPhone)) && (
               <View style={styles.pickupInfoContainer}>
-                {chefLocation && (
+                {isDelivery ? (
                   <View style={styles.pickupLocationCard}>
-                    <TouchableOpacity 
+                    <TouchableOpacity
                       style={styles.pickupLocationHeader}
-                      onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}
+                      onPress={() => setIsDeliveryDetailsExpanded(!isDeliveryDetailsExpanded)}
                     >
-                      <Text style={styles.pickupLocationLabel}>Pickup address</Text>
-                      <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
+                      <Text style={styles.pickupLocationLabel}>Delivery details</Text>
+                      <Text style={styles.expandIcon}>{isDeliveryDetailsExpanded ? '−' : '+'}</Text>
                     </TouchableOpacity>
-                    {isPickupAddressExpanded && (
-                      <View style={styles.pickupLocationContainer}>
-                        <View style={styles.pickupLocationRow}>
-                          <Text style={styles.pickupLocation}>{formatLocationDisplay(chefLocation)}</Text>
-                          <TouchableOpacity 
-                            onPress={() => {
-                              const encodedAddress = encodeURIComponent(chefLocation || '');
-                              const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
-                              Linking.openURL(mapsUrl);
-                            }}
-                          >
-                            <Image 
-                              source={require('../../assets/locationnewicon.png')} 
-                              style={styles.locationIcon}
-                              tintColor={PRIMARY}
-                              resizeMode="contain"
-                            />
-                          </TouchableOpacity>
-                        </View>
+                    {isDeliveryDetailsExpanded ? (
+                      <View style={styles.deliveryDetailsContent}>
+                        {deliveryPhone ? (
+                          <View style={styles.deliveryDetailBlock}>
+                            <Text style={styles.deliveryDetailLabel}>Phone</Text>
+                            <Text style={styles.deliveryDetailValue}>
+                              {formatPhone(deliveryPhone) || deliveryPhone}
+                            </Text>
+                          </View>
+                        ) : null}
+                        {fulfillmentLocation ? (
+                          <View style={styles.deliveryDetailBlock}>
+                            <Text style={styles.deliveryDetailLabel}>Address</Text>
+                            <View style={styles.deliveryAddressRow}>
+                              <Text style={styles.deliveryDetailValue}>
+                                {formatLocationDisplay(fulfillmentLocation)}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const encodedAddress = encodeURIComponent(fulfillmentLocation || '');
+                                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                                  Linking.openURL(mapsUrl);
+                                }}
+                              >
+                                <Image
+                                  source={require('../../assets/locationnewicon.png')}
+                                  style={styles.locationIcon}
+                                  tintColor={PRIMARY}
+                                  resizeMode="contain"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        ) : null}
+                        {scheduledAt ? (
+                          <View style={styles.deliveryDetailBlock}>
+                            <Text style={styles.deliveryDetailLabel}>Date & time</Text>
+                            <Text style={styles.deliveryDetailValue}>
+                              {formatScheduledDateTime(scheduledAt)}
+                            </Text>
+                          </View>
+                        ) : null}
                       </View>
-                    )}
+                    ) : null}
                   </View>
-                )}
-                
-                {pickupAt && (
-                  <View style={styles.pickupDateTimeCard}>
-                    <TouchableOpacity 
-                      style={styles.pickupDateTimeHeader}
-                      onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}
-                    >
-                      <Text style={styles.pickupDateTimeLabel}>Pickup date & time</Text>
-                      <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
-                    </TouchableOpacity>
-                    {isPickupDateTimeExpanded && (
-                      <View style={styles.pickupDateTimeContainer}>
-                        <Text style={styles.pickupDateTime}>
-                          {formatPickupDateTime(pickupAt)}
-                        </Text>
+                ) : (
+                  <>
+                    {fulfillmentLocation ? (
+                      <View style={styles.pickupLocationCard}>
+                        <TouchableOpacity
+                          style={styles.pickupLocationHeader}
+                          onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}
+                        >
+                          <Text style={styles.pickupLocationLabel}>Pickup address</Text>
+                          <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
+                        </TouchableOpacity>
+                        {isPickupAddressExpanded && (
+                          <View style={styles.pickupLocationContainer}>
+                            <View style={styles.pickupLocationRow}>
+                              <Text style={styles.pickupLocation}>
+                                {formatLocationDisplay(fulfillmentLocation)}
+                              </Text>
+                              <TouchableOpacity
+                                onPress={() => {
+                                  const encodedAddress = encodeURIComponent(fulfillmentLocation || '');
+                                  const mapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+                                  Linking.openURL(mapsUrl);
+                                }}
+                              >
+                                <Image
+                                  source={require('../../assets/locationnewicon.png')}
+                                  style={styles.locationIcon}
+                                  tintColor={PRIMARY}
+                                  resizeMode="contain"
+                                />
+                              </TouchableOpacity>
+                            </View>
+                          </View>
+                        )}
                       </View>
-                    )}
-                  </View>
+                    ) : null}
+                    {scheduledAt ? (
+                      <View style={styles.pickupDateTimeCard}>
+                        <TouchableOpacity
+                          style={styles.pickupDateTimeHeader}
+                          onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}
+                        >
+                          <Text style={styles.pickupDateTimeLabel}>Pickup date & time</Text>
+                          <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
+                        </TouchableOpacity>
+                        {isPickupDateTimeExpanded && (
+                          <View style={styles.pickupDateTimeContainer}>
+                            <Text style={styles.pickupDateTime}>
+                              {formatScheduledDateTime(scheduledAt)}
+                            </Text>
+                          </View>
+                        )}
+                      </View>
+                    ) : null}
+                  </>
                 )}
               </View>
             )}
@@ -676,6 +755,12 @@ export default function OrderSuccessPage() {
                       </View>
                       <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
                     </View>
+                    {isDelivery && deliveryFee > 0 ? (
+                      <View style={styles.summaryRow}>
+                        <Text style={styles.summaryLabel}>Delivery fee</Text>
+                        <Text style={styles.summaryValue}>{cents(deliveryFee)}</Text>
+                      </View>
+                    ) : null}
                     <View style={[styles.summaryRow, { marginTop: 8 }]}>
                       <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>Total</Text>
                       <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>
@@ -690,7 +775,9 @@ export default function OrderSuccessPage() {
             )}
             
             <Text style={styles.reminderText}>
-              We'll remind you before pickup!
+              {isDelivery
+                ? "We'll remind you before delivery!"
+                : "We'll remind you before pickup!"}
             </Text>
             
             <TouchableOpacity 
@@ -714,12 +801,16 @@ export default function OrderSuccessPage() {
                   The food is prepared by an independent home chef.
                 </Text>
                 <Text style={styles.footerNote}>
-                  Please handle it safely after pickup.
+                  {isDelivery
+                    ? 'Please handle it safely once delivered.'
+                    : 'Please handle it safely after pickup.'}
                 </Text>
               </>
             ) : (
               <Text style={styles.footerNote}>
-                The food is prepared by an independent home chef. Please handle it safely after pickup.
+                {isDelivery
+                  ? 'The food is prepared by an independent home chef. Please handle it safely once delivered.'
+                  : 'The food is prepared by an independent home chef. Please handle it safely after pickup.'}
               </Text>
             )}
           </View>
@@ -1128,6 +1219,34 @@ const styles = StyleSheet.create({
     gap: 4,
     width: '100%',
     paddingLeft: 24,
+  },
+  deliveryDetailsContent: {
+    gap: 16,
+    width: '100%',
+    paddingLeft: 24,
+    paddingTop: 4,
+  },
+  deliveryDetailBlock: {
+    gap: 4,
+    width: '100%',
+  },
+  deliveryDetailLabel: {
+    color: TEXT_MUTED,
+    fontSize: 14,
+    fontFamily: theme.typography.fontFamily.body,
+    fontWeight: '500',
+  },
+  deliveryDetailValue: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontFamily: theme.typography.fontFamily.body,
+    flex: 1,
+  },
+  deliveryAddressRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+    width: '100%',
   },
   pickupDateTimeContainer: {
     gap: 4,
