@@ -1706,8 +1706,8 @@ export default function ChefDashboard() {
     return (
       <View style={pending ? { backgroundColor: BG_PAGE, paddingHorizontal: 24, paddingTop: 16, paddingBottom: 4 } : { flex: 1, backgroundColor: BG_PAGE }}>
         {pending ? (
-          <Text style={{ color: TEXT_DARK, fontSize: 16, fontFamily: theme.typography.fontFamily.body, lineHeight: 24 }}>
-            Your application is pending to be approved. You will be able to set up your Stripe Connect account once your chef application has been approved.
+          <Text style={{ color: TEXT_DARK, fontSize: 16, fontFamily: theme.typography.fontFamily.body, lineHeight: 24, textAlign: 'center' }}>
+            Your chef application is pending approval. You will be able to connect your bank account information through Stripe Connect after your approval.
           </Text>
         ) : (
           <PayoutSettings
@@ -1885,7 +1885,7 @@ export default function ChefDashboard() {
         value={formatChefFinancialMetric(financialMetrics.platformCommission)}
         label="Fees"
         infoTitle="Fees"
-        infoMessage="10% of your food sales (subtotal). Does not include the customer service fee or card processing."
+        infoMessage="10% of your food sales (sub-total)"
         onInfo={showInfo}
       />
       <FinancialStatCell
@@ -2892,10 +2892,11 @@ const styles = StyleSheet.create({
     borderTopColor: 'transparent',
   },
   tabBarWrapper: {
-    marginBottom: theme.spacing.lg,
+    marginBottom: theme.spacing.xs,
     marginTop: 0,
     backgroundColor: '#F2F0EF',
-    paddingVertical: theme.spacing.md,
+    paddingTop: theme.spacing.md,
+    paddingBottom: theme.spacing.xs,
     paddingHorizontal: 0,
     borderRadius: 8,
   },

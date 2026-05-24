@@ -24,6 +24,15 @@ interface Props {
   onStatusChange?: (status: ConnectStatus | null, hasAccount: boolean) => void;
 }
 
+const ONBOARDING_BENEFITS = [
+  'Make your chef store visible to the public',
+  'Accept incoming orders from your customers',
+  'Instantly receive payments to your bank account',
+] as const;
+
+const STORE_SETUP_CARD_TITLE = 'Open store for business';
+const STORE_SETUP_CARD_BODY = 'Accept customer orders & receive payment instantly';
+
 export default function PayoutSettings({ connectStatusChefId, onStatusChange }: Props) {
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState(false);
@@ -105,7 +114,7 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
   if (loading) {
     return (
       <View style={styles.center}>
-        <ActivityIndicator size="large" color="#FE734C" />
+        <ActivityIndicator size="large" color={theme.colors.primary} />
         <Text style={styles.loadingText}>Loading payout status…</Text>
       </View>
     );
@@ -117,16 +126,30 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
   const accountId = status?.accountId ?? null;
   const accountDetailsSubmitted = Boolean(status?.details_submitted);
   const hasAccount = Boolean(status?.hasAccount);
+  const onboardingComplete = hasAccount && !needsMoreInfo;
+  const needsVerification = hasAccount && needsMoreInfo;
+
+  const pageTitle = onboardingComplete
+    ? 'Your bank is connected'
+    : needsVerification
+      ? 'Action: Verify with Photo ID'
+      : 'Action: Connect your bank';
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.wrap}>
-      <Text style={styles.title}>Payout settings</Text>
-      <Text style={styles.subtitle}>Connect your Stripe account to receive payouts.</Text>
+      <Text style={[styles.title, !onboardingComplete && styles.titleOnboarding]}>
+        {pageTitle}
+      </Text>
+      <Text style={styles.subtitle} numberOfLines={1} adjustsFontSizeToFit minimumFontScale={0.85}>
+        {onboardingComplete
+          ? 'Order earnings are deposited to your bank via Stripe'
+          : 'Your bank payments are securely powered by Stripe'}
+      </Text>
 
       {!hasAccount && (
         <View style={styles.card}>
-          <Text style={styles.cardTitle}>No payout account yet</Text>
-          <Text style={styles.cardBody}>Connect with Stripe to start receiving payouts.</Text>
+          <Text style={styles.cardTitle}>{STORE_SETUP_CARD_TITLE}</Text>
+          <Text style={styles.cardBody}>{STORE_SETUP_CARD_BODY}</Text>
           <View style={styles.buttonRow}>
             <Pressable
               style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && { opacity: 0.8 }]}
@@ -135,11 +158,11 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
             >
               {busy ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={theme.colors.primaryContrast} />
                   <Text style={styles.primaryBtnText}>Opening…</Text>
                 </View>
               ) : (
-                <Text style={styles.primaryBtnText}>Connect with Stripe</Text>
+                <Text style={styles.primaryBtnText}>Connect my bank</Text>
               )}
             </Pressable>
           </View>
@@ -147,13 +170,9 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
       )}
 
       {hasAccount && needsMoreInfo && (
-        <View style={styles.cardWarning}>
-          <Text style={styles.cardTitle}>More information required</Text>
-          <Text style={styles.cardBodyWarning}>
-            {requirements.length > 0
-              ? 'Stripe needs more details to enable payouts—business info, personal details, and bank account. Click below to complete the setup.'
-              : 'Payouts are not enabled yet.'}
-          </Text>
+        <View style={styles.card}>
+          <Text style={styles.cardTitle}>{STORE_SETUP_CARD_TITLE}</Text>
+          <Text style={styles.cardBody}>{STORE_SETUP_CARD_BODY}</Text>
           <View style={styles.buttonRow}>
             <Pressable
               style={({ pressed }) => [styles.primaryBtn, (pressed || busy) && { opacity: 0.8 }]}
@@ -163,11 +182,11 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
             >
               {busy ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-                  <ActivityIndicator size="small" color="#FFFFFF" />
+                  <ActivityIndicator size="small" color={theme.colors.primaryContrast} />
                   <Text style={styles.primaryBtnText}>Opening…</Text>
                 </View>
               ) : (
-                <Text style={styles.primaryBtnText}>Continue onboarding</Text>
+                <Text style={styles.primaryBtnText}>Connect my bank</Text>
               )}
             </Pressable>
             <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
@@ -213,111 +232,124 @@ export default function PayoutSettings({ connectStatusChefId, onStatusChange }: 
             <Text style={styles.detailValue}>{status?.charges_enabled ? 'Enabled' : 'Pending'}</Text>
           </View>
           <View style={styles.buttonRow}>
-            <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
-              <Text style={styles.secondaryBtnText}>Refresh</Text>
-            </Pressable>
-            {status?.loginLink && (
+            {status?.loginLink ? (
               <Pressable style={styles.primaryBtn} onPress={() => openExternal(status.loginLink!)}>
                 <Text style={styles.primaryBtnText}>Open Stripe</Text>
               </Pressable>
-            )}
+            ) : null}
+            <Pressable style={styles.secondaryBtn} onPress={handleRefresh}>
+              <Text style={styles.secondaryBtnText}>Refresh</Text>
+            </Pressable>
           </View>
         </View>
       )}
 
-      <View style={styles.infoBox}>
-        <Text style={styles.infoText}>Orders can only be accepted when payouts are enabled. Complete onboarding to proceed with the next steps.</Text>
-      </View>
+      {!onboardingComplete ? (
+        <View style={styles.benefitList}>
+          {ONBOARDING_BENEFITS.map((line) => (
+            <View key={line} style={styles.benefitPill}>
+              <Text style={styles.benefitPillText}>{line}</Text>
+            </View>
+          ))}
+        </View>
+      ) : null}
     </ScrollView>
   );
 }
 
-const NAVBAR_BG = '#F2F0EF';
+/** Chef sales dashboard + theme tokens (Open Sans, brand orange). */
+const BRAND = {
+  pageBg: '#F2F0EF',
+  surface: theme.colors.surfaceLight,
+  text: '#33393A',
+  textMuted: '#555555',
+  primary: theme.colors.primary,
+  primaryContrast: theme.colors.primaryContrast,
+  border: theme.colors.borderLight,
+  warning: theme.colors.warning,
+  warningSurface: 'rgba(255, 183, 0, 0.14)',
+  primarySurface: theme.colors.primaryLight,
+  primaryBorder: 'rgba(254, 115, 76, 0.35)',
+} as const;
+
+const FONT_DISPLAY = theme.typography.fontFamily.display;
+const FONT_BODY = theme.typography.fontFamily.body;
 
 const styles = StyleSheet.create({
   scroll: {
     flex: 1,
-    backgroundColor: NAVBAR_BG,
+    backgroundColor: BRAND.pageBg,
   },
   wrap: {
-    padding: 24,
+    paddingTop: theme.spacing.sm,
+    paddingHorizontal: theme.spacing['2xl'],
     paddingBottom: 100,
-    backgroundColor: NAVBAR_BG,
+    backgroundColor: BRAND.pageBg,
   },
   center: {
     flex: 1,
     alignItems: 'center',
     justifyContent: 'center',
-    padding: 24,
+    padding: theme.spacing['2xl'],
+    backgroundColor: BRAND.pageBg,
   },
   loadingText: {
-    marginTop: 12,
-    color: '#555555',
+    marginTop: theme.spacing.md,
+    color: BRAND.textMuted,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: FONT_BODY,
   },
   title: {
-    fontSize: 24,
-    fontWeight: '800',
-    marginBottom: 4,
-    color: '#1E1E1E',
+    fontSize: theme.typography.fontSize['3xl'],
+    fontWeight: theme.typography.fontWeight.bold as '700',
+    marginBottom: theme.spacing.xs,
+    color: BRAND.text,
+    fontFamily: FONT_DISPLAY,
+  },
+  titleOnboarding: {
+    color: BRAND.primary,
   },
   subtitle: {
-    color: '#636363',
-    marginBottom: 20,
-    fontSize: 14,
+    color: BRAND.textMuted,
+    marginBottom: theme.spacing.xl,
+    fontSize: theme.typography.fontSize.sm,
+    lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.normal,
+    fontFamily: FONT_BODY,
   },
   card: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardWarning: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#F59E0B',
-    backgroundColor: '#FEF3C7',
-    padding: 16,
-    marginBottom: 16,
-  },
-  cardInfo: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#BFDBFE',
-    backgroundColor: '#EFF6FF',
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: theme.radius.lg,
+    backgroundColor: BRAND.surface,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
   },
   cardSuccess: {
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: '#FED7CC',
-    backgroundColor: '#FFF4F1',
-    padding: 16,
-    marginBottom: 16,
+    borderRadius: theme.radius.lg,
+    backgroundColor: BRAND.surface,
+    padding: theme.spacing.lg,
+    marginBottom: theme.spacing.lg,
   },
   cardTitleRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginBottom: 8,
+    gap: theme.spacing.sm,
+    marginBottom: theme.spacing.sm,
   },
   checkmarkIcon: {
     width: 22,
     height: 22,
   },
   cardTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: '#1F2937',
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: theme.typography.fontWeight.bold as '700',
+    color: BRAND.text,
+    fontFamily: FONT_DISPLAY,
   },
   cardBody: {
-    color: '#4B5563',
-    marginBottom: 12,
-  },
-  cardBodyWarning: {
-    color: '#92400E',
-    marginBottom: 12,
+    color: BRAND.textMuted,
+    marginBottom: theme.spacing.md,
+    fontSize: theme.typography.fontSize.sm,
+    lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.normal,
+    fontFamily: FONT_BODY,
   },
   buttonRow: {
     flexDirection: 'row',
@@ -330,52 +362,64 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 4,
+    paddingVertical: theme.spacing.xs,
   },
   detailLabel: {
-    color: '#4B5563',
-    fontSize: 13,
+    color: BRAND.textMuted,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: FONT_BODY,
   },
   detailValue: {
-    color: '#111827',
-    fontWeight: '600',
-    fontSize: 13,
-    marginLeft: 8,
+    color: BRAND.text,
+    fontWeight: theme.typography.fontWeight.semibold as '600',
+    fontSize: theme.typography.fontSize.sm,
+    marginLeft: theme.spacing.sm,
+    fontFamily: FONT_BODY,
   },
   primaryBtn: {
-    backgroundColor: '#FE734C',
-    paddingHorizontal: 16,
+    backgroundColor: BRAND.primary,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: 10,
-    borderRadius: 10,
-    marginRight: 12,
+    borderRadius: theme.radius.md,
+    marginRight: theme.spacing.md,
   },
   primaryBtnText: {
-    color: '#FFFFFF',
-    fontWeight: '400',
-    fontFamily: theme.typography.fontFamily.body,
+    color: BRAND.primaryContrast,
+    fontWeight: theme.typography.fontWeight.normal as '400',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: FONT_BODY,
   },
   secondaryBtn: {
-    paddingHorizontal: 16,
+    paddingHorizontal: theme.spacing.lg,
     paddingVertical: 10,
-    borderRadius: 10,
+    borderRadius: theme.radius.md,
     borderWidth: 1,
-    borderColor: '#D1D5DB',
-    marginRight: 8,
+    borderColor: BRAND.border,
+    marginRight: theme.spacing.sm,
+    backgroundColor: BRAND.surface,
   },
   secondaryBtnText: {
-    color: '#1F2937',
-    fontWeight: '400',
-    fontFamily: theme.typography.fontFamily.body,
+    color: BRAND.text,
+    fontWeight: theme.typography.fontWeight.normal as '400',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: FONT_BODY,
   },
-  infoBox: {
-    borderRadius: 12,
+  benefitList: {
+    gap: 10,
+  },
+  benefitPill: {
+    alignSelf: 'stretch',
+    borderRadius: theme.radius.full,
     borderWidth: 1,
-    borderColor: '#E5E7EB',
-    padding: 14,
-    backgroundColor: '#F9FAFB',
+    borderColor: BRAND.border,
+    backgroundColor: BRAND.surface,
+    paddingVertical: theme.spacing.md,
+    paddingHorizontal: theme.spacing.lg,
   },
-  infoText: {
-    color: '#374151',
-    fontSize: 13,
+  benefitPillText: {
+    color: BRAND.text,
+    fontSize: theme.typography.fontSize.sm,
+    lineHeight: theme.typography.fontSize.sm * theme.typography.lineHeight.normal,
+    fontFamily: FONT_BODY,
   },
 });
