@@ -31,7 +31,7 @@ const ONBOARDING_BENEFITS = [
 ] as const;
 
 const STORE_SETUP_CARD_TITLE = 'Open store for business';
-const STORE_SETUP_CARD_BODY = 'Accept customer orders & receive payment instantly';
+const STORE_SETUP_CARD_BODY = 'Accept orders & receive payment instantly';
 
 export default function PayoutSettings({ connectStatusChefId, onStatusChange }: Props) {
   const [loading, setLoading] = useState(true);
