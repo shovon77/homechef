@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useMemo, useRef } from "react";
+import React, { useCallback, useEffect, useState, useMemo, useRef } from "react";
 import { View, Text, TextInput, TouchableOpacity, ScrollView, ActivityIndicator, Alert, Image, Modal, Platform, StyleSheet, useWindowDimensions } from "react-native";
 import { useRouter, Link } from "expo-router";
 import * as ImagePicker from "expo-image-picker";
@@ -10,11 +10,82 @@ import { uploadAvatar } from "../../../lib/storage";
 import { uploadToBucket } from "../../../lib/upload";
 import FilePicker from "../../../components/FilePicker";
 import LocationPicker from "../../../components/LocationPicker";
-import { formatCad } from "../../../lib/money";
+import { formatCad, formatCadDollarsInput, parseCadDollarsInput } from "../../../lib/money";
+import { isValidCanadianPhone, toCanadianPhoneE164 } from "../../../lib/formatPhone";
 import { formatLocal as formatLocalOrder } from "../../../lib/datetime";
-import { CHEF_TIMEZONE_OPTIONS, DEFAULT_CHEF_TIMEZONE, resolveChefTimezoneId, chefTimezoneLabel } from "../../../lib/chef-timezones";
+import {
+  CHEF_TIMEZONE_OPTIONS,
+  DEFAULT_CHEF_TIMEZONE,
+  resolveChefTimezoneId,
+  chefTimezoneLabel,
+  isValidChefTimezoneId,
+} from "../../../lib/chef-timezones";
+import {
+  CHEF_FULFILLMENT_OPTIONS,
+  DEFAULT_CHEF_FULFILLMENT_MODE,
+  resolveChefFulfillmentMode,
+  chefFulfillmentLabel,
+  chefFulfillmentIncludesDelivery,
+  chefFulfillmentIncludesPickup,
+  isValidChefFulfillmentMode,
+  type ChefFulfillmentMode,
+} from "../../../lib/chef-fulfillment";
 import type { Profile, OrderStatus } from "../../../lib/types";
 import { Screen } from "../../../components/Screen";
+import { confirmDiscardChanges, useUnsavedChangesGuard } from "../../../hooks/useUnsavedChangesGuard";
+
+type ChefProfileFormSnapshot = {
+  firstName: string;
+  lastName: string;
+  phone: string;
+  location: string;
+  photoUrl: string | null;
+  chefLogoUrl: string | null;
+  brandName: string;
+  briefDescription: string;
+  cuisineType: string[];
+  pickupAvailability: Array<{ day: string; timeWindow: string }>;
+  deliveryAvailability: Array<{ day: string; timeWindow: string }>;
+  chefTimezone: string;
+  fulfillmentMode: ChefFulfillmentMode;
+  deliveryFlatFee: string;
+};
+
+function stableCuisineKey(cuisineType: string[]): string {
+  return [...cuisineType].sort().join('\0');
+}
+
+function stableAvailabilityKey(slots: Array<{ day: string; timeWindow: string }>): string {
+  return JSON.stringify(
+    [...slots].sort((a, b) =>
+      `${a.day}:${a.timeWindow}`.localeCompare(`${b.day}:${b.timeWindow}`),
+    ),
+  );
+}
+
+function profileSnapshotsEqual(a: ChefProfileFormSnapshot, b: ChefProfileFormSnapshot): boolean {
+  return (
+    a.firstName === b.firstName &&
+    a.lastName === b.lastName &&
+    a.phone === b.phone &&
+    a.location === b.location &&
+    a.photoUrl === b.photoUrl &&
+    a.chefLogoUrl === b.chefLogoUrl &&
+    a.brandName === b.brandName &&
+    a.briefDescription === b.briefDescription &&
+    stableCuisineKey(a.cuisineType) === stableCuisineKey(b.cuisineType) &&
+    stableAvailabilityKey(a.pickupAvailability) === stableAvailabilityKey(b.pickupAvailability) &&
+    stableAvailabilityKey(a.deliveryAvailability) === stableAvailabilityKey(b.deliveryAvailability) &&
+    a.chefTimezone === b.chefTimezone &&
+    a.fulfillmentMode === b.fulfillmentMode &&
+    a.deliveryFlatFee === b.deliveryFlatFee
+  );
+}
+
+const MONEY_TEXT_INPUT_PROPS = {
+  keyboardType: 'decimal-pad' as const,
+  ...(Platform.OS === 'web' ? ({ inputMode: 'decimal' } as Record<string, string>) : {}),
+};
 
 export default function ChefProfilePage() {
   const router = useRouter();
@@ -42,12 +113,19 @@ export default function ChefProfilePage() {
   const [briefDescription, setBriefDescription] = useState("");
   const [cuisineType, setCuisineType] = useState<string[]>([]);
   const [pickupAvailability, setPickupAvailability] = useState<Array<{ day: string; timeWindow: string }>>([]);
+  const [deliveryAvailability, setDeliveryAvailability] = useState<Array<{ day: string; timeWindow: string }>>([]);
   const [showCuisineModal, setShowCuisineModal] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
+  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [chefTimezone, setChefTimezone] = useState(DEFAULT_CHEF_TIMEZONE);
   const [showChefTimezoneModal, setShowChefTimezoneModal] = useState(false);
+  const [fulfillmentMode, setFulfillmentMode] = useState<ChefFulfillmentMode>(DEFAULT_CHEF_FULFILLMENT_MODE);
+  const [showFulfillmentModal, setShowFulfillmentModal] = useState(false);
+  const [deliveryFlatFee, setDeliveryFlatFee] = useState("");
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
+  const [selectedDeliveryDay, setSelectedDeliveryDay] = useState<string>('');
+  const [selectedDeliveryTimeWindows, setSelectedDeliveryTimeWindows] = useState<string[]>([]);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsType, setTermsType] = useState<'agreement' | 'fee' | 'payout' | null>(null);
   const [profileSaveMsg, setProfileSaveMsg] = useState<string | null>(null);
@@ -69,6 +147,64 @@ export default function ChefProfilePage() {
   }>>([]);
   const [ordersLoading, setOrdersLoading] = useState(false);
   const loadedUserIdRef = useRef<string | null>(null);
+  const savedSnapshotRef = useRef<ChefProfileFormSnapshot | null>(null);
+  const [savedSnapshotVersion, setSavedSnapshotVersion] = useState(0);
+
+  const getCurrentFormSnapshot = useCallback((): ChefProfileFormSnapshot => ({
+    firstName,
+    lastName,
+    phone,
+    location,
+    photoUrl,
+    chefLogoUrl,
+    brandName,
+    briefDescription,
+    cuisineType,
+    pickupAvailability,
+    deliveryAvailability,
+    chefTimezone: resolveChefTimezoneId(chefTimezone),
+    fulfillmentMode: resolveChefFulfillmentMode(fulfillmentMode),
+    deliveryFlatFee,
+  }), [
+    firstName,
+    lastName,
+    phone,
+    location,
+    photoUrl,
+    chefLogoUrl,
+    brandName,
+    briefDescription,
+    cuisineType,
+    pickupAvailability,
+    deliveryAvailability,
+    chefTimezone,
+    fulfillmentMode,
+    deliveryFlatFee,
+  ]);
+
+  const commitSavedSnapshot = useCallback((snapshot?: ChefProfileFormSnapshot) => {
+    savedSnapshotRef.current = snapshot ?? getCurrentFormSnapshot();
+    setSavedSnapshotVersion((v) => v + 1);
+  }, [getCurrentFormSnapshot]);
+
+  const isProfileDirty = useMemo(() => {
+    if (loading || !savedSnapshotRef.current) return false;
+    return !profileSnapshotsEqual(savedSnapshotRef.current, getCurrentFormSnapshot());
+  }, [loading, savedSnapshotVersion, getCurrentFormSnapshot]);
+
+  useUnsavedChangesGuard(isProfileDirty && !loading);
+
+  const trySetActiveNavTab = useCallback(
+    (tab: 'orders' | 'settings') => {
+      if (tab === activeNavTab) return;
+      if (activeNavTab === 'settings' && tab === 'orders' && isProfileDirty) {
+        confirmDiscardChanges(() => setActiveNavTab(tab));
+        return;
+      }
+      setActiveNavTab(tab);
+    },
+    [activeNavTab, isProfileDirty],
+  );
 
   const cuisineTypes = [
     'Italian', 'Mexican', 'Chinese', 'Japanese', 'Thai', 'Indian', 'Bengali',
@@ -109,44 +245,93 @@ export default function ChefProfilePage() {
     if (!user) return;
     setLoading(true);
     try {
+      let snapshot: ChefProfileFormSnapshot = {
+        firstName: "",
+        lastName: "",
+        phone: "",
+        location: "",
+        photoUrl: null,
+        chefLogoUrl: null,
+        brandName: "",
+        briefDescription: "",
+        cuisineType: [],
+        pickupAvailability: [],
+        deliveryAvailability: [],
+        chefTimezone: DEFAULT_CHEF_TIMEZONE,
+        fulfillmentMode: DEFAULT_CHEF_FULFILLMENT_MODE,
+        deliveryFlatFee: "",
+      };
+
       const prof = await getProfile(user.id);
       if (prof) {
         setProfile(prof);
         const nameParts = (prof.name || "").trim().split(" ");
-        setFirstName(nameParts[0] || "");
-        setLastName(nameParts.slice(1).join(" ") || "");
+        const loadedFirst = nameParts[0] || "";
+        const loadedLast = nameParts.slice(1).join(" ") || "";
+        setFirstName(loadedFirst);
+        setLastName(loadedLast);
         setName(prof.name || "");
         setEmail(prof.email || "");
-        setPhone((prof as any).phone || "");
-        setLocation(prof.location || "");
-        setPhotoUrl(prof.photo_url || null);
+        const loadedPhone = (prof as { phone?: string | null }).phone || "";
+        setPhone(loadedPhone);
+        const loadedLocation = prof.location || "";
+        setLocation(loadedLocation);
+        const loadedPhoto = prof.photo_url || null;
+        setPhotoUrl(loadedPhoto);
+        snapshot = {
+          ...snapshot,
+          firstName: loadedFirst,
+          lastName: loadedLast,
+          phone: loadedPhone,
+          location: loadedLocation,
+          photoUrl: loadedPhoto,
+        };
       }
       
       // Load chef data from chefs table
       const { data: chefData } = await supabase
         .from('chefs')
-        .select('name, bio, cuisine, phone, pickup_availability, photo, timezone')
+        .select('name, bio, cuisine, phone, pickup_availability, delivery_availability, photo, timezone, fulfillment_mode, delivery_flat_fee')
         .eq('user_id', user.id)
         .maybeSingle();
       
       if (chefData) {
-        setBrandName(chefData.name || "");
-        setBriefDescription(chefData.bio || "");
-        setChefLogoUrl(chefData.photo || null);
-        setChefTimezone(resolveChefTimezoneId((chefData as { timezone?: string | null }).timezone));
+        const loadedBrand = chefData.name || "";
+        const loadedBio = chefData.bio || "";
+        const loadedLogo = chefData.photo || null;
+        const loadedTimezone = resolveChefTimezoneId((chefData as { timezone?: string | null }).timezone);
+        const loadedFulfillment = resolveChefFulfillmentMode(
+          (chefData as { fulfillment_mode?: string | null }).fulfillment_mode,
+        );
+        const loadedDeliveryFee = formatCadDollarsInput(
+          (chefData as { delivery_flat_fee?: number | null }).delivery_flat_fee,
+        );
+        let loadedCuisine: string[] = [];
+        let loadedPickup: Array<{ day: string; timeWindow: string }> = [];
+        let loadedDelivery: Array<{ day: string; timeWindow: string }> = [];
+
+        setBrandName(loadedBrand);
+        setBriefDescription(loadedBio);
+        setChefLogoUrl(loadedLogo);
+        setChefTimezone(loadedTimezone);
+        setFulfillmentMode(loadedFulfillment);
+        setDeliveryFlatFee(loadedDeliveryFee);
         
         // Parse cuisine - could be string or array
         if (chefData.cuisine) {
           if (typeof chefData.cuisine === 'string') {
             try {
               const parsed = JSON.parse(chefData.cuisine);
-              setCuisineType(Array.isArray(parsed) ? parsed : chefData.cuisine.split(',').map(c => c.trim()));
+              loadedCuisine = Array.isArray(parsed) ? parsed : chefData.cuisine.split(',').map((c) => c.trim());
             } catch {
-              setCuisineType(chefData.cuisine.split(',').map(c => c.trim()));
+              loadedCuisine = chefData.cuisine.split(',').map((c) => c.trim());
             }
           } else if (Array.isArray(chefData.cuisine)) {
-            setCuisineType(chefData.cuisine);
+            loadedCuisine = chefData.cuisine;
           }
+          setCuisineType(loadedCuisine);
+        } else {
+          setCuisineType([]);
         }
         
         // Parse pickup_availability
@@ -156,13 +341,47 @@ export default function ChefProfilePage() {
               ? JSON.parse(chefData.pickup_availability)
               : chefData.pickup_availability;
             if (Array.isArray(parsed)) {
+              loadedPickup = parsed;
               setPickupAvailability(parsed);
             }
           } catch (e) {
             console.warn('Failed to parse pickup_availability:', e);
           }
+        } else {
+          setPickupAvailability([]);
         }
+
+        if (chefData.delivery_availability) {
+          try {
+            const parsed = typeof chefData.delivery_availability === 'string'
+              ? JSON.parse(chefData.delivery_availability)
+              : chefData.delivery_availability;
+            if (Array.isArray(parsed)) {
+              loadedDelivery = parsed;
+              setDeliveryAvailability(parsed);
+            }
+          } catch (e) {
+            console.warn('Failed to parse delivery_availability:', e);
+          }
+        } else {
+          setDeliveryAvailability([]);
+        }
+
+        snapshot = {
+          ...snapshot,
+          brandName: loadedBrand,
+          briefDescription: loadedBio,
+          chefLogoUrl: loadedLogo,
+          cuisineType: loadedCuisine,
+          pickupAvailability: loadedPickup,
+          deliveryAvailability: loadedDelivery,
+          chefTimezone: loadedTimezone,
+          fulfillmentMode: loadedFulfillment,
+          deliveryFlatFee: loadedDeliveryFee,
+        };
       }
+
+      commitSavedSnapshot(snapshot);
     } catch (e: any) {
       console.error("Error loading profile:", e);
     } finally {
@@ -304,6 +523,40 @@ export default function ChefProfilePage() {
       Alert.alert("Validation", "Brand name cannot be empty");
       return;
     }
+    if (!phone.trim()) {
+      Alert.alert("Validation", "Phone number is required");
+      return;
+    }
+    if (!isValidCanadianPhone(phone)) {
+      Alert.alert(
+        "Validation",
+        "Please enter a valid Canadian phone number (e.g., (416) 555-1234).",
+      );
+      return;
+    }
+
+    const phoneE164 = toCanadianPhoneE164(phone);
+
+    if (!isValidChefFulfillmentMode(fulfillmentMode)) {
+      Alert.alert("Validation", "Please select an order fulfillment option.");
+      return;
+    }
+    if (!isValidChefTimezoneId(chefTimezone)) {
+      Alert.alert("Validation", "Please select a timezone.");
+      return;
+    }
+
+    const resolvedFulfillment = resolveChefFulfillmentMode(fulfillmentMode);
+    if (chefFulfillmentIncludesPickup(resolvedFulfillment)) {
+      if (!location.trim()) {
+        Alert.alert("Validation", "Please enter a pickup location.");
+        return;
+      }
+      if (pickupAvailability.length === 0) {
+        Alert.alert("Validation", "Please add at least one pickup day and time.");
+        return;
+      }
+    }
 
     setSaving(true);
     try {
@@ -342,7 +595,7 @@ export default function ChefProfilePage() {
         photo_url?: string | null 
       } = {
         name: fullName,
-        phone: phone.trim() || null,
+        phone: phoneE164,
         location: locationValue,
       };
       
@@ -390,6 +643,32 @@ export default function ChefProfilePage() {
           .eq("user_id", user.id);
       }
 
+      const includesDelivery = chefFulfillmentIncludesDelivery(resolvedFulfillment);
+      let deliveryFeeValue: number | null = null;
+      if (includesDelivery) {
+        const feeRaw = deliveryFlatFee.trim();
+        if (!feeRaw) {
+          Alert.alert('Error', 'Please enter a delivery flat fee when offering delivery.');
+          setSaving(false);
+          return;
+        }
+        const parsed = parseCadDollarsInput(feeRaw);
+        if (parsed === null) {
+          Alert.alert('Error', 'Please enter a valid delivery flat fee amount.');
+          setSaving(false);
+          return;
+        }
+        deliveryFeeValue = parsed;
+      }
+
+      if (chefFulfillmentIncludesDelivery(resolvedFulfillment)) {
+        if (deliveryAvailability.length === 0) {
+          Alert.alert('Validation', 'Please add at least one delivery day and time.');
+          setSaving(false);
+          return;
+        }
+      }
+
       // Update chefs table with onboarding fields
       const chefUpdateData: {
         name: string;
@@ -397,14 +676,24 @@ export default function ChefProfilePage() {
         cuisine: string | null;
         phone: string | null;
         pickup_availability: any;
+        delivery_availability: any;
         timezone: string;
+        fulfillment_mode: ChefFulfillmentMode;
+        delivery_flat_fee: number | null;
       } = {
         name: brandName.trim(),
         bio: briefDescription.trim() || null,
         cuisine: cuisineType.length > 0 ? (cuisineType.length === 1 ? cuisineType[0] : JSON.stringify(cuisineType)) : null,
-        phone: phone.trim() || null,
-        pickup_availability: pickupAvailability.length > 0 ? pickupAvailability : null,
+        phone: phoneE164,
+        pickup_availability: chefFulfillmentIncludesPickup(resolvedFulfillment) && pickupAvailability.length > 0
+          ? pickupAvailability
+          : null,
+        delivery_availability: chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliveryAvailability.length > 0
+          ? deliveryAvailability
+          : null,
         timezone: resolveChefTimezoneId(chefTimezone),
+        fulfillment_mode: resolvedFulfillment,
+        delivery_flat_fee: deliveryFeeValue,
       };
       
       const { error: chefError } = await supabase
@@ -438,6 +727,7 @@ export default function ChefProfilePage() {
         .update({ photo_url: publicUrl })
         .eq('id', user.id);
       if (error) throw error;
+      commitSavedSnapshot({ ...getCurrentFormSnapshot(), photoUrl: publicUrl });
       Alert.alert("Success", "Avatar uploaded and saved successfully!");
     } catch (e: any) {
       console.error("Avatar upload error:", e);
@@ -466,6 +756,7 @@ export default function ChefProfilePage() {
         .update({ photo: publicUrl })
         .eq('id', chefData.id);
       if (error) throw error;
+      commitSavedSnapshot({ ...getCurrentFormSnapshot(), chefLogoUrl: publicUrl });
       Alert.alert("Success", "Chef logo uploaded and saved successfully!");
     } catch (e: any) {
       console.error("Chef logo upload error:", e);
@@ -573,6 +864,24 @@ export default function ChefProfilePage() {
     setPickupAvailability(pickupAvailability.filter(s => s.day !== day));
   }
 
+  function handleAddDeliverySlot() {
+    if (!selectedDeliveryDay || selectedDeliveryTimeWindows.length === 0) {
+      Alert.alert('Validation', 'Please select a day and at least one time window');
+      return;
+    }
+
+    const newSlots = selectedDeliveryTimeWindows.map(tw => ({ day: selectedDeliveryDay, timeWindow: tw }));
+    const existing = deliveryAvailability.filter(s => s.day !== selectedDeliveryDay);
+    setDeliveryAvailability([...existing, ...newSlots]);
+    setSelectedDeliveryDay('');
+    setSelectedDeliveryTimeWindows([]);
+    setShowDeliveryModal(false);
+  }
+
+  function handleRemoveDeliverySlot(day: string) {
+    setDeliveryAvailability(deliveryAvailability.filter(s => s.day !== day));
+  }
+
   if (roleLoading || loading) {
     return (
       <Screen>
@@ -635,13 +944,13 @@ export default function ChefProfilePage() {
             >
               <TouchableOpacity 
                 style={[profileStyles.navItem, activeNavTab === "settings" && profileStyles.navItemActive]}
-                onPress={() => setActiveNavTab("settings")}
+                onPress={() => trySetActiveNavTab("settings")}
               >
                 <Text style={[profileStyles.navText, activeNavTab === "settings" && profileStyles.navTextActive]}>Account</Text>
               </TouchableOpacity>
               <TouchableOpacity 
                 style={[profileStyles.navItem, activeNavTab === "orders" && profileStyles.navItemActive]}
-                onPress={() => setActiveNavTab("orders")}
+                onPress={() => trySetActiveNavTab("orders")}
               >
                 <Text style={[profileStyles.navText, activeNavTab === "orders" && profileStyles.navTextActive]}>Orders</Text>
               </TouchableOpacity>
@@ -829,7 +1138,7 @@ export default function ChefProfilePage() {
                       <Text style={{ color: cuisineType.length > 0 ? '#101828' : '#94a3b8', fontFamily: theme.typography.fontFamily.body }}>
                         {cuisineType.length > 0 ? cuisineType.join(', ') : 'Select cuisine types...'}
                       </Text>
-                      <Text style={{ color: '#94a3b8', fontFamily: theme.typography.fontFamily.body }}>▼</Text>
+                      <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>▼</Text>
                     </TouchableOpacity>
                     {cuisineType.length > 0 && (
                       <TouchableOpacity
@@ -894,7 +1203,10 @@ export default function ChefProfilePage() {
 
                 {/* Phone */}
                 <View style={profileStyles.settingsSection}>
-                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>Phone</Text>
+                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                    Phone
+                    <Text style={{ color: theme.colors.primary }}> *</Text>
+                  </Text>
                   <TextInput
                     value={phone}
                     onChangeText={setPhone}
@@ -905,9 +1217,103 @@ export default function ChefProfilePage() {
                   />
                 </View>
 
+                {/* Fulfillment mode */}
+                <View style={profileStyles.settingsSection}>
+                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                    Order fulfillment
+                    <Text style={{ color: theme.colors.primary }}> *</Text>
+                  </Text>
+                  <TouchableOpacity
+                    onPress={() => setShowFulfillmentModal(true)}
+                    style={[profileStyles.settingsInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
+                  >
+                    <Text
+                      style={{ color: '#101828', fontFamily: theme.typography.fontFamily.body, flex: 1, paddingRight: 8 }}
+                      numberOfLines={2}
+                    >
+                      {chefFulfillmentLabel(fulfillmentMode)}
+                    </Text>
+                    <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>▼</Text>
+                  </TouchableOpacity>
+                  <Text style={profileStyles.settingsHint}>Required.</Text>
+                </View>
+
+                {chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
+                  <View style={profileStyles.settingsSection}>
+                    <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                      Delivery flat fees
+                      <Text style={{ color: theme.colors.primary }}> *</Text>
+                    </Text>
+                    <View style={[profileStyles.settingsInput, profileStyles.settingsInputPrefixed]}>
+                      <Text style={profileStyles.settingsInputPrefix}>$</Text>
+                      <TextInput
+                        value={deliveryFlatFee}
+                        onChangeText={setDeliveryFlatFee}
+                        placeholder="0.00"
+                        placeholderTextColor="#94a3b8"
+                        {...MONEY_TEXT_INPUT_PROPS}
+                        style={profileStyles.settingsInputInner}
+                      />
+                    </View>
+                    <Text style={profileStyles.settingsHint}>Required. Flat delivery fee in CAD dollars.</Text>
+                  </View>
+                ) : null}
+
+                {chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
+                  <View style={profileStyles.settingsSection}>
+                    <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                      Delivery days & times
+                      <Text style={{ color: theme.colors.primary }}> *</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowDeliveryModal(true)}
+                      style={[profileStyles.settingsInput, { marginBottom: 8 }]}
+                    >
+                      <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>+ Add delivery slot</Text>
+                    </TouchableOpacity>
+                    <Text style={[profileStyles.settingsHint, { marginBottom: 8 }]}>Required. Add at least one delivery slot.</Text>
+                    {deliveryAvailability.length > 0 && (
+                      <>
+                        <Text
+                          style={[
+                            profileStyles.settingsSectionTitle,
+                            { marginBottom: 8, marginTop: theme.spacing.xs },
+                          ]}
+                        >
+                          Selected delivery days and times
+                        </Text>
+                        <View style={{ gap: 8 }}>
+                          {(() => {
+                            const slotsByDay: { [day: string]: string[] } = {};
+                            deliveryAvailability.forEach(slot => {
+                              if (!slotsByDay[slot.day]) {
+                                slotsByDay[slot.day] = [];
+                              }
+                              slotsByDay[slot.day].push(slot.timeWindow);
+                            });
+                            return Object.entries(slotsByDay).map(([day, windows]) => (
+                              <View key={day} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: '#F9FAFB', borderRadius: 6 }}>
+                                <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>
+                                  {day}: {windows.join(', ')}
+                                </Text>
+                                <TouchableOpacity onPress={() => handleRemoveDeliverySlot(day)}>
+                                  <Text style={{ color: '#B91C1C', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Remove</Text>
+                                </TouchableOpacity>
+                              </View>
+                            ));
+                          })()}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                ) : null}
+
                 {/* Pickup timezone (IANA) */}
                 <View style={profileStyles.settingsSection}>
-                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>Pickup timezone</Text>
+                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                    Timezone
+                    <Text style={{ color: theme.colors.primary }}> *</Text>
+                  </Text>
                   <TouchableOpacity
                     onPress={() => setShowChefTimezoneModal(true)}
                     style={[profileStyles.settingsInput, { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }]}
@@ -918,57 +1324,79 @@ export default function ChefProfilePage() {
                     >
                       {chefTimezoneLabel(chefTimezone)}
                     </Text>
-                    <Text style={{ color: '#94a3b8', fontFamily: theme.typography.fontFamily.body }}>▼</Text>
+                    <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>▼</Text>
                   </TouchableOpacity>
                   <Text style={profileStyles.settingsHint}>
-                    Checkout uses this so pickup hours match your local clock (e.g. Manitoba vs Toronto).
+                    Required. Checkout uses this so pickup hours match your local clock (e.g. Manitoba vs Toronto).
                   </Text>
                 </View>
 
-                {/* Pickup Days & Time */}
-                <View style={profileStyles.settingsSection}>
-                  <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>Pickup days & time</Text>
-                  <TouchableOpacity
-                    onPress={() => setShowPickupModal(true)}
-                    style={[profileStyles.settingsInput, { marginBottom: 8 }]}
-                  >
-                    <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>+ Add pickup slot</Text>
-                  </TouchableOpacity>
-                  {pickupAvailability.length > 0 && (
-                    <View style={{ gap: 8 }}>
-                      {(() => {
-                        const slotsByDay: { [day: string]: string[] } = {};
-                        pickupAvailability.forEach(slot => {
-                          if (!slotsByDay[slot.day]) {
-                            slotsByDay[slot.day] = [];
-                          }
-                          slotsByDay[slot.day].push(slot.timeWindow);
-                        });
-                        return Object.entries(slotsByDay).map(([day, timeWindows]) => (
-                          <View key={day} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: '#F9FAFB', borderRadius: 6 }}>
-                            <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>
-                              {day}: {timeWindows.join(', ')}
-                            </Text>
-                            <TouchableOpacity onPress={() => handleRemovePickupSlot(day)}>
-                              <Text style={{ color: '#B91C1C', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Remove</Text>
-                            </TouchableOpacity>
-                          </View>
-                        ));
-                      })()}
-                    </View>
-                  )}
-                </View>
+                {chefFulfillmentIncludesPickup(fulfillmentMode) ? (
+                  <View style={profileStyles.settingsSection}>
+                    <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                      Pickup days & time
+                      <Text style={{ color: theme.colors.primary }}> *</Text>
+                    </Text>
+                    <TouchableOpacity
+                      onPress={() => setShowPickupModal(true)}
+                      style={[profileStyles.settingsInput, { marginBottom: 8 }]}
+                    >
+                      <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>+ Add pickup slot</Text>
+                    </TouchableOpacity>
+                    <Text style={[profileStyles.settingsHint, { marginBottom: 8 }]}>Required. Add at least one pickup slot.</Text>
+                    {pickupAvailability.length > 0 && (
+                      <>
+                        <Text
+                          style={[
+                            profileStyles.settingsSectionTitle,
+                            { marginBottom: 8, marginTop: theme.spacing.xs },
+                          ]}
+                        >
+                          Selected pickup days and times
+                        </Text>
+                        <View style={{ gap: 8 }}>
+                        {(() => {
+                          const slotsByDay: { [day: string]: string[] } = {};
+                          pickupAvailability.forEach(slot => {
+                            if (!slotsByDay[slot.day]) {
+                              slotsByDay[slot.day] = [];
+                            }
+                            slotsByDay[slot.day].push(slot.timeWindow);
+                          });
+                          return Object.entries(slotsByDay).map(([day, timeWindows]) => (
+                            <View key={day} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: '#F9FAFB', borderRadius: 6 }}>
+                              <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>
+                                {day}: {timeWindows.join(', ')}
+                              </Text>
+                              <TouchableOpacity onPress={() => handleRemovePickupSlot(day)}>
+                                <Text style={{ color: '#B91C1C', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Remove</Text>
+                              </TouchableOpacity>
+                            </View>
+                          ));
+                        })()}
+                        </View>
+                      </>
+                    )}
+                  </View>
+                ) : null}
 
-                <View style={profileStyles.settingsSection}>
-                  <Text style={profileStyles.settingsSectionTitle}>Pickup location</Text>
-                  <LocationPicker
-                    value={location}
-                    onChange={setLocation}
-                    placeholder="Search for your location..."
-                    style={profileStyles.locationPicker}
-                  />
-                  <Text style={profileStyles.settingsHint}>Only available to customers after order confirmation</Text>
-                </View>
+                {chefFulfillmentIncludesPickup(fulfillmentMode) ? (
+                  <View style={profileStyles.settingsSection}>
+                    <Text style={profileStyles.settingsSectionTitle}>
+                      Pickup location
+                      <Text style={{ color: theme.colors.primary }}> *</Text>
+                    </Text>
+                    <LocationPicker
+                      value={location}
+                      onChange={setLocation}
+                      placeholder="Search for your location..."
+                      style={profileStyles.locationPicker}
+                    />
+                    <Text style={profileStyles.settingsHint}>
+                      Required. Only available to customers during checkout.
+                    </Text>
+                  </View>
+                ) : null}
 
                 {/* Terms and Agreements Section */}
                 <View style={[profileStyles.settingsSection, { paddingTop: theme.spacing.xl, borderTopWidth: 1, borderTopColor: '#EAECF0' }]}>
@@ -1140,7 +1568,7 @@ export default function ChefProfilePage() {
             }}
           >
             <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>
-              Pickup timezone
+              Timezone
             </Text>
             <ScrollView style={{ maxHeight: 420 }} showsVerticalScrollIndicator>
               {CHEF_TIMEZONE_OPTIONS.map((opt) => {
@@ -1196,6 +1624,214 @@ export default function ChefProfilePage() {
             >
               <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Done</Text>
             </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Fulfillment mode */}
+      <Modal
+        visible={showFulfillmentModal}
+        transparent
+        animationType="fade"
+        onRequestClose={() => setShowFulfillmentModal(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+          activeOpacity={1}
+          onPress={() => setShowFulfillmentModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              padding: 20,
+              width: '100%',
+              maxWidth: 440,
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 12, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>
+              Order fulfillment
+            </Text>
+            {CHEF_FULFILLMENT_OPTIONS.map((opt) => {
+              const sel = resolveChefFulfillmentMode(fulfillmentMode) === opt.id;
+              return (
+                <TouchableOpacity
+                  key={opt.id}
+                  onPress={() => {
+                    setFulfillmentMode(opt.id);
+                    setShowFulfillmentModal(false);
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 12,
+                    paddingHorizontal: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#EAECF0',
+                    backgroundColor: sel ? theme.colors.primary + '18' : 'transparent',
+                  }}
+                >
+                  <View
+                    style={{
+                      width: 20,
+                      height: 20,
+                      borderRadius: 4,
+                      borderWidth: 2,
+                      borderColor: theme.colors.primary,
+                      backgroundColor: sel ? theme.colors.primary : 'transparent',
+                      alignItems: 'center',
+                      justifyContent: 'center',
+                      marginRight: 12,
+                    }}
+                  >
+                    {sel ? (
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
+                    ) : null}
+                  </View>
+                  <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>{opt.label}</Text>
+                </TouchableOpacity>
+              );
+            })}
+            <TouchableOpacity
+              onPress={() => setShowFulfillmentModal(false)}
+              style={{
+                marginTop: 16,
+                paddingVertical: 12,
+                backgroundColor: theme.colors.primary,
+                borderRadius: 8,
+                alignItems: 'center',
+              }}
+            >
+              <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Done</Text>
+            </TouchableOpacity>
+          </TouchableOpacity>
+        </TouchableOpacity>
+      </Modal>
+
+      {/* Delivery Availability Modal */}
+      <Modal
+        visible={showDeliveryModal}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => setShowDeliveryModal(false)}
+      >
+        <TouchableOpacity
+          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
+          activeOpacity={1}
+          onPress={() => setShowDeliveryModal(false)}
+        >
+          <TouchableOpacity
+            activeOpacity={1}
+            onPress={(e) => e.stopPropagation()}
+            style={{
+              backgroundColor: '#FFFFFF',
+              borderRadius: 12,
+              padding: 20,
+              width: '100%',
+              maxWidth: 400,
+              maxHeight: '80%',
+            }}
+          >
+            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>Add delivery slot</Text>
+
+            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Day</Text>
+            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
+              <View style={{ flexDirection: 'row', gap: 8 }}>
+                {daysOfWeek.map((day) => (
+                  <TouchableOpacity
+                    key={day}
+                    onPress={() => setSelectedDeliveryDay(day)}
+                    style={{
+                      paddingVertical: 8,
+                      paddingHorizontal: 12,
+                      borderRadius: 8,
+                      borderWidth: 2,
+                      borderColor: selectedDeliveryDay === day ? theme.colors.primary : '#E5E7EB',
+                      backgroundColor: selectedDeliveryDay === day ? theme.colors.primary + '20' : '#FFFFFF',
+                    }}
+                  >
+                    <Text style={{
+                      color: selectedDeliveryDay === day ? theme.colors.primary : '#101828',
+                      fontSize: 14,
+                      fontWeight: selectedDeliveryDay === day ? '700' : '400',
+                      fontFamily: theme.typography.fontFamily.body,
+                    }}>{day.slice(0, 3)}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </ScrollView>
+
+            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Time windows</Text>
+            <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
+              {timeWindows.map((tw) => (
+                <TouchableOpacity
+                  key={tw}
+                  onPress={() => {
+                    if (selectedDeliveryTimeWindows.includes(tw)) {
+                      setSelectedDeliveryTimeWindows(selectedDeliveryTimeWindows.filter(t => t !== tw));
+                    } else {
+                      setSelectedDeliveryTimeWindows([...selectedDeliveryTimeWindows, tw]);
+                    }
+                  }}
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    paddingVertical: 10,
+                    paddingHorizontal: 8,
+                    borderBottomWidth: 1,
+                    borderBottomColor: '#EAECF0',
+                  }}
+                >
+                  <View style={{
+                    width: 20,
+                    height: 20,
+                    borderRadius: 4,
+                    borderWidth: 2,
+                    borderColor: theme.colors.primary,
+                    backgroundColor: selectedDeliveryTimeWindows.includes(tw) ? theme.colors.primary : 'transparent',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    marginRight: 12,
+                  }}>
+                    {selectedDeliveryTimeWindows.includes(tw) && (
+                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
+                    )}
+                  </View>
+                  <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{tw}</Text>
+                </TouchableOpacity>
+              ))}
+            </ScrollView>
+
+            <View style={{ flexDirection: 'row', gap: 12 }}>
+              <TouchableOpacity
+                onPress={() => setShowDeliveryModal(false)}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  backgroundColor: '#F9FAFB',
+                  borderRadius: 8,
+                  alignItems: 'center',
+                  borderWidth: 1,
+                  borderColor: '#E5E7EB',
+                }}
+              >
+                <Text style={{ color: '#101828', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                onPress={handleAddDeliverySlot}
+                style={{
+                  flex: 1,
+                  paddingVertical: 12,
+                  backgroundColor: theme.colors.primary,
+                  borderRadius: 8,
+                  alignItems: 'center',
+                }}
+              >
+                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Add</Text>
+              </TouchableOpacity>
+            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>
@@ -2058,6 +2694,27 @@ const profileStyles = StyleSheet.create({
   settingsInputReadOnly: {
     backgroundColor: '#F9FAFB',
     color: '#667085',
+  },
+  settingsInputPrefixed: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  settingsInputPrefix: {
+    color: '#94a3b8',
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    marginRight: theme.spacing.xs,
+  },
+  settingsInputInner: {
+    flex: 1,
+    padding: 0,
+    margin: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    fontSize: theme.typography.fontSize.base,
+    color: '#101828',
+    fontFamily: theme.typography.fontFamily.body,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : {}),
   },
   locationPicker: {
     marginTop: 0,

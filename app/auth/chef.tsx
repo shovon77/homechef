@@ -14,7 +14,24 @@ import LocationPicker from '../../components/LocationPicker';
 import FilePicker from '../../components/FilePicker';
 import { uploadToBucket } from '../../lib/upload';
 import { createNotification, createChefApplicationSubmittedNotification } from '../../lib/notifications';
-import { CHEF_TIMEZONE_OPTIONS, DEFAULT_CHEF_TIMEZONE, resolveChefTimezoneId } from '../../lib/chef-timezones';
+import {
+  CHEF_TIMEZONE_OPTIONS,
+  DEFAULT_CHEF_TIMEZONE,
+  resolveChefTimezoneId,
+  chefTimezoneLabel,
+  isValidChefTimezoneId,
+} from '../../lib/chef-timezones';
+import {
+  CHEF_FULFILLMENT_OPTIONS,
+  DEFAULT_CHEF_FULFILLMENT_MODE,
+  resolveChefFulfillmentMode,
+  chefFulfillmentLabel,
+  chefFulfillmentIncludesDelivery,
+  chefFulfillmentIncludesPickup,
+  isValidChefFulfillmentMode,
+  type ChefFulfillmentMode,
+} from '../../lib/chef-fulfillment';
+import { parseCadDollarsInput } from '../../lib/money';
 
 // Storage key for chef onboarding form data
 const CHEF_FORM_STORAGE_KEY = 'chef_onboarding_form_data';
@@ -144,17 +161,24 @@ export default function ChefSignup() {
   const [emailExists, setEmailExists] = useState(false);
   const [emailCheckUnavailable, setEmailCheckUnavailable] = useState(false);
   const [address, setAddress] = useState('');
+  const [fulfillmentMode, setFulfillmentMode] = useState<ChefFulfillmentMode>(DEFAULT_CHEF_FULFILLMENT_MODE);
+  const [showFulfillmentPicker, setShowFulfillmentPicker] = useState(false);
+  const [deliveryFlatFee, setDeliveryFlatFee] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [passwordFocused, setPasswordFocused] = useState(false);
   
-  // Step 2 fields - Availability & Pickup
+  // Step 2 fields - Availability (pickup and/or delivery)
   const [pickupSlots, setPickupSlots] = useState<Array<{ day: string; timeWindow: string }>>([]);
+  const [deliverySlots, setDeliverySlots] = useState<Array<{ day: string; timeWindow: string }>>([]);
   const [chefTimezone, setChefTimezone] = useState(DEFAULT_CHEF_TIMEZONE);
   const [showTimezonePicker, setShowTimezonePicker] = useState(false);
   const [showPickupPicker, setShowPickupPicker] = useState(false);
+  const [showDeliveryPicker, setShowDeliveryPicker] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
+  const [selectedDeliveryDay, setSelectedDeliveryDay] = useState<string>('');
+  const [selectedDeliveryTimeWindows, setSelectedDeliveryTimeWindows] = useState<string[]>([]);
   
   // Step 3 fields - Dish Management
   type DishItem = {
@@ -397,8 +421,13 @@ export default function ChefSignup() {
           // Only load email from storage if user is not logged in (email from auth takes precedence)
           if (data.email && !user?.email) setEmail(data.email);
           if (data.address) setAddress(data.address);
+          if (data.fulfillmentMode) {
+            setFulfillmentMode(resolveChefFulfillmentMode(data.fulfillmentMode));
+          }
+          if (data.deliveryFlatFee) setDeliveryFlatFee(data.deliveryFlatFee);
           // Password is not restored from storage (security)
           if (data.pickupSlots) setPickupSlots(data.pickupSlots);
+          if (data.deliverySlots) setDeliverySlots(data.deliverySlots);
           if (data.chefTimezone) setChefTimezone(resolveChefTimezoneId(data.chefTimezone));
           if (data.dishes) setDishes(data.dishes);
           if (data.bio) setBio(data.bio);
@@ -435,7 +464,10 @@ export default function ChefSignup() {
           phone,
           email,
           address,
+          fulfillmentMode,
+          deliveryFlatFee,
           pickupSlots,
+          deliverySlots,
           chefTimezone,
           dishes: dishes.map(d => ({ ...d, file: null })), // Don't save File objects
           bio,
@@ -455,10 +487,31 @@ export default function ChefSignup() {
       }
     };
     saveData();
-  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, pickupSlots, chefTimezone, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
+  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, fulfillmentMode, deliveryFlatFee, pickupSlots, deliverySlots, chefTimezone, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
 
-  const canProceedToStep2 = fullName && brandName && briefDescription && cuisineType.length > 0 && phoneIsValid && emailOk && address;
-  const canProceedToStep3 = pickupSlots.length > 0;
+  const fulfillmentOk = isValidChefFulfillmentMode(fulfillmentMode);
+  const deliveryFeeOk =
+    !chefFulfillmentIncludesDelivery(fulfillmentMode) ||
+    (deliveryFlatFee.trim().length > 0 && parseCadDollarsInput(deliveryFlatFee) !== null);
+
+  const includesPickup = chefFulfillmentIncludesPickup(fulfillmentMode);
+  const includesDelivery = chefFulfillmentIncludesDelivery(fulfillmentMode);
+  const timezoneOk = isValidChefTimezoneId(chefTimezone);
+
+  const canProceedToStep2 =
+    fullName &&
+    brandName &&
+    briefDescription &&
+    cuisineType.length > 0 &&
+    phoneIsValid &&
+    emailOk &&
+    address &&
+    fulfillmentOk &&
+    deliveryFeeOk &&
+    timezoneOk;
+
+  const canProceedToStep3 =
+    (!includesPickup || pickupSlots.length > 0) && (!includesDelivery || deliverySlots.length > 0);
   const canProceedToStep4 = dishes.length > 0; // At least one dish required
   const canProceedToStep5 = foodSafetyAcknowledged && allergensDisclosed && platformInspectionUnderstood && agreementAccepted && feeAccepted && payoutAccepted;
   const canSubmit = isLoggedIn
@@ -481,6 +534,12 @@ export default function ChefSignup() {
           'An account with this email already exists. Please log in first, then continue the chef sign-up.',
           [{ text: 'Log in', onPress: () => router.push('/login') }, { text: 'OK' }]
         );
+      } else if (!fulfillmentOk) {
+        Alert.alert('Required', 'Please select an order fulfillment option.');
+      } else if (!deliveryFeeOk) {
+        Alert.alert('Required', 'Please enter a delivery flat fee when offering delivery.');
+      } else if (!timezoneOk) {
+        Alert.alert('Required', 'Please select a timezone.');
       }
     } else if (step === 2 && canProceedToStep3) {
       setStep(3);
@@ -573,9 +632,8 @@ export default function ChefSignup() {
   }
 
   function handleBack() {
-    if (step > 1) {
-      setStep(step - 1);
-    }
+    if (step <= 1) return;
+    setStep(step - 1);
   }
   
   // Days of the week
@@ -641,6 +699,32 @@ export default function ChefSignup() {
     setPickupSlots(pickupSlots.filter((_, i) => i !== index));
   };
 
+  const handleToggleDeliveryTimeWindow = (timeWindow: string) => {
+    if (selectedDeliveryTimeWindows.includes(timeWindow)) {
+      setSelectedDeliveryTimeWindows(selectedDeliveryTimeWindows.filter(tw => tw !== timeWindow));
+    } else {
+      setSelectedDeliveryTimeWindows([...selectedDeliveryTimeWindows, timeWindow]);
+    }
+  };
+
+  const handleAddDeliverySlots = () => {
+    if (selectedDeliveryDay && selectedDeliveryTimeWindows.length > 0) {
+      const newSlots = selectedDeliveryTimeWindows
+        .filter(timeWindow =>
+          !deliverySlots.some(
+            slot => slot.day === selectedDeliveryDay && slot.timeWindow === timeWindow,
+          ),
+        )
+        .map(timeWindow => ({ day: selectedDeliveryDay, timeWindow }));
+
+      if (newSlots.length > 0) {
+        setDeliverySlots([...deliverySlots, ...newSlots]);
+      }
+      setSelectedDeliveryTimeWindows([]);
+      setShowDeliveryPicker(false);
+    }
+  };
+
   async function submit() {
     setBusy(true);
     setMsg(null);
@@ -652,6 +736,34 @@ export default function ChefSignup() {
       const chefBio = briefDescription || bio || null;
       const chefLocation = address || location || null;
       const chefCuisine = cuisineType.length > 0 ? cuisineType.join(', ') : null;
+      if (!isValidChefTimezoneId(chefTimezone)) {
+        Alert.alert('Required', 'Please select a timezone.');
+        setBusy(false);
+        return;
+      }
+
+      const resolvedFulfillment = resolveChefFulfillmentMode(fulfillmentMode);
+      let deliveryFeeValue: number | null = null;
+      if (chefFulfillmentIncludesDelivery(resolvedFulfillment)) {
+        const parsed = parseCadDollarsInput(deliveryFlatFee.trim());
+        if (parsed === null) {
+          Alert.alert('Required', 'Please enter a valid delivery flat fee.');
+          setBusy(false);
+          return;
+        }
+        deliveryFeeValue = parsed;
+      }
+
+      if (chefFulfillmentIncludesPickup(resolvedFulfillment) && pickupSlots.length === 0) {
+        Alert.alert('Required', 'Please add at least one pickup day and time.');
+        setBusy(false);
+        return;
+      }
+      if (chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliverySlots.length === 0) {
+        Alert.alert('Required', 'Please add at least one delivery day and time.');
+        setBusy(false);
+        return;
+      }
       
       // 1) Check if user is already logged in
       const { data: { session: existingSession }, error: sessionError } = await supabase.auth.getSession();
@@ -755,8 +867,17 @@ export default function ChefSignup() {
             location: chefLocation,
             bio: chefBio,
             cuisine: chefCuisine,
-            pickup_availability: pickupSlots.length > 0 ? pickupSlots : null,
+            pickup_availability:
+              chefFulfillmentIncludesPickup(resolvedFulfillment) && pickupSlots.length > 0
+                ? pickupSlots
+                : null,
+            delivery_availability:
+              chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliverySlots.length > 0
+                ? deliverySlots
+                : null,
             timezone: resolveChefTimezoneId(chefTimezone),
+            fulfillment_mode: resolvedFulfillment,
+            delivery_flat_fee: deliveryFeeValue,
             status: 'pending', // Deactivated until admin approval
           user_id: session.user.id,
           })
@@ -780,8 +901,17 @@ export default function ChefSignup() {
             location: chefLocation,
             bio: chefBio,
             cuisine: chefCuisine,
-            pickup_availability: pickupSlots.length > 0 ? pickupSlots : null,
+            pickup_availability:
+              chefFulfillmentIncludesPickup(resolvedFulfillment) && pickupSlots.length > 0
+                ? pickupSlots
+                : null,
+            delivery_availability:
+              chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliverySlots.length > 0
+                ? deliverySlots
+                : null,
             timezone: resolveChefTimezoneId(chefTimezone),
+            fulfillment_mode: resolvedFulfillment,
+            delivery_flat_fee: deliveryFeeValue,
             status: 'pending', // Deactivated until admin approval
             user_id: session.user.id,
           })
@@ -953,16 +1083,21 @@ export default function ChefSignup() {
     phoneIsValid,
     emailOk,
     address.trim().length > 0,
+    fulfillmentOk,
+    deliveryFeeOk,
+    timezoneOk,
   ];
   const step1Done = step1Checks.filter(Boolean).length;
   const step1Total = step1Checks.length;
   const step1Ratio = step1Total ? step1Done / step1Total : 0;
 
   // Step 2 becomes "complete" with 1 slot, but gains extra progress with more slots.
-  const step2Ratio =
-    pickupSlots.length === 0
-      ? 0
-      : clamp01(0.7 + 0.3 * Math.min(1, pickupSlots.length / 3));
+  const step2SlotCount =
+    (includesPickup ? pickupSlots.length : 0) + (includesDelivery ? deliverySlots.length : 0);
+  const step2Complete = canProceedToStep3;
+  const step2Ratio = !step2Complete
+    ? 0
+    : clamp01(0.7 + 0.3 * Math.min(1, step2SlotCount / 3));
 
   // Step 3 becomes "complete" with 1 dish, but gains extra progress with more dishes.
   const step3Ratio =
@@ -991,8 +1126,211 @@ export default function ChefSignup() {
           (step === 1 ? step1Ratio * 20 : step === 2 ? step2Ratio * 20 : step === 3 ? step3Ratio * 20 : step4Ratio * 20)
         );
 
-  const stepTitles = ['Personal Info', 'Availability & Pickup', 'Menu', 'Agreement', 'Review'];
+  const stepTitles = [
+    'Personal Info',
+    includesPickup && includesDelivery
+      ? 'Availability'
+      : includesDelivery
+        ? 'Availability & Delivery'
+        : 'Availability & Pickup',
+    'Menu',
+    'Agreement',
+    'Review',
+  ];
   const stepTitle = stepTitles[step - 1] || '';
+
+  const step2SectionTitle =
+    includesPickup && includesDelivery
+      ? 'Availability'
+      : includesDelivery
+        ? 'Availability & delivery'
+        : 'Availability & pickup';
+  const step2SectionSubtitle = includesPickup && includesDelivery
+    ? 'Set when customers can pick up orders or receive delivery.'
+    : includesDelivery
+      ? 'You control when deliveries happen.'
+      : 'You control when & where pickups happen.';
+
+  const renderGroupedAvailabilitySlots = (
+    slots: Array<{ day: string; timeWindow: string }>,
+    onRemoveRange: ((day: string, slotsToRemove: string[]) => void) | null,
+  ) => {
+    const slotsByDay: { [day: string]: string[] } = {};
+    slots.forEach(slot => {
+      if (!slotsByDay[slot.day]) slotsByDay[slot.day] = [];
+      slotsByDay[slot.day].push(slot.timeWindow);
+    });
+
+    const findConsecutiveRanges = (timeWindowValues: string[]): Array<{ start: string; end: string; indices: number[] }> => {
+      if (timeWindowValues.length === 0) return [];
+      const sorted = [...timeWindowValues].sort((a, b) => {
+        const hourA = parseInt(a.split(':')[0]);
+        const hourB = parseInt(b.split(':')[0]);
+        return hourA - hourB;
+      });
+      const ranges: Array<{ start: string; end: string; indices: number[] }> = [];
+      let currentRange: { start: string; end: string; indices: number[] } | null = null;
+      sorted.forEach((timeWindow) => {
+        const hour = parseInt(timeWindow.split(':')[0]);
+        const endHour = parseInt(timeWindow.split('-')[1].split(':')[0]);
+        if (!currentRange) {
+          currentRange = { start: timeWindow, end: timeWindow, indices: [timeWindowValues.indexOf(timeWindow)] };
+        } else {
+          const lastEndHour = parseInt(currentRange.end.split('-')[1].split(':')[0]);
+          if (hour === lastEndHour) {
+            currentRange.end = timeWindow;
+            currentRange.indices.push(timeWindowValues.indexOf(timeWindow));
+          } else {
+            ranges.push(currentRange);
+            currentRange = { start: timeWindow, end: timeWindow, indices: [timeWindowValues.indexOf(timeWindow)] };
+          }
+        }
+      });
+      if (currentRange) ranges.push(currentRange);
+      return ranges;
+    };
+
+    const formatTimeRange = (startWindow: string, endWindow: string): string => {
+      const startHour = parseInt(startWindow.split(':')[0]);
+      const endHour = parseInt(endWindow.split('-')[1].split(':')[0]);
+      const startHour12 = startHour === 0 ? 12 : startHour > 12 ? startHour - 12 : startHour;
+      const startHour12Padded = startHour12.toString().padStart(2, '0');
+      const startAmpm = startHour < 12 ? 'AM' : 'PM';
+      const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
+      const endHour12Padded = endHour12.toString().padStart(2, '0');
+      const endAmpm = endHour < 12 ? 'AM' : 'PM';
+      return `${startHour12Padded}:00 ${startAmpm} - ${endHour12Padded}:00 ${endAmpm}`;
+    };
+
+    return Object.entries(slotsByDay).map(([day, timeWindowsForDay]) => {
+      const ranges = findConsecutiveRanges(timeWindowsForDay);
+      return ranges.map((range, rangeIdx) => {
+        const isSingleSlot = range.start === range.end;
+        const timeLabel = isSingleSlot
+          ? (timeWindows.find(tw => tw.value === range.start)?.label || range.start)
+          : formatTimeRange(range.start, range.end);
+        if (!onRemoveRange) {
+          return (
+            <View key={`${day}-${rangeIdx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
+              <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                {day} • {timeLabel}
+              </Text>
+            </View>
+          );
+        }
+        return (
+          <View key={`${day}-${rangeIdx}`} style={styles.selectedPickupTimeItem}>
+            <Text style={styles.selectedPickupTimeText}>{day}</Text>
+            <Text style={styles.selectedPickupTimeText}>•</Text>
+            <Text style={styles.selectedPickupTimeText}>{timeLabel}</Text>
+            <TouchableOpacity
+              onPress={() => {
+                const slotsToRemove = range.indices.map(idx => timeWindowsForDay[idx]);
+                onRemoveRange(day, slotsToRemove);
+              }}
+              style={styles.removeSlotButton}
+            >
+              <Text style={styles.removeSlotButtonText}>✕</Text>
+            </TouchableOpacity>
+          </View>
+        );
+      });
+    }).flat();
+  };
+
+  const renderAvailabilityPickerModal = (opts: {
+    visible: boolean;
+    onClose: () => void;
+    onAdd: () => void;
+    selectedDay: string;
+    setSelectedDay: (day: string) => void;
+    selectedTimeWindows: string[];
+    setSelectedTimeWindows: (windows: string[]) => void;
+    onToggleTimeWindow: (tw: string) => void;
+    title: string;
+  }) => (
+    <Modal visible={opts.visible} transparent animationType="fade" onRequestClose={opts.onClose}>
+      <View style={styles.pickerModalOverlay}>
+        <View style={styles.pickerModalContent}>
+          <View style={styles.pickerModalHeader}>
+            <TouchableOpacity onPress={opts.onClose}>
+              <Text style={styles.pickerModalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.pickerModalTitle}>{opts.title}</Text>
+            <TouchableOpacity onPress={opts.onAdd}>
+              <Text style={styles.pickerModalConfirm}>Add</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.inlinePickerContainer}>
+            <View style={styles.inlinePickerWheel}>
+              <Text style={styles.inlinePickerLabel}>Day</Text>
+              <ScrollView
+                style={styles.pickerWheelContainer}
+                contentContainerStyle={styles.pickerWheelContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {daysOfWeek.map((day) => {
+                  const isSelected = opts.selectedDay === day;
+                  return (
+                    <TouchableOpacity
+                      key={day}
+                      onPress={() => {
+                        opts.setSelectedDay(day);
+                        opts.setSelectedTimeWindows([]);
+                      }}
+                      style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
+                    >
+                      <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>{day}</Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+            <View style={styles.inlinePickerWheel}>
+              <Text style={styles.inlinePickerLabel}>Time Window</Text>
+              <ScrollView
+                style={styles.pickerWheelContainer}
+                contentContainerStyle={styles.pickerWheelContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {timeWindows.map((timeWindow) => {
+                  const isSelected = opts.selectedTimeWindows.includes(timeWindow.value);
+                  return (
+                    <TouchableOpacity
+                      key={timeWindow.value}
+                      onPress={() => opts.onToggleTimeWindow(timeWindow.value)}
+                      style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
+                    >
+                      <Text
+                        style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}
+                        numberOfLines={1}
+                      >
+                        {timeWindow.label}
+                      </Text>
+                      {isSelected ? <Text style={styles.pickerWheelCheckmark}>✓</Text> : null}
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+          </View>
+          <TouchableOpacity
+            style={[
+              styles.addPickupTimeButton,
+              (!opts.selectedDay || opts.selectedTimeWindows.length === 0) && styles.addPickupTimeButtonDisabled,
+            ]}
+            onPress={opts.onAdd}
+            disabled={!opts.selectedDay || opts.selectedTimeWindows.length === 0}
+          >
+            <Text style={styles.addPickupTimeButtonText}>
+              Add {opts.selectedTimeWindows.length > 0 ? `${opts.selectedTimeWindows.length} ` : ''}Slot
+              {opts.selectedTimeWindows.length !== 1 ? 's' : ''}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   return (
     <Screen style={{ backgroundColor: BACKGROUND_LIGHT }}>
@@ -1304,6 +1642,113 @@ export default function ChefSignup() {
                       <Text style={styles.hint}>Your address is only available to customers after paid order confirmation</Text>
                   </View>
 
+                    {/* Order fulfillment */}
+                    <View style={[styles.field, styles.fieldFull]}>
+                      <View style={styles.fieldLabel}>
+                        <Text style={styles.label}>
+                          Order fulfillment
+                          <RequiredMark show={!fulfillmentOk} />
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.input, styles.dropdownButton]}
+                        onPress={() => setShowFulfillmentPicker(true)}
+                      >
+                        <Text style={styles.dropdownButtonText} numberOfLines={2}>
+                          {chefFulfillmentLabel(fulfillmentMode)}
+                        </Text>
+                        <Text style={[styles.dropdownArrow, { color: PRIMARY_COLOR }]}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.hint}>How customers receive orders from your store.</Text>
+                    </View>
+
+                    {chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
+                      <View style={[styles.field, styles.fieldFull]}>
+                        <View style={styles.fieldLabel}>
+                          <Text style={styles.label}>
+                            Delivery flat fees
+                            <RequiredMark show={!deliveryFeeOk} />
+                          </Text>
+                        </View>
+                        <View style={[styles.input, styles.moneyInputRow]}>
+                          <Text style={styles.moneyInputPrefix}>$</Text>
+                          <TextInput
+                            value={deliveryFlatFee}
+                            onChangeText={setDeliveryFlatFee}
+                            placeholder="0.00"
+                            placeholderTextColor={TEXT_MUTED}
+                            {...PRICE_TEXT_INPUT_PROPS}
+                            style={styles.moneyInputField}
+                            onFocus={() => setFocusedInput('deliveryFlatFee')}
+                            onBlur={() => setFocusedInput(null)}
+                          />
+                        </View>
+                        <Text style={styles.hint}>Required. Flat delivery fee in CAD dollars.</Text>
+                      </View>
+                    ) : null}
+
+                    <View style={[styles.field, styles.fieldFull]}>
+                      <View style={styles.fieldLabel}>
+                        <Text style={styles.label}>
+                          Timezone
+                          <RequiredMark show={!timezoneOk} />
+                        </Text>
+                      </View>
+                      <TouchableOpacity
+                        style={[styles.input, styles.dropdownButton]}
+                        onPress={() => setShowTimezonePicker(true)}
+                      >
+                        <Text style={styles.dropdownButtonText} numberOfLines={3}>
+                          {chefTimezoneLabel(chefTimezone)}
+                        </Text>
+                        <Text style={[styles.dropdownArrow, { color: PRIMARY_COLOR }]}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.hint}>
+                        Required. Checkout uses this so pickup hours match your local clock (e.g. Manitoba vs Toronto).
+                      </Text>
+                    </View>
+
+                    <Modal
+                      visible={showFulfillmentPicker}
+                      transparent
+                      animationType="fade"
+                      onRequestClose={() => setShowFulfillmentPicker(false)}
+                    >
+                      <View style={styles.pickerModalOverlay}>
+                        <View style={styles.pickerModalContent}>
+                          <View style={styles.pickerModalHeader}>
+                            <TouchableOpacity onPress={() => setShowFulfillmentPicker(false)}>
+                              <Text style={styles.pickerModalCancel}>Cancel</Text>
+                            </TouchableOpacity>
+                            <Text style={styles.pickerModalTitle}>Order fulfillment</Text>
+                            <TouchableOpacity onPress={() => setShowFulfillmentPicker(false)}>
+                              <Text style={styles.pickerModalConfirm}>Done</Text>
+                            </TouchableOpacity>
+                          </View>
+                          <ScrollView style={{ maxHeight: 320 }} contentContainerStyle={styles.pickerWheelContent}>
+                            {CHEF_FULFILLMENT_OPTIONS.map((opt) => {
+                              const sel = resolveChefFulfillmentMode(fulfillmentMode) === opt.id;
+                              return (
+                                <TouchableOpacity
+                                  key={opt.id}
+                                  onPress={() => {
+                                    setFulfillmentMode(opt.id);
+                                    setShowFulfillmentPicker(false);
+                                  }}
+                                  style={[styles.pickerWheelItem, sel && styles.pickerWheelItemSelected]}
+                                >
+                                  <Text style={[styles.pickerWheelText, sel && styles.pickerWheelTextSelected]}>
+                                    {opt.label}
+                                  </Text>
+                                  {sel ? <Text style={styles.pickerWheelCheckmark}>✓</Text> : null}
+                                </TouchableOpacity>
+                              );
+                            })}
+                          </ScrollView>
+                        </View>
+                      </View>
+                    </Modal>
+
                   {/* Action Buttons */}
                   <View style={styles.actions}>
                         <TouchableOpacity
@@ -1317,307 +1762,92 @@ export default function ChefSignup() {
                 </>
               ) : step === 2 ? (
                 <>
-                  {/* Step 2: Availability & Pickup */}
-                  <Text style={styles.sectionTitle}>Availability & pickup</Text>
-                  <Text style={styles.sectionSubtitle}>You control when & where pickups happen.</Text>
+                  <Text style={styles.sectionTitle}>{step2SectionTitle}</Text>
+                  <Text style={styles.sectionSubtitle}>{step2SectionSubtitle}</Text>
 
-                  {/* Pickup Days & Times Field */}
+                  {includesPickup ? (
                     <View style={[styles.field, styles.fieldFull]}>
                       <View style={styles.fieldLabel}>
-                      <Text style={styles.label}>
-                        Pickup days & times
-                        <RequiredMark show={pickupSlots.length === 0} />
-                      </Text>
-                      </View>
-                    <TouchableOpacity
-                      style={[styles.input, styles.dropdownButton]}
-                      onPress={() => setShowPickupPicker(true)}
-                    >
-                      <Text style={[styles.dropdownButtonText, pickupSlots.length === 0 && styles.dropdownPlaceholder]}>
-                        {pickupSlots.length > 0 
-                          ? `${pickupSlots.length} slot(s) selected`
-                          : 'Select pickup days & times...'}
-                          </Text>
-                      <Text style={styles.dropdownArrow}>▼</Text>
-                    </TouchableOpacity>
-                    <Text style={styles.hint}>Select the days and time windows when customers can pick up orders.</Text>
-
-                    <View style={[styles.field, styles.fieldFull, { marginTop: 12 }]}>
-                      <View style={styles.fieldLabel}>
-                        <Text style={styles.label}>Pickup timezone</Text>
+                        <Text style={styles.label}>
+                          Pickup days & times
+                          <RequiredMark show={pickupSlots.length === 0} />
+                        </Text>
                       </View>
                       <TouchableOpacity
                         style={[styles.input, styles.dropdownButton]}
-                        onPress={() => setShowTimezonePicker(true)}
+                        onPress={() => setShowPickupPicker(true)}
                       >
-                        <Text
-                          style={styles.dropdownButtonText}
-                          numberOfLines={2}
-                        >
-                          {CHEF_TIMEZONE_OPTIONS.find((o) => o.id === resolveChefTimezoneId(chefTimezone))?.label ??
-                            chefTimezone}
+                        <Text style={[styles.dropdownButtonText, pickupSlots.length === 0 && styles.dropdownPlaceholder]}>
+                          {pickupSlots.length > 0
+                            ? `${pickupSlots.length} slot(s) selected`
+                            : 'Select pickup days & times...'}
                         </Text>
                         <Text style={styles.dropdownArrow}>▼</Text>
                       </TouchableOpacity>
-                      <Text style={styles.hint}>
-                        We use this so checkout matches your local clock (important outside Eastern Ontario).
-                      </Text>
-                    </View>
-
-                    {/* Display selected combinations */}
-                    {pickupSlots.length > 0 && (
-                      <View style={styles.selectedPickupTimes}>
-                        <Text style={styles.selectedPickupTimesLabel}>Selected slots:</Text>
-                        {(() => {
-                          // Group slots by day
-                          const slotsByDay: { [day: string]: string[] } = {};
-                          pickupSlots.forEach(slot => {
-                            if (!slotsByDay[slot.day]) {
-                              slotsByDay[slot.day] = [];
-                            }
-                            slotsByDay[slot.day].push(slot.timeWindow);
-                          });
-
-                          // Helper function to find consecutive time windows and create ranges
-                          const findConsecutiveRanges = (timeWindowValues: string[]): Array<{ start: string; end: string; indices: number[] }> => {
-                            if (timeWindowValues.length === 0) return [];
-                            
-                            // Sort time windows by their hour value
-                            const sorted = [...timeWindowValues].sort((a, b) => {
-                              const hourA = parseInt(a.split(':')[0]);
-                              const hourB = parseInt(b.split(':')[0]);
-                              return hourA - hourB;
-                            });
-                            
-                            const ranges: Array<{ start: string; end: string; indices: number[] }> = [];
-                            let currentRange: { start: string; end: string; indices: number[] } | null = null;
-                            
-                            sorted.forEach((timeWindow, idx) => {
-                              const hour = parseInt(timeWindow.split(':')[0]);
-                              const endHour = parseInt(timeWindow.split('-')[1].split(':')[0]);
-                              
-                              if (!currentRange) {
-                                currentRange = {
-                                  start: timeWindow,
-                                  end: timeWindow,
-                                  indices: [timeWindowValues.indexOf(timeWindow)]
-                                };
-                              } else {
-                                const lastEndHour = parseInt(currentRange.end.split('-')[1].split(':')[0]);
-                                // Check if this time window is consecutive (starts where the last one ended)
-                                if (hour === lastEndHour) {
-                                  currentRange.end = timeWindow;
-                                  currentRange.indices.push(timeWindowValues.indexOf(timeWindow));
-                                } else {
-                                  // Save current range and start a new one
-                                  ranges.push(currentRange);
-                                  currentRange = {
-                                    start: timeWindow,
-                                    end: timeWindow,
-                                    indices: [timeWindowValues.indexOf(timeWindow)]
-                                  };
-                                }
-                              }
-                            });
-                            
-                            if (currentRange) {
-                              ranges.push(currentRange);
-                            }
-                            
-                            return ranges;
-                          };
-
-                          // Helper function to format time range
-                          const formatTimeRange = (startWindow: string, endWindow: string): string => {
-                            const startHour = parseInt(startWindow.split(':')[0]);
-                            const endHour = parseInt(endWindow.split('-')[1].split(':')[0]);
-                            
-                            const startHour12 = startHour === 0 ? 12 : startHour > 12 ? startHour - 12 : startHour;
-                            const startHour12Padded = startHour12.toString().padStart(2, '0');
-                            const startAmpm = startHour < 12 ? 'AM' : 'PM';
-                            
-                            const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
-                            const endHour12Padded = endHour12.toString().padStart(2, '0');
-                            const endAmpm = endHour < 12 ? 'AM' : 'PM';
-                            
-                            return `${startHour12Padded}:00 ${startAmpm} - ${endHour12Padded}:00 ${endAmpm}`;
-                          };
-                          
-                          return Object.entries(slotsByDay).map(([day, timeWindowsForDay]) => {
-                            const ranges = findConsecutiveRanges(timeWindowsForDay);
-                            
-                            return ranges.map((range, rangeIdx) => {
-                              const isSingleSlot = range.start === range.end;
-                              const timeLabel = isSingleSlot 
-                                ? (timeWindows.find(tw => tw.value === range.start)?.label || range.start)
-                                : formatTimeRange(range.start, range.end);
-                              
-                              // Find the first slot index for this range
-                              const firstSlotIndex = pickupSlots.findIndex(s => s.day === day && s.timeWindow === range.start);
-                              
-                              return (
-                                <View key={`${day}-${rangeIdx}`} style={styles.selectedPickupTimeItem}>
-                                  <Text style={styles.selectedPickupTimeText}>{day}</Text>
-                                  <Text style={styles.selectedPickupTimeText}>•</Text>
-                                  <Text style={styles.selectedPickupTimeText}>{timeLabel}</Text>
-                                  <TouchableOpacity
-                                    onPress={() => {
-                                      // Remove all slots in this range
-                                      const slotsToRemove = range.indices.map(idx => timeWindowsForDay[idx]);
-                                      setPickupSlots(pickupSlots.filter(s => 
-                                        !(s.day === day && slotsToRemove.includes(s.timeWindow))
-                                      ));
-                                    }}
-                                    style={styles.removeSlotButton}
-                                  >
-                                    <Text style={styles.removeSlotButtonText}>✕</Text>
-                        </TouchableOpacity>
-                      </View>
-                              );
-                            });
-                          }).flat();
-                        })()}
-                    </View>
-                    )}
-
-                    {/* Pickup Days & Times Picker Modal */}
-                    <Modal
-                      visible={showPickupPicker}
-                      transparent={true}
-                      animationType="fade"
-                      onRequestClose={() => setShowPickupPicker(false)}
-                    >
-                      <View style={styles.pickerModalOverlay}>
-                        <View style={styles.pickerModalContent}>
-                          <View style={styles.pickerModalHeader}>
-                            <TouchableOpacity onPress={() => setShowPickupPicker(false)}>
-                              <Text style={styles.pickerModalCancel}>Cancel</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.pickerModalTitle}>Select Days & Time Windows</Text>
-                            <TouchableOpacity onPress={() => {
-                              handleAddPickupSlots();
-                            }}>
-                              <Text style={styles.pickerModalConfirm}>Add</Text>
-                            </TouchableOpacity>
-                      </View>
-                          <View style={styles.inlinePickerContainer}>
-                            {/* Days Picker Wheel */}
-                            <View style={styles.inlinePickerWheel}>
-                              <Text style={styles.inlinePickerLabel}>Day</Text>
-                              <ScrollView 
-                                style={styles.pickerWheelContainer}
-                                contentContainerStyle={styles.pickerWheelContent}
-                                showsVerticalScrollIndicator={false}
-                              >
-                                {daysOfWeek.map((day) => {
-                                  const isSelected = selectedDay === day;
-                                  return (
-                                    <TouchableOpacity
-                                      key={day}
-                                      onPress={() => {
-                                        setSelectedDay(day);
-                                        // Reset time windows when day changes
-                                        setSelectedTimeWindows([]);
-                                      }}
-                                      style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
-                                    >
-                                      <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
-                                        {day}
-                                      </Text>
-                                    </TouchableOpacity>
-                                  );
-                                })}
-                              </ScrollView>
-                  </View>
-
-                            {/* Time Window Picker Wheel */}
-                            <View style={styles.inlinePickerWheel}>
-                              <Text style={styles.inlinePickerLabel}>Time Window</Text>
-                              <ScrollView 
-                                style={styles.pickerWheelContainer} 
-                                contentContainerStyle={styles.pickerWheelContent}
-                                showsVerticalScrollIndicator={false}
-                              >
-                                {timeWindows.map((timeWindow) => {
-                                  const isSelected = selectedTimeWindows.includes(timeWindow.value);
-                                  return (
-                                    <TouchableOpacity
-                                      key={timeWindow.value}
-                                      onPress={() => handleToggleTimeWindow(timeWindow.value)}
-                                      style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
-                                    >
-                                      <Text 
-                                        style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}
-                                        numberOfLines={1}
-                                      >
-                                        {timeWindow.label}
-                                      </Text>
-                                      {isSelected && (
-                                        <Text style={styles.pickerWheelCheckmark}>✓</Text>
-                                      )}
-                                    </TouchableOpacity>
-                                  );
-                                })}
-                              </ScrollView>
-                      </View>
-                          </View>
-                          <TouchableOpacity
-                            style={[styles.addPickupTimeButton, (!selectedDay || selectedTimeWindows.length === 0) && styles.addPickupTimeButtonDisabled]}
-                            onPress={handleAddPickupSlots}
-                            disabled={!selectedDay || selectedTimeWindows.length === 0}
-                          >
-                            <Text style={styles.addPickupTimeButtonText}>
-                              Add {selectedTimeWindows.length > 0 ? `${selectedTimeWindows.length} ` : ''}Slot{selectedTimeWindows.length !== 1 ? 's' : ''}
-                            </Text>
-                          </TouchableOpacity>
+                      <Text style={styles.hint}>Select the days and time windows when customers can pick up orders.</Text>
+                      {pickupSlots.length > 0 && (
+                        <View style={styles.selectedPickupTimes}>
+                          <Text style={styles.selectedPickupTimesLabel}>Selected pickup slots:</Text>
+                          {renderGroupedAvailabilitySlots(pickupSlots, (day, slotsToRemove) => {
+                            setPickupSlots(pickupSlots.filter(s => !(s.day === day && slotsToRemove.includes(s.timeWindow))));
+                          })}
                         </View>
-                      </View>
-                    </Modal>
+                      )}
+                      {renderAvailabilityPickerModal({
+                        visible: showPickupPicker,
+                        onClose: () => setShowPickupPicker(false),
+                        onAdd: handleAddPickupSlots,
+                        selectedDay,
+                        setSelectedDay,
+                        selectedTimeWindows,
+                        setSelectedTimeWindows,
+                        onToggleTimeWindow: handleToggleTimeWindow,
+                        title: 'Select pickup days & times',
+                      })}
+                    </View>
+                  ) : null}
 
-                    <Modal
-                      visible={showTimezonePicker}
-                      transparent
-                      animationType="fade"
-                      onRequestClose={() => setShowTimezonePicker(false)}
-                    >
-                      <View style={styles.pickerModalOverlay}>
-                        <View style={styles.pickerModalContent}>
-                          <View style={styles.pickerModalHeader}>
-                            <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
-                              <Text style={styles.pickerModalCancel}>Cancel</Text>
-                            </TouchableOpacity>
-                            <Text style={styles.pickerModalTitle}>Pickup timezone</Text>
-                            <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
-                              <Text style={styles.pickerModalConfirm}>Done</Text>
-                            </TouchableOpacity>
-                          </View>
-                          <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.pickerWheelContent}>
-                            {CHEF_TIMEZONE_OPTIONS.map((opt) => {
-                              const sel = resolveChefTimezoneId(chefTimezone) === opt.id;
-                              return (
-                                <TouchableOpacity
-                                  key={opt.id}
-                                  onPress={() => {
-                                    setChefTimezone(opt.id);
-                                    setShowTimezonePicker(false);
-                                  }}
-                                  style={[styles.pickerWheelItem, sel && styles.pickerWheelItemSelected]}
-                                >
-                                  <Text
-                                    style={[styles.pickerWheelText, sel && styles.pickerWheelTextSelected]}
-                                    numberOfLines={3}
-                                  >
-                                    {opt.label}
-                                  </Text>
-                                  {sel ? <Text style={styles.pickerWheelCheckmark}>✓</Text> : null}
-                                </TouchableOpacity>
-                              );
-                            })}
-                          </ScrollView>
-                        </View>
+                  {includesDelivery ? (
+                    <View style={[styles.field, styles.fieldFull]}>
+                      <View style={styles.fieldLabel}>
+                        <Text style={styles.label}>
+                          Delivery days & times
+                          <RequiredMark show={deliverySlots.length === 0} />
+                        </Text>
                       </View>
-                    </Modal>
-                  </View>
+                      <TouchableOpacity
+                        style={[styles.input, styles.dropdownButton]}
+                        onPress={() => setShowDeliveryPicker(true)}
+                      >
+                        <Text style={[styles.dropdownButtonText, deliverySlots.length === 0 && styles.dropdownPlaceholder]}>
+                          {deliverySlots.length > 0
+                            ? `${deliverySlots.length} slot(s) selected`
+                            : 'Select delivery days & times...'}
+                        </Text>
+                        <Text style={styles.dropdownArrow}>▼</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.hint}>Select the days and time windows when you offer delivery.</Text>
+                      {deliverySlots.length > 0 && (
+                        <View style={styles.selectedPickupTimes}>
+                          <Text style={styles.selectedPickupTimesLabel}>Selected delivery slots:</Text>
+                          {renderGroupedAvailabilitySlots(deliverySlots, (day, slotsToRemove) => {
+                            setDeliverySlots(deliverySlots.filter(s => !(s.day === day && slotsToRemove.includes(s.timeWindow))));
+                          })}
+                        </View>
+                      )}
+                      {renderAvailabilityPickerModal({
+                        visible: showDeliveryPicker,
+                        onClose: () => setShowDeliveryPicker(false),
+                        onAdd: handleAddDeliverySlots,
+                        selectedDay: selectedDeliveryDay,
+                        setSelectedDay: setSelectedDeliveryDay,
+                        selectedTimeWindows: selectedDeliveryTimeWindows,
+                        setSelectedTimeWindows: setSelectedDeliveryTimeWindows,
+                        onToggleTimeWindow: handleToggleDeliveryTimeWindow,
+                        title: 'Select delivery days & times',
+                      })}
+                    </View>
+                  ) : null}
 
                   {/* Action Buttons */}
                   <View style={styles.actions}>
@@ -2235,14 +2465,28 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                         <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
                           <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Address:</Text> {address || 'Not set'}
                         </Text>
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Order fulfillment:</Text>{' '}
+                          {chefFulfillmentLabel(fulfillmentMode)}
+                        </Text>
+                        {chefFulfillmentIncludesDelivery(fulfillmentMode) && deliveryFlatFee.trim() ? (
+                          <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Delivery flat fee:</Text>{' '}
+                            ${deliveryFlatFee.trim()} CAD
+                          </Text>
+                        ) : null}
+                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                          <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, fontFamily: theme.typography.fontFamily.display }}>Timezone:</Text>{' '}
+                          {chefTimezoneLabel(chefTimezone)}
+                        </Text>
                       </View>
                     </View>
 
-                    {/* Availability & pickup */}
+                    {(includesPickup || includesDelivery) ? (
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
                       <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: theme.spacing.md }}>
                         <Text style={{ fontSize: theme.typography.fontSize.lg, fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
-                          Availability & pickup
+                          {step2SectionTitle}
                         </Text>
                         <TouchableOpacity onPress={() => setStep(2)}>
                           <Text style={{ color: PRIMARY_COLOR, fontSize: theme.typography.fontSize.sm, fontFamily: theme.typography.fontFamily.body }}>
@@ -2250,125 +2494,42 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                           </Text>
                         </TouchableOpacity>
                       </View>
-                      {pickupSlots.length > 0 ? (
-                        <View style={{ gap: theme.spacing.xs }}>
-                          {(() => {
-                            // Group slots by day
-                            const slotsByDay: { [day: string]: string[] } = {};
-                            pickupSlots.forEach(slot => {
-                              if (!slotsByDay[slot.day]) {
-                                slotsByDay[slot.day] = [];
-                              }
-                              slotsByDay[slot.day].push(slot.timeWindow);
-                            });
-
-                            // Helper function to find consecutive time windows and create ranges
-                            const findConsecutiveRanges = (timeWindowValues: string[]): Array<{ start: string; end: string; indices: number[] }> => {
-                              if (timeWindowValues.length === 0) return [];
-                              
-                              // Sort time windows by their hour value
-                              const sorted = [...timeWindowValues].sort((a, b) => {
-                                const hourA = parseInt(a.split(':')[0]);
-                                const hourB = parseInt(b.split(':')[0]);
-                                return hourA - hourB;
-                              });
-                              
-                              const ranges: Array<{ start: string; end: string; indices: number[] }> = [];
-                              let currentRange: { start: string; end: string; indices: number[] } | null = null;
-                              
-                              sorted.forEach((timeWindow) => {
-                                const hour = parseInt(timeWindow.split(':')[0]);
-                                const endHour = parseInt(timeWindow.split('-')[1].split(':')[0]);
-                                
-                                if (!currentRange) {
-                                  currentRange = {
-                                    start: timeWindow,
-                                    end: timeWindow,
-                                    indices: [timeWindowValues.indexOf(timeWindow)]
-                                  };
-                                } else {
-                                  const lastEndHour = parseInt(currentRange.end.split('-')[1].split(':')[0]);
-                                  // Check if this time window is consecutive (starts where the last one ended)
-                                  if (hour === lastEndHour) {
-                                    currentRange.end = timeWindow;
-                                    currentRange.indices.push(timeWindowValues.indexOf(timeWindow));
-                                  } else {
-                                    // Save current range and start a new one
-                                    ranges.push(currentRange);
-                                    currentRange = {
-                                      start: timeWindow,
-                                      end: timeWindow,
-                                      indices: [timeWindowValues.indexOf(timeWindow)]
-                                    };
-                                  }
-                                }
-                              });
-                              
-                              if (currentRange) {
-                                ranges.push(currentRange);
-                              }
-                              
-                              return ranges;
-                            };
-
-                            // Helper function to format time range
-                            const formatTimeRange = (startWindow: string, endWindow: string): string => {
-                              const startHour = parseInt(startWindow.split(':')[0]);
-                              const endHour = parseInt(endWindow.split('-')[1].split(':')[0]);
-                              
-                              const startHour12 = startHour === 0 ? 12 : startHour > 12 ? startHour - 12 : startHour;
-                              const startHour12Padded = startHour12.toString().padStart(2, '0');
-                              const startAmpm = startHour < 12 ? 'AM' : 'PM';
-                              
-                              const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
-                              const endHour12Padded = endHour12.toString().padStart(2, '0');
-                              const endAmpm = endHour < 12 ? 'AM' : 'PM';
-                              
-                              return `${startHour12Padded}:00 ${startAmpm} - ${endHour12Padded}:00 ${endAmpm}`;
-                            };
-
-                            // Generate time windows for label lookup
-                            const timeWindows: Array<{ value: string; label: string }> = [];
-                            for (let hour = 8; hour <= 20; hour++) {
-                              const endHour = hour + 1;
-                              const hour12Start = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-                              const hour12StartPadded = hour12Start.toString().padStart(2, '0');
-                              const ampmStart = hour < 12 ? 'AM' : 'PM';
-                              const hour12End = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
-                              const hour12EndPadded = hour12End.toString().padStart(2, '0');
-                              const ampmEnd = endHour < 12 ? 'AM' : 'PM';
-                              timeWindows.push({
-                                value: `${hour.toString().padStart(2, '0')}:00-${endHour.toString().padStart(2, '0')}:00`,
-                                label: `${hour12StartPadded}:00 ${ampmStart} - ${hour12EndPadded}:00 ${ampmEnd}`,
-                              });
-                            }
-                            
-                            return Object.entries(slotsByDay).map(([day, timeWindowsForDay]) => {
-                              const ranges = findConsecutiveRanges(timeWindowsForDay);
-                              
-                              return ranges.map((range, rangeIdx) => {
-                                const isSingleSlot = range.start === range.end;
-                                const timeLabel = isSingleSlot 
-                                  ? (timeWindows.find(tw => tw.value === range.start)?.label || range.start)
-                                  : formatTimeRange(range.start, range.end);
-                                
-                                return (
-                                  <View key={`${day}-${rangeIdx}`} style={{ flexDirection: 'row', alignItems: 'center', gap: theme.spacing.xs }}>
-                                    <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
-                                      {day} • {timeLabel}
-                                    </Text>
-                                  </View>
-                                );
-                              });
-                            }).flat();
-                          })()}
-                        </View>
-                      ) : (
-                        <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
-                          No time slots selected
-                        </Text>
-                      )}
+                      <View style={{ gap: theme.spacing.md }}>
+                        {includesPickup ? (
+                          <View style={{ gap: theme.spacing.xs }}>
+                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
+                              Pickup
+                            </Text>
+                            {pickupSlots.length > 0 ? (
+                              <View style={{ gap: theme.spacing.xs }}>
+                                {renderGroupedAvailabilitySlots(pickupSlots, null)}
+                              </View>
+                            ) : (
+                              <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                                No pickup slots selected
+                              </Text>
+                            )}
+                          </View>
+                        ) : null}
+                        {includesDelivery ? (
+                          <View style={{ gap: theme.spacing.xs }}>
+                            <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
+                              Delivery
+                            </Text>
+                            {deliverySlots.length > 0 ? (
+                              <View style={{ gap: theme.spacing.xs }}>
+                                {renderGroupedAvailabilitySlots(deliverySlots, null)}
+                              </View>
+                            ) : (
+                              <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
+                                No delivery slots selected
+                              </Text>
+                            )}
+                          </View>
+                        ) : null}
+                      </View>
                     </View>
+                    ) : null}
 
                     {/* Dishes */}
                     <View style={{ backgroundColor: CARD_LIGHT, borderRadius: theme.radius.lg, padding: theme.spacing.lg, borderWidth: 1, borderColor: BORDER_LIGHT }}>
@@ -2533,6 +2694,50 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                   </View>
                 </>
               ) : null}
+
+              <Modal
+                visible={showTimezonePicker}
+                transparent
+                animationType="fade"
+                onRequestClose={() => setShowTimezonePicker(false)}
+              >
+                <View style={styles.pickerModalOverlay}>
+                  <View style={styles.pickerModalContent}>
+                    <View style={styles.pickerModalHeader}>
+                      <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                        <Text style={styles.pickerModalCancel}>Cancel</Text>
+                      </TouchableOpacity>
+                      <Text style={styles.pickerModalTitle}>Timezone</Text>
+                      <TouchableOpacity onPress={() => setShowTimezonePicker(false)}>
+                        <Text style={styles.pickerModalConfirm}>Done</Text>
+                      </TouchableOpacity>
+                    </View>
+                    <ScrollView style={{ maxHeight: 400 }} contentContainerStyle={styles.pickerWheelContent}>
+                      {CHEF_TIMEZONE_OPTIONS.map((opt) => {
+                        const sel = resolveChefTimezoneId(chefTimezone) === opt.id;
+                        return (
+                          <TouchableOpacity
+                            key={opt.id}
+                            onPress={() => {
+                              setChefTimezone(opt.id);
+                              setShowTimezonePicker(false);
+                            }}
+                            style={[styles.pickerWheelItem, sel && styles.pickerWheelItemSelected]}
+                          >
+                            <Text
+                              style={[styles.pickerWheelText, sel && styles.pickerWheelTextSelected]}
+                              numberOfLines={3}
+                            >
+                              {opt.label}
+                            </Text>
+                            {sel ? <Text style={styles.pickerWheelCheckmark}>✓</Text> : null}
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </ScrollView>
+                  </View>
+                </View>
+              </Modal>
 
               {msg && (
                 <Text style={[styles.message, msg.startsWith('Thanks') ? styles.messageSuccess : styles.messageError]}>
@@ -3247,6 +3452,29 @@ const styles = StyleSheet.create({
     color: TEXT_MUTED,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
+  },
+  moneyInputRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingVertical: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.md,
+  },
+  moneyInputPrefix: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    marginRight: theme.spacing.xs,
+  },
+  moneyInputField: {
+    flex: 1,
+    padding: 0,
+    margin: 0,
+    borderWidth: 0,
+    backgroundColor: 'transparent',
+    color: TEXT_LIGHT,
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: theme.typography.fontFamily.body,
+    ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as object) : {}),
   },
   modalOverlay: {
     flex: 1,

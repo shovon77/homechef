@@ -1,7 +1,7 @@
 'use client';
 
-import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, StyleSheet, Linking, Platform, Image, useWindowDimensions, Modal, ScrollView } from 'react-native';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, StyleSheet, Linking, Platform, Image, useWindowDimensions, Modal, ScrollView, Animated, Easing } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import Screen from '../../components/Screen';
 import { useCart } from '../../context/CartContext';
@@ -14,6 +14,14 @@ import { formatCad } from '../../lib/money';
 import { theme } from '../../lib/theme';
 import { supabase } from '../../lib/supabase';
 import { formatLocationDisplay } from '../../lib/formatAddress';
+import LocationPicker from '../../components/LocationPicker';
+import {
+  chefFulfillmentIncludesDelivery,
+  chefFulfillmentIncludesPickup,
+  resolveChefFulfillmentMode,
+  type ChefFulfillmentMode,
+} from '../../lib/chef-fulfillment';
+import { isValidCanadianPhone, formatPhone } from '../../lib/formatPhone';
 
 const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
@@ -28,6 +36,231 @@ const CART_ITEM_IMAGE_SIZE = 96;
 const CART_ITEM_IMAGE_PAD = theme.spacing.sm;
 const CART_ITEM_CONTENT_LEFT = CART_ITEM_IMAGE_PAD + CART_ITEM_IMAGE_SIZE + theme.spacing.md;
 const CART_ITEM_MIN_HEIGHT = CART_ITEM_IMAGE_SIZE + CART_ITEM_IMAGE_PAD * 2 + theme.spacing.lg;
+
+type TimeSlotOption = { value: string; label: string };
+
+type FulfillmentMethod = 'pickup' | 'delivery';
+
+function CrossfadeFulfillmentPanel({
+  method,
+  pickupContent,
+  deliveryContent,
+}: {
+  method: FulfillmentMethod | null;
+  pickupContent: React.ReactNode;
+  deliveryContent: React.ReactNode;
+}) {
+  const [displayedMethod, setDisplayedMethod] = useState<FulfillmentMethod | null>(null);
+  const displayedMethodRef = useRef<FulfillmentMethod | null>(null);
+  const opacity = useRef(new Animated.Value(0)).current;
+  const translateY = useRef(new Animated.Value(8)).current;
+
+  const animateIn = () => {
+    opacity.setValue(0);
+    translateY.setValue(8);
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 1,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: 0,
+        duration: 260,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start();
+  };
+
+  const animateOut = (onDone: () => void) => {
+    Animated.parallel([
+      Animated.timing(opacity, {
+        toValue: 0,
+        duration: 160,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+      Animated.timing(translateY, {
+        toValue: -6,
+        duration: 160,
+        easing: Easing.in(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]).start(({ finished }) => {
+      if (finished) onDone();
+    });
+  };
+
+  useEffect(() => {
+    const from = displayedMethodRef.current;
+    if (from === method) return;
+
+    if (!method) {
+      if (!from) return;
+      animateOut(() => {
+        displayedMethodRef.current = null;
+        setDisplayedMethod(null);
+      });
+      return;
+    }
+
+    if (!from) {
+      displayedMethodRef.current = method;
+      setDisplayedMethod(method);
+      animateIn();
+      return;
+    }
+
+    animateOut(() => {
+      displayedMethodRef.current = method;
+      setDisplayedMethod(method);
+      animateIn();
+    });
+  }, [method]);
+
+  if (!displayedMethod) return null;
+
+  return (
+    <Animated.View style={{ opacity, transform: [{ translateY }] }}>
+      {displayedMethod === 'pickup' ? pickupContent : deliveryContent}
+    </Animated.View>
+  );
+}
+
+function PreferredDateTimeModal({
+  visible,
+  onClose,
+  availableDates,
+  selectedDate,
+  onSelectDate,
+  selectedTime,
+  onSelectTime,
+  timeSlots,
+  emptyTimeMessage,
+  selectDateFirstMessage,
+}: {
+  visible: boolean;
+  onClose: () => void;
+  availableDates: Date[];
+  selectedDate: Date | null;
+  onSelectDate: (date: Date) => void;
+  selectedTime: string;
+  onSelectTime: (time: string) => void;
+  timeSlots: TimeSlotOption[];
+  emptyTimeMessage: string;
+  selectDateFirstMessage: string;
+}) {
+  return (
+    <Modal visible={visible} transparent animationType="slide" onRequestClose={onClose}>
+      <View style={styles.pickerModalOverlay}>
+        <View style={styles.pickerModalContent}>
+          <View style={styles.pickerModalHeader}>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.pickerModalCancel}>Cancel</Text>
+            </TouchableOpacity>
+            <Text style={styles.pickerModalTitle}>Select Date & Time</Text>
+            <TouchableOpacity onPress={onClose}>
+              <Text style={styles.pickerModalConfirm}>Confirm</Text>
+            </TouchableOpacity>
+          </View>
+          <View style={styles.inlinePickerContainer}>
+            <View style={styles.inlinePickerWheel}>
+              <Text style={styles.inlinePickerLabel}>Date</Text>
+              <ScrollView
+                style={styles.pickerWheelContainer}
+                contentContainerStyle={styles.pickerWheelContent}
+                showsVerticalScrollIndicator={false}
+              >
+                {availableDates.map((date, index) => {
+                  const isSelected = selectedDate?.toDateString() === date.toDateString();
+                  return (
+                    <TouchableOpacity
+                      key={index}
+                      onPress={() => onSelectDate(date)}
+                      style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
+                    >
+                      <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
+                        {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
+            </View>
+            <View style={styles.inlinePickerWheel}>
+              <Text style={styles.inlinePickerLabel}>Time</Text>
+              <ScrollView
+                style={styles.pickerWheelContainer}
+                contentContainerStyle={
+                  !selectedDate || timeSlots.length === 0
+                    ? [styles.pickerWheelContent, styles.pickerTimePlaceholderScrollContent]
+                    : styles.pickerWheelContent
+                }
+                showsVerticalScrollIndicator={false}
+              >
+                {!selectedDate ? (
+                  <View style={styles.pickerTimePlaceholder}>
+                    <Text style={styles.pickerTimePlaceholderText}>{selectDateFirstMessage}</Text>
+                  </View>
+                ) : timeSlots.length === 0 ? (
+                  <View style={styles.pickerTimePlaceholder}>
+                    <Text style={styles.pickerTimePlaceholderText}>{emptyTimeMessage}</Text>
+                  </View>
+                ) : (
+                  timeSlots.map((timeSlot) => {
+                    const isSelected = selectedTime === timeSlot.value;
+                    return (
+                      <TouchableOpacity
+                        key={timeSlot.value}
+                        onPress={() => onSelectTime(timeSlot.value)}
+                        style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
+                      >
+                        <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
+                          {timeSlot.label}
+                        </Text>
+                      </TouchableOpacity>
+                    );
+                  })
+                )}
+              </ScrollView>
+            </View>
+          </View>
+        </View>
+      </View>
+    </Modal>
+  );
+}
+
+function validatePreferredDateTime(
+  selectedDate: Date,
+  selectedTime: string,
+  availability: Array<{ day: string; timeWindow: string }> | null,
+  label: 'Pickup' | 'Delivery',
+): Date | null {
+  const [hour, minute] = selectedTime.split(':').map(Number);
+  const combined = new Date(selectedDate);
+  combined.setHours(hour, minute, 0, 0);
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const minDate = new Date(today);
+  minDate.setDate(today.getDate() + 1);
+  const maxDate = new Date(today);
+  const maxDaysAhead = availability && availability.length > 0 ? 14 : 3;
+  maxDate.setDate(today.getDate() + maxDaysAhead);
+
+  if (combined < minDate || combined > maxDate) {
+    Alert.alert('Invalid date', `${label} must be within the next ${maxDaysAhead} days.`);
+    return null;
+  }
+  if (hour < 8 || hour > 20) {
+    Alert.alert('Invalid time', `${label} time must be between 8:00 AM and 8:00 PM.`);
+    return null;
+  }
+  return combined;
+}
 
 export default function CheckoutPage() {
   const router = useRouter();
@@ -44,6 +277,17 @@ export default function CheckoutPage() {
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showDateTimePicker, setShowDateTimePicker] = useState(false);
   const [chefPickupAvailability, setChefPickupAvailability] = useState<Array<{ day: string; timeWindow: string }> | null>(null);
+  const [chefDeliveryAvailability, setChefDeliveryAvailability] = useState<Array<{ day: string; timeWindow: string }> | null>(null);
+  const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<Date | null>(null);
+  const [selectedDeliveryTime, setSelectedDeliveryTime] = useState('');
+  const [showDeliveryDateTimePicker, setShowDeliveryDateTimePicker] = useState(false);
+  const [chefFulfillmentMode, setChefFulfillmentMode] = useState<ChefFulfillmentMode>('pickup_only');
+  const [chefCheckoutLoading, setChefCheckoutLoading] = useState(true);
+  const [chefDeliveryFlatFee, setChefDeliveryFlatFee] = useState<number>(0);
+  const [fulfillmentChoice, setFulfillmentChoice] = useState<'pickup' | 'delivery' | null>(null);
+  const [deliveryAddress, setDeliveryAddress] = useState('');
+  const [deliveryPhone, setDeliveryPhone] = useState('');
+  const [deliveryPhonePrefilled, setDeliveryPhonePrefilled] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -54,20 +298,40 @@ export default function CheckoutPage() {
           setChefName(null);
           setChefLocation(null);
           setChefPickupAvailability(null);
+          setChefDeliveryAvailability(null);
+          setSelectedDeliveryDate(null);
+          setSelectedDeliveryTime('');
+          setChefFulfillmentMode('pickup_only');
+          setChefDeliveryFlatFee(0);
+          setFulfillmentChoice(null);
+          setChefCheckoutLoading(false);
         }
         return;
       }
 
+      setChefCheckoutLoading(true);
+      try {
       const chef = await getChefById(cartChefId);
       if (cancelled) return;
 
       setChefName(chef?.name ?? null);
+      setChefFulfillmentMode(resolveChefFulfillmentMode(chef?.fulfillment_mode));
+      const flatFee = Number(chef?.delivery_flat_fee ?? 0);
+      setChefDeliveryFlatFee(Number.isFinite(flatFee) && flatFee > 0 ? flatFee : 0);
+      setFulfillmentChoice(null);
 
-      const availability = chef?.pickup_availability;
-      if (Array.isArray(availability) && availability.length > 0) {
-        setChefPickupAvailability(availability);
+      const pickupAvailability = chef?.pickup_availability;
+      if (Array.isArray(pickupAvailability) && pickupAvailability.length > 0) {
+        setChefPickupAvailability(pickupAvailability);
       } else {
         setChefPickupAvailability(null);
+      }
+
+      const deliveryAvailability = chef?.delivery_availability;
+      if (Array.isArray(deliveryAvailability) && deliveryAvailability.length > 0) {
+        setChefDeliveryAvailability(deliveryAvailability);
+      } else {
+        setChefDeliveryAvailability(null);
       }
 
       // Pickup location should come from the chef's profile record (fallback to chefs.location).
@@ -101,6 +365,11 @@ export default function CheckoutPage() {
       if (!cancelled) {
         setChefLocation(pickupLocation);
       }
+      } finally {
+        if (!cancelled) {
+          setChefCheckoutLoading(false);
+        }
+      }
     })();
 
     return () => {
@@ -108,12 +377,49 @@ export default function CheckoutPage() {
     };
   }, [cartChefId]);
 
+  useEffect(() => {
+    if (deliveryPhonePrefilled) return;
+    let cancelled = false;
+    (async () => {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || cancelled) return;
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('phone')
+        .eq('id', user.id)
+        .maybeSingle();
+      if (cancelled) return;
+      const phone = (profile as { phone?: string | null } | null)?.phone;
+      if (typeof phone === 'string' && phone.trim()) {
+        setDeliveryPhone(formatPhone(phone));
+        setDeliveryPhonePrefilled(true);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [deliveryPhonePrefilled]);
+
+  const offersPickup = chefFulfillmentIncludesPickup(chefFulfillmentMode);
+  const offersDelivery = chefFulfillmentIncludesDelivery(chefFulfillmentMode);
+  const needsFulfillmentChoice = offersPickup && offersDelivery;
+
+  const effectiveFulfillmentMethod = useMemo((): 'pickup' | 'delivery' | null => {
+    if (offersPickup && !offersDelivery) return 'pickup';
+    if (offersDelivery && !offersPickup) return 'delivery';
+    return fulfillmentChoice;
+  }, [offersPickup, offersDelivery, fulfillmentChoice]);
+
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
   // Platform service fee: flat $1.50
   const platformFee = 1.50;
-  // Total (customer): subtotal + platform service fee
+  const deliveryFee = effectiveFulfillmentMethod === 'delivery' ? chefDeliveryFlatFee : 0;
+  // Total (customer): subtotal + platform service fee + delivery fee when applicable
   // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not paid by customer
-  const total = useMemo(() => subtotal + platformFee, [subtotal, platformFee]);
+  const total = useMemo(
+    () => subtotal + platformFee + deliveryFee,
+    [subtotal, platformFee, deliveryFee],
+  );
   const totalCents = useMemo(() => Math.round(total * 100), [total]);
   
   // If chef has pickup_availability, only show dates whose weekday matches.
@@ -151,9 +457,55 @@ export default function CheckoutPage() {
     }
     return slots;
   }, [selectedDate, chefPickupAvailability]);
+
+  const deliveryAvailableDates = useMemo(() => {
+    if (chefDeliveryAvailability && chefDeliveryAvailability.length > 0) {
+      return getAvailableDatesForChef(chefDeliveryAvailability);
+    }
+    const now = new Date();
+    return Array.from({ length: 3 }, (_, i) => {
+      const d = new Date();
+      d.setDate(now.getDate() + 1 + i);
+      d.setHours(0, 0, 0, 0);
+      return d;
+    });
+  }, [chefDeliveryAvailability]);
+
+  const deliveryTimeSlots = useMemo(() => {
+    if (!selectedDeliveryDate) return [];
+    if (chefDeliveryAvailability && chefDeliveryAvailability.length > 0) {
+      return getTimeSlotsForDate(chefDeliveryAvailability, selectedDeliveryDate);
+    }
+    const slots: Array<{ value: string; label: string }> = [];
+    for (let hour = 8; hour <= 20; hour++) {
+      const hour24 = hour.toString().padStart(2, '0');
+      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour < 12 ? 'AM' : 'PM';
+      slots.push({ value: `${hour24}:00`, label: `${hour12}:00 ${ampm}` });
+    }
+    return slots;
+  }, [selectedDeliveryDate, chefDeliveryAvailability]);
   
-  // Check if date and time are both selected
-  const isFormValid = selectedDate !== null && selectedTime.trim().length > 0;
+  const isFormValid = useMemo(() => {
+    if (!effectiveFulfillmentMethod) return false;
+    if (effectiveFulfillmentMethod === 'pickup') {
+      return selectedDate !== null && selectedTime.trim().length > 0;
+    }
+    return (
+      selectedDeliveryDate !== null &&
+      selectedDeliveryTime.trim().length > 0 &&
+      deliveryAddress.trim().length > 0 &&
+      isValidCanadianPhone(deliveryPhone)
+    );
+  }, [
+    effectiveFulfillmentMethod,
+    selectedDate,
+    selectedTime,
+    selectedDeliveryDate,
+    selectedDeliveryTime,
+    deliveryAddress,
+    deliveryPhone,
+  ]);
 
   const handleSubmit = async () => {
     if (items.length === 0) {
@@ -167,33 +519,39 @@ export default function CheckoutPage() {
       return;
     }
 
-    if (!selectedDate || !selectedTime) {
-      Alert.alert('Pickup time required', 'Please choose a pickup date and time.');
+    if (!effectiveFulfillmentMethod) {
+      Alert.alert('Fulfillment required', 'Please choose pickup or delivery.');
       return;
     }
 
-    // Combine selected date and time
-    const [hour, minute] = selectedTime.split(':').map(Number);
-    const combined = new Date(selectedDate);
-    combined.setHours(hour, minute, 0, 0);
-
-    // Validate that the date is within the allowed range
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const minDate = new Date(today);
-    minDate.setDate(today.getDate() + 1); // Tomorrow
-    const maxDate = new Date(today);
-    const maxDaysAhead = (chefPickupAvailability && chefPickupAvailability.length > 0) ? 14 : 3;
-    maxDate.setDate(today.getDate() + maxDaysAhead);
-    
-    if (combined < minDate || combined > maxDate) {
-      Alert.alert('Invalid date', `Pickup must be within the next ${maxDaysAhead} days.`);
-      return;
-    }
-
-    if (hour < 8 || hour > 20) {
-      Alert.alert('Invalid time', 'Pickup time must be between 8:00 AM and 8:00 PM.');
-      return;
+    let combined: Date | null = null;
+    if (effectiveFulfillmentMethod === 'pickup') {
+      if (!selectedDate || !selectedTime) {
+        Alert.alert('Pickup time required', 'Please choose a pickup date and time.');
+        return;
+      }
+      combined = validatePreferredDateTime(selectedDate, selectedTime, chefPickupAvailability, 'Pickup');
+      if (!combined) return;
+    } else {
+      if (!selectedDeliveryDate || !selectedDeliveryTime) {
+        Alert.alert('Delivery time required', 'Please choose a preferred delivery date and time.');
+        return;
+      }
+      if (!deliveryAddress.trim()) {
+        Alert.alert('Delivery address required', 'Please enter your delivery address.');
+        return;
+      }
+      if (!isValidCanadianPhone(deliveryPhone)) {
+        Alert.alert('Invalid phone number', 'Please enter a valid Canadian phone number.');
+        return;
+      }
+      combined = validatePreferredDateTime(
+        selectedDeliveryDate,
+        selectedDeliveryTime,
+        chefDeliveryAvailability,
+        'Delivery',
+      );
+      if (!combined) return;
     }
 
     setSubmitting(true);
@@ -218,19 +576,40 @@ export default function CheckoutPage() {
       const cancelUrl = `${baseUrl}/cart`;
 
       // Log the URLs being sent for debugging
-      console.log('Checkout URLs:', { baseUrl, successUrl, cancelUrl, pickupAt: combined });
-
-      const checkoutPromise = submitCheckout({
-        items: items.map(item => ({
-          dish_id: Number(item.id),
-          quantity: Number(item.quantity),
-          notes: item.notes,
-        })),
-        chef_id: Number(cartChefId),
-        pickupAt: combined,
+      console.log('Checkout URLs:', {
+        baseUrl,
         successUrl,
         cancelUrl,
+        fulfillmentMethod: effectiveFulfillmentMethod,
+        pickupAt: combined,
       });
+
+      const checkoutItems = items.map(item => ({
+        dish_id: Number(item.id),
+        quantity: Number(item.quantity),
+        notes: item.notes,
+      }));
+
+      const checkoutPromise =
+        effectiveFulfillmentMethod === 'pickup'
+          ? submitCheckout({
+              items: checkoutItems,
+              chef_id: Number(cartChefId),
+              fulfillmentMethod: 'pickup',
+              pickupAt: combined!,
+              successUrl,
+              cancelUrl,
+            })
+          : submitCheckout({
+              items: checkoutItems,
+              chef_id: Number(cartChefId),
+              fulfillmentMethod: 'delivery',
+              deliveryAt: combined!,
+              deliveryAddress: deliveryAddress.trim(),
+              deliveryPhone,
+              successUrl,
+              cancelUrl,
+            });
 
       const timeoutPromise = new Promise<never>((_, reject) =>
         setTimeout(() => reject(new Error('Checkout is taking too long. Please try again.')), 30000)
@@ -350,6 +729,12 @@ export default function CheckoutPage() {
               </View>
               <Text style={styles.orderSummaryValue}>{formatCad(platformFee)}</Text>
             </View>
+            {!chefCheckoutLoading && effectiveFulfillmentMethod === 'delivery' && deliveryFee > 0 && (
+              <View style={styles.orderSummaryRow}>
+                <Text style={styles.orderSummaryLabel}>Delivery fee</Text>
+                <Text style={styles.orderSummaryValue}>{formatCad(deliveryFee)}</Text>
+              </View>
+            )}
             <View style={styles.orderSummaryDivider} />
             <View style={styles.orderSummaryRow}>
               <Text style={styles.orderSummaryTotalLabel}>Total</Text>
@@ -366,158 +751,205 @@ export default function CheckoutPage() {
           </View>
         )}
 
-        <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 24, gap: 16 }}>
-          <View style={styles.pickupHeader}>
-            <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: 'OpenSans_700Bold' }}>Preferred pickup</Text>
+        <View style={{ backgroundColor: '#FFFFFF', borderRadius: 16, borderWidth: 1, borderColor: BORDER, padding: 24, gap: 16, minHeight: chefCheckoutLoading ? 120 : undefined }}>
+          {chefCheckoutLoading ? (
+            <View style={{ paddingVertical: 28, alignItems: 'center', justifyContent: 'center' }}>
+              <ActivityIndicator size="small" color={PRIMARY_COLOR} />
+            </View>
+          ) : (
+          <>
+          {needsFulfillmentChoice && (
+            <View style={{ gap: 12 }}>
+              <Text style={styles.fulfillmentQuestionTitle}>How would you like to get your order?</Text>
+              <View style={styles.fulfillmentChoiceRow}>
                 <TouchableOpacity
-              onPress={() => setShowDateTimePicker(true)}
-              style={styles.dateTimePickerButton}
-            >
-              <Text style={styles.dateTimePickerButtonText}>Date/Time</Text>
+                  onPress={() => {
+                    setFulfillmentChoice('pickup');
+                    setShowDateTimePicker(false);
+                    setShowDeliveryDateTimePicker(false);
+                    setSelectedDeliveryDate(null);
+                    setSelectedDeliveryTime('');
+                  }}
+                  style={[
+                    styles.fulfillmentChoiceButton,
+                    fulfillmentChoice === 'pickup' && styles.fulfillmentChoiceButtonSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.fulfillmentChoiceButtonText,
+                      fulfillmentChoice === 'pickup' && styles.fulfillmentChoiceButtonTextSelected,
+                    ]}
+                  >
+                    Pickup
+                  </Text>
                 </TouchableOpacity>
-          </View>
-
-          {/* Selected date and time */}
-          {(selectedDate || selectedTime) && (
-            <View style={styles.selectedDateTimeDisplay}>
-              {selectedDate && (
-                <Text style={styles.selectedDateTimeText}>
-                  {selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                </Text>
-              )}
-              {selectedDate && selectedTime && (
-                <Text style={styles.selectedDateTimeText}> • </Text>
-              )}
-              {selectedTime && (
-                <Text style={styles.selectedDateTimeText}>
-                  {timeSlots.find(slot => slot.value === selectedTime)?.label || selectedTime}
-                </Text>
-              )}
+                <TouchableOpacity
+                  onPress={() => {
+                    setFulfillmentChoice('delivery');
+                    setShowDateTimePicker(false);
+                    setShowDeliveryDateTimePicker(false);
+                    setSelectedDate(null);
+                    setSelectedTime('');
+                  }}
+                  style={[
+                    styles.fulfillmentChoiceButton,
+                    fulfillmentChoice === 'delivery' && styles.fulfillmentChoiceButtonSelected,
+                  ]}
+                >
+                  <Text
+                    style={[
+                      styles.fulfillmentChoiceButtonText,
+                      fulfillmentChoice === 'delivery' && styles.fulfillmentChoiceButtonTextSelected,
+                    ]}
+                  >
+                    Delivery
+                  </Text>
+                </TouchableOpacity>
+              </View>
             </View>
           )}
 
-          <View style={styles.pickupLocationRow}>
-            <Text style={styles.pickupLocationLabel}>Pickup location</Text>
-            <View style={styles.pickupLocationValueContainer}>
-              {chefLocation ? (
-                <Text style={styles.pickupLocationValue}>{formatLocationDisplay(chefLocation)}</Text>
-              ) : (
-                <Text style={styles.pickupLocationValue}>Location not available</Text>
-              )}
-            </View>
-          </View>
-
-          {/* Date/Time Picker Modal */}
-          <Modal
-            visible={showDateTimePicker}
-            transparent={true}
-            animationType="slide"
-            onRequestClose={() => setShowDateTimePicker(false)}
-          >
-            <View style={styles.pickerModalOverlay}>
-              <View style={styles.pickerModalContent}>
-                <View style={styles.pickerModalHeader}>
-                  <TouchableOpacity onPress={() => setShowDateTimePicker(false)}>
-                    <Text style={styles.pickerModalCancel}>Cancel</Text>
-                  </TouchableOpacity>
-                  <Text style={styles.pickerModalTitle}>Select Date & Time</Text>
-                  <TouchableOpacity onPress={() => {
-                    if (selectedDate) {
-                      setDateInput(selectedDate.toISOString().split('T')[0]);
-                    }
-                    if (selectedTime) {
-                      setTimeInput(selectedTime);
-                    }
-                    setShowDateTimePicker(false);
-                  }}>
-                    <Text style={styles.pickerModalConfirm}>Confirm</Text>
+          <CrossfadeFulfillmentPanel
+            method={effectiveFulfillmentMethod}
+            pickupContent={
+              <>
+                <View style={styles.pickupHeader}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: 'OpenSans_700Bold' }}>Preferred pickup</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowDateTimePicker(true)}
+                    style={styles.dateTimePickerButton}
+                  >
+                    <Text style={styles.dateTimePickerButtonText}>Date/Time</Text>
                   </TouchableOpacity>
                 </View>
-                <View style={styles.inlinePickerContainer}>
-                  {/* Date Picker Wheel */}
-                  <View style={styles.inlinePickerWheel}>
-                    <Text style={styles.inlinePickerLabel}>Date</Text>
-                    <ScrollView 
-                      style={styles.pickerWheelContainer}
-                      contentContainerStyle={styles.pickerWheelContent}
-                      showsVerticalScrollIndicator={false}
-                    >
-                      {availableDates.map((date, index) => {
-                        const isSelected = selectedDate?.toDateString() === date.toDateString();
-                        return (
-                          <TouchableOpacity
-                            key={index}
-                            onPress={() => {
-                              setSelectedDate(date);
-                              setDateInput(date.toISOString().split('T')[0]);
-                              setSelectedTime('');
-                              setTimeInput('');
-                            }}
-                            style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
-                          >
-                            <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
-                              {date.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
-                            </Text>
-                          </TouchableOpacity>
-                        );
-                      })}
-                    </ScrollView>
-                  </View>
 
-                  {/* Time Picker Wheel */}
-                  <View style={styles.inlinePickerWheel}>
-                    <Text style={styles.inlinePickerLabel}>Time</Text>
-                    <ScrollView
-                      style={styles.pickerWheelContainer}
-                      contentContainerStyle={
-                        !selectedDate || timeSlots.length === 0
-                          ? [styles.pickerWheelContent, styles.pickerTimePlaceholderScrollContent]
-                          : styles.pickerWheelContent
-                      }
-                      showsVerticalScrollIndicator={false}
-                    >
-                      {!selectedDate ? (
-                        <View style={styles.pickerTimePlaceholder}>
-                          <Text style={styles.pickerTimePlaceholderText}>
-                            Select a date first. Pickup times will appear here.
-                          </Text>
-                        </View>
-                      ) : timeSlots.length === 0 ? (
-                        <View style={styles.pickerTimePlaceholder}>
-                          <Text style={styles.pickerTimePlaceholderText}>
-                            No pickup times for this day.
-                          </Text>
-                        </View>
-                      ) : (
-                        timeSlots.map((timeSlot) => {
-                          const isSelected = selectedTime === timeSlot.value;
-                          return (
-                            <TouchableOpacity
-                              key={timeSlot.value}
-                              onPress={() => {
-                                setSelectedTime(timeSlot.value);
-                                setTimeInput(timeSlot.value);
-                              }}
-                              style={[styles.pickerWheelItem, isSelected && styles.pickerWheelItemSelected]}
-                            >
-                              <Text style={[styles.pickerWheelText, isSelected && styles.pickerWheelTextSelected]}>
-                                {timeSlot.label}
-                              </Text>
-                            </TouchableOpacity>
-                          );
-                        })
-                      )}
-                    </ScrollView>
+                {(selectedDate || selectedTime) && (
+                  <View style={styles.selectedDateTimeDisplay}>
+                    {selectedDate && (
+                      <Text style={styles.selectedDateTimeText}>
+                        {selectedDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </Text>
+                    )}
+                    {selectedDate && selectedTime && (
+                      <Text style={styles.selectedDateTimeText}> • </Text>
+                    )}
+                    {selectedTime && (
+                      <Text style={styles.selectedDateTimeText}>
+                        {timeSlots.find(slot => slot.value === selectedTime)?.label || selectedTime}
+                      </Text>
+                    )}
                   </View>
+                )}
+
+                <View style={styles.pickupLocationRow}>
+                  <Text style={styles.pickupLocationLabel}>Pickup location</Text>
+                  <View style={styles.pickupLocationValueContainer}>
+                    {chefLocation ? (
+                      <Text style={styles.pickupLocationValue}>{formatLocationDisplay(chefLocation)}</Text>
+                    ) : (
+                      <Text style={styles.pickupLocationValue}>Location not available</Text>
+                    )}
+                  </View>
+                </View>
+              </>
+            }
+            deliveryContent={
+              <View style={{ gap: 16 }}>
+                <View style={styles.pickupHeader}>
+                  <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: 'OpenSans_700Bold' }}>Preferred delivery</Text>
+                  <TouchableOpacity
+                    onPress={() => setShowDeliveryDateTimePicker(true)}
+                    style={styles.dateTimePickerButton}
+                  >
+                    <Text style={styles.dateTimePickerButtonText}>Date/Time</Text>
+                  </TouchableOpacity>
+                </View>
+
+                {(selectedDeliveryDate || selectedDeliveryTime) && (
+                  <View style={styles.selectedDateTimeDisplay}>
+                    {selectedDeliveryDate && (
+                      <Text style={styles.selectedDateTimeText}>
+                        {selectedDeliveryDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
+                      </Text>
+                    )}
+                    {selectedDeliveryDate && selectedDeliveryTime && (
+                      <Text style={styles.selectedDateTimeText}> • </Text>
+                    )}
+                    {selectedDeliveryTime && (
+                      <Text style={styles.selectedDateTimeText}>
+                        {deliveryTimeSlots.find(slot => slot.value === selectedDeliveryTime)?.label || selectedDeliveryTime}
+                      </Text>
+                    )}
+                  </View>
+                )}
+
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.deliveryFieldLabel}>Delivery address</Text>
+                  <LocationPicker
+                    value={deliveryAddress}
+                    onChange={setDeliveryAddress}
+                    placeholder="Enter your delivery address"
+                    inputStyle={styles.input}
+                  />
+                </View>
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.deliveryFieldLabel}>Phone number</Text>
+                  <TextInput
+                    value={deliveryPhone}
+                    onChangeText={setDeliveryPhone}
+                    placeholder="(xxx) xxx-xxxx"
+                    keyboardType="phone-pad"
+                    style={styles.input}
+                    placeholderTextColor={TEXT_MUTED}
+                  />
                 </View>
               </View>
-          </View>
-          </Modal>
+            }
+          />
+
+          <PreferredDateTimeModal
+            visible={showDateTimePicker}
+            onClose={() => setShowDateTimePicker(false)}
+            availableDates={availableDates}
+            selectedDate={selectedDate}
+            onSelectDate={(date) => {
+              setSelectedDate(date);
+              setDateInput(date.toISOString().split('T')[0]);
+              setSelectedTime('');
+              setTimeInput('');
+            }}
+            selectedTime={selectedTime}
+            onSelectTime={(time) => {
+              setSelectedTime(time);
+              setTimeInput(time);
+            }}
+            timeSlots={timeSlots}
+            selectDateFirstMessage="Select a date first. Pickup times will appear here."
+            emptyTimeMessage="No pickup times for this day."
+          />
+          <PreferredDateTimeModal
+            visible={showDeliveryDateTimePicker}
+            onClose={() => setShowDeliveryDateTimePicker(false)}
+            availableDates={deliveryAvailableDates}
+            selectedDate={selectedDeliveryDate}
+            onSelectDate={(date) => {
+              setSelectedDeliveryDate(date);
+              setSelectedDeliveryTime('');
+            }}
+            selectedTime={selectedDeliveryTime}
+            onSelectTime={setSelectedDeliveryTime}
+            timeSlots={deliveryTimeSlots}
+            selectDateFirstMessage="Select a date first. Delivery times will appear here."
+            emptyTimeMessage="No delivery times for this day."
+          />
+          </>
+          )}
         </View>
 
         <TouchableOpacity
           onPress={handleSubmit}
-          disabled={submitting || !isFormValid}
+          disabled={submitting || !isFormValid || chefCheckoutLoading}
           style={{
             backgroundColor: PRIMARY_COLOR,
             paddingVertical: 16,
@@ -526,7 +958,7 @@ export default function CheckoutPage() {
             alignItems: 'center',
             alignSelf: 'center',
             maxWidth: 200,
-            opacity: (submitting || !isFormValid) ? 0.6 : 1,
+            opacity: (submitting || !isFormValid || chefCheckoutLoading) ? 0.6 : 1,
           }}
         >
           {submitting ? (
@@ -933,5 +1365,44 @@ const styles = StyleSheet.create({
     fontSize: theme.typography.fontSize.sm,
     fontFamily: 'OpenSans_400Regular',
     textAlign: 'right',
+  },
+  fulfillmentQuestionTitle: {
+    color: TEXT_DARK,
+    fontSize: 18,
+    fontWeight: '800' as any,
+    fontFamily: 'OpenSans_700Bold',
+  },
+  fulfillmentChoiceRow: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  fulfillmentChoiceButton: {
+    flex: 1,
+    paddingVertical: 12,
+    paddingHorizontal: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: BORDER,
+    backgroundColor: BACKGROUND,
+    alignItems: 'center',
+  },
+  fulfillmentChoiceButtonSelected: {
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: '#FFF5F2',
+  },
+  fulfillmentChoiceButtonText: {
+    fontSize: theme.typography.fontSize.base,
+    fontFamily: 'OpenSans_600SemiBold',
+    fontWeight: '600' as any,
+    color: TEXT_DARK,
+  },
+  fulfillmentChoiceButtonTextSelected: {
+    color: PRIMARY_COLOR,
+  },
+  deliveryFieldLabel: {
+    color: TEXT_DARK,
+    fontSize: 16,
+    fontWeight: '700' as any,
+    fontFamily: 'OpenSans_700Bold',
   },
 });

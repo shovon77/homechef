@@ -22,9 +22,14 @@ export const CHEF_TIMEZONE_OPTIONS: readonly { id: string; label: string }[] = [
 
 const ALLOWED = new Set(CHEF_TIMEZONE_OPTIONS.map((o) => o.id));
 
+export function isValidChefTimezoneId(id: string | null | undefined): boolean {
+  const t = (id ?? '').trim();
+  return ALLOWED.has(t);
+}
+
 export function resolveChefTimezoneId(raw: string | null | undefined): string {
   const t = (raw ?? '').trim();
-  if (!t || !ALLOWED.has(t)) return DEFAULT_CHEF_TIMEZONE;
+  if (!isValidChefTimezoneId(t)) return DEFAULT_CHEF_TIMEZONE;
   return t;
 }
 

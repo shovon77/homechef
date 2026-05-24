@@ -7,27 +7,65 @@ export const LineItemSchema = z.object({
   notes: z.string().max(500).optional(),
 });
 
-export const CreateCheckoutBody = z.object({
-  items: z.array(LineItemSchema).min(1),
-  chef_id: z.number().int().positive(),
-  // ISO datetime string required
-  pickup_at: z.string().refine((s) => !Number.isNaN(Date.parse(s)), "pickup_at must be ISO datetime"),
-  // Allow URLs with placeholders like {ORDER_ID} - validate as URL pattern instead of strict URL
-  success_url: z.string().refine(
-    (s) => {
-      // Replace placeholders with dummy values for validation, then check if it's a valid URL pattern
-      const testUrl = s.replace(/\{[^}]+\}/g, 'placeholder');
-      try {
-        new URL(testUrl);
-        return true;
-      } catch {
-        return false;
+const urlWithPlaceholders = z.string().refine(
+  (s) => {
+    const testUrl = s.replace(/\{[^}]+\}/g, 'placeholder');
+    try {
+      new URL(testUrl);
+      return true;
+    } catch {
+      return false;
+    }
+  },
+  "success_url must be a valid URL (placeholders like {ORDER_ID} are allowed)",
+);
+
+export const CreateCheckoutBody = z
+  .object({
+    items: z.array(LineItemSchema).min(1),
+    chef_id: z.number().int().positive(),
+    fulfillment_method: z.enum(["pickup", "delivery"]),
+    pickup_at: z.string().optional(),
+    delivery_address: z.string().max(500).optional(),
+    delivery_phone: z.string().max(30).optional(),
+    delivery_at: z.string().optional(),
+    success_url: urlWithPlaceholders,
+    cancel_url: z.string().url(),
+  })
+  .superRefine((data, ctx) => {
+    if (data.fulfillment_method === "pickup") {
+      if (!data.pickup_at || Number.isNaN(Date.parse(data.pickup_at))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["pickup_at"],
+          message: "pickup_at must be ISO datetime",
+        });
       }
-    },
-    "success_url must be a valid URL (placeholders like {ORDER_ID} are allowed)"
-  ),
-  cancel_url: z.string().url(), // cancel_url doesn't have placeholders, so strict validation is fine
-});
+    } else {
+      const addr = (data.delivery_address ?? "").trim();
+      const phone = (data.delivery_phone ?? "").trim();
+      if (!addr) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["delivery_address"],
+          message: "delivery_address is required",
+        });
+      }
+      if (!phone) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["delivery_phone"],
+          message: "delivery_phone is required",
+        });
+      }
+      if (!data.delivery_at || Number.isNaN(Date.parse(data.delivery_at))) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          path: ["delivery_at"],
+          message: "delivery_at must be ISO datetime",
+        });
+      }
+    }
+  });
 
 export type TCreateCheckoutBody = z.infer<typeof CreateCheckoutBody>;
-

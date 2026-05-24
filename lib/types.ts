@@ -45,8 +45,13 @@ export type Chef = {
   latitude?: number | null; // Geocoded latitude for faster distance calculations
   longitude?: number | null; // Geocoded longitude for faster distance calculations
   pickup_availability?: Array<{ day: string; timeWindow: string }> | null;
+  delivery_availability?: Array<{ day: string; timeWindow: string }> | null;
   /** IANA timezone for pickup wall-clock at chef location (e.g. America/Toronto) */
   timezone?: string | null;
+  /** pickup_only | delivery_only | pickup_and_delivery */
+  fulfillment_mode?: string | null;
+  /** CAD dollars; set when fulfillment includes delivery */
+  delivery_flat_fee?: number | null;
 };
 
 // ============================================================================
@@ -127,6 +132,11 @@ export type Order = {
   status: OrderStatus; // default 'requested'
   total_cents: number; // integer, default 0
   pickup_at: string | null; // timestamptz
+  fulfillment_method?: 'pickup' | 'delivery' | null;
+  delivery_address?: string | null;
+  delivery_phone?: string | null;
+  delivery_at?: string | null;
+  delivery_fee_cents?: number | null;
   created_at: string; // timestamptz, NOT NULL
 };
 

@@ -25,6 +25,45 @@ function j(status: number, data: unknown) {
   });
 }
 
+function validateScheduledAtInChefTimezone(
+  iso: string,
+  chefTimezone: string | null | undefined,
+  label: 'Pickup' | 'Delivery',
+): { ok: true; iso: string } | { ok: false; error: string } {
+  const scheduled = new Date(iso);
+  if (Number.isNaN(scheduled.getTime())) {
+    return { ok: false, error: `${label} time is invalid` };
+  }
+  const now = new Date();
+  const max = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  if (scheduled.getTime() < now.getTime() || scheduled.getTime() > max.getTime()) {
+    return { ok: false, error: `${label} must be within the next 7 days` };
+  }
+  const chefTz = resolveChefTimezoneId(chefTimezone);
+  let localHour = NaN;
+  try {
+    localHour = Number(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: chefTz,
+        hour: '2-digit',
+        hourCycle: 'h23',
+      }).format(scheduled),
+    );
+  } catch {
+    localHour = Number(
+      new Intl.DateTimeFormat('en-CA', {
+        timeZone: 'America/Toronto',
+        hour: '2-digit',
+        hourCycle: 'h23',
+      }).format(scheduled),
+    );
+  }
+  if (!Number.isFinite(localHour) || localHour < 8 || localHour >= 20) {
+    return { ok: false, error: `${label} time must be between 08:00 and 20:00` };
+  }
+  return { ok: true, iso: scheduled.toISOString() };
+}
+
 export const handler = async (req: Request) => {
   // Handle CORS preflight - must return early with headers
   if (req.method === 'OPTIONS') {
@@ -117,7 +156,7 @@ export const handler = async (req: Request) => {
     // Check if chef is suspended
     const { data: chef, error: chefErr } = await adminClient
       .from('chefs')
-      .select('id, status, timezone')
+      .select('id, status, timezone, fulfillment_mode, delivery_flat_fee')
       .eq('id', body.chef_id)
       .maybeSingle();
 
@@ -137,35 +176,33 @@ export const handler = async (req: Request) => {
       return j(400, { error: 'This chef has paused their listings and cannot accept orders right now' });
     }
 
-    // 2) Validate pickup window: within next 7 days (absolute), and 08:00-20:00 in the chef's IANA timezone.
-    const pickupDate = new Date(body.pickup_at);
-    const now = new Date();
-    const max = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
-    if (pickupDate.getTime() < now.getTime() || pickupDate.getTime() > max.getTime()) {
-      return j(400, { error: 'Pickup must be within the next 7 days' });
+    const chefFulfillment = String((chef as { fulfillment_mode?: string | null }).fulfillment_mode ?? 'pickup_only').trim();
+    const allowsPickup = chefFulfillment === 'pickup_only' || chefFulfillment === 'pickup_and_delivery';
+    const allowsDelivery = chefFulfillment === 'delivery_only' || chefFulfillment === 'pickup_and_delivery';
+
+    if (body.fulfillment_method === 'pickup' && !allowsPickup) {
+      return j(400, { error: 'This chef does not offer pickup' });
     }
-    const chefTz = resolveChefTimezoneId((chef as { timezone?: string | null }).timezone);
-    let localHour = NaN;
-    try {
-      localHour = Number(
-        new Intl.DateTimeFormat('en-CA', {
-          timeZone: chefTz,
-          hour: '2-digit',
-          hourCycle: 'h23',
-        }).format(pickupDate),
-      );
-    } catch {
-      console.warn('[create-checkout] invalid chef timezone, falling back', { chefId: body.chef_id, chefTz });
-      localHour = Number(
-        new Intl.DateTimeFormat('en-CA', {
-          timeZone: 'America/Toronto',
-          hour: '2-digit',
-          hourCycle: 'h23',
-        }).format(pickupDate),
-      );
+    if (body.fulfillment_method === 'delivery' && !allowsDelivery) {
+      return j(400, { error: 'This chef does not offer delivery' });
     }
-    if (!Number.isFinite(localHour) || localHour < 8 || localHour >= 20) {
-      return j(400, { error: 'Pickup time must be between 08:00 and 20:00' });
+
+    let pickupAtIso: string | null = null;
+    let deliveryAtIso: string | null = null;
+    let deliveryAddress: string | null = null;
+    let deliveryPhone: string | null = null;
+    const chefTimezone = (chef as { timezone?: string | null }).timezone;
+
+    if (body.fulfillment_method === 'pickup') {
+      const validated = validateScheduledAtInChefTimezone(body.pickup_at!, chefTimezone, 'Pickup');
+      if (!validated.ok) return j(400, { error: validated.error });
+      pickupAtIso = validated.iso;
+    } else {
+      deliveryAddress = (body.delivery_address ?? '').trim();
+      deliveryPhone = (body.delivery_phone ?? '').trim();
+      const validated = validateScheduledAtInChefTimezone(body.delivery_at!, chefTimezone, 'Delivery');
+      if (!validated.ok) return j(400, { error: validated.error });
+      deliveryAtIso = validated.iso;
     }
 
     // 3) Compute totals (assume `price` is numeric in DB)
@@ -198,9 +235,17 @@ export const handler = async (req: Request) => {
 
     // No tax charged on orders
     const taxCents = 0;
+
+    let deliveryFeeCents = 0;
+    if (body.fulfillment_method === 'delivery') {
+      const flatFee = Number((chef as { delivery_flat_fee?: number | null }).delivery_flat_fee ?? 0);
+      if (Number.isFinite(flatFee) && flatFee > 0) {
+        deliveryFeeCents = Math.round(flatFee * 100);
+      }
+    }
     
-    // Customer pays: subtotal + platform service fee (commission is NOT paid by customer)
-    const grandTotalCents = total_cents + platformFeeCents;
+    // Customer pays: subtotal + platform service fee + delivery fee (commission is NOT paid by customer)
+    const grandTotalCents = total_cents + platformFeeCents + deliveryFeeCents;
     
     // Amount chef receives: subtotal minus platform commission
     // (Stripe processing fees are deducted separately by Stripe)
@@ -250,7 +295,12 @@ export const handler = async (req: Request) => {
         platform_commission_cents: platformCommissionCents, // 10% of subtotal
         platform_fee_cents: platformFeeCents, // Flat $1.50 service fee
         tax_cents: 0, // No tax charged
-        pickup_at: pickupDate.toISOString(),
+        fulfillment_method: body.fulfillment_method,
+        pickup_at: pickupAtIso,
+        delivery_address: deliveryAddress,
+        delivery_phone: deliveryPhone,
+        delivery_at: deliveryAtIso,
+        delivery_fee_cents: deliveryFeeCents,
         expires_at: expiresAt.toISOString(),
       })
       .select('id')
@@ -291,7 +341,9 @@ export const handler = async (req: Request) => {
         order_id: String(orderId),
         user_id: user.id,
         chef_id: String(body.chef_id),
-        pickup_at: pickupDate.toISOString(),
+        fulfillment_method: body.fulfillment_method,
+        ...(pickupAtIso ? { pickup_at: pickupAtIso } : {}),
+        ...(deliveryAtIso ? { delivery_at: deliveryAtIso } : {}),
       },
     };
 
@@ -348,6 +400,20 @@ export const handler = async (req: Request) => {
             },
             quantity: 1,
           },
+          ...(deliveryFeeCents > 0
+            ? [
+                {
+                  price_data: {
+                    currency: 'cad',
+                    product_data: {
+                      name: 'Delivery fee',
+                    },
+                    unit_amount: deliveryFeeCents,
+                  },
+                  quantity: 1,
+                },
+              ]
+            : []),
         ],
         success_url: resolveUrl(body.success_url),
         cancel_url: resolveUrl(body.cancel_url),

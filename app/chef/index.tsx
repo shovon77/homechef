@@ -16,6 +16,8 @@ import { uploadToBucket } from '../../lib/upload';
 import { theme } from '../../lib/theme';
 import { Screen } from '../../components/Screen';
 import { formatLocal } from '../../lib/datetime';
+import { formatLocationDisplay } from '../../lib/formatAddress';
+import { formatPhone } from '../../lib/formatPhone';
 import { updateOrderStatus } from '../../lib/orders';
 import { callFn } from '../../lib/fn';
 import PayoutSettings from '../../components/chef/PayoutSettings';
@@ -73,7 +75,32 @@ type ChefRow = {
   stripe_connect_completed?: boolean | null;
 };
 type DishRow = { id: number; chef_id: number | null; name: string; price: number; description?: string | null; portion?: string | null; ingredients?: string | null; image?: string | null; thumbnail?: string | null; chef?: string | null; is_active?: boolean };
-type OrderRow = { id: number; user_id: string; status: string; total_cents: number; subtotal_cents?: number | null; platform_fee_cents?: number | null; platform_commission_cents?: number | null; created_at: string; pickup_at: string | null; stripe_transfer_id?: string | null; order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number; notes?: string | null }>; user_email?: string; user_name?: string };
+type OrderRow = {
+  id: number;
+  user_id: string;
+  status: string;
+  total_cents: number;
+  subtotal_cents?: number | null;
+  platform_fee_cents?: number | null;
+  platform_commission_cents?: number | null;
+  created_at: string;
+  pickup_at: string | null;
+  fulfillment_method?: string | null;
+  delivery_address?: string | null;
+  delivery_phone?: string | null;
+  delivery_at?: string | null;
+  stripe_transfer_id?: string | null;
+  order_items?: Array<{ id: number; dish_id: number; dish_name?: string; quantity: number; unit_price_cents: number; notes?: string | null }>;
+  user_email?: string;
+  user_name?: string;
+};
+
+function isDeliveryOrder(order: Pick<OrderRow, 'fulfillment_method' | 'delivery_address'>): boolean {
+  const method = (order.fulfillment_method ?? '').trim();
+  if (method === 'delivery') return true;
+  if (method === 'pickup') return false;
+  return Boolean(order.delivery_address?.trim());
+}
 
 type ChefDashboardTab = 'menu' | 'orders' | 'payouts';
 const CHEF_DASHBOARD_TABS: ChefDashboardTab[] = ['menu', 'orders', 'payouts'];
@@ -1100,12 +1127,16 @@ export default function ChefDashboard() {
         return;
       }
       if (status === 'ready' && customerUserId) {
+        const orderRow = orders.find(o => o.id === id);
+        const delivery = orderRow ? isDeliveryOrder(orderRow) : false;
         try {
           await createNotification(
             customerUserId,
             'order_ready',
-            'Order Ready for Pickup',
-            'Your order is ready for pickup! Please collect it from the chef.',
+            delivery ? 'Order Ready for Delivery' : 'Order Ready for Pickup',
+            delivery
+              ? 'Your order is ready for delivery!'
+              : 'Your order is ready for pickup! Please collect it from the chef.',
             id,
             'order'
           );
@@ -1127,7 +1158,7 @@ export default function ChefDashboard() {
       // Include: payment_status='succeeded' OR (payment_status IS NULL AND has stripe_payment_intent_id)
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,platform_commission_cents,created_at,pickup_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
+        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,platform_commission_cents,created_at,pickup_at,fulfillment_method,delivery_address,delivery_phone,delivery_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
         .eq('chef_id', chefId)
         .in('status', ['requested', 'pending', 'ready', 'completed', 'cancelled', 'rejected'])
         .order('created_at', { ascending: false });
@@ -1242,6 +1273,10 @@ export default function ChefDashboard() {
         platform_commission_cents: order.platform_commission_cents ?? null,
         created_at: order.created_at,
         pickup_at: order.pickup_at ?? null,
+        fulfillment_method: order.fulfillment_method ?? null,
+        delivery_address: order.delivery_address ?? null,
+        delivery_phone: order.delivery_phone ?? null,
+        delivery_at: order.delivery_at ?? null,
         user_email: emailMap.get(order.user_id) ?? undefined,
         user_name: nameMap.get(order.user_id) ?? undefined,
         platform_fee_cents: order.platform_fee_cents ?? 0,
@@ -2192,7 +2227,9 @@ export default function ChefDashboard() {
                 {/* Orders in Card Style */}
                 <View style={{ gap: 12 }}>
                   {filteredDashboardOrders.length > 0 ? (
-                    filteredDashboardOrders.map(order => (
+                    filteredDashboardOrders.map(order => {
+                      const deliveryOrder = isDeliveryOrder(order);
+                      return (
                       <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                           <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
@@ -2202,12 +2239,32 @@ export default function ChefDashboard() {
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>
                         )}
                         {order.status === 'ready' && (
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Ready for pickup</Text>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>
+                            {deliveryOrder ? 'Ready for delivery' : 'Ready for pickup'}
+                          </Text>
                         )}
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
             {order.order_items?.map((item: any) => `${item.quantity}x ${item.dish_name || 'Item'}${item.notes?.trim() ? ` — ${item.notes.trim()}` : ''}`).join(', ') || 'No items'}
                         </Text>
-                        <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                        {deliveryOrder ? (
+                          <>
+                            {order.delivery_phone ? (
+                              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+                                Phone: {formatPhone(order.delivery_phone) || order.delivery_phone}
+                              </Text>
+                            ) : null}
+                            {order.delivery_address ? (
+                              <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+                                Address: {formatLocationDisplay(order.delivery_address)}
+                              </Text>
+                            ) : null}
+                            <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>
+                              Delivery: {formatLocal(order.delivery_at)}
+                            </Text>
+                          </>
+                        ) : (
+                          <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Pickup: {formatLocal(order.pickup_at)}</Text>
+                        )}
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Customer: {order.user_name || order.user_email || 'Unknown'}</Text>
                         <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>Placed: {formatLocal(order.created_at)}</Text>
                         <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
@@ -2292,15 +2349,17 @@ export default function ChefDashboard() {
                               >
                                 <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Messages</Text>
                               </TouchableOpacity>
-                              <TouchableOpacity
-                                onPress={() => handleOpenPickupUpdateModal(order)}
-                                style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
-                              >
-                                <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
-                              </TouchableOpacity>
+                              {!deliveryOrder ? (
+                                <TouchableOpacity
+                                  onPress={() => handleOpenPickupUpdateModal(order)}
+                                  style={{ backgroundColor: 'transparent', borderWidth: 1, borderColor: PRIMARY_COLOR, paddingVertical: 8, paddingHorizontal: 10, borderRadius: 8, alignSelf: 'flex-start' }}
+                                >
+                                  <Text style={{ color: PRIMARY_COLOR, fontSize: 12, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>Update pickup date/time</Text>
+                                </TouchableOpacity>
+                              ) : null}
                             </View>
                           ) : null}
-                          {['requested', 'pending'].includes(order.status) && (
+                          {!deliveryOrder && ['requested', 'pending'].includes(order.status) && (
                             <View style={{ flexDirection: 'column', gap: 8, alignSelf: 'flex-start' }}>
                               <TouchableOpacity
                                 onPress={() => handleOpenPickupUpdateModal(order)}
@@ -2312,7 +2371,8 @@ export default function ChefDashboard() {
                           )}
                         </View>
                       </View>
-                    ))
+                    );
+                    })
                   ) : (
                     <View style={{ padding: 32, alignItems: 'center' }}>
                       <Text style={{ color: TEXT_MUTED, fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>No {dashboardOrderStatusFilter === 'cancelled' || dashboardOrderStatusFilter === 'rejected' ? 'declined' : dashboardOrderStatusFilter} orders</Text>
