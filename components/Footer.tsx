@@ -18,11 +18,11 @@ type SocialDef = {
 
 /** Order: FB → IG → YT → WA → LI */
 const SOCIAL_DEFS: SocialDef[] = [
-  { urlKey: 'facebook', label: 'Facebook', source: require('../assets/facebook-logo.png') },
-  { urlKey: 'instagram', label: 'Instagram', source: require('../assets/instagram.png') },
-  { urlKey: 'youtube', label: 'YouTube', source: require('../assets/youtube.png') },
-  { urlKey: 'whatsapp', label: 'WhatsApp', source: require('../assets/whatsapp.png') },
-  { urlKey: 'linkedin', label: 'LinkedIn', source: require('../assets/linkedin.png') },
+  { urlKey: 'facebook', label: 'Facebook', source: require('../assets/facebook.png') },
+  { urlKey: 'instagram', label: 'Instagram', source: require('../assets/instagram (1).png') },
+  { urlKey: 'youtube', label: 'YouTube', source: require('../assets/youtube (1).png') },
+  { urlKey: 'whatsapp', label: 'WhatsApp', source: require('../assets/whatsapp (1).png') },
+  { urlKey: 'linkedin', label: 'LinkedIn', source: require('../assets/linkedin (1).png') },
 ]
 
 function openExternalUrl(url: string) {

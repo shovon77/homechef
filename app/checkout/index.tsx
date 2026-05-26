@@ -760,7 +760,7 @@ export default function CheckoutPage() {
           <>
           {needsFulfillmentChoice && (
             <View style={{ gap: 12 }}>
-              <Text style={styles.fulfillmentQuestionTitle}>How would you like to get your order?</Text>
+              <Text style={styles.fulfillmentQuestionTitle}>How do you want your order?</Text>
               <View style={styles.fulfillmentChoiceRow}>
                 <TouchableOpacity
                   onPress={() => {
@@ -1368,9 +1368,10 @@ const styles = StyleSheet.create({
   },
   fulfillmentQuestionTitle: {
     color: TEXT_DARK,
-    fontSize: 18,
-    fontWeight: '800' as any,
+    fontSize: theme.typography.fontSize.lg,
+    fontWeight: '700' as any,
     fontFamily: 'OpenSans_700Bold',
+    letterSpacing: -0.2,
   },
   fulfillmentChoiceRow: {
     flexDirection: 'row',

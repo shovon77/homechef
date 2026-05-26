@@ -1,6 +1,7 @@
 import React, { useEffect, useState, useMemo, startTransition, useCallback, useRef, lazy, Suspense } from "react";
 import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
 import { Link, useRouter } from "expo-router";
+import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../lib/supabase";
 import { theme, elev } from "../lib/theme";
@@ -664,27 +665,38 @@ export default function HomePage() {
           </Link>
 
           {/* Featured Dishes section - Auto-scroll + Swipeable Carousel */}
-          <View ref={featuredSectionRef} style={styles.section}>
-            <Text
+          <View ref={featuredSectionRef} style={[styles.section, styles.featuredDishesSection]}>
+            <View
               style={[
-                styles.sectionTitle,
-                styles.homeSectionTitleSmaller,
-                isMobile && styles.sectionTitleMobile,
-                isMobile && styles.homeSectionTitleSmallerMobile,
+                styles.homeSectionHeaderPill,
+                styles.homeSectionHeaderPillFirst,
+                styles.featuredSectionHeaderPill,
+                isMobile && styles.homeSectionHeaderPillMobile,
               ]}
             >
-              Featured this week
-            </Text>
+              <Text
+                style={[
+                  styles.homeSectionHeaderTitle,
+                  styles.homeSectionTitleSmaller,
+                  isMobile && styles.homeSectionTitleSmallerMobile,
+                ]}
+                numberOfLines={1}
+              >
+                Featured this week
+              </Text>
+              <Ionicons name="chevron-forward" size={22} color="rgba(255, 255, 255, 0.72)" />
+            </View>
             <ScrollView 
               ref={featuredScrollRef}
               horizontal 
               showsHorizontalScrollIndicator={false}
               bounces={false}
               contentContainerStyle={{
-                flexDirection: 'row', 
+                flexDirection: 'row',
                 gap: GAP,
                 paddingHorizontal: GAP / 2,
-                paddingBottom: theme.spacing.md,
+                // Space below dish cards inside this section (not section margin, which only pushes Popular down).
+                paddingBottom: 0,
               }}
               decelerationRate="fast"
               scrollEventThrottle={16}
@@ -740,17 +752,26 @@ export default function HomePage() {
           </View>
 
           {/* Featured Chefs section - matches HTML design */}
-          <View style={styles.section}>
-            <Text
+          <View style={[styles.section, styles.popularChefsSection]}>
+            <View
               style={[
-                styles.sectionTitle,
-                styles.homeSectionTitleSmaller,
-                isMobile && styles.sectionTitleMobile,
-                isMobile && styles.homeSectionTitleSmallerMobile,
+                styles.homeSectionHeaderPill,
+                styles.popularSectionHeaderPill,
+                isMobile && styles.homeSectionHeaderPillMobile,
               ]}
             >
-              Popular near you
-            </Text>
+              <Text
+                style={[
+                  styles.homeSectionHeaderTitle,
+                  styles.homeSectionTitleSmaller,
+                  isMobile && styles.homeSectionTitleSmallerMobile,
+                ]}
+                numberOfLines={1}
+              >
+                Popular near you
+              </Text>
+              <Ionicons name="chevron-forward" size={22} color="rgba(255, 255, 255, 0.72)" />
+            </View>
             {isMobile ? (
               <ScrollView 
                 horizontal 
@@ -808,16 +829,21 @@ export default function HomePage() {
 
           {/* How It Works section */}
           <View style={[styles.section, styles.howItWorksSection]}>
-            <View style={[styles.howItWorksHeaderRow, isMobile && styles.howItWorksHeaderRowMobile]}>
+            <View
+              style={[
+                styles.homeSectionHeaderPill,
+                styles.howItWorksHeaderPill,
+                isMobile && styles.homeSectionHeaderPillMobile,
+              ]}
+            >
               <Text
                 style={[
-                  styles.sectionTitle,
-                  styles.howItWorksHeadingInline,
+                  styles.homeSectionHeaderTitle,
+                  styles.howItWorksHeaderTitle,
                   styles.homeSectionTitleSmaller,
-                  isMobile && styles.sectionTitleMobile,
                   isMobile && styles.homeSectionTitleSmallerMobile,
                 ]}
-                numberOfLines={2}
+                numberOfLines={1}
               >
                 How it works?
               </Text>
@@ -1019,7 +1045,7 @@ const styles = StyleSheet.create({
     }),
     borderRadius: theme.radius.xl,
     overflow: "hidden",
-    marginBottom: theme.spacing.xl,
+    marginBottom: 0,
     position: "relative",
     backgroundColor: '#E6E4E1',
   },
@@ -1224,29 +1250,33 @@ const styles = StyleSheet.create({
     // Keep spacing consistent between homepage sections
     marginBottom: theme.spacing.lg,
   },
+  featuredDishesSection: {
+    marginTop: theme.spacing.xl,
+    // Gap above Popular header matches gap below Featured header pill.
+    marginBottom: theme.spacing.xl,
+  },
+  /** Gap below Featured header pill matches featuredDishesSection marginTop above it. */
+  featuredSectionHeaderPill: {
+    marginBottom: theme.spacing.xl,
+  },
+  popularChefsSection: {
+    // Gap above How it works header matches gap below Popular header pill.
+    marginBottom: theme.spacing.xl,
+  },
+  /** Gap below Popular header pill matches gap above it (featuredDishesSection marginBottom). */
+  popularSectionHeaderPill: {
+    marginBottom: theme.spacing.xl,
+  },
   howItWorksSection: {
     paddingBottom: 0,
   },
-  howItWorksHeaderRow: {
-    flexDirection: "row",
-    alignItems: "center",
-    justifyContent: "space-between",
-    paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.lg,
-    gap: theme.spacing.sm,
+  howItWorksHeaderPill: {
+    flexWrap: 'nowrap',
+    // Gap below header pill matches gap above it (popularChefsSection marginBottom).
+    marginBottom: theme.spacing.xl,
   },
-  howItWorksHeaderRowMobile: {
-    paddingBottom: theme.spacing.md,
-    gap: theme.spacing.xs,
-  },
-  howItWorksHeadingInline: {
-    flex: 1,
+  howItWorksHeaderTitle: {
     flexShrink: 1,
-    minWidth: 0,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
   },
   /** Slightly smaller than `sectionTitle` for homepage section headings only */
   homeSectionTitleSmaller: {
@@ -1263,25 +1293,54 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
   },
+  homeSectionHeaderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  /** First homepage section header: slightly less top padding below the hero. */
+  homeSectionHeaderPillFirst: {
+    paddingTop: theme.spacing.xs,
+  },
+  homeSectionHeaderPillMobile: {
+    paddingHorizontal: theme.spacing.md,
+  },
+  homeSectionHeaderTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontFamily: 'OpenSans_300Light',
+    fontWeight: '300',
+    letterSpacing: 0,
+    padding: 0,
+    margin: 0,
+  },
   howItWorksToggleTrack: {
     flexDirection: "row",
     alignItems: "stretch",
     flexShrink: 0,
-    backgroundColor: "#EBEBEB",
-    borderWidth: 1,
-    borderColor: "#E8E8E8",
+    backgroundColor: "#F2F0EF",
+    borderWidth: 0,
     borderRadius: 999,
     overflow: "hidden",
-    minHeight: 42,
+    minHeight: 32,
     minWidth: 136,
   },
   howItWorksToggleTrackMinMobile: {
-    minWidth: 152,
-    minHeight: 40,
+    minHeight: 32,
+    minWidth: 128,
   },
   howItWorksToggleSegment: {
     flex: 1,
-    paddingVertical: 6,
+    paddingVertical: 4,
     paddingHorizontal: 3,
     alignItems: "center",
     justifyContent: "center",
@@ -1291,11 +1350,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   howItWorksToggleSegmentInactive: {
-    backgroundColor: "transparent",
+    backgroundColor: "#F2F0EF",
   },
   howItWorksToggleSegmentActive: {
-    backgroundColor: "#FE734C",
-    // Full capsule so the inner edge is a semicircle, not a hard vertical split.
+    backgroundColor: "#FFFFFF",
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -1313,10 +1371,11 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   howItWorksToggleLabelActive: {
-    color: "#FFFFFF",
+    color: theme.colors.primary,
+    fontWeight: theme.typography.fontWeight.semibold,
   },
   howItWorksToggleLabelInactive: {
-    color: "#33393A",
+    color: "#6B7280",
   },
   sellCtaContainer: {
     alignItems: 'center',
@@ -1375,7 +1434,7 @@ const styles = StyleSheet.create({
   // Featured Dishes
   horizontalScrollContent: {
     paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
+    paddingBottom: 0,
     gap: theme.spacing.lg,
   },
   dishCardWrapper: {
@@ -1542,6 +1601,7 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: theme.spacing.lg,
     paddingHorizontal: theme.spacing.sm,
+    paddingBottom: 0,
   },
   homepageChefCardWrapperDesktop: {
     flex: 1,
@@ -1631,7 +1691,7 @@ const styles = StyleSheet.create({
   },
   heroMobile: {
     minHeight: 200,
-    padding: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.sm,
   },
   heroTitleMobile: {
     fontFamily: theme.typography.fontFamily.body,

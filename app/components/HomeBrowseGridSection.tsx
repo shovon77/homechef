@@ -17,6 +17,7 @@ import {
   type NativeScrollEvent,
 } from 'react-native'
 import { Link } from 'expo-router'
+import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { theme } from '../../lib/theme'
 import DishCard from './DishCard'
@@ -121,22 +122,30 @@ const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGrid
 
     return (
       <View style={[styles.section, styles.homeBrowseGridSection]}>
-        <View style={styles.homeBrowseGridHeader}>
+        <View
+          style={[
+            styles.homeSectionHeaderPill,
+            isMobile && styles.homeSectionHeaderPillMobile,
+          ]}
+        >
           <Text
             style={[
-              styles.sectionTitle,
+              styles.homeSectionHeaderTitle,
               styles.homeSectionTitleSmaller,
-              isMobile && styles.sectionTitleMobile,
               isMobile && styles.homeSectionTitleSmallerMobile,
-              styles.homeBrowseGridHeadingText,
             ]}
-            numberOfLines={2}
+            numberOfLines={1}
           >
             Explore dishes
           </Text>
           <Link href="/browse?tab=dishes" asChild>
-            <TouchableOpacity style={styles.homeBrowseGridSeeAll}>
-              <Text style={styles.homeBrowseGridSeeAllText}>See all</Text>
+            <TouchableOpacity
+              style={styles.homeBrowseGridSeeAll}
+              accessibilityRole="link"
+              accessibilityLabel="View all dishes"
+            >
+              <Text style={styles.homeBrowseGridSeeAllText}>All</Text>
+              <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
             </TouchableOpacity>
           </Link>
         </View>
@@ -186,18 +195,31 @@ const styles = StyleSheet.create({
   section: {
     marginBottom: theme.spacing.xl,
   },
-  sectionTitle: {
-    color: '#333333',
-    fontSize: Platform.select({
-      web: 30,
-      default: 22,
-    }),
-    fontFamily: theme.typography.fontFamily.display,
-    fontWeight: theme.typography.fontWeight.bold,
-    letterSpacing: -0.015,
+  homeSectionHeaderPill: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    width: '100%',
+    backgroundColor: theme.colors.primary,
+    borderRadius: 999,
+    paddingTop: theme.spacing.sm,
+    paddingBottom: theme.spacing.sm,
+    paddingHorizontal: theme.spacing.lg,
+    marginBottom: theme.spacing.sm,
+    gap: theme.spacing.sm,
+  },
+  homeSectionHeaderPillMobile: {
     paddingHorizontal: theme.spacing.md,
-    paddingTop: theme.spacing.md,
-    paddingBottom: theme.spacing.md,
+  },
+  homeSectionHeaderTitle: {
+    flex: 1,
+    minWidth: 0,
+    color: 'rgba(255, 255, 255, 0.72)',
+    fontFamily: 'OpenSans_300Light',
+    fontWeight: '300',
+    letterSpacing: 0,
+    padding: 0,
+    margin: 0,
   },
   homeSectionTitleSmaller: {
     fontSize: Platform.select({
@@ -213,39 +235,22 @@ const styles = StyleSheet.create({
     fontSize: 22,
     lineHeight: 28,
   },
-  sectionTitleMobile: {
-    fontFamily: theme.typography.fontFamily.display,
-    fontSize: 26,
-    paddingHorizontal: 0,
-    fontWeight: theme.typography.fontWeight.bold,
-  },
   homeBrowseGridSection: {
     marginBottom: theme.spacing.lg,
   },
-  homeBrowseGridHeader: {
+  homeBrowseGridSeeAll: {
+    flexShrink: 0,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: theme.spacing.sm,
-    gap: theme.spacing.sm,
-  },
-  homeBrowseGridHeadingText: {
-    flex: 1,
-    minWidth: 0,
-    paddingHorizontal: 0,
-    paddingTop: 0,
-    paddingBottom: 0,
-  },
-  homeBrowseGridSeeAll: {
-    paddingVertical: 6,
-    paddingHorizontal: theme.spacing.sm,
+    gap: 2,
+    paddingVertical: 0,
+    paddingHorizontal: theme.spacing.xs,
   },
   homeBrowseGridSeeAllText: {
-    color: '#FE734C',
-    fontFamily: theme.typography.fontFamily.body,
+    color: '#FFFFFF',
+    fontFamily: 'OpenSans_300Light',
+    fontWeight: '300',
     fontSize: theme.typography.fontSize.sm,
-    fontWeight: '600' as const,
   },
   homeBrowseGridLoading: {
     paddingVertical: theme.spacing['2xl'],
