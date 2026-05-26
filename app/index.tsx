@@ -1269,6 +1269,8 @@ const styles = StyleSheet.create({
   },
   howItWorksSection: {
     paddingBottom: 0,
+    // Gap above Explore dishes header matches gap below How it works header pill.
+    marginBottom: theme.spacing.xl,
   },
   howItWorksHeaderPill: {
     flexWrap: 'nowrap',
@@ -1383,7 +1385,8 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: theme.spacing.md,
     marginTop: 0,
-    marginBottom: theme.spacing.lg,
+    // Same gap before Explore dishes header as below How it works header pill.
+    marginBottom: theme.spacing.xl,
     gap: theme.spacing.sm,
   },
   becomeChefButton: {

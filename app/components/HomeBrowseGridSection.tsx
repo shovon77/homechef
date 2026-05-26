@@ -125,6 +125,7 @@ const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGrid
         <View
           style={[
             styles.homeSectionHeaderPill,
+            styles.exploreSectionHeaderPill,
             isMobile && styles.homeSectionHeaderPillMobile,
           ]}
         >
@@ -210,6 +211,10 @@ const styles = StyleSheet.create({
   },
   homeSectionHeaderPillMobile: {
     paddingHorizontal: theme.spacing.md,
+  },
+  /** Gap below Explore header pill matches gap above it (howItWorks / sell CTA marginBottom). */
+  exploreSectionHeaderPill: {
+    marginBottom: theme.spacing.xl,
   },
   homeSectionHeaderTitle: {
     flex: 1,
