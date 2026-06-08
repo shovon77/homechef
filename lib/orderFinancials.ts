@@ -9,7 +9,14 @@ export type OrderAmountFields = {
   total_cents?: number | null;
   platform_fee_cents?: number | null;
   platform_commission_cents?: number | null;
+  delivery_fee_cents?: number | null;
 };
+
+export function getOrderDeliveryFeeCents(order: OrderAmountFields): number {
+  const stored = order.delivery_fee_cents;
+  if (typeof stored === 'number' && stored >= 0) return stored;
+  return 0;
+}
 
 export function getOrderSubtotalCents(order: OrderAmountFields): number {
   if (typeof order.subtotal_cents === 'number' && order.subtotal_cents >= 0) {
@@ -17,7 +24,8 @@ export function getOrderSubtotalCents(order: OrderAmountFields): number {
   }
   const total = order.total_cents ?? 0;
   const platformFee = order.platform_fee_cents ?? 0;
-  return Math.max(0, total - platformFee);
+  const deliveryFee = getOrderDeliveryFeeCents(order);
+  return Math.max(0, total - platformFee - deliveryFee);
 }
 
 /** 10% of food subtotal; prefers stored platform_commission_cents from checkout. */
@@ -28,6 +36,24 @@ export function getChefPlatformCommissionCents(order: OrderAmountFields): number
   return Math.round(subtotal * PLATFORM_COMMISSION_RATE);
 }
 
+/**
+ * Stripe transfer to chef: food subtotal − 10% commission + full delivery fee.
+ * Delivery fee is not subject to platform commission.
+ */
+export function getChefPayoutCents(order: OrderAmountFields): number {
+  return (
+    getOrderSubtotalCents(order) -
+    getChefPlatformCommissionCents(order) +
+    getOrderDeliveryFeeCents(order)
+  );
+}
+
+/** Chef take-home after platform commission on food; includes delivery fees. */
 export function getChefNetSalesCents(order: OrderAmountFields): number {
-  return getOrderSubtotalCents(order) - getChefPlatformCommissionCents(order);
+  return getChefPayoutCents(order);
+}
+
+/** Platform revenue from an order: flat service fee + 10% food commission. */
+export function getPlatformRevenueCents(order: OrderAmountFields): number {
+  return (order.platform_fee_cents ?? 0) + getChefPlatformCommissionCents(order);
 }

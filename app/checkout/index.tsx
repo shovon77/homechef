@@ -415,7 +415,7 @@ export default function CheckoutPage() {
   const platformFee = 1.50;
   const deliveryFee = effectiveFulfillmentMethod === 'delivery' ? chefDeliveryFlatFee : 0;
   // Total (customer): subtotal + platform service fee + delivery fee when applicable
-  // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not paid by customer
+  // Platform commission (10% of subtotal) is deducted from chef food sales; delivery fee goes fully to the chef.
   const total = useMemo(
     () => subtotal + platformFee + deliveryFee,
     [subtotal, platformFee, deliveryFee],

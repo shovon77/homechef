@@ -247,9 +247,9 @@ export const handler = async (req: Request) => {
     // Customer pays: subtotal + platform service fee + delivery fee (commission is NOT paid by customer)
     const grandTotalCents = total_cents + platformFeeCents + deliveryFeeCents;
     
-    // Amount chef receives: subtotal minus platform commission
-    // (Stripe processing fees are deducted separately by Stripe)
-    const chefAmountCents = total_cents - platformCommissionCents;
+    // Chef receives: food subtotal minus 10% commission + full delivery fee (no commission on delivery).
+    // Stripe processing fees are deducted separately by Stripe.
+    const chefAmountCents = total_cents - platformCommissionCents + deliveryFeeCents;
 
     const { data: chefRow, error: chefError } = await adminClient
       .from('chefs')
@@ -348,24 +348,22 @@ export const handler = async (req: Request) => {
     };
 
     // Only add transfer data if we have a destination account
-    // Customer pays: subtotal + service fee + tax
-    // Chef receives: subtotal - commission (commission is deducted from chef's payout)
-    // Platform receives: commission + service fee + tax (automatically calculated as grandTotalCents - chefAmountCents)
+    // Customer pays: subtotal + service fee + delivery fee
+    // Chef receives: subtotal - commission + delivery fee
+    // Platform receives: commission + service fee (grandTotalCents - chefAmountCents)
     if (stripeAccountId) {
-      // Use transfer_data.amount to specify exactly what chef receives
-      // Platform automatically gets the difference: grandTotalCents - chefAmountCents
-      // Note: Cannot use both application_fee_amount and transfer_data.amount (they are mutually exclusive)
       paymentIntentData.transfer_data = {
         destination: stripeAccountId,
-        amount: chefAmountCents, // Chef receives subtotal minus commission
+        amount: chefAmountCents,
       };
       paymentIntentData.transfer_group = transferGroup;
       console.log('[create-checkout] Stripe transfer setup', {
-        chefAmountCents, // What chef receives (subtotal - commission)
-        platformCommissionCents, // Commission deducted from chef
-        platformFeeCents, // Service fee
-        grandTotalCents, // Total customer pays (subtotal + service fee)
-        platformTotal: grandTotalCents - chefAmountCents, // Total platform receives (commission + service fee)
+        chefAmountCents,
+        deliveryFeeCents,
+        platformCommissionCents,
+        platformFeeCents,
+        grandTotalCents,
+        platformTotal: grandTotalCents - chefAmountCents,
       });
     }
 

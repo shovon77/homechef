@@ -24,6 +24,7 @@ import PayoutSettings from '../../components/chef/PayoutSettings';
 import { formatCad, cents } from '../../lib/money';
 import {
   getChefNetSalesCents,
+  getChefPayoutCents,
   getChefPlatformCommissionCents,
   getOrderSubtotalCents,
 } from '../../lib/orderFinancials';
@@ -84,6 +85,7 @@ type OrderRow = {
   subtotal_cents?: number | null;
   platform_fee_cents?: number | null;
   platform_commission_cents?: number | null;
+  delivery_fee_cents?: number | null;
   created_at: string;
   pickup_at: string | null;
   fulfillment_method?: string | null;
@@ -1152,7 +1154,7 @@ export default function ChefDashboard() {
       // Include: payment_status='succeeded' OR (payment_status IS NULL AND has stripe_payment_intent_id)
       const { data: ordersData, error } = await supabase
         .from('orders')
-        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,platform_commission_cents,created_at,pickup_at,fulfillment_method,delivery_address,delivery_phone,delivery_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
+        .select('id,user_id,status,total_cents,subtotal_cents,platform_fee_cents,platform_commission_cents,delivery_fee_cents,created_at,pickup_at,fulfillment_method,delivery_address,delivery_phone,delivery_at,chef_id,stripe_transfer_id,payment_status,stripe_payment_intent_id,checkout_session_id')
         .eq('chef_id', chefId)
         .in('status', ['requested', 'pending', 'ready', 'completed', 'cancelled', 'rejected'])
         .order('created_at', { ascending: false });
@@ -1265,6 +1267,7 @@ export default function ChefDashboard() {
         total_cents: order.total_cents ?? 0,
         subtotal_cents: order.subtotal_cents ?? null,
         platform_commission_cents: order.platform_commission_cents ?? null,
+        delivery_fee_cents: order.delivery_fee_cents ?? null,
         created_at: order.created_at,
         pickup_at: order.pickup_at ?? null,
         fulfillment_method: order.fulfillment_method ?? null,
@@ -1382,7 +1385,7 @@ export default function ChefDashboard() {
         const orderDate = new Date(order.created_at);
         return orderDate >= startOfWeek && orderDate < endOfWeek;
       })
-      .reduce((sum, order) => sum + Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)), 0);
+      .reduce((sum, order) => sum + getChefPayoutCents(order), 0);
   }, [orders]);
 
   const monthlyEarnings = useMemo(() => {
@@ -1396,7 +1399,7 @@ export default function ChefDashboard() {
         const orderDate = new Date(order.created_at);
         return orderDate >= startOfMonth && orderDate < endOfMonth;
       })
-      .reduce((sum, order) => sum + Math.max(0, (order.total_cents ?? 0) - (order.platform_fee_cents ?? 0)), 0);
+      .reduce((sum, order) => sum + getChefPayoutCents(order), 0);
   }, [orders]);
 
   // All-time financial metrics (paid orders with a transfer)
@@ -1415,7 +1418,7 @@ export default function ChefDashboard() {
       (sum, order) => sum + getChefNetSalesCents(order),
       0,
     );
-    
+
     return {
       grossSales,
       platformCommission,
@@ -1922,7 +1925,7 @@ export default function ChefDashboard() {
         value={formatChefFinancialMetric(financialMetrics.netEarnings)}
         label="Profit"
         infoTitle="Profit"
-        infoMessage="What you take home after fees are removed"
+        infoMessage="What you take home after the 10% food fee, including delivery fees you charge"
         onInfo={showInfo}
         valueColor={PRIMARY_COLOR}
       />
@@ -2227,7 +2230,7 @@ export default function ChefDashboard() {
                       <View key={order.id} style={{ backgroundColor: BG_LIGHT, borderRadius: 12, borderWidth: 1, borderColor: BORDER_LIGHT, padding: 16, gap: 6 }}>
                         <View style={{ flexDirection: 'row', justifyContent: 'space-between' }}>
                           <Text style={{ color: TEXT_DARK, fontSize: 16, fontWeight: '900', fontFamily: theme.typography.fontFamily.display }}>Order #{order.id}</Text>
-                          <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad((order.subtotal_cents ?? order.total_cents ?? 0) / 100)} CAD</Text>
+                          <Text style={{ color: PRIMARY_COLOR, fontSize: 16, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>{formatCad(getChefPayoutCents(order) / 100)} CAD</Text>
                         </View>
                         {order.status === 'pending' && (
                           <Text style={{ color: PRIMARY_COLOR, fontSize: 14, fontWeight: '400', fontFamily: theme.typography.fontFamily.body }}>In the kitchen</Text>

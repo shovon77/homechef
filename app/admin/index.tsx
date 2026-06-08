@@ -20,6 +20,13 @@ import {
   mergeSocialUrlsWithDb,
   type FooterSocialUrlKey,
 } from '../../lib/footerSocialSettings';
+import {
+  getChefPayoutCents,
+  getChefPlatformCommissionCents,
+  getOrderDeliveryFeeCents,
+  getOrderSubtotalCents,
+  getPlatformRevenueCents,
+} from '../../lib/orderFinancials';
 
 const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
@@ -1825,15 +1832,14 @@ export default function AdminPage() {
     let totalStripeFeesCents = 0;
     const uniqueCustomerIds = new Set<string>();
 
-    // Order structure: total_cents = subtotal + platform_fee (no tax). subtotal = food only. platform_commission = 10% of subtotal.
+    // total_cents = subtotal + platform_fee + delivery_fee. Commission = 10% of food only; delivery goes to chef.
     // Marketplace metrics (gross sales, order count, active chefs/customers) use only completed orders.
     filteredOrders.forEach((order) => {
       if (!order || typeof order.total_cents !== 'number') return;
       const isCompleted = (order as any).status === 'completed';
       const createdAt = order.created_at ? new Date(order.created_at) : null;
       const platformFee = (order as any).platform_fee_cents ?? 0;
-      const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
-      const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
+      const platformCommission = getChefPlatformCommissionCents(order as any);
 
       totalCents += order.total_cents ?? 0;
 
@@ -1842,10 +1848,9 @@ export default function AdminPage() {
         orderCount += 1;
         grossSalesCents += order.total_cents ?? 0;
         if (order.user_id) uniqueCustomerIds.add(order.user_id);
-        // Platform flat fee and 10% commission
         totalPlatformFeesCents += platformFee;
         totalPlatformCommissionCents += platformCommission;
-        totalChefPayoutsCents += subtotalCents - platformCommission;
+        totalChefPayoutsCents += getChefPayoutCents(order as any);
         // Stripe fees: typically 2.9% + $0.30 per transaction
         if (order.stripe_payment_intent_id) {
           const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
@@ -1928,10 +1933,7 @@ export default function AdminPage() {
         const refundAmount = issue.orders?.total_cents ?? 0;
         totalRefundsCents += refundAmount;
         if (order) {
-          const pf = (order as any).platform_fee_cents ?? 0;
-          const subtotal = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - pf);
-          const pc = (order as any).platform_commission_cents ?? Math.round(subtotal * 0.10);
-          platformRefundsCents += pf + pc;
+          platformRefundsCents += getPlatformRevenueCents(order as any);
         } else {
           platformRefundsCents += refundAmount; // fallback if order not found
         }
@@ -2077,13 +2079,12 @@ export default function AdminPage() {
       if (!order || typeof order.total_cents !== 'number') return;
       if ((order as any).status !== 'completed') return;
       const platformFee = (order as any).platform_fee_cents ?? 0;
-      const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
-      const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
+      const platformCommission = getChefPlatformCommissionCents(order as any);
 
       grossSalesCents += order.total_cents ?? 0;
       totalPlatformFeesCents += platformFee;
       totalPlatformCommissionCents += platformCommission;
-      totalChefPayoutsCents += subtotalCents - platformCommission;
+      totalChefPayoutsCents += getChefPayoutCents(order as any);
       if (order.stripe_payment_intent_id) {
         totalStripeFeesCents += Math.round((order.total_cents ?? 0) * 0.029) + 30;
       }
@@ -2099,10 +2100,7 @@ export default function AdminPage() {
       const refundAmount = issue.orders?.total_cents ?? 0;
       totalRefundsCents += refundAmount;
       if (order) {
-        const pf = (order as any).platform_fee_cents ?? 0;
-        const subtotal = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - pf);
-        const pc = (order as any).platform_commission_cents ?? Math.round(subtotal * 0.10);
-        platformRefundsCents += pf + pc;
+        platformRefundsCents += getPlatformRevenueCents(order as any);
       } else {
         platformRefundsCents += refundAmount;
       }
@@ -2235,13 +2233,12 @@ export default function AdminPage() {
       if (!order || typeof order.total_cents !== 'number') return;
       if ((order as any).status !== 'completed') return;
       const platformFee = (order as any).platform_fee_cents ?? 0;
-      const subtotalCents = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - platformFee);
-      const platformCommission = (order as any).platform_commission_cents ?? Math.round(subtotalCents * 0.10);
+      const platformCommission = getChefPlatformCommissionCents(order as any);
 
       grossSalesCents += order.total_cents ?? 0;
       totalPlatformFeesCents += platformFee;
       totalPlatformCommissionCents += platformCommission;
-      totalChefPayoutsCents += subtotalCents - platformCommission;
+      totalChefPayoutsCents += getChefPayoutCents(order as any);
       if (order.stripe_payment_intent_id) {
         totalStripeFeesCents += Math.round((order.total_cents ?? 0) * 0.029) + 30;
       }
@@ -2257,10 +2254,7 @@ export default function AdminPage() {
       const refundAmount = issue.orders?.total_cents ?? 0;
       totalRefundsCents += refundAmount;
       if (order) {
-        const pf = (order as any).platform_fee_cents ?? 0;
-        const subtotal = (order as any).subtotal_cents ?? Math.max(0, (order.total_cents ?? 0) - pf);
-        const pc = (order as any).platform_commission_cents ?? Math.round(subtotal * 0.10);
-        platformRefundsCents += pf + pc;
+        platformRefundsCents += getPlatformRevenueCents(order as any);
       } else {
         platformRefundsCents += refundAmount;
       }
@@ -2565,7 +2559,7 @@ export default function AdminPage() {
             <Text style={[styles.metricValue, { color: '#FE734C' }]}>{formatCad(snapshotStats.revenueCents)} CAD</Text>
           </View>
           <View style={styles.metricRow}>
-            <Text style={styles.metricLabel}>Commissions</Text>
+            <Text style={styles.metricLabel}>Chef payouts</Text>
             <Text style={styles.metricValue}>{formatCad(snapshotStats.commissionsCents)} CAD</Text>
           </View>
           <View style={styles.metricRow}>
@@ -3745,45 +3739,40 @@ export default function AdminPage() {
       return null;
     }
 
-    // Calculate financial metrics for this order
-    // Gross revenue = subtotal (dish prices only, before fees and tax)
     const platformFeeCents = order.platform_fee_cents ?? 0;
-    const subtotalCents = (order as any).subtotal_cents ?? 
-      Math.round(((order.total_cents ?? 0) - platformFeeCents) / 1.13);
-    const grossRevenueCents = subtotalCents;
-    
-    // Platform commission = 10% of subtotal (what platform keeps from chef)
-    const platformCommissionCents = (order as any).platform_commission_cents ?? 
-      Math.round(subtotalCents * 0.10); // 10% commission
-    // Commissions = platform commission (what platform keeps)
-    const commissionsCents = platformCommissionCents;
-    
-    // Stripe fees: 2.9% + $0.30 per transaction (on total customer paid)
+    const subtotalCents = getOrderSubtotalCents(order as any);
+    const deliveryFeeCents = getOrderDeliveryFeeCents(order as any);
+    const platformCommissionCents = getChefPlatformCommissionCents(order as any);
+    const chefPayoutCents = getChefPayoutCents(order as any);
+    const platformRevenueCents = getPlatformRevenueCents(order as any);
+
     let stripeFeesCents = 0;
     const totalCustomerPaid = order.total_cents ?? 0;
     if (order.stripe_payment_intent_id || (order as any).stripe_payment_intent_id) {
       stripeFeesCents = Math.round(totalCustomerPaid * 0.029) + 30;
     }
 
-    // Check for refunds on this order
     let refundsCents = 0;
+    let platformRefundLossCents = 0;
     if (issues && Array.isArray(issues)) {
-      const orderIssue = issues.find((issue: any) => 
+      const orderIssue = issues.find((issue: any) =>
         issue.order_id === order.id && issue.status === 'refunded'
       );
       if (orderIssue && orderIssue.orders?.total_cents) {
         refundsCents = orderIssue.orders.total_cents;
+        platformRefundLossCents = platformRevenueCents;
       }
     }
 
-    // Net profit = gross revenue + platform fees + commissions - stripe fees - refunds
-    const netProfitCents = grossRevenueCents + platformFeeCents + commissionsCents - stripeFeesCents - refundsCents;
+    const netProfitCents = platformRevenueCents - stripeFeesCents - platformRefundLossCents;
 
     return {
       orderId: order.id,
-      grossRevenueCents,
+      subtotalCents,
+      deliveryFeeCents,
+      chefPayoutCents,
       platformFeeCents,
-      commissionsCents,
+      commissionsCents: platformCommissionCents,
       stripeFeesCents,
       refundsCents,
       netProfitCents,
@@ -3892,7 +3881,7 @@ export default function AdminPage() {
         </View>
         <View style={styles.metricsList}>
           <View style={styles.metricRow}>
-            <Text style={styles.metricLabel}>Commissions</Text>
+            <Text style={styles.metricLabel}>Chef payouts</Text>
             <Text style={styles.metricValue}>{formatCad(financeStats.commissionsCents)} CAD</Text>
           </View>
           <View style={styles.metricRow}>
@@ -3929,15 +3918,23 @@ export default function AdminPage() {
         {getOrderFinancialDetails ? (
           <View style={styles.metricsList}>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Gross revenue</Text>
-              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.grossRevenueCents)} CAD</Text>
+              <Text style={styles.metricLabel}>Food subtotal</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.subtotalCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Delivery fee (to chef)</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.deliveryFeeCents)} CAD</Text>
+            </View>
+            <View style={styles.metricRow}>
+              <Text style={styles.metricLabel}>Chef payout</Text>
+              <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.chefPayoutCents)} CAD</Text>
             </View>
             <View style={styles.metricRow}>
               <Text style={styles.metricLabel}>Platform fees</Text>
               <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.platformFeeCents)} CAD</Text>
             </View>
             <View style={styles.metricRow}>
-              <Text style={styles.metricLabel}>Commissions</Text>
+              <Text style={styles.metricLabel}>Platform commission</Text>
               <Text style={styles.metricValue}>{formatCad(getOrderFinancialDetails.commissionsCents)} CAD</Text>
             </View>
             <View style={styles.metricRow}>
