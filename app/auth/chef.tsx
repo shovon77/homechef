@@ -32,6 +32,14 @@ import {
   type ChefFulfillmentMode,
 } from '../../lib/chef-fulfillment';
 import { parseCadDollarsInput } from '../../lib/money';
+import {
+  serializeDeliveryAvailability,
+  migrateLegacySlotsToZones,
+  type DeliveryZone,
+  type GeoPoint,
+} from '../../lib/delivery-zones';
+import { geocodeAddress } from '../../lib/geocode';
+import DeliveryZonesSection from '../../components/chef/DeliveryZonesSection';
 
 // Storage key for chef onboarding form data
 const CHEF_FORM_STORAGE_KEY = 'chef_onboarding_form_data';
@@ -170,15 +178,13 @@ export default function ChefSignup() {
   
   // Step 2 fields - Availability (pickup and/or delivery)
   const [pickupSlots, setPickupSlots] = useState<Array<{ day: string; timeWindow: string }>>([]);
-  const [deliverySlots, setDeliverySlots] = useState<Array<{ day: string; timeWindow: string }>>([]);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
+  const [kitchenCoords, setKitchenCoords] = useState<GeoPoint | null>(null);
   const [chefTimezone, setChefTimezone] = useState(DEFAULT_CHEF_TIMEZONE);
   const [showTimezonePicker, setShowTimezonePicker] = useState(false);
   const [showPickupPicker, setShowPickupPicker] = useState(false);
-  const [showDeliveryPicker, setShowDeliveryPicker] = useState(false);
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
-  const [selectedDeliveryDay, setSelectedDeliveryDay] = useState<string>('');
-  const [selectedDeliveryTimeWindows, setSelectedDeliveryTimeWindows] = useState<string[]>([]);
   
   // Step 3 fields - Dish Management
   type DishItem = {
@@ -427,7 +433,11 @@ export default function ChefSignup() {
           if (data.deliveryFlatFee) setDeliveryFlatFee(data.deliveryFlatFee);
           // Password is not restored from storage (security)
           if (data.pickupSlots) setPickupSlots(data.pickupSlots);
-          if (data.deliverySlots) setDeliverySlots(data.deliverySlots);
+          if (data.deliveryZones) {
+            setDeliveryZones(data.deliveryZones);
+          } else if (data.deliverySlots?.length) {
+            setDeliveryZones(migrateLegacySlotsToZones(data.deliverySlots));
+          }
           if (data.chefTimezone) setChefTimezone(resolveChefTimezoneId(data.chefTimezone));
           if (data.dishes) setDishes(data.dishes);
           if (data.bio) setBio(data.bio);
@@ -467,7 +477,7 @@ export default function ChefSignup() {
           fulfillmentMode,
           deliveryFlatFee,
           pickupSlots,
-          deliverySlots,
+          deliveryZones,
           chefTimezone,
           dishes: dishes.map(d => ({ ...d, file: null })), // Don't save File objects
           bio,
@@ -487,7 +497,27 @@ export default function ChefSignup() {
       }
     };
     saveData();
-  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, fulfillmentMode, deliveryFlatFee, pickupSlots, deliverySlots, chefTimezone, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
+  }, [step, fullName, brandName, briefDescription, cuisineType, phone, email, address, fulfillmentMode, deliveryFlatFee, pickupSlots, deliveryZones, chefTimezone, dishes, bio, location, experience, specialties, foodSafetyAcknowledged, allergensDisclosed, platformInspectionUnderstood, agreementAccepted, feeAccepted, payoutAccepted]);
+
+  useEffect(() => {
+    const kitchenAddress = address.trim();
+    if (!kitchenAddress) {
+      setKitchenCoords(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const coords = await geocodeAddress(kitchenAddress);
+      if (!cancelled) {
+        setKitchenCoords(coords);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [address]);
 
   const fulfillmentOk = isValidChefFulfillmentMode(fulfillmentMode);
   const deliveryFeeOk =
@@ -511,7 +541,8 @@ export default function ChefSignup() {
     timezoneOk;
 
   const canProceedToStep3 =
-    (!includesPickup || pickupSlots.length > 0) && (!includesDelivery || deliverySlots.length > 0);
+    (!includesPickup || pickupSlots.length > 0) &&
+    (!includesDelivery || deliveryZones.some((zone) => zone.slots.length > 0));
   const canProceedToStep4 = dishes.length > 0; // At least one dish required
   const canProceedToStep5 = foodSafetyAcknowledged && allergensDisclosed && platformInspectionUnderstood && agreementAccepted && feeAccepted && payoutAccepted;
   const canSubmit = isLoggedIn
@@ -699,32 +730,6 @@ export default function ChefSignup() {
     setPickupSlots(pickupSlots.filter((_, i) => i !== index));
   };
 
-  const handleToggleDeliveryTimeWindow = (timeWindow: string) => {
-    if (selectedDeliveryTimeWindows.includes(timeWindow)) {
-      setSelectedDeliveryTimeWindows(selectedDeliveryTimeWindows.filter(tw => tw !== timeWindow));
-    } else {
-      setSelectedDeliveryTimeWindows([...selectedDeliveryTimeWindows, timeWindow]);
-    }
-  };
-
-  const handleAddDeliverySlots = () => {
-    if (selectedDeliveryDay && selectedDeliveryTimeWindows.length > 0) {
-      const newSlots = selectedDeliveryTimeWindows
-        .filter(timeWindow =>
-          !deliverySlots.some(
-            slot => slot.day === selectedDeliveryDay && slot.timeWindow === timeWindow,
-          ),
-        )
-        .map(timeWindow => ({ day: selectedDeliveryDay, timeWindow }));
-
-      if (newSlots.length > 0) {
-        setDeliverySlots([...deliverySlots, ...newSlots]);
-      }
-      setSelectedDeliveryTimeWindows([]);
-      setShowDeliveryPicker(false);
-    }
-  };
-
   async function submit() {
     setBusy(true);
     setMsg(null);
@@ -759,10 +764,20 @@ export default function ChefSignup() {
         setBusy(false);
         return;
       }
-      if (chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliverySlots.length === 0) {
-        Alert.alert('Required', 'Please add at least one delivery day and time.');
+      if (chefFulfillmentIncludesDelivery(resolvedFulfillment) && !serializeDeliveryAvailability(deliveryZones)) {
+        Alert.alert('Required', 'Please select at least one delivery city/region and add a schedule.');
         setBusy(false);
         return;
+      }
+
+      let kitchenLat: number | null = kitchenCoords?.lat ?? null;
+      let kitchenLon: number | null = kitchenCoords?.lon ?? null;
+      if (chefLocation && (kitchenLat == null || kitchenLon == null)) {
+        const coords = await geocodeAddress(chefLocation);
+        if (coords) {
+          kitchenLat = coords.lat;
+          kitchenLon = coords.lon;
+        }
       }
       
       // 1) Check if user is already logged in
@@ -872,12 +887,14 @@ export default function ChefSignup() {
                 ? pickupSlots
                 : null,
             delivery_availability:
-              chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliverySlots.length > 0
-                ? deliverySlots
+              chefFulfillmentIncludesDelivery(resolvedFulfillment)
+                ? serializeDeliveryAvailability(deliveryZones)
                 : null,
             timezone: resolveChefTimezoneId(chefTimezone),
             fulfillment_mode: resolvedFulfillment,
             delivery_flat_fee: deliveryFeeValue,
+            latitude: kitchenLat,
+            longitude: kitchenLon,
             status: 'pending', // Deactivated until admin approval
           user_id: session.user.id,
           })
@@ -906,12 +923,14 @@ export default function ChefSignup() {
                 ? pickupSlots
                 : null,
             delivery_availability:
-              chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliverySlots.length > 0
-                ? deliverySlots
+              chefFulfillmentIncludesDelivery(resolvedFulfillment)
+                ? serializeDeliveryAvailability(deliveryZones)
                 : null,
             timezone: resolveChefTimezoneId(chefTimezone),
             fulfillment_mode: resolvedFulfillment,
             delivery_flat_fee: deliveryFeeValue,
+            latitude: kitchenLat,
+            longitude: kitchenLon,
             status: 'pending', // Deactivated until admin approval
             user_id: session.user.id,
           })
@@ -1093,7 +1112,7 @@ export default function ChefSignup() {
 
   // Step 2 becomes "complete" with 1 slot, but gains extra progress with more slots.
   const step2SlotCount =
-    (includesPickup ? pickupSlots.length : 0) + (includesDelivery ? deliverySlots.length : 0);
+    (includesPickup ? pickupSlots.length : 0) + (includesDelivery ? deliveryZones.length : 0);
   const step2Complete = canProceedToStep3;
   const step2Ratio = !step2Complete
     ? 0
@@ -1809,43 +1828,12 @@ export default function ChefSignup() {
 
                   {includesDelivery ? (
                     <View style={[styles.field, styles.fieldFull]}>
-                      <View style={styles.fieldLabel}>
-                        <Text style={styles.label}>
-                          Delivery days & times
-                          <RequiredMark show={deliverySlots.length === 0} />
-                        </Text>
-                      </View>
-                      <TouchableOpacity
-                        style={[styles.input, styles.dropdownButton]}
-                        onPress={() => setShowDeliveryPicker(true)}
-                      >
-                        <Text style={[styles.dropdownButtonText, deliverySlots.length === 0 && styles.dropdownPlaceholder]}>
-                          {deliverySlots.length > 0
-                            ? `${deliverySlots.length} slot(s) selected`
-                            : 'Select delivery days & times...'}
-                        </Text>
-                        <Text style={styles.dropdownArrow}>▼</Text>
-                      </TouchableOpacity>
-                      <Text style={styles.hint}>Select the days and time windows when you offer delivery.</Text>
-                      {deliverySlots.length > 0 && (
-                        <View style={styles.selectedPickupTimes}>
-                          <Text style={styles.selectedPickupTimesLabel}>Selected delivery slots:</Text>
-                          {renderGroupedAvailabilitySlots(deliverySlots, (day, slotsToRemove) => {
-                            setDeliverySlots(deliverySlots.filter(s => !(s.day === day && slotsToRemove.includes(s.timeWindow))));
-                          })}
-                        </View>
-                      )}
-                      {renderAvailabilityPickerModal({
-                        visible: showDeliveryPicker,
-                        onClose: () => setShowDeliveryPicker(false),
-                        onAdd: handleAddDeliverySlots,
-                        selectedDay: selectedDeliveryDay,
-                        setSelectedDay: setSelectedDeliveryDay,
-                        selectedTimeWindows: selectedDeliveryTimeWindows,
-                        setSelectedTimeWindows: setSelectedDeliveryTimeWindows,
-                        onToggleTimeWindow: handleToggleDeliveryTimeWindow,
-                        title: 'Select delivery days & times',
-                      })}
+                      <DeliveryZonesSection
+                        zones={deliveryZones}
+                        onChange={setDeliveryZones}
+                        kitchen={kitchenCoords}
+                        required
+                      />
                     </View>
                   ) : null}
 
@@ -2514,15 +2502,22 @@ No subscriptions. No long-term commitments. Continued use of the Platform confir
                         {includesDelivery ? (
                           <View style={{ gap: theme.spacing.xs }}>
                             <Text style={{ fontWeight: theme.typography.fontWeight.bold as any, color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.display }}>
-                              Delivery
+                              Delivery zones
                             </Text>
-                            {deliverySlots.length > 0 ? (
-                              <View style={{ gap: theme.spacing.xs }}>
-                                {renderGroupedAvailabilitySlots(deliverySlots, null)}
+                            {deliveryZones.length > 0 ? (
+                              <View style={{ gap: theme.spacing.sm }}>
+                                {deliveryZones.map((zone) => (
+                                  <View key={zone.id} style={{ gap: theme.spacing.xs }}>
+                                    <Text style={{ color: TEXT_LIGHT, fontFamily: theme.typography.fontFamily.body }}>
+                                      {zone.name}
+                                    </Text>
+                                    {renderGroupedAvailabilitySlots(zone.slots, null)}
+                                  </View>
+                                ))}
                               </View>
                             ) : (
                               <Text style={{ color: TEXT_MUTED, fontSize: theme.typography.fontSize.base, fontFamily: theme.typography.fontFamily.body }}>
-                                No delivery slots selected
+                                No delivery zones added
                               </Text>
                             )}
                           </View>

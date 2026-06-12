@@ -27,6 +27,29 @@ export type Profile = {
 // ============================================================================
 // Chefs
 // ============================================================================
+export type DeliveryAvailabilitySlot = { day: string; timeWindow: string };
+
+export type DeliveryZoneConfigV3 = {
+  version: 3;
+  zones: Array<{
+    id: string;
+    regionId: string;
+    name: string;
+    slots: DeliveryAvailabilitySlot[];
+  }>;
+};
+
+/** @deprecated v2 radius-based config */
+export type DeliveryZoneConfigV2 = {
+  version: 2;
+  zones: Array<{
+    id: string;
+    name: string;
+    radiusKm: number;
+    slots: DeliveryAvailabilitySlot[];
+  }>;
+};
+
 export type Chef = {
   id: number; // BIGINT (may exceed JS safe int in production)
   slug?: string | null; // URL-safe unique identifier (e.g. chittagong-kitchen)
@@ -45,7 +68,7 @@ export type Chef = {
   latitude?: number | null; // Geocoded latitude for faster distance calculations
   longitude?: number | null; // Geocoded longitude for faster distance calculations
   pickup_availability?: Array<{ day: string; timeWindow: string }> | null;
-  delivery_availability?: Array<{ day: string; timeWindow: string }> | null;
+  delivery_availability?: DeliveryZoneConfigV3 | DeliveryZoneConfigV2 | DeliveryAvailabilitySlot[] | null;
   /** IANA timezone for pickup wall-clock at chef location (e.g. America/Toronto) */
   timezone?: string | null;
   /** pickup_only | delivery_only | pickup_and_delivery */

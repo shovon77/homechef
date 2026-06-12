@@ -4,6 +4,8 @@
  */
 
 import { Platform } from 'react-native';
+import { supabase } from './supabase';
+import { toFiniteNumberOrNull } from './number';
 
 // Coordinate cache with persistent storage
 const coordinateCache = new Map<string, { lat: number; lon: number } | null>();
@@ -38,6 +40,45 @@ function saveCacheToStorage() {
       console.warn('Failed to save geocode cache:', e);
     }
   }
+}
+
+function cacheCoords(address: string, coords: { lat: number; lon: number }) {
+  coordinateCache.set(address, coords);
+  saveCacheToStorage();
+}
+
+/**
+ * Resolve an address to coordinates using Google Geocoding (via edge function),
+ * falling back to OpenStreetMap Nominatim when needed.
+ */
+export async function resolveAddressCoords(
+  address: string,
+): Promise<{ lat: number; lon: number } | null> {
+  const trimmed = address.trim();
+  if (!trimmed) return null;
+
+  if (coordinateCache.has(trimmed)) {
+    const cached = coordinateCache.get(trimmed);
+    if (cached) return cached;
+  }
+
+  try {
+    const { data, error } = await supabase.functions.invoke('google-geocode-forward', {
+      body: { address: trimmed },
+    });
+
+    const lat = toFiniteNumberOrNull((data as { lat?: unknown })?.lat);
+    const lng = toFiniteNumberOrNull((data as { lng?: unknown })?.lng);
+    if (!error && lat !== null && lng !== null) {
+      const coords = { lat, lon: lng };
+      cacheCoords(trimmed, coords);
+      return coords;
+    }
+  } catch {
+    // Fall back to Nominatim below.
+  }
+
+  return geocodeAddress(trimmed);
 }
 
 /**

@@ -87,6 +87,11 @@ async function notifyChefOfNewOrder(orderId: number): Promise<void> {
       read: false,
     });
     if (insertErr) {
+      // 23505 = unique_violation (notifications_one_new_order_request_per_order index)
+      if ((insertErr as { code?: string }).code === '23505') {
+        console.log('[stripe-webhook] Chef already notified of new order', { orderId, chefId: order.chef_id });
+        return;
+      }
       console.error('[stripe-webhook] Notification insert failed', { orderId, chefId: order.chef_id, error: insertErr });
       return;
     }

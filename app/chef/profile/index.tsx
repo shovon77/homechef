@@ -30,9 +30,44 @@ import {
   isValidChefFulfillmentMode,
   type ChefFulfillmentMode,
 } from "../../../lib/chef-fulfillment";
+import {
+  parseDeliveryAvailability,
+  serializeDeliveryAvailability,
+  stableDeliveryZonesKey,
+  type DeliveryZone,
+  type GeoPoint,
+} from "../../../lib/delivery-zones";
+import DeliveryZonesSection from "../../../components/chef/DeliveryZonesSection";
+import { geocodeAddress } from "../../../lib/geocode";
 import type { Profile, OrderStatus } from "../../../lib/types";
 import { Screen } from "../../../components/Screen";
 import { confirmDiscardChanges, useUnsavedChangesGuard } from "../../../hooks/useUnsavedChangesGuard";
+
+async function resolveKitchenCoords(options: {
+  location: string;
+  chefLat?: number | null;
+  chefLon?: number | null;
+  profileLat?: number | null;
+  profileLon?: number | null;
+}): Promise<GeoPoint | null> {
+  const { location, chefLat, chefLon, profileLat, profileLon } = options;
+
+  if (typeof chefLat === "number" && typeof chefLon === "number") {
+    return { lat: chefLat, lon: chefLon };
+  }
+  if (typeof profileLat === "number" && typeof profileLon === "number") {
+    return { lat: profileLat, lon: profileLon };
+  }
+
+  const trimmed = location.trim();
+  if (!trimmed) return null;
+
+  try {
+    return await geocodeAddress(trimmed);
+  } catch {
+    return null;
+  }
+}
 
 type ChefProfileFormSnapshot = {
   firstName: string;
@@ -45,7 +80,7 @@ type ChefProfileFormSnapshot = {
   briefDescription: string;
   cuisineType: string[];
   pickupAvailability: Array<{ day: string; timeWindow: string }>;
-  deliveryAvailability: Array<{ day: string; timeWindow: string }>;
+  deliveryZones: DeliveryZone[];
   chefTimezone: string;
   fulfillmentMode: ChefFulfillmentMode;
   deliveryFlatFee: string;
@@ -75,7 +110,7 @@ function profileSnapshotsEqual(a: ChefProfileFormSnapshot, b: ChefProfileFormSna
     a.briefDescription === b.briefDescription &&
     stableCuisineKey(a.cuisineType) === stableCuisineKey(b.cuisineType) &&
     stableAvailabilityKey(a.pickupAvailability) === stableAvailabilityKey(b.pickupAvailability) &&
-    stableAvailabilityKey(a.deliveryAvailability) === stableAvailabilityKey(b.deliveryAvailability) &&
+    stableDeliveryZonesKey(a.deliveryZones) === stableDeliveryZonesKey(b.deliveryZones) &&
     a.chefTimezone === b.chefTimezone &&
     a.fulfillmentMode === b.fulfillmentMode &&
     a.deliveryFlatFee === b.deliveryFlatFee
@@ -113,10 +148,10 @@ export default function ChefProfilePage() {
   const [briefDescription, setBriefDescription] = useState("");
   const [cuisineType, setCuisineType] = useState<string[]>([]);
   const [pickupAvailability, setPickupAvailability] = useState<Array<{ day: string; timeWindow: string }>>([]);
-  const [deliveryAvailability, setDeliveryAvailability] = useState<Array<{ day: string; timeWindow: string }>>([]);
+  const [deliveryZones, setDeliveryZones] = useState<DeliveryZone[]>([]);
+  const [kitchenCoords, setKitchenCoords] = useState<GeoPoint | null>(null);
   const [showCuisineModal, setShowCuisineModal] = useState(false);
   const [showPickupModal, setShowPickupModal] = useState(false);
-  const [showDeliveryModal, setShowDeliveryModal] = useState(false);
   const [chefTimezone, setChefTimezone] = useState(DEFAULT_CHEF_TIMEZONE);
   const [showChefTimezoneModal, setShowChefTimezoneModal] = useState(false);
   const [fulfillmentMode, setFulfillmentMode] = useState<ChefFulfillmentMode>(DEFAULT_CHEF_FULFILLMENT_MODE);
@@ -124,8 +159,6 @@ export default function ChefProfilePage() {
   const [deliveryFlatFee, setDeliveryFlatFee] = useState("");
   const [selectedDay, setSelectedDay] = useState<string>('');
   const [selectedTimeWindows, setSelectedTimeWindows] = useState<string[]>([]);
-  const [selectedDeliveryDay, setSelectedDeliveryDay] = useState<string>('');
-  const [selectedDeliveryTimeWindows, setSelectedDeliveryTimeWindows] = useState<string[]>([]);
   const [showTermsModal, setShowTermsModal] = useState(false);
   const [termsType, setTermsType] = useState<'agreement' | 'fee' | 'payout' | null>(null);
   const [profileSaveMsg, setProfileSaveMsg] = useState<string | null>(null);
@@ -161,7 +194,7 @@ export default function ChefProfilePage() {
     briefDescription,
     cuisineType,
     pickupAvailability,
-    deliveryAvailability,
+    deliveryZones,
     chefTimezone: resolveChefTimezoneId(chefTimezone),
     fulfillmentMode: resolveChefFulfillmentMode(fulfillmentMode),
     deliveryFlatFee,
@@ -176,7 +209,7 @@ export default function ChefProfilePage() {
     briefDescription,
     cuisineType,
     pickupAvailability,
-    deliveryAvailability,
+    deliveryZones,
     chefTimezone,
     fulfillmentMode,
     deliveryFlatFee,
@@ -241,6 +274,28 @@ export default function ChefProfilePage() {
     }
   }, [activeNavTab, user]);
 
+  useEffect(() => {
+    if (!chefFulfillmentIncludesDelivery(fulfillmentMode)) return;
+
+    const loc = location.trim();
+    if (!loc) {
+      setKitchenCoords(null);
+      return;
+    }
+
+    let cancelled = false;
+    (async () => {
+      const coords = await resolveKitchenCoords({ location: loc });
+      if (!cancelled) {
+        setKitchenCoords(coords);
+      }
+    })();
+
+    return () => {
+      cancelled = true;
+    };
+  }, [location, fulfillmentMode]);
+
   async function loadProfile() {
     if (!user) return;
     setLoading(true);
@@ -256,11 +311,13 @@ export default function ChefProfilePage() {
         briefDescription: "",
         cuisineType: [],
         pickupAvailability: [],
-        deliveryAvailability: [],
+        deliveryZones: [],
         chefTimezone: DEFAULT_CHEF_TIMEZONE,
         fulfillmentMode: DEFAULT_CHEF_FULFILLMENT_MODE,
         deliveryFlatFee: "",
       };
+
+      let loadedLocation = "";
 
       const prof = await getProfile(user.id);
       if (prof) {
@@ -274,7 +331,7 @@ export default function ChefProfilePage() {
         setEmail(prof.email || "");
         const loadedPhone = (prof as { phone?: string | null }).phone || "";
         setPhone(loadedPhone);
-        const loadedLocation = prof.location || "";
+        loadedLocation = prof.location || "";
         setLocation(loadedLocation);
         const loadedPhoto = prof.photo_url || null;
         setPhotoUrl(loadedPhoto);
@@ -291,7 +348,7 @@ export default function ChefProfilePage() {
       // Load chef data from chefs table
       const { data: chefData } = await supabase
         .from('chefs')
-        .select('name, bio, cuisine, phone, pickup_availability, delivery_availability, photo, timezone, fulfillment_mode, delivery_flat_fee')
+        .select('name, bio, cuisine, phone, pickup_availability, delivery_availability, photo, timezone, fulfillment_mode, delivery_flat_fee, latitude, longitude')
         .eq('user_id', user.id)
         .maybeSingle();
       
@@ -308,7 +365,7 @@ export default function ChefProfilePage() {
         );
         let loadedCuisine: string[] = [];
         let loadedPickup: Array<{ day: string; timeWindow: string }> = [];
-        let loadedDelivery: Array<{ day: string; timeWindow: string }> = [];
+        let loadedDeliveryZones: DeliveryZone[] = [];
 
         setBrandName(loadedBrand);
         setBriefDescription(loadedBio);
@@ -352,20 +409,20 @@ export default function ChefProfilePage() {
         }
 
         if (chefData.delivery_availability) {
-          try {
-            const parsed = typeof chefData.delivery_availability === 'string'
-              ? JSON.parse(chefData.delivery_availability)
-              : chefData.delivery_availability;
-            if (Array.isArray(parsed)) {
-              loadedDelivery = parsed;
-              setDeliveryAvailability(parsed);
-            }
-          } catch (e) {
-            console.warn('Failed to parse delivery_availability:', e);
-          }
+          loadedDeliveryZones = parseDeliveryAvailability(chefData.delivery_availability)?.zones ?? [];
+          setDeliveryZones(loadedDeliveryZones);
         } else {
-          setDeliveryAvailability([]);
+          setDeliveryZones([]);
         }
+
+        const resolvedKitchen = await resolveKitchenCoords({
+          location: loadedLocation,
+          chefLat: (chefData as { latitude?: number | null }).latitude,
+          chefLon: (chefData as { longitude?: number | null }).longitude,
+          profileLat: prof?.latitude,
+          profileLon: prof?.longitude,
+        });
+        setKitchenCoords(resolvedKitchen);
 
         snapshot = {
           ...snapshot,
@@ -374,7 +431,7 @@ export default function ChefProfilePage() {
           chefLogoUrl: loadedLogo,
           cuisineType: loadedCuisine,
           pickupAvailability: loadedPickup,
-          deliveryAvailability: loadedDelivery,
+          deliveryZones: loadedDeliveryZones,
           chefTimezone: loadedTimezone,
           fulfillmentMode: loadedFulfillment,
           deliveryFlatFee: loadedDeliveryFee,
@@ -547,6 +604,10 @@ export default function ChefProfilePage() {
     }
 
     const resolvedFulfillment = resolveChefFulfillmentMode(fulfillmentMode);
+    if (chefFulfillmentIncludesDelivery(resolvedFulfillment) && !location.trim()) {
+      Alert.alert("Validation", "Please enter your kitchen address.");
+      return;
+    }
     if (chefFulfillmentIncludesPickup(resolvedFulfillment)) {
       if (!location.trim()) {
         Alert.alert("Validation", "Please enter a pickup location.");
@@ -562,27 +623,18 @@ export default function ChefProfilePage() {
     try {
       const fullName = [firstName.trim(), lastName.trim()].filter(Boolean).join(" ");
       
-      // Geocode location if it changed
       let latitude: number | null = null;
       let longitude: number | null = null;
       const locationValue = location.trim() || null;
-      if (locationValue && locationValue !== profile?.location) {
-        try {
-          const { geocodeAddress } = await import('../../lib/geocode');
-          const coords = await geocodeAddress(locationValue);
-          if (coords) {
-            latitude = coords.lat;
-            longitude = coords.lon;
-          }
-        } catch (error) {
-          console.warn('Failed to geocode location:', error);
-        }
-      } else if (locationValue === profile?.location && profile) {
-        // Location unchanged, preserve existing coordinates if available
-        const existingProfile = profile as any;
-        if (existingProfile.latitude && existingProfile.longitude) {
-          latitude = existingProfile.latitude;
-          longitude = existingProfile.longitude;
+      if (locationValue) {
+        const coords = await resolveKitchenCoords({
+          location: locationValue,
+          profileLat: profile?.latitude,
+          profileLon: profile?.longitude,
+        });
+        if (coords) {
+          latitude = coords.lat;
+          longitude = coords.lon;
         }
       }
       
@@ -603,6 +655,7 @@ export default function ChefProfilePage() {
       if (latitude !== null && longitude !== null) {
         updateData.latitude = latitude;
         updateData.longitude = longitude;
+        setKitchenCoords({ lat: latitude, lon: longitude });
       } else if (locationValue === null) {
         // Clear coordinates if location is cleared
         updateData.latitude = null;
@@ -619,29 +672,6 @@ export default function ChefProfilePage() {
         .eq("id", user.id);
 
       if (profileError) throw profileError;
-
-      // Also update chef's location in chefs table if location changed
-      if (locationValue !== profile?.location) {
-        const chefLocationUpdate: {
-          location?: string | null;
-          latitude?: number | null;
-          longitude?: number | null;
-        } = {
-          location: locationValue,
-        };
-        if (latitude !== null && longitude !== null) {
-          chefLocationUpdate.latitude = latitude;
-          chefLocationUpdate.longitude = longitude;
-        } else if (locationValue === null) {
-          chefLocationUpdate.latitude = null;
-          chefLocationUpdate.longitude = null;
-        }
-        
-        await supabase
-        .from("chefs")
-          .update(chefLocationUpdate)
-          .eq("user_id", user.id);
-      }
 
       const includesDelivery = chefFulfillmentIncludesDelivery(resolvedFulfillment);
       let deliveryFeeValue: number | null = null;
@@ -662,8 +692,8 @@ export default function ChefProfilePage() {
       }
 
       if (chefFulfillmentIncludesDelivery(resolvedFulfillment)) {
-        if (deliveryAvailability.length === 0) {
-          Alert.alert('Validation', 'Please add at least one delivery day and time.');
+        if (deliveryZones.length === 0 || !serializeDeliveryAvailability(deliveryZones)) {
+          Alert.alert('Validation', 'Please add at least one delivery city/region with a schedule.');
           setSaving(false);
           return;
         }
@@ -675,6 +705,9 @@ export default function ChefProfilePage() {
         bio: string | null;
         cuisine: string | null;
         phone: string | null;
+        location: string | null;
+        latitude: number | null;
+        longitude: number | null;
         pickup_availability: any;
         delivery_availability: any;
         timezone: string;
@@ -685,11 +718,14 @@ export default function ChefProfilePage() {
         bio: briefDescription.trim() || null,
         cuisine: cuisineType.length > 0 ? (cuisineType.length === 1 ? cuisineType[0] : JSON.stringify(cuisineType)) : null,
         phone: phoneE164,
+        location: locationValue,
+        latitude,
+        longitude,
         pickup_availability: chefFulfillmentIncludesPickup(resolvedFulfillment) && pickupAvailability.length > 0
           ? pickupAvailability
           : null,
-        delivery_availability: chefFulfillmentIncludesDelivery(resolvedFulfillment) && deliveryAvailability.length > 0
-          ? deliveryAvailability
+        delivery_availability: chefFulfillmentIncludesDelivery(resolvedFulfillment)
+          ? serializeDeliveryAvailability(deliveryZones)
           : null,
         timezone: resolveChefTimezoneId(chefTimezone),
         fulfillment_mode: resolvedFulfillment,
@@ -862,24 +898,6 @@ export default function ChefProfilePage() {
   
   function handleRemovePickupSlot(day: string) {
     setPickupAvailability(pickupAvailability.filter(s => s.day !== day));
-  }
-
-  function handleAddDeliverySlot() {
-    if (!selectedDeliveryDay || selectedDeliveryTimeWindows.length === 0) {
-      Alert.alert('Validation', 'Please select a day and at least one time window');
-      return;
-    }
-
-    const newSlots = selectedDeliveryTimeWindows.map(tw => ({ day: selectedDeliveryDay, timeWindow: tw }));
-    const existing = deliveryAvailability.filter(s => s.day !== selectedDeliveryDay);
-    setDeliveryAvailability([...existing, ...newSlots]);
-    setSelectedDeliveryDay('');
-    setSelectedDeliveryTimeWindows([]);
-    setShowDeliveryModal(false);
-  }
-
-  function handleRemoveDeliverySlot(day: string) {
-    setDeliveryAvailability(deliveryAvailability.filter(s => s.day !== day));
   }
 
   if (roleLoading || loading) {
@@ -1241,6 +1259,26 @@ export default function ChefProfilePage() {
                 {chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
                   <View style={profileStyles.settingsSection}>
                     <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
+                      {chefFulfillmentIncludesPickup(fulfillmentMode)
+                        ? "Kitchen & pickup location"
+                        : "Kitchen location"}
+                      <Text style={{ color: theme.colors.primary }}> *</Text>
+                    </Text>
+                    <LocationPicker
+                      value={location}
+                      onChange={setLocation}
+                      placeholder="Search for your kitchen address..."
+                      style={profileStyles.locationPicker}
+                    />
+                    <Text style={profileStyles.settingsHint}>
+                      Required. Nearby delivery cities are based on this address.
+                    </Text>
+                  </View>
+                ) : null}
+
+                {chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
+                  <View style={profileStyles.settingsSection}>
+                    <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
                       Delivery flat fees
                       <Text style={{ color: theme.colors.primary }}> *</Text>
                     </Text>
@@ -1261,50 +1299,12 @@ export default function ChefProfilePage() {
 
                 {chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
                   <View style={profileStyles.settingsSection}>
-                    <Text style={[profileStyles.settingsSectionTitle, { marginBottom: 8 }]}>
-                      Delivery days & times
-                      <Text style={{ color: theme.colors.primary }}> *</Text>
-                    </Text>
-                    <TouchableOpacity
-                      onPress={() => setShowDeliveryModal(true)}
-                      style={[profileStyles.settingsInput, { marginBottom: 8 }]}
-                    >
-                      <Text style={{ color: theme.colors.primary, fontFamily: theme.typography.fontFamily.body }}>+ Add delivery slot</Text>
-                    </TouchableOpacity>
-                    <Text style={[profileStyles.settingsHint, { marginBottom: 8 }]}>Required. Add at least one delivery slot.</Text>
-                    {deliveryAvailability.length > 0 && (
-                      <>
-                        <Text
-                          style={[
-                            profileStyles.settingsSectionTitle,
-                            { marginBottom: 8, marginTop: theme.spacing.xs },
-                          ]}
-                        >
-                          Selected delivery days and times
-                        </Text>
-                        <View style={{ gap: 8 }}>
-                          {(() => {
-                            const slotsByDay: { [day: string]: string[] } = {};
-                            deliveryAvailability.forEach(slot => {
-                              if (!slotsByDay[slot.day]) {
-                                slotsByDay[slot.day] = [];
-                              }
-                              slotsByDay[slot.day].push(slot.timeWindow);
-                            });
-                            return Object.entries(slotsByDay).map(([day, windows]) => (
-                              <View key={day} style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 8, backgroundColor: '#F9FAFB', borderRadius: 6 }}>
-                                <Text style={{ color: '#101828', fontSize: 14, flex: 1, fontFamily: theme.typography.fontFamily.body }}>
-                                  {day}: {windows.join(', ')}
-                                </Text>
-                                <TouchableOpacity onPress={() => handleRemoveDeliverySlot(day)}>
-                                  <Text style={{ color: '#B91C1C', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Remove</Text>
-                                </TouchableOpacity>
-                              </View>
-                            ));
-                          })()}
-                        </View>
-                      </>
-                    )}
+                    <DeliveryZonesSection
+                      zones={deliveryZones}
+                      onChange={setDeliveryZones}
+                      kitchen={kitchenCoords}
+                      required
+                    />
                   </View>
                 ) : null}
 
@@ -1380,7 +1380,8 @@ export default function ChefProfilePage() {
                   </View>
                 ) : null}
 
-                {chefFulfillmentIncludesPickup(fulfillmentMode) ? (
+                {chefFulfillmentIncludesPickup(fulfillmentMode) &&
+                !chefFulfillmentIncludesDelivery(fulfillmentMode) ? (
                   <View style={profileStyles.settingsSection}>
                     <Text style={profileStyles.settingsSectionTitle}>
                       Pickup location
@@ -1706,132 +1707,6 @@ export default function ChefProfilePage() {
             >
               <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Done</Text>
             </TouchableOpacity>
-          </TouchableOpacity>
-        </TouchableOpacity>
-      </Modal>
-
-      {/* Delivery Availability Modal */}
-      <Modal
-        visible={showDeliveryModal}
-        transparent={true}
-        animationType="fade"
-        onRequestClose={() => setShowDeliveryModal(false)}
-      >
-        <TouchableOpacity
-          style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center', padding: 20 }}
-          activeOpacity={1}
-          onPress={() => setShowDeliveryModal(false)}
-        >
-          <TouchableOpacity
-            activeOpacity={1}
-            onPress={(e) => e.stopPropagation()}
-            style={{
-              backgroundColor: '#FFFFFF',
-              borderRadius: 12,
-              padding: 20,
-              width: '100%',
-              maxWidth: 400,
-              maxHeight: '80%',
-            }}
-          >
-            <Text style={{ fontSize: 18, fontWeight: '700', marginBottom: 16, color: '#101828', fontFamily: theme.typography.fontFamily.body }}>Add delivery slot</Text>
-
-            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Day</Text>
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 16 }}>
-              <View style={{ flexDirection: 'row', gap: 8 }}>
-                {daysOfWeek.map((day) => (
-                  <TouchableOpacity
-                    key={day}
-                    onPress={() => setSelectedDeliveryDay(day)}
-                    style={{
-                      paddingVertical: 8,
-                      paddingHorizontal: 12,
-                      borderRadius: 8,
-                      borderWidth: 2,
-                      borderColor: selectedDeliveryDay === day ? theme.colors.primary : '#E5E7EB',
-                      backgroundColor: selectedDeliveryDay === day ? theme.colors.primary + '20' : '#FFFFFF',
-                    }}
-                  >
-                    <Text style={{
-                      color: selectedDeliveryDay === day ? theme.colors.primary : '#101828',
-                      fontSize: 14,
-                      fontWeight: selectedDeliveryDay === day ? '700' : '400',
-                      fontFamily: theme.typography.fontFamily.body,
-                    }}>{day.slice(0, 3)}</Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </ScrollView>
-
-            <Text style={{ color: '#667085', fontSize: 14, fontWeight: '700', marginBottom: 8, fontFamily: theme.typography.fontFamily.body }}>Time windows</Text>
-            <ScrollView style={{ maxHeight: 200, marginBottom: 16 }}>
-              {timeWindows.map((tw) => (
-                <TouchableOpacity
-                  key={tw}
-                  onPress={() => {
-                    if (selectedDeliveryTimeWindows.includes(tw)) {
-                      setSelectedDeliveryTimeWindows(selectedDeliveryTimeWindows.filter(t => t !== tw));
-                    } else {
-                      setSelectedDeliveryTimeWindows([...selectedDeliveryTimeWindows, tw]);
-                    }
-                  }}
-                  style={{
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    paddingVertical: 10,
-                    paddingHorizontal: 8,
-                    borderBottomWidth: 1,
-                    borderBottomColor: '#EAECF0',
-                  }}
-                >
-                  <View style={{
-                    width: 20,
-                    height: 20,
-                    borderRadius: 4,
-                    borderWidth: 2,
-                    borderColor: theme.colors.primary,
-                    backgroundColor: selectedDeliveryTimeWindows.includes(tw) ? theme.colors.primary : 'transparent',
-                    alignItems: 'center',
-                    justifyContent: 'center',
-                    marginRight: 12,
-                  }}>
-                    {selectedDeliveryTimeWindows.includes(tw) && (
-                      <Text style={{ color: '#FFFFFF', fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>✓</Text>
-                    )}
-                  </View>
-                  <Text style={{ color: '#101828', fontSize: 14, fontFamily: theme.typography.fontFamily.body }}>{tw}</Text>
-                </TouchableOpacity>
-              ))}
-            </ScrollView>
-
-            <View style={{ flexDirection: 'row', gap: 12 }}>
-              <TouchableOpacity
-                onPress={() => setShowDeliveryModal(false)}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  backgroundColor: '#F9FAFB',
-                  borderRadius: 8,
-                  alignItems: 'center',
-                  borderWidth: 1,
-                  borderColor: '#E5E7EB',
-                }}
-              >
-                <Text style={{ color: '#101828', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Cancel</Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                onPress={handleAddDeliverySlot}
-                style={{
-                  flex: 1,
-                  paddingVertical: 12,
-                  backgroundColor: theme.colors.primary,
-                  borderRadius: 8,
-                  alignItems: 'center',
-                }}
-              >
-                <Text style={{ color: '#FFFFFF', fontWeight: '700', fontSize: 16, fontFamily: theme.typography.fontFamily.body }}>Add</Text>
-              </TouchableOpacity>
-            </View>
           </TouchableOpacity>
         </TouchableOpacity>
       </Modal>

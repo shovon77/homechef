@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { View, Text, TouchableOpacity, TextInput, Alert, ActivityIndicator, StyleSheet, Linking, Platform, Image, useWindowDimensions, Modal, ScrollView, Animated, Easing } from 'react-native';
 import { useRouter, Link } from 'expo-router';
 import Screen from '../../components/Screen';
@@ -22,6 +22,13 @@ import {
   type ChefFulfillmentMode,
 } from '../../lib/chef-fulfillment';
 import { isValidCanadianPhone, formatPhone } from '../../lib/formatPhone';
+import {
+  parseDeliveryAvailability,
+  findMatchingDeliveryZone,
+  type DeliveryZone,
+  type GeoPoint,
+} from '../../lib/delivery-zones';
+import { resolveAddressCoords } from '../../lib/geocode';
 
 const BACKGROUND = '#F2F0EF';
 const BORDER = '#E5E7EB';
@@ -126,6 +133,85 @@ function CrossfadeFulfillmentPanel({
     <Animated.View style={{ opacity, transform: [{ translateY }] }}>
       {displayedMethod === 'pickup' ? pickupContent : deliveryContent}
     </Animated.View>
+  );
+}
+
+function DeliveryVerifyingPulse() {
+  const pulse = useRef(new Animated.Value(0)).current;
+  const ring = useRef(new Animated.Value(0)).current;
+
+  useEffect(() => {
+    const loop = Animated.loop(
+      Animated.parallel([
+        Animated.sequence([
+          Animated.timing(pulse, {
+            toValue: 1,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+          Animated.timing(pulse, {
+            toValue: 0,
+            duration: 800,
+            easing: Easing.inOut(Easing.ease),
+            useNativeDriver: true,
+          }),
+        ]),
+        Animated.sequence([
+          Animated.timing(ring, {
+            toValue: 1,
+            duration: 1600,
+            easing: Easing.out(Easing.cubic),
+            useNativeDriver: true,
+          }),
+          Animated.timing(ring, {
+            toValue: 0,
+            duration: 0,
+            useNativeDriver: true,
+          }),
+        ]),
+      ]),
+    );
+
+    loop.start();
+    return () => loop.stop();
+  }, [pulse, ring]);
+
+  const dotScale = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 1.2],
+  });
+  const dotOpacity = pulse.interpolate({
+    inputRange: [0, 1],
+    outputRange: [1, 0.55],
+  });
+  const ringScale = ring.interpolate({
+    inputRange: [0, 1],
+    outputRange: [0.75, 2.2],
+  });
+  const ringOpacity = ring.interpolate({
+    inputRange: [0, 0.65, 1],
+    outputRange: [0.55, 0.2, 0],
+  });
+
+  return (
+    <View style={styles.deliveryVerifyingRow}>
+      <View style={styles.deliveryVerifyingPulseWrap}>
+        <Animated.View
+          style={[
+            styles.deliveryVerifyingRing,
+            { transform: [{ scale: ringScale }], opacity: ringOpacity },
+          ]}
+        />
+        <Animated.View
+          style={[
+            styles.deliveryVerifyingDot,
+            { transform: [{ scale: dotScale }], opacity: dotOpacity },
+          ]}
+        />
+      </View>
+      <Text style={styles.deliveryZoneHint}>Checking delivery area…</Text>
+    </View>
   );
 }
 
@@ -277,7 +363,9 @@ export default function CheckoutPage() {
   const [selectedTime, setSelectedTime] = useState<string>('');
   const [showDateTimePicker, setShowDateTimePicker] = useState(false);
   const [chefPickupAvailability, setChefPickupAvailability] = useState<Array<{ day: string; timeWindow: string }> | null>(null);
-  const [chefDeliveryAvailability, setChefDeliveryAvailability] = useState<Array<{ day: string; timeWindow: string }> | null>(null);
+  const [chefDeliveryZones, setChefDeliveryZones] = useState<DeliveryZone[]>([]);
+  const [deliveryAddressCoords, setDeliveryAddressCoords] = useState<GeoPoint | null>(null);
+  const [deliveryGeocoding, setDeliveryGeocoding] = useState(false);
   const [selectedDeliveryDate, setSelectedDeliveryDate] = useState<Date | null>(null);
   const [selectedDeliveryTime, setSelectedDeliveryTime] = useState('');
   const [showDeliveryDateTimePicker, setShowDeliveryDateTimePicker] = useState(false);
@@ -288,6 +376,7 @@ export default function CheckoutPage() {
   const [deliveryAddress, setDeliveryAddress] = useState('');
   const [deliveryPhone, setDeliveryPhone] = useState('');
   const [deliveryPhonePrefilled, setDeliveryPhonePrefilled] = useState(false);
+  const skipDeliveryGeocodeDebounceRef = useRef(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -298,7 +387,9 @@ export default function CheckoutPage() {
           setChefName(null);
           setChefLocation(null);
           setChefPickupAvailability(null);
-          setChefDeliveryAvailability(null);
+          setChefDeliveryZones([]);
+          setDeliveryAddressCoords(null);
+          setDeliveryGeocoding(false);
           setSelectedDeliveryDate(null);
           setSelectedDeliveryTime('');
           setChefFulfillmentMode('pickup_only');
@@ -327,12 +418,8 @@ export default function CheckoutPage() {
         setChefPickupAvailability(null);
       }
 
-      const deliveryAvailability = chef?.delivery_availability;
-      if (Array.isArray(deliveryAvailability) && deliveryAvailability.length > 0) {
-        setChefDeliveryAvailability(deliveryAvailability);
-      } else {
-        setChefDeliveryAvailability(null);
-      }
+      const deliveryConfig = parseDeliveryAvailability(chef?.delivery_availability);
+      setChefDeliveryZones(deliveryConfig?.zones ?? []);
 
       // Pickup location should come from the chef's profile record (fallback to chefs.location).
       let pickupLocation: string | null = chef?.location ?? null;
@@ -410,6 +497,79 @@ export default function CheckoutPage() {
     return fulfillmentChoice;
   }, [offersPickup, offersDelivery, fulfillmentChoice]);
 
+  const verifyDeliveryAddress = useCallback(async (address: string) => {
+    const addr = address.trim();
+    if (!addr) {
+      setDeliveryAddressCoords(null);
+      setDeliveryGeocoding(false);
+      return;
+    }
+
+    setDeliveryGeocoding(true);
+    const coords = await resolveAddressCoords(addr);
+    setDeliveryAddressCoords(coords);
+    setDeliveryGeocoding(false);
+    setSelectedDeliveryDate(null);
+    setSelectedDeliveryTime('');
+  }, []);
+
+  useEffect(() => {
+    if (effectiveFulfillmentMethod !== 'delivery') {
+      setDeliveryAddressCoords(null);
+      setDeliveryGeocoding(false);
+      return;
+    }
+
+    const addr = deliveryAddress.trim();
+    if (!addr) {
+      setDeliveryAddressCoords(null);
+      setDeliveryGeocoding(false);
+      return;
+    }
+
+    if (skipDeliveryGeocodeDebounceRef.current) {
+      skipDeliveryGeocodeDebounceRef.current = false;
+      return;
+    }
+
+    let cancelled = false;
+    setDeliveryGeocoding(true);
+
+    const timer = setTimeout(() => {
+      (async () => {
+        const coords = await resolveAddressCoords(addr);
+        if (cancelled) return;
+        setDeliveryAddressCoords(coords);
+        setDeliveryGeocoding(false);
+        setSelectedDeliveryDate(null);
+        setSelectedDeliveryTime('');
+      })();
+    }, 500);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [deliveryAddress, effectiveFulfillmentMethod]);
+
+  const matchedDeliveryZone = useMemo(
+    () => findMatchingDeliveryZone(chefDeliveryZones, deliveryAddressCoords),
+    [chefDeliveryZones, deliveryAddressCoords],
+  );
+
+  const activeDeliverySlots = useMemo(
+    () => matchedDeliveryZone?.slots ?? [],
+    [matchedDeliveryZone],
+  );
+
+  const deliveryZoneStatus = useMemo((): 'idle' | 'geocoding' | 'needs_address' | 'geocode_failed' | 'outside' | 'matched' => {
+    if (!deliveryAddress.trim()) return 'needs_address';
+    if (deliveryGeocoding) return 'geocoding';
+    if (!deliveryAddressCoords) return 'geocode_failed';
+    if (!matchedDeliveryZone) return 'outside';
+    return 'matched';
+  }, [deliveryAddress, deliveryGeocoding, deliveryAddressCoords, matchedDeliveryZone]);
+
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
   // Platform service fee: flat $1.50
   const platformFee = 1.50;
@@ -459,9 +619,10 @@ export default function CheckoutPage() {
   }, [selectedDate, chefPickupAvailability]);
 
   const deliveryAvailableDates = useMemo(() => {
-    if (chefDeliveryAvailability && chefDeliveryAvailability.length > 0) {
-      return getAvailableDatesForChef(chefDeliveryAvailability);
+    if (activeDeliverySlots.length > 0) {
+      return getAvailableDatesForChef(activeDeliverySlots);
     }
+    if (deliveryZoneStatus !== 'matched') return [];
     const now = new Date();
     return Array.from({ length: 3 }, (_, i) => {
       const d = new Date();
@@ -469,12 +630,12 @@ export default function CheckoutPage() {
       d.setHours(0, 0, 0, 0);
       return d;
     });
-  }, [chefDeliveryAvailability]);
+  }, [activeDeliverySlots, deliveryZoneStatus]);
 
   const deliveryTimeSlots = useMemo(() => {
     if (!selectedDeliveryDate) return [];
-    if (chefDeliveryAvailability && chefDeliveryAvailability.length > 0) {
-      return getTimeSlotsForDate(chefDeliveryAvailability, selectedDeliveryDate);
+    if (activeDeliverySlots.length > 0) {
+      return getTimeSlotsForDate(activeDeliverySlots, selectedDeliveryDate);
     }
     const slots: Array<{ value: string; label: string }> = [];
     for (let hour = 8; hour <= 20; hour++) {
@@ -484,7 +645,7 @@ export default function CheckoutPage() {
       slots.push({ value: `${hour24}:00`, label: `${hour12}:00 ${ampm}` });
     }
     return slots;
-  }, [selectedDeliveryDate, chefDeliveryAvailability]);
+  }, [selectedDeliveryDate, activeDeliverySlots]);
   
   const isFormValid = useMemo(() => {
     if (!effectiveFulfillmentMethod) return false;
@@ -495,7 +656,8 @@ export default function CheckoutPage() {
       selectedDeliveryDate !== null &&
       selectedDeliveryTime.trim().length > 0 &&
       deliveryAddress.trim().length > 0 &&
-      isValidCanadianPhone(deliveryPhone)
+      isValidCanadianPhone(deliveryPhone) &&
+      deliveryZoneStatus === 'matched'
     );
   }, [
     effectiveFulfillmentMethod,
@@ -505,6 +667,7 @@ export default function CheckoutPage() {
     selectedDeliveryTime,
     deliveryAddress,
     deliveryPhone,
+    deliveryZoneStatus,
   ]);
 
   const handleSubmit = async () => {
@@ -545,10 +708,18 @@ export default function CheckoutPage() {
         Alert.alert('Invalid phone number', 'Please enter a valid Canadian phone number.');
         return;
       }
+      if (deliveryZoneStatus === 'outside') {
+        Alert.alert('Outside delivery area', 'This address is outside the chef\'s delivery zones. Try pickup or a different address.');
+        return;
+      }
+      if (deliveryZoneStatus !== 'matched') {
+        Alert.alert('Delivery address', 'Please enter a valid delivery address within the chef\'s delivery area.');
+        return;
+      }
       combined = validatePreferredDateTime(
         selectedDeliveryDate,
         selectedDeliveryTime,
-        chefDeliveryAvailability,
+        activeDeliverySlots,
         'Delivery',
       );
       if (!combined) return;
@@ -856,13 +1027,52 @@ export default function CheckoutPage() {
             }
             deliveryContent={
               <View style={{ gap: 16 }}>
+                <View style={{ gap: 8 }}>
+                  <Text style={styles.deliveryFieldLabel}>Delivery address</Text>
+                  <LocationPicker
+                    value={deliveryAddress}
+                    onChange={setDeliveryAddress}
+                    onPlaceSelect={(_placeId, description) => {
+                      skipDeliveryGeocodeDebounceRef.current = true;
+                      void verifyDeliveryAddress(description);
+                    }}
+                    placeholder="Enter your delivery address"
+                    inputStyle={styles.input}
+                  />
+                  {deliveryZoneStatus === 'geocoding' && deliveryAddress.trim() ? (
+                    <DeliveryVerifyingPulse />
+                  ) : null}
+                  {deliveryZoneStatus === 'geocode_failed' ? (
+                    <Text style={styles.deliveryZoneError}>We couldn&apos;t verify this address. Please check and try again.</Text>
+                  ) : null}
+                  {deliveryZoneStatus === 'outside' ? (
+                    <Text style={styles.deliveryZoneError}>This address is outside the chef&apos;s delivery cities.</Text>
+                  ) : null}
+                  {deliveryZoneStatus === 'matched' && matchedDeliveryZone ? (
+                    <Text style={styles.deliveryZoneSuccess}>
+                      Delivery available — {matchedDeliveryZone.name}
+                    </Text>
+                  ) : null}
+                </View>
+
                 <View style={styles.pickupHeader}>
                   <Text style={{ color: TEXT_DARK, fontSize: 18, fontWeight: '800', fontFamily: 'OpenSans_700Bold' }}>Preferred delivery</Text>
                   <TouchableOpacity
                     onPress={() => setShowDeliveryDateTimePicker(true)}
-                    style={styles.dateTimePickerButton}
+                    disabled={deliveryZoneStatus !== 'matched'}
+                    style={[
+                      styles.dateTimePickerButton,
+                      deliveryZoneStatus !== 'matched' && styles.dateTimePickerButtonDisabled,
+                    ]}
                   >
-                    <Text style={styles.dateTimePickerButtonText}>Date/Time</Text>
+                    <Text
+                      style={[
+                        styles.dateTimePickerButtonText,
+                        deliveryZoneStatus !== 'matched' && styles.dateTimePickerButtonTextDisabled,
+                      ]}
+                    >
+                      Date/Time
+                    </Text>
                   </TouchableOpacity>
                 </View>
 
@@ -884,15 +1094,6 @@ export default function CheckoutPage() {
                   </View>
                 )}
 
-                <View style={{ gap: 8 }}>
-                  <Text style={styles.deliveryFieldLabel}>Delivery address</Text>
-                  <LocationPicker
-                    value={deliveryAddress}
-                    onChange={setDeliveryAddress}
-                    placeholder="Enter your delivery address"
-                    inputStyle={styles.input}
-                  />
-                </View>
                 <View style={{ gap: 8 }}>
                   <Text style={styles.deliveryFieldLabel}>Phone number</Text>
                   <TextInput
@@ -1329,6 +1530,12 @@ const styles = StyleSheet.create({
     color: BRAND_BLACK,
     fontWeight: '600' as any,
   },
+  dateTimePickerButtonDisabled: {
+    opacity: 0.45,
+  },
+  dateTimePickerButtonTextDisabled: {
+    color: TEXT_MUTED,
+  },
   selectedDateTimeDisplay: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -1405,5 +1612,47 @@ const styles = StyleSheet.create({
     fontSize: 16,
     fontWeight: '700' as any,
     fontFamily: 'OpenSans_700Bold',
+  },
+  deliveryVerifyingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginTop: 4,
+  },
+  deliveryVerifyingPulseWrap: {
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deliveryVerifyingDot: {
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    backgroundColor: PRIMARY_COLOR,
+  },
+  deliveryVerifyingRing: {
+    position: 'absolute',
+    width: 12,
+    height: 12,
+    borderRadius: 999,
+    borderWidth: 2,
+    borderColor: PRIMARY_COLOR,
+    backgroundColor: 'transparent',
+  },
+  deliveryZoneHint: {
+    color: TEXT_MUTED,
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  deliveryZoneError: {
+    color: '#B91C1C',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'OpenSans_400Regular',
+  },
+  deliveryZoneSuccess: {
+    color: '#047857',
+    fontSize: theme.typography.fontSize.sm,
+    fontFamily: 'OpenSans_400Regular',
   },
 });
