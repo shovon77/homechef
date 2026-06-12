@@ -41,11 +41,36 @@ const TEXT_DARK = '#0e1b18';
 const BRAND_BLACK = '#33393A';
 const BORDER_LIGHT = '#E5E7EB';
 const MAXW = 1280; // max-w-7xl
+const MOBILE_MAX_WIDTH = 768;
+/** Viewport widths treated as tablet layout (hamburger + compact bar). */
+const TABLET_MAX_WIDTH = 1280;
+/** iPad Pro 12.9" landscape can report up to 1366px with touch. */
+const TABLET_TOUCH_MAX_WIDTH = 1366;
+
+function useTabletLayout(width: number): boolean {
+  const [isTouchLike, setIsTouchLike] = useState(false);
+
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    const mq = window.matchMedia('(pointer: coarse), (hover: none)');
+    const update = () => setIsTouchLike(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
+
+  if (width < MOBILE_MAX_WIDTH) return false;
+  if (width < TABLET_MAX_WIDTH) return true;
+  if (Platform.OS === 'ios' && width <= TABLET_TOUCH_MAX_WIDTH) return true;
+  if (Platform.OS === 'web' && isTouchLike && width <= TABLET_TOUCH_MAX_WIDTH) return true;
+  return false;
+}
 
 // Generic NavButton component with animation support
 function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: string, label: string, isActive: boolean, icon?: any, iconSource?: any }) {
   const { width } = useWindowDimensions();
-  const isMobile = width < 768;
+  const isMobile = width < MOBILE_MAX_WIDTH;
+  const isTablet = useTabletLayout(width);
   const activeColor = '#FE734C'; // Updated brand color
 
   // Web version with framer-motion animations
@@ -58,8 +83,8 @@ function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: st
     const containerStyle = {
       display: 'inline-flex',
       alignItems: 'center',
-      gap: isMobile ? '4px' : '5px',
-      paddingInline: isMobile ? '8px' : '8px',
+      gap: isMobile ? '4px' : isTablet ? '4px' : '5px',
+      paddingInline: isMobile ? '8px' : isTablet ? '6px' : '8px',
       paddingBlock: '7px',
       borderRadius: '8px',
       position: 'relative',
@@ -104,7 +129,8 @@ function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: st
           styles.navLink,
           { flexDirection: 'row', alignItems: 'center', gap: 5 },
           isMobile && { paddingHorizontal: 8, paddingVertical: 8 },
-          !isMobile && { paddingHorizontal: 8, paddingVertical: 7 },
+          !isMobile && isTablet && { paddingHorizontal: 6, paddingVertical: 7 },
+          !isMobile && !isTablet && { paddingHorizontal: 8, paddingVertical: 7 },
           isActive && { backgroundColor: activeColor, borderRadius: 8 },
         ])}
       >
@@ -126,7 +152,9 @@ function NavButton({ href, label, isActive, icon: Icon, iconSource }: { href: st
 export default function NavBar() {
   const router = useRouter()
   const { width } = useWindowDimensions()
-  const isMobile = width < 768
+  const isMobile = width < MOBILE_MAX_WIDTH
+  const isTablet = useTabletLayout(width)
+  const useCompactNav = isMobile || isTablet
   const { isAdmin, isChef, user, profile, refreshRole, hasProfileLocation } = useRole()
   const { items } = useCart()
   const { showLocationModal, setShowLocationModal } = useLocationModal()
@@ -173,6 +201,20 @@ export default function NavBar() {
   const unreadCount = useMemo(() => {
     return notifications.filter(n => !n.read).length;
   }, [notifications]);
+  const showCenterOrders = hasActiveOrder && !(isTablet && (isAdmin || isChef))
+  const showCenterDashboard =
+    (isAdmin || isChef) &&
+    !isCartPage &&
+    !isCheckoutPage &&
+    !isChefSignupPage
+  const showCenterLocation =
+    loggedIn &&
+    !isAdmin &&
+    !isChef &&
+    ordersChecked &&
+    !hasActiveOrder &&
+    !isTablet
+  const showTabletMenuOrders = isTablet && hasActiveOrder && (isAdmin || isChef)
   const [locationView, setLocationView] = useState<'default' | 'manual_form'>('default')
   const [location, setLocation] = useState("")
   const [currentLocation, setCurrentLocation] = useState("")
@@ -829,18 +871,30 @@ export default function NavBar() {
 
   return (
     <View style={StyleSheet.flatten([styles.header, isChefDashboard && styles.headerNoBorder])} data-testid={isChefDashboard ? 'chef-dashboard-navbar' : undefined}>
-      <View style={StyleSheet.flatten([styles.container, isMobile && styles.containerMobile])}>
+      <View style={StyleSheet.flatten([
+        styles.container,
+        isMobile && styles.containerMobile,
+        isTablet && styles.containerTablet,
+      ])}>
         {/* Left Section: Logo - key forces remount on route change to fix disappearing logo after chef→other nav */}
         <Link href="/" asChild>
           <TouchableOpacity 
-            style={StyleSheet.flatten([styles.logoContainer, isMobile && styles.logoContainerMobile])}
+            style={StyleSheet.flatten([
+              styles.logoContainer,
+              isMobile && styles.logoContainerMobile,
+              isTablet && styles.logoContainerTablet,
+            ])}
             accessibilityRole={Platform.OS === 'web' ? 'link' : undefined}
             collapsable={false}
           >
             <Image 
               key={pathname || 'nav-logo'}
               source={require('../assets/YHC-New-Logo-Only.png')}
-              style={StyleSheet.flatten([styles.logoImage, isMobile && styles.logoImageMobile]) as any}
+              style={StyleSheet.flatten([
+                styles.logoImage,
+                isMobile && styles.logoImageMobile,
+                isTablet && styles.logoImageTablet,
+              ]) as any}
               resizeMode="contain"
             />
           </TouchableOpacity>
@@ -848,12 +902,16 @@ export default function NavBar() {
 
         {/* Center Section: Navigation */}
         {!isAuthPage && (
-        <View style={StyleSheet.flatten([styles.navCenter, isMobile && styles.navCenterMobile])}>
+        <View style={StyleSheet.flatten([
+          styles.navCenter,
+          isMobile && styles.navCenterMobile,
+          isTablet && styles.navCenterTablet,
+        ])}>
           <NavButton href="/browse" label="Explore" isActive={isExploreActive} />
             {!loggedIn && (
               <NavButton href="/signup" label="Sign-up" isActive={false} />
             )}
-            {hasActiveOrder ? (
+            {showCenterOrders ? (
             <Link href="/orders/track" asChild style={Platform.OS === 'web' ? { textDecoration: 'none', outlineStyle: 'none', outlineWidth: 0, outlineColor: 'transparent' } as any : undefined}>
                 <TouchableOpacity style={StyleSheet.flatten([
                   styles.navLink, 
@@ -868,19 +926,20 @@ export default function NavBar() {
               </TouchableOpacity>
             </Link>
           ) : null}
-            {/* Dashboard button: only show for admin or chef, but not on cart, checkout, or chef signup page */}
-            {(isAdmin || isChef) && !isCartPage && !isCheckoutPage && !isChefSignupPage && (
+            {showCenterDashboard ? (
             <NavButton 
               href={isAdmin ? '/admin' : '/chef'} 
-              label={isAdmin ? (isMobile ? 'Admin' : 'Dashboard') : 'Sales'} 
+              label={isAdmin ? 'Admin' : 'Sales'} 
               isActive={isDashboardActive} 
             />
-          )}
-            {/* Location button - show in navbar for regular users when no active orders (wait for ordersChecked to avoid flash) */}
-            {loggedIn && !isAdmin && !isChef && ordersChecked && !hasActiveOrder && (
+          ) : null}
+            {showCenterLocation ? (
             <TouchableOpacity 
                 onPress={() => setShowLocationModal(true)}
-                style={styles.locationNavButton}
+                style={StyleSheet.flatten([
+                  styles.locationNavButton,
+                  isTablet && styles.locationNavButtonTablet,
+                ])}
               >
                 <Image
                   source={require('../assets/locationnewicon.png')}
@@ -892,12 +951,16 @@ export default function NavBar() {
                   {hasProfileLocation && location ? (location.split(',')[1]?.trim() || location.split(',')[0]) : 'Location'}
                 </Text>
             </TouchableOpacity>
-          )}
+          ) : null}
         </View>
         )}
 
         {/* Right Section: Actions */}
-        <View style={StyleSheet.flatten([styles.rightSection, isMobile && styles.rightSectionMobile])}>
+        <View style={StyleSheet.flatten([
+          styles.rightSection,
+          isMobile && styles.rightSectionMobile,
+          isTablet && styles.rightSectionTablet,
+        ])}>
           {!isFaqPage && (isAuthPage && !isChefSignupPage) ? (
             <Link href="/faq" asChild>
               <TouchableOpacity style={styles.secondaryButton}>
@@ -906,7 +969,7 @@ export default function NavBar() {
             </Link>
           ) : (
             <>
-          {isMobile ? (
+          {useCompactNav ? (
             <>
               {/* FAQ button removed from navbar - will be in menu when location not set */}
               {loggedIn && (
@@ -1151,7 +1214,7 @@ export default function NavBar() {
 
 
       {/* Mobile Menu Overlay */}
-      {isMobile && isMenuOpen && (
+      {useCompactNav && isMenuOpen && (
         <Pressable 
           style={styles.mobileMenuOverlay}
           onPress={() => setIsMenuOpen(false)}
@@ -1178,6 +1241,23 @@ export default function NavBar() {
                 <Image source={require('../assets/user.png')} style={styles.menuIcon as any} tintColor={PRIMARY_COLOR} resizeMode="contain" />
                 <Text style={styles.mobileMenuText}>Profile</Text>
               </TouchableOpacity>
+
+              {showTabletMenuOrders ? (
+                <Link href="/orders/track" asChild>
+                  <TouchableOpacity
+                    style={styles.mobileMenuItem}
+                    onPress={() => setIsMenuOpen(false)}
+                  >
+                    <Text style={StyleSheet.flatten([
+                      styles.mobileMenuText,
+                      isOrderActive && styles.mobileMenuTextActive,
+                    ])}>
+                      Orders
+                    </Text>
+                    {hasReadyOrder ? <View style={styles.mobileMenuReadyDot} /> : null}
+                  </TouchableOpacity>
+                </Link>
+              ) : null}
               
               {/* Location option - show for all logged-in users (when has active orders, location is only in menu) */}
               {loggedIn && (
@@ -1747,6 +1827,7 @@ const styles = StyleSheet.create({
     paddingLeft: 0,
     paddingTop: 0,
     marginTop: 0,
+    flexShrink: 0,
     ...Platform.select({ web: { overflow: 'visible' as const }, default: {} }),
   },
   logoImage: {
@@ -1799,6 +1880,8 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+    flexShrink: 0,
+    marginLeft: 'auto',
   },
   desktopNavLinksGroup: {
     flexDirection: 'row',
@@ -1967,6 +2050,50 @@ const styles = StyleSheet.create({
   rightSectionMobile: {
     gap: 0,
   },
+  // Tablet-only styles (768px+ compact layout). Mobile styles above are unchanged.
+  containerTablet: {
+    paddingRight: 8,
+    ...Platform.select({
+      web: { overflow: 'hidden' as const },
+      default: {},
+    }),
+  },
+  logoContainerTablet: {
+    marginLeft: -16,
+  },
+  logoImageTablet: {
+    width: 176,
+    height: 35,
+  },
+  navCenterTablet: {
+    ...Platform.select({
+      web: {
+        position: 'relative',
+        left: 'auto',
+        top: 'auto',
+        transform: [],
+        flex: 1,
+        minWidth: 0,
+        maxWidth: 'none',
+        overflow: 'hidden',
+        justifyContent: 'center',
+      },
+      default: {
+        flex: 1,
+        minWidth: 0,
+        overflow: 'hidden',
+      },
+    }),
+    gap: 4,
+  },
+  locationNavButtonTablet: {
+    marginLeft: 0,
+    marginRight: 8,
+    maxWidth: 120,
+  },
+  rightSectionTablet: {
+    gap: 4,
+  },
   iconButton: {
     width: 36,
     height: 36,
@@ -2064,6 +2191,17 @@ const styles = StyleSheet.create({
         includeFontPadding: false,
       },
     }),
+  },
+  mobileMenuTextActive: {
+    color: PRIMARY_COLOR,
+    fontWeight: '600' as any,
+  },
+  mobileMenuReadyDot: {
+    width: 8,
+    height: 8,
+    borderRadius: 4,
+    backgroundColor: PRIMARY_COLOR,
+    marginLeft: 'auto',
   },
   notificationsOverlay: {
     position: 'absolute',
