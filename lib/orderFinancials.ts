@@ -28,6 +28,11 @@ export function getOrderSubtotalCents(order: OrderAmountFields): number {
   return Math.max(0, total - platformFee - deliveryFee);
 }
 
+/** Food subtotal plus delivery fees charged to the customer (excludes platform service fee). */
+export function getChefGrossSalesCents(order: OrderAmountFields): number {
+  return getOrderSubtotalCents(order) + getOrderDeliveryFeeCents(order);
+}
+
 /** 10% of food subtotal; prefers stored platform_commission_cents from checkout. */
 export function getChefPlatformCommissionCents(order: OrderAmountFields): number {
   const stored = order.platform_commission_cents;

@@ -23,10 +23,10 @@ import { callFn } from '../../lib/fn';
 import PayoutSettings from '../../components/chef/PayoutSettings';
 import { formatCad, cents } from '../../lib/money';
 import {
+  getChefGrossSalesCents,
   getChefNetSalesCents,
   getChefPayoutCents,
   getChefPlatformCommissionCents,
-  getOrderSubtotalCents,
 } from '../../lib/orderFinancials';
 import { useRole } from '../../hooks/useRole';
 import type { Profile, OrderStatus } from '../../lib/types';
@@ -1407,7 +1407,7 @@ export default function ChefDashboard() {
     const completedOrders = orders.filter(order => !!order.stripe_transfer_id);
     
     const grossSales = completedOrders.reduce(
-      (sum, order) => sum + getOrderSubtotalCents(order),
+      (sum, order) => sum + getChefGrossSalesCents(order),
       0,
     );
     const platformCommission = completedOrders.reduce(
@@ -1909,7 +1909,7 @@ export default function ChefDashboard() {
         value={formatChefFinancialMetric(financialMetrics.grossSales)}
         label="Sales"
         infoTitle="Sales"
-        infoMessage="The full amount customers paid for your food"
+        infoMessage="The full amount customers paid for your food and delivery fees"
         onInfo={showInfo}
       />
       <FinancialStatCell
