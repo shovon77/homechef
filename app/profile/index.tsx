@@ -17,6 +17,7 @@ import { formatCad } from "../../lib/money";
 import { isDeliveryOrder } from "../../lib/chef-fulfillment";
 import { formatLocationDisplay } from "../../lib/formatAddress";
 import { formatPhone } from "../../lib/formatPhone";
+import { getOrderPaymentStatusColor, getOrderPaymentStatusLabel } from "../../lib/orderPaymentStatus";
 
 type UserOrderSummary = {
   id: number;
@@ -33,6 +34,9 @@ type UserOrderSummary = {
   chef_location?: string | null;
   dish_names?: string[];
   total_quantity?: number;
+  payment_status?: string | null;
+  stripe_payment_intent_id?: string | null;
+  payment_intent_id?: string | null;
 };
 
 export default function ProfilePage() {
@@ -120,7 +124,7 @@ export default function ProfilePage() {
     try {
       const { data, error } = await supabase
         .from('orders')
-        .select('id,status,total_cents,created_at,pickup_at,fulfillment_method,delivery_address,delivery_phone,delivery_at,chef_id')
+        .select('id,status,total_cents,created_at,pickup_at,fulfillment_method,delivery_address,delivery_phone,delivery_at,chef_id,payment_status,stripe_payment_intent_id,payment_intent_id')
         .eq('user_id', user.id)
         .order('created_at', { ascending: false });
 
@@ -197,6 +201,9 @@ export default function ProfilePage() {
           chef_location: chefInfo?.location ?? null,
           dish_names: items.map(i => i.dish_name),
           total_quantity: items.reduce((sum, i) => sum + i.quantity, 0),
+          payment_status: row.payment_status ?? null,
+          stripe_payment_intent_id: row.stripe_payment_intent_id ?? null,
+          payment_intent_id: row.payment_intent_id ?? null,
         };
       });
 
@@ -771,6 +778,9 @@ export default function ProfilePage() {
                                   {statusInfo.label}
                                 </Text>
                               </View>
+                              <Text style={[styles.orderPaymentStatus, { color: getOrderPaymentStatusColor(order) }]}>
+                                Payment: {getOrderPaymentStatusLabel(order)}
+                              </Text>
                             </View>
                             <View style={{ alignItems: 'flex-end', gap: 12 }}>
                               <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
@@ -1170,6 +1180,12 @@ const styles = StyleSheet.create({
   statusText: {
     fontSize: theme.typography.fontSize.sm,
     fontWeight: theme.typography.fontWeight.medium,
+    fontFamily: theme.typography.fontFamily.body,
+  },
+  orderPaymentStatus: {
+    fontSize: theme.typography.fontSize.sm,
+    fontWeight: theme.typography.fontWeight.medium,
+    lineHeight: theme.typography.fontSize.sm * 1.5,
     fontFamily: theme.typography.fontFamily.body,
   },
   orderButton: {

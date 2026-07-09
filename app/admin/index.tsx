@@ -27,6 +27,7 @@ import {
   getOrderSubtotalCents,
   getPlatformRevenueCents,
 } from '../../lib/orderFinancials';
+import { getOrderPaymentStatusColor, getOrderPaymentStatusLabel } from '../../lib/orderPaymentStatus';
 
 const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
@@ -3083,6 +3084,9 @@ export default function AdminPage() {
                   {orderSortBy === 'total' ? (orderSortDir === 'asc' ? '▲' : '▼') : '↕'}
                 </Text>
               </TouchableOpacity>
+              <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 0.9 }]}>
+                <Text style={styles.tableHeaderCellText}>Payment</Text>
+              </View>
               <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }]}>
                 <Text style={styles.tableHeaderCellText}>Status</Text>
               </View>
@@ -3126,6 +3130,9 @@ export default function AdminPage() {
                   </Text>
                   <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }]}>
                     {cents(order.total_cents || 0)}
+                  </Text>
+                  <Text style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 0.9 }, { color: getOrderPaymentStatusColor(order) }]}>
+                    {getOrderPaymentStatusLabel(order, { short: true })}
                   </Text>
                   <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1 }, { color: statusStyles.text.color }]}>
                     {orderStatusLabel(order.status)}
