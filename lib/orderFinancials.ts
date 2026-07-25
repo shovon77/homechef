@@ -1,5 +1,5 @@
-/** Flat customer service fee (platform revenue, not deducted from chef food subtotal). */
-export const DEFAULT_PLATFORM_FEE_CENTS = 150;
+/** Customer service fee (platform revenue). Currently disabled (0). */
+export const DEFAULT_PLATFORM_FEE_CENTS = 0;
 
 /** Platform commission on food subtotal only. */
 export const PLATFORM_COMMISSION_RATE = 0.10;

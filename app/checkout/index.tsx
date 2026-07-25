@@ -571,10 +571,10 @@ export default function CheckoutPage() {
   }, [deliveryAddress, deliveryGeocoding, deliveryAddressCoords, matchedDeliveryZone]);
 
   const subtotal = useMemo(() => items.reduce((sum, item) => sum + item.price * item.quantity, 0), [items]);
-  // Platform service fee: flat $1.50
-  const platformFee = 1.50;
+  // Platform service fee currently disabled
+  const platformFee = 0;
   const deliveryFee = effectiveFulfillmentMethod === 'delivery' ? chefDeliveryFlatFee : 0;
-  // Total (customer): subtotal + platform service fee + delivery fee when applicable
+  // Total (customer): subtotal + delivery fee when applicable
   // Platform commission (10% of subtotal) is deducted from chef food sales; delivery fee goes fully to the chef.
   const total = useMemo(
     () => subtotal + platformFee + deliveryFee,
@@ -893,13 +893,15 @@ export default function CheckoutPage() {
               <Text style={styles.orderSummaryLabel}>Subtotal</Text>
               <Text style={styles.orderSummaryValue}>{formatCad(subtotal)}</Text>
                 </View>
-            <View style={styles.orderSummaryRow}>
-              <View style={styles.orderSummaryLabelWithIcon}>
-                <Text style={styles.orderSummaryLabel}>Platform service fee </Text>
-                <Text style={styles.infoIcon}>ⓘ</Text>
+            {platformFee > 0 && (
+              <View style={styles.orderSummaryRow}>
+                <View style={styles.orderSummaryLabelWithIcon}>
+                  <Text style={styles.orderSummaryLabel}>Platform service fee </Text>
+                  <Text style={styles.infoIcon}>ⓘ</Text>
+                </View>
+                <Text style={styles.orderSummaryValue}>{formatCad(platformFee)}</Text>
               </View>
-              <Text style={styles.orderSummaryValue}>{formatCad(platformFee)}</Text>
-            </View>
+            )}
             {!chefCheckoutLoading && effectiveFulfillmentMethod === 'delivery' && deliveryFee > 0 && (
               <View style={styles.orderSummaryRow}>
                 <Text style={styles.orderSummaryLabel}>Delivery fee</Text>
@@ -912,7 +914,9 @@ export default function CheckoutPage() {
               <Text style={styles.orderSummaryTotalValue}>{formatCad(total)}</Text>
           </View>
           </View>
-          <Text style={styles.platformFeeNote}>ⓘ A small fee supports customer support, marketplace maintenance & secure payments.</Text>
+          {platformFee > 0 && (
+            <Text style={styles.platformFeeNote}>ⓘ A small fee supports customer support, marketplace maintenance & secure payments.</Text>
+          )}
         </View>
 
         {error && (

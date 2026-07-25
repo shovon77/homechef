@@ -31,6 +31,7 @@ export default function OrderSuccessPage() {
   const [deliveryPhone, setDeliveryPhone] = useState<string | null>(null);
   const [deliveryFeeCents, setDeliveryFeeCents] = useState<number | null>(null);
   const [orderSubtotalCents, setOrderSubtotalCents] = useState<number | null>(null);
+  const [orderPlatformFeeCents, setOrderPlatformFeeCents] = useState<number | null>(null);
   const [items, setItems] = useState<Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }>>([]);
   const [chef, setChef] = useState<{ id: number; name: string; photo?: string | null } | null>(null);
   const [orderTotalCents, setOrderTotalCents] = useState<number | null>(null);
@@ -115,7 +116,7 @@ export default function OrderSuccessPage() {
         const { data: order } = await supabase
           .from('orders')
           .select(
-            'id, payment_status, checkout_session_id, pickup_at, delivery_at, chef_id, fulfillment_method, delivery_address, delivery_phone, delivery_fee_cents, subtotal_cents, total_cents'
+            'id, payment_status, checkout_session_id, pickup_at, delivery_at, chef_id, fulfillment_method, delivery_address, delivery_phone, delivery_fee_cents, subtotal_cents, total_cents, platform_fee_cents'
           )
           .eq('id', orderId)
           .maybeSingle();
@@ -131,6 +132,9 @@ export default function OrderSuccessPage() {
 
           if (typeof order.subtotal_cents === 'number') {
             setOrderSubtotalCents(order.subtotal_cents);
+          }
+          if (typeof order.platform_fee_cents === 'number') {
+            setOrderPlatformFeeCents(order.platform_fee_cents);
           }
           if (typeof order.total_cents === 'number') {
             setOrderTotalCents(order.total_cents);
@@ -243,7 +247,7 @@ export default function OrderSuccessPage() {
     [items]
   );
   const subtotalCents = orderSubtotalCents ?? itemsSubtotalCents;
-  const platformFeeCents = 150; // $1.50 flat fee
+  const platformFeeCents = orderPlatformFeeCents ?? 0;
   const deliveryFee = isDelivery ? (deliveryFeeCents ?? 0) : 0;
   const calculatedTotalCents = subtotalCents + platformFeeCents + (isDelivery ? deliveryFee : 0);
   const totalCents = orderTotalCents !== null ? orderTotalCents : calculatedTotalCents;
@@ -748,13 +752,17 @@ export default function OrderSuccessPage() {
                       <Text style={styles.summaryLabel}>Subtotal</Text>
                       <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
                     </View>
-                    <View style={styles.summaryRow}>
-                      <View style={styles.summaryLabelWithIcon}>
-                        <Text style={styles.summaryLabel}>Platform service fee </Text>
-                        <Text style={styles.infoIcon}>ⓘ</Text>
-                      </View>
-                      <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
-                    </View>
+                    {platformFeeCents > 0 && (
+                      <>
+                        <View style={styles.summaryRow}>
+                          <View style={styles.summaryLabelWithIcon}>
+                            <Text style={styles.summaryLabel}>Platform service fee </Text>
+                            <Text style={styles.infoIcon}>ⓘ</Text>
+                          </View>
+                          <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
+                        </View>
+                      </>
+                    )}
                     {isDelivery && deliveryFee > 0 ? (
                       <View style={styles.summaryRow}>
                         <Text style={styles.summaryLabel}>Delivery fee</Text>
@@ -766,9 +774,11 @@ export default function OrderSuccessPage() {
                       <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>
                     </View>
                     
-                    <Text style={styles.platformFeeInfo}>
-                      ⓘ It helps support the platform and secure payments.
-                    </Text>
+                    {platformFeeCents > 0 && (
+                      <Text style={styles.platformFeeInfo}>
+                        ⓘ It helps support the platform and secure payments.
+                      </Text>
+                    )}
                   </View>
                 )}
               </View>

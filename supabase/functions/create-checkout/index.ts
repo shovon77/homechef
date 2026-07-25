@@ -4,8 +4,8 @@ import { adminClient } from '../_shared/db.ts';
 import { stripe } from '../_shared/stripe.ts';
 import { resolveChefTimezoneId } from '../_shared/chef-timezone.ts';
 
-// Flat platform service fee: $1.50 (150 cents)
-const PLATFORM_FEE_CENTS = 150;
+// Platform service fee disabled (was $1.50 / 150 cents)
+const PLATFORM_FEE_CENTS = 0;
 // Platform commission: 10% of subtotal (food only)
 const PLATFORM_COMMISSION_RATE = 0.10;
 // Tax is no longer charged (previously 13% HST)
@@ -228,7 +228,6 @@ export const handler = async (req: Request) => {
       return j(400, { error: 'Order total must be greater than zero' });
     }
 
-    // Flat platform service fee: $1.50
     const platformFeeCents = PLATFORM_FEE_CENTS;
 
     const platformCommissionCents = Math.round(total_cents * PLATFORM_COMMISSION_RATE);
@@ -244,7 +243,7 @@ export const handler = async (req: Request) => {
       }
     }
     
-    // Customer pays: subtotal + platform service fee + delivery fee (commission is NOT paid by customer)
+    // Customer pays: subtotal + delivery fee (commission is NOT paid by customer; service fee currently 0)
     const grandTotalCents = total_cents + platformFeeCents + deliveryFeeCents;
     
     // Chef receives: food subtotal minus 10% commission + full delivery fee (no commission on delivery).
@@ -290,10 +289,10 @@ export const handler = async (req: Request) => {
         chef_id: body.chef_id,
         status: 'requested',
         payment_status: 'awaiting_payment', // Order is created before payment
-        total_cents: grandTotalCents, // Total customer pays: subtotal + service fee (commission deducted from chef)
+        total_cents: grandTotalCents, // Total customer pays: subtotal + delivery (commission deducted from chef)
         subtotal_cents: total_cents, // Subtotal (dish prices only)
         platform_commission_cents: platformCommissionCents, // 10% of subtotal
-        platform_fee_cents: platformFeeCents, // Flat $1.50 service fee
+        platform_fee_cents: platformFeeCents, // Customer service fee (currently 0)
         tax_cents: 0, // No tax charged
         fulfillment_method: body.fulfillment_method,
         pickup_at: pickupAtIso,
@@ -348,9 +347,9 @@ export const handler = async (req: Request) => {
     };
 
     // Only add transfer data if we have a destination account
-    // Customer pays: subtotal + service fee + delivery fee
+    // Customer pays: subtotal + delivery fee
     // Chef receives: subtotal - commission + delivery fee
-    // Platform receives: commission + service fee (grandTotalCents - chefAmountCents)
+    // Platform receives: commission (+ any service fee if re-enabled)
     if (stripeAccountId) {
       paymentIntentData.transfer_data = {
         destination: stripeAccountId,
@@ -386,18 +385,22 @@ export const handler = async (req: Request) => {
             },
             quantity: item.quantity,
           })),
-          // Platform service fee
-          // Note: Platform commission is NOT charged to customer - it's deducted from chef's payout
-          {
-            price_data: {
-              currency: 'cad',
-              product_data: {
-                name: 'Service Fee',
-              },
-              unit_amount: platformFeeCents,
-            },
-            quantity: 1,
-          },
+          // Platform commission is NOT charged to customer — deducted from chef's payout.
+          // Service fee line only when PLATFORM_FEE_CENTS > 0.
+          ...(platformFeeCents > 0
+            ? [
+                {
+                  price_data: {
+                    currency: 'cad',
+                    product_data: {
+                      name: 'Service Fee',
+                    },
+                    unit_amount: platformFeeCents,
+                  },
+                  quantity: 1,
+                },
+              ]
+            : []),
           ...(deliveryFeeCents > 0
             ? [
                 {

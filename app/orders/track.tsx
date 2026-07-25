@@ -382,8 +382,8 @@ export default function TrackOrderPage() {
   );
   const itemCount = useMemo(() => items.reduce((sum, item) => sum + item.quantity, 0), [items]);
   
-  // Platform service fee: flat $1.50 (150 cents)
-  const platformFeeCents = 150;
+  // Platform service fee from order (0 for new orders; may be 150 on older orders)
+  const platformFeeCents = typeof order?.platform_fee_cents === 'number' ? order.platform_fee_cents : 0;
   // Note: Platform commission (10% of subtotal) is deducted from chef's payout, not shown to customer
 
   // Send message function
@@ -1478,21 +1478,25 @@ export default function TrackOrderPage() {
             <Text style={styles.summaryLabel}>Subtotal</Text>
             <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
           </View>
-          <View style={styles.summaryRow}>
+          {platformFeeCents > 0 && (
+            <View style={styles.summaryRow}>
                 <View style={styles.summaryLabelWithIcon}>
                   <Text style={styles.summaryLabel}>Platform service fee </Text>
                   <Text style={styles.infoIcon}>ⓘ</Text>
                 </View>
                 <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
               </View>
+          )}
           <View style={[styles.summaryRow, { marginTop: 8 }]}>
                 <Text style={styles.summaryLabel}>Total</Text>
                 <Text style={styles.summaryValue}>{cents(calculatedTotalCents)}</Text>
           </View>
               
-              <Text style={styles.platformFeeInfo}>
-                ⓘ It helps support the platform and secure payments.
-              </Text>
+              {platformFeeCents > 0 && (
+                <Text style={styles.platformFeeInfo}>
+                  ⓘ It helps support the platform and secure payments.
+                </Text>
+              )}
             </View>
           )}
         </View>

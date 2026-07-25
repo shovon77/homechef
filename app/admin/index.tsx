@@ -4676,7 +4676,7 @@ export default function AdminPage() {
         }
         if (!orderDetails) return null;
         const subtotalCents = orderDetails.items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
-        const platformFeeCents = orderDetails.platformFeeCents !== null ? orderDetails.platformFeeCents : 150;
+        const platformFeeCents = orderDetails.platformFeeCents !== null ? orderDetails.platformFeeCents : 0;
         const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents;
         return (
           <Modal visible transparent animationType="fade" onRequestClose={() => setOrderDetailModalId(null)}>
@@ -4741,10 +4741,12 @@ export default function AdminPage() {
                             <Text style={styles.summaryLabel}>Subtotal</Text>
                             <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
                           </View>
-                          <View style={styles.summaryRow}>
-                            <Text style={styles.summaryLabel}>Platform service fee</Text>
-                            <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
-                          </View>
+                          {platformFeeCents > 0 && (
+                            <View style={styles.summaryRow}>
+                              <Text style={styles.summaryLabel}>Platform service fee</Text>
+                              <Text style={styles.summaryValue}>{cents(platformFeeCents)}</Text>
+                            </View>
+                          )}
                           <View style={[styles.summaryRow, { marginTop: 8 }]}>
                             <Text style={[styles.summaryLabel, styles.summaryTotalLabel]}>Total</Text>
                             <Text style={[styles.summaryValue, styles.summaryTotalValue]}>{cents(totalCents)}</Text>

@@ -144,13 +144,13 @@ export default function OrderThankYouPage() {
     };
   }, [params.id]);
 
-  // Totals match what was charged at checkout (see create-checkout: subtotal + platform fee; tax_cents is 0 unless enabled later).
+  // Totals match what was charged at checkout (subtotal + optional platform fee + delivery).
   const itemsSubtotalCents = useMemo(
     () => items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0),
     [items]
   );
   const subtotalCents = orderTotals.subtotal_cents ?? itemsSubtotalCents;
-  const platformFeeCents = orderTotals.platform_fee_cents ?? 150;
+  const platformFeeCents = orderTotals.platform_fee_cents ?? 0;
   const taxesCents = orderTotals.tax_cents ?? 0;
   const deliveryFee = isDelivery ? (deliveryFeeCents ?? 0) : 0;
   const totalCents = useMemo(() => {
@@ -259,10 +259,12 @@ export default function OrderThankYouPage() {
                   <Text style={styles.priceLabel}>Subtotal</Text>
                   <Text style={styles.priceValue}>{cents(subtotalCents)}</Text>
                 </View>
-                <View style={styles.priceRow}>
-                  <Text style={styles.priceLabel}>Platform service fee</Text>
-                  <Text style={styles.priceValue}>{cents(platformFeeCents)}</Text>
-                </View>
+                {platformFeeCents > 0 && (
+                  <View style={styles.priceRow}>
+                    <Text style={styles.priceLabel}>Platform service fee</Text>
+                    <Text style={styles.priceValue}>{cents(platformFeeCents)}</Text>
+                  </View>
+                )}
                 {isDelivery && deliveryFee > 0 ? (
                   <View style={styles.priceRow}>
                     <Text style={styles.priceLabel}>Delivery fee</Text>
