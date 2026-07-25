@@ -127,11 +127,13 @@ const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGrid
             styles.homeSectionHeaderPill,
             styles.exploreSectionHeaderPill,
             isMobile && styles.homeSectionHeaderPillMobile,
+            styles.homeSectionHeaderPlain,
           ]}
         >
           <Text
             style={[
               styles.homeSectionHeaderTitle,
+              styles.homeSectionHeaderTitleOrange,
               styles.homeSectionTitleSmaller,
               isMobile && styles.homeSectionTitleSmallerMobile,
             ]}
@@ -141,12 +143,11 @@ const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGrid
           </Text>
           <Link href="/browse?tab=dishes" asChild>
             <TouchableOpacity
-              style={styles.homeBrowseGridSeeAll}
+              style={styles.homeSectionHeaderArrowCircle}
               accessibilityRole="link"
               accessibilityLabel="View all dishes"
             >
-              <Text style={styles.homeBrowseGridSeeAllText}>All</Text>
-              <Ionicons name="chevron-forward" size={22} color="#FFFFFF" />
+              <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
             </TouchableOpacity>
           </Link>
         </View>
@@ -209,6 +210,13 @@ const styles = StyleSheet.create({
     marginBottom: theme.spacing.sm,
     gap: theme.spacing.sm,
   },
+  homeSectionHeaderPlain: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+  },
   homeSectionHeaderPillMobile: {
     paddingHorizontal: theme.spacing.md,
   },
@@ -226,6 +234,18 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
+  homeSectionHeaderTitleOrange: {
+    color: theme.colors.primary,
+  },
+  homeSectionHeaderArrowCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   homeSectionTitleSmaller: {
     fontSize: Platform.select({
       web: 24,
@@ -242,20 +262,6 @@ const styles = StyleSheet.create({
   },
   homeBrowseGridSection: {
     marginBottom: theme.spacing.lg,
-  },
-  homeBrowseGridSeeAll: {
-    flexShrink: 0,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 2,
-    paddingVertical: 0,
-    paddingHorizontal: theme.spacing.xs,
-  },
-  homeBrowseGridSeeAllText: {
-    color: '#FFFFFF',
-    fontFamily: 'OpenSans_300Light',
-    fontWeight: '300',
-    fontSize: theme.typography.fontSize.sm,
   },
   homeBrowseGridLoading: {
     paddingVertical: theme.spacing['2xl'],

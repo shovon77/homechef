@@ -123,8 +123,8 @@ export default function HomePage() {
   const [imageSize, setImageSize] = useState<{ width: number; height: number } | null>(null);
   const [heroLayout, setHeroLayout] = useState<{ width: number; height: number } | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [howItWorksAudience, setHowItWorksAudience] = useState<"users" | "chefs">("chefs");
-  const [howItWorksPanelAudience, setHowItWorksPanelAudience] = useState<"users" | "chefs">("chefs");
+  const [howItWorksAudience, setHowItWorksAudience] = useState<"users" | "chefs">("users");
+  const [howItWorksPanelAudience, setHowItWorksPanelAudience] = useState<"users" | "chefs">("users");
   const howItWorksAudienceRef = React.useRef(howItWorksAudience);
   howItWorksAudienceRef.current = howItWorksAudience;
   const howItWorksFade = React.useRef(new Animated.Value(1)).current;
@@ -672,11 +672,13 @@ export default function HomePage() {
                 styles.homeSectionHeaderPillFirst,
                 styles.featuredSectionHeaderPill,
                 isMobile && styles.homeSectionHeaderPillMobile,
+                styles.homeSectionHeaderPlain,
               ]}
             >
               <Text
                 style={[
                   styles.homeSectionHeaderTitle,
+                  styles.homeSectionHeaderTitleOrange,
                   styles.homeSectionTitleSmaller,
                   isMobile && styles.homeSectionTitleSmallerMobile,
                 ]}
@@ -684,7 +686,9 @@ export default function HomePage() {
               >
                 Featured this week
               </Text>
-              <Ionicons name="chevron-forward" size={22} color="rgba(255, 255, 255, 0.72)" />
+              <View style={styles.homeSectionHeaderArrowCircle}>
+                <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+              </View>
             </View>
             <ScrollView 
               ref={featuredScrollRef}
@@ -758,11 +762,13 @@ export default function HomePage() {
                 styles.homeSectionHeaderPill,
                 styles.popularSectionHeaderPill,
                 isMobile && styles.homeSectionHeaderPillMobile,
+                styles.homeSectionHeaderPlain,
               ]}
             >
               <Text
                 style={[
                   styles.homeSectionHeaderTitle,
+                  styles.homeSectionHeaderTitleOrange,
                   styles.homeSectionTitleSmaller,
                   isMobile && styles.homeSectionTitleSmallerMobile,
                 ]}
@@ -770,7 +776,9 @@ export default function HomePage() {
               >
                 Popular near you
               </Text>
-              <Ionicons name="chevron-forward" size={22} color="rgba(255, 255, 255, 0.72)" />
+              <View style={styles.homeSectionHeaderArrowCircle}>
+                <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+              </View>
             </View>
             {isMobile ? (
               <ScrollView 
@@ -834,12 +842,14 @@ export default function HomePage() {
                 styles.homeSectionHeaderPill,
                 styles.howItWorksHeaderPill,
                 isMobile && styles.homeSectionHeaderPillMobile,
+                styles.homeSectionHeaderPlain,
               ]}
             >
               <Text
                 style={[
                   styles.homeSectionHeaderTitle,
                   styles.howItWorksHeaderTitle,
+                  styles.homeSectionHeaderTitleOrange,
                   styles.homeSectionTitleSmaller,
                   isMobile && styles.homeSectionTitleSmallerMobile,
                 ]}
@@ -1325,11 +1335,31 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
+  /** Transparent header for Featured / Popular / Explore (not How it works). */
+  homeSectionHeaderPlain: {
+    backgroundColor: 'transparent',
+    borderRadius: 0,
+    paddingTop: 0,
+    paddingBottom: 0,
+    paddingHorizontal: 0,
+  },
+  homeSectionHeaderTitleOrange: {
+    color: theme.colors.primary,
+  },
+  homeSectionHeaderArrowCircle: {
+    width: 28,
+    height: 28,
+    borderRadius: 14,
+    backgroundColor: theme.colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    flexShrink: 0,
+  },
   howItWorksToggleTrack: {
     flexDirection: "row",
     alignItems: "stretch",
     flexShrink: 0,
-    backgroundColor: "#F2F0EF",
+    backgroundColor: "#FFFFFF",
     borderWidth: 0,
     borderRadius: 999,
     overflow: "hidden",
@@ -1352,10 +1382,10 @@ const styles = StyleSheet.create({
     paddingHorizontal: 2,
   },
   howItWorksToggleSegmentInactive: {
-    backgroundColor: "#F2F0EF",
+    backgroundColor: "transparent",
   },
   howItWorksToggleSegmentActive: {
-    backgroundColor: "#FFFFFF",
+    backgroundColor: theme.colors.primary,
     borderRadius: 999,
     overflow: "hidden",
   },
@@ -1373,7 +1403,7 @@ const styles = StyleSheet.create({
     lineHeight: 15,
   },
   howItWorksToggleLabelActive: {
-    color: theme.colors.primary,
+    color: "#FFFFFF",
     fontWeight: theme.typography.fontWeight.semibold,
   },
   howItWorksToggleLabelInactive: {
