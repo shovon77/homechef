@@ -72,7 +72,7 @@ const HOW_IT_WORKS_USERS: HowItWorksStep[] = [
     icon: require("../assets/shopping-cart.png"),
   },
   {
-    title: "Pickup",
+    title: "Pickup or Delivery",
     text: "Collect your order on time, handle food safely after pickup",
     icon: require("../assets/dinner.png"),
   },
