@@ -73,7 +73,7 @@ const HOW_IT_WORKS_USERS: HowItWorksStep[] = [
   },
   {
     title: "Pickup or Delivery",
-    text: "Collect your order on time, handle food safely after pickup",
+    text: "Get your order delivered or pickup at your convenience",
     icon: require("../assets/dinner.png"),
   },
 ];
