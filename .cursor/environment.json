@@ -1,0 +1,14 @@
+{
+  "name": "HomeChef",
+  "install": "npm install --no-audit --no-fund",
+  "terminals": [
+    {
+      "name": "expo-web",
+      "command": "npx expo start --web --port 8081",
+      "description": "Expo Router web dev server (Metro bundler). Serves the HomeChef web app at http://localhost:8081."
+    }
+  ],
+  "ports": [
+    { "name": "expo-web", "port": 8081 }
+  ]
+}
