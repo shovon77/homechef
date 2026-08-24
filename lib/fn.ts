@@ -27,8 +27,16 @@ export async function callFn<T = any>(
       statusText: (error as any)?.statusText,
     });
     
-    // Try to extract detailed error message from various possible locations
-    const errorContext = (error as any)?.context;
+    // Try to extract detailed error message from various possible locations.
+    // For FunctionsHttpError, context is a fetch Response whose JSON body must be awaited.
+    let errorContext = (error as any)?.context;
+    if (errorContext && typeof errorContext.json === 'function') {
+      try {
+        errorContext = await errorContext.json();
+      } catch {
+        errorContext = null;
+      }
+    }
     let errorMsg = 
       errorContext?.error ??
       errorContext?.message ??

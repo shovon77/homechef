@@ -35,9 +35,10 @@ function validateScheduledAtInChefTimezone(
     return { ok: false, error: `${label} time is invalid` };
   }
   const now = new Date();
-  const max = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+  // 14 days: chefs with configured availability windows can offer dates up to 14 days out.
+  const max = new Date(now.getTime() + 14 * 24 * 60 * 60 * 1000);
   if (scheduled.getTime() < now.getTime() || scheduled.getTime() > max.getTime()) {
-    return { ok: false, error: `${label} must be within the next 7 days` };
+    return { ok: false, error: `${label} must be scheduled within the next 14 days` };
   }
   const chefTz = resolveChefTimezoneId(chefTimezone);
   let localHour = NaN;
@@ -58,8 +59,9 @@ function validateScheduledAtInChefTimezone(
       }).format(scheduled),
     );
   }
-  if (!Number.isFinite(localHour) || localHour < 8 || localHour >= 20) {
-    return { ok: false, error: `${label} time must be between 08:00 and 20:00` };
+  // Allowed window: 8:00 AM through midnight. Hour 0 (12:00 AM) counts as the end of the day.
+  if (!Number.isFinite(localHour) || (localHour !== 0 && localHour < 8)) {
+    return { ok: false, error: `${label} time must be between 8:00 AM and 12:00 AM (midnight)` };
   }
   return { ok: true, iso: scheduled.toISOString() };
 }
