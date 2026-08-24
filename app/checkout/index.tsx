@@ -335,14 +335,16 @@ function validatePreferredDateTime(
   minDate.setDate(today.getDate() + 1);
   const maxDate = new Date(today);
   const maxDaysAhead = availability && availability.length > 0 ? 14 : 3;
-  maxDate.setDate(today.getDate() + maxDaysAhead);
+  // +1 so the whole last allowed day (up to and including its midnight) is accepted.
+  maxDate.setDate(today.getDate() + maxDaysAhead + 1);
 
   if (combined < minDate || combined > maxDate) {
     Alert.alert('Invalid date', `${label} must be within the next ${maxDaysAhead} days.`);
     return null;
   }
-  if (hour < 8 || hour > 20) {
-    Alert.alert('Invalid time', `${label} time must be between 8:00 AM and 8:00 PM.`);
+  // Hour 24 is the midnight slot (12:00 AM at the end of the selected day).
+  if (hour < 8 || hour > 24) {
+    Alert.alert('Invalid time', `${label} time must be between 8:00 AM and 12:00 AM (midnight).`);
     return null;
   }
   return combined;
@@ -599,7 +601,7 @@ export default function CheckoutPage() {
   }, [chefPickupAvailability]);
 
   // Show time slots only after a date is selected.
-  // If chef has pickup_availability, filter to their configured windows; otherwise full 8AM-8PM.
+  // If chef has pickup_availability, filter to their configured windows; otherwise full 8 AM - midnight.
   const timeSlots = useMemo(() => {
     if (!selectedDate) return [];
 
@@ -607,12 +609,13 @@ export default function CheckoutPage() {
       return getTimeSlotsForDate(chefPickupAvailability, selectedDate);
     }
 
-    // Fallback: full 8AM-8PM range
+    // Fallback: full 8 AM - midnight range (hour 24 = 12:00 AM at the end of the day)
     const slots: Array<{ value: string; label: string }> = [];
-    for (let hour = 8; hour <= 20; hour++) {
+    for (let hour = 8; hour <= 24; hour++) {
       const hour24 = hour.toString().padStart(2, '0');
-      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-      const ampm = hour < 12 ? 'AM' : 'PM';
+      const isMidnight = hour === 24;
+      const hour12 = isMidnight ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour < 12 || isMidnight ? 'AM' : 'PM';
       slots.push({ value: `${hour24}:00`, label: `${hour12}:00 ${ampm}` });
     }
     return slots;
@@ -638,10 +641,11 @@ export default function CheckoutPage() {
       return getTimeSlotsForDate(activeDeliverySlots, selectedDeliveryDate);
     }
     const slots: Array<{ value: string; label: string }> = [];
-    for (let hour = 8; hour <= 20; hour++) {
+    for (let hour = 8; hour <= 24; hour++) {
       const hour24 = hour.toString().padStart(2, '0');
-      const hour12 = hour === 0 ? 12 : hour > 12 ? hour - 12 : hour;
-      const ampm = hour < 12 ? 'AM' : 'PM';
+      const isMidnight = hour === 24;
+      const hour12 = isMidnight ? 12 : hour > 12 ? hour - 12 : hour;
+      const ampm = hour < 12 || isMidnight ? 'AM' : 'PM';
       slots.push({ value: `${hour24}:00`, label: `${hour12}:00 ${ampm}` });
     }
     return slots;

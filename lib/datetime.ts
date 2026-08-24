@@ -1,6 +1,6 @@
 export const PICKUP_START_HOUR = 8;
-export const PICKUP_END_HOUR = 20; // inclusive 20:00
-export const PICKUP_MAX_DAYS = 7;
+export const PICKUP_END_HOUR = 24; // exclusive; midnight (12:00 AM) is allowed as the end of the day
+export const PICKUP_MAX_DAYS = 14;
 
 export function formatLocal(dtISO?: string | null, options: Intl.DateTimeFormatOptions = { dateStyle: 'medium', timeStyle: 'short' }): string {
   if (!dtISO) return '—';
@@ -57,9 +57,8 @@ export function isValidPickup(dtLocal: Date): boolean {
   const minute = dtLocal.getMinutes();
 
   const withinHours =
-    hour > PICKUP_START_HOUR && hour < PICKUP_END_HOUR ||
-    (hour === PICKUP_START_HOUR && minute >= 0) ||
-    (hour === PICKUP_END_HOUR && minute === 0);
+    (hour >= PICKUP_START_HOUR && hour < PICKUP_END_HOUR) ||
+    (hour === 0 && minute === 0); // midnight counts as the end of the previous day
 
   return dtLocal.getTime() >= now.getTime() && dtLocal.getTime() <= max.getTime() && withinHours;
 }
