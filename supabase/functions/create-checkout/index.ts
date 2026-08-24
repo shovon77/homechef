@@ -58,7 +58,8 @@ function validateScheduledAtInChefTimezone(
       }).format(scheduled),
     );
   }
-  if (!Number.isFinite(localHour) || localHour < 8 || localHour >= 20) {
+  // Allow the 8 PM hour inclusive — the client offers 8:00 PM as the last slot.
+  if (!Number.isFinite(localHour) || localHour < 8 || localHour > 20) {
     return { ok: false, error: `${label} time must be between 08:00 and 20:00` };
   }
   return { ok: true, iso: scheduled.toISOString() };
