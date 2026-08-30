@@ -17,7 +17,7 @@ import { formatCad } from "../../lib/money";
 import { isDeliveryOrder } from "../../lib/chef-fulfillment";
 import { formatLocationDisplay } from "../../lib/formatAddress";
 import { formatPhone } from "../../lib/formatPhone";
-import { getOrderPaymentStatusColor, getOrderPaymentStatusLabel } from "../../lib/orderPaymentStatus";
+import { getOrderPaymentStatusColor, getOrderPaymentStatusLabel, isOrderPaymentCompleted } from "../../lib/orderPaymentStatus";
 
 type UserOrderSummary = {
   id: number;
@@ -65,7 +65,8 @@ export default function ProfilePage() {
     if (activeTab === 'all') {
       return orders;
     } else if (activeTab === 'upcoming') {
-      return orders.filter(order => ['requested', 'pending', 'ready', 'paid'].includes(order.status));
+      // Only paid orders count as upcoming — failed/canceled payments never reach the chef.
+      return orders.filter(order => ['requested', 'pending', 'ready', 'paid'].includes(order.status) && isOrderPaymentCompleted(order));
     } else if (activeTab === 'completed') {
       return orders.filter(order => order.status === 'completed');
     } else if (activeTab === 'declined') {
