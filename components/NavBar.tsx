@@ -337,7 +337,7 @@ export default function NavBar() {
           .select('status, payment_status')
           .eq('user_id', user.id)
           .in('status', ['requested', 'pending', 'ready', 'paid'])
-          .neq('payment_status', 'awaiting_payment')
+          .not('payment_status', 'in', '(awaiting_payment,failed,canceled)')
         if (mounted && !error) {
           const statuses = (data ?? []).map((row: any) => row.status)
           setHasActiveOrder(statuses.length > 0)

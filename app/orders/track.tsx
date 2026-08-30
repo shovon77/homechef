@@ -65,6 +65,7 @@ type OrderRow = {
   user_id: string;
   chef_id: number | null;
   status: string;
+  payment_status?: string | null;
   total_cents: number;
   pickup_at: string | null;
   fulfillment_method?: string | null;
@@ -242,7 +243,7 @@ export default function TrackOrderPage() {
             .select('*')
             .eq('user_id', user.id)
             .in('status', ACTIVE_STATUSES as any)
-            .neq('payment_status', 'awaiting_payment')
+            .not('payment_status', 'in', '(awaiting_payment,failed,canceled)')
             .order('created_at', { ascending: false })
             .limit(1);
           if (!r.error && Array.isArray(r.data) && r.data.length > 0) {
@@ -250,13 +251,13 @@ export default function TrackOrderPage() {
           }
         }
 
-        // Fetch ALL active orders for navigation (exclude unpaid)
+        // Fetch ALL active orders for navigation (exclude unpaid / failed / canceled payments)
         const allOrdersRes = await supabase
           .from('orders')
           .select('*')
           .eq('user_id', user.id)
           .in('status', ACTIVE_STATUSES as any)
-          .neq('payment_status', 'awaiting_payment')
+          .not('payment_status', 'in', '(awaiting_payment,failed,canceled)')
           .order('created_at', { ascending: false });
 
         const activeOrders = (allOrdersRes.data || []) as OrderRow[];
@@ -920,6 +921,18 @@ export default function TrackOrderPage() {
       break;
     default:
       statusMessage = 'Your order status is being updated';
+  }
+
+  // Payment never went through — don't show chef-confirmation states for these orders.
+  const paymentState = String(order.payment_status ?? '').toLowerCase();
+  if ((paymentState === 'failed' || paymentState === 'canceled') && visualStatus !== 'completed') {
+    stepMeta = {
+      label: paymentState === 'failed' ? 'Payment failed' : 'Payment canceled',
+      icon: '',
+    };
+    statusMessage = paymentState === 'failed'
+      ? 'Your payment did not go through and you were not charged. The chef was not notified — please try ordering again.'
+      : 'This payment was canceled and you were not charged.';
   }
 
   const showReadyAction = order.status === 'ready' || order.status === 'completed';
