@@ -17,10 +17,69 @@ import type { HomeBrowseGridSectionHandle } from "./components/HomeBrowseGridSec
 const HomeBrowseGridSectionLazy = lazy(() => import("./components/HomeBrowseGridSection"));
 
 type Chef = Record<string, any>;
-type Dish = { id: number; name: string; image?: string | null; price?: number | null; chef_id?: number | null; chef?: string | null };
+type Dish = {
+  id: number;
+  name: string;
+  image?: string | null;
+  price?: number | null;
+  chef_id?: number | null;
+  chef?: string | null;
+  rating?: number | null;
+  rating_count?: number | null;
+  created_at?: string | null;
+};
 
 const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
 const FEATURED_CHEFS_LIMIT = 30;
+const FEATURED_DISHES_LIMIT = 15;
+const FEATURED_DISH_CANDIDATES = 100;
+const FEATURED_MAX_PER_CHEF = 3;
+const FEATURED_SALES_WINDOW_DAYS = 90;
+const FEATURED_NEW_DISH_WINDOW_MS = 21 * 24 * 60 * 60 * 1000;
+
+/**
+ * Rank carousel dishes by demand instead of price:
+ * recent confirmed sales (log-scaled) + rating quality (confidence-weighted) + new-dish boost,
+ * with a per-chef cap so one chef doesn't dominate the carousel.
+ */
+function rankFeaturedDishes(candidates: Dish[], unitsSoldByDishId: Map<number, number>): Dish[] {
+  const now = Date.now();
+  const scored = candidates.map((dish) => {
+    const units = unitsSoldByDishId.get(Number(dish.id)) ?? 0;
+    const rating = Number(dish.rating) || 0;
+    const ratingCount = Number(dish.rating_count) || 0;
+    const createdAtMs = Date.parse(String(dish.created_at ?? ''));
+    const isNew = Number.isFinite(createdAtMs) && now - createdAtMs < FEATURED_NEW_DISH_WINDOW_MS;
+    const salesScore = 3 * Math.log1p(units);
+    // Confidence-weighted rating: a 5.0 from one review counts less than a 4.6 from many.
+    const ratingScore = rating * (Math.min(ratingCount, 5) / 5);
+    const score = salesScore + ratingScore + (isNew ? 1.25 : 0);
+    return { dish, score };
+  });
+  scored.sort((a, b) => b.score - a.score);
+
+  const perChef = new Map<string, number>();
+  const picked: Dish[] = [];
+  const pickedIds = new Set<number>();
+  for (const { dish } of scored) {
+    if (picked.length >= FEATURED_DISHES_LIMIT) break;
+    const chefKey = String(dish.chef_id ?? 'unknown');
+    const used = perChef.get(chefKey) ?? 0;
+    if (used >= FEATURED_MAX_PER_CHEF) continue;
+    perChef.set(chefKey, used + 1);
+    picked.push(dish);
+    pickedIds.add(Number(dish.id));
+  }
+  // If per-chef caps left slots open (few featured chefs), backfill by score.
+  for (const { dish } of scored) {
+    if (picked.length >= FEATURED_DISHES_LIMIT) break;
+    if (!pickedIds.has(Number(dish.id))) {
+      picked.push(dish);
+      pickedIds.add(Number(dish.id));
+    }
+  }
+  return picked;
+}
 
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
@@ -387,20 +446,33 @@ export default function HomePage() {
         })
         .catch(() => {});
 
-      const [{ data: c }, { data: d }] = await Promise.all([
+      const [{ data: c }, { data: d }, salesRes] = await Promise.all([
         supabase.from("chefs").select("id, name, slug, photo, bio, location, rating, cuisine, latitude, longitude, user_id").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
         supabase.from("dishes")
-          .select("id,name,image,price,chef_id,chef,rating, chefs!inner(featured, status, stripe_connect_completed, name)")
+          .select("id,name,image,price,chef_id,chef,rating,rating_count,created_at, chefs!inner(featured, status, stripe_connect_completed, name)")
           .eq("chefs.featured", true)
           .eq("chefs.status", "active")
           .eq("chefs.stripe_connect_completed", true)
           .or("is_active.eq.true,is_active.is.null")
-          .order("price", { ascending: true })
-          .limit(15),
+          .order("created_at", { ascending: false })
+          .limit(FEATURED_DISH_CANDIDATES),
+        // Aggregate sales signal (anon-safe RPC); ranking degrades gracefully if it fails.
+        supabase.rpc('get_dish_sales_stats', { p_days: FEATURED_SALES_WINDOW_DAYS }).then(
+          (r) => r,
+          () => ({ data: null, error: true } as any),
+        ),
       ]);
       if (!mounted) return;
+      const unitsSoldByDishId = new Map<number, number>();
+      if (Array.isArray(salesRes?.data)) {
+        for (const row of salesRes.data as Array<{ dish_id: number; units_sold: number }>) {
+          const id = Number(row?.dish_id);
+          const units = Number(row?.units_sold);
+          if (Number.isFinite(id) && Number.isFinite(units)) unitsSoldByDishId.set(id, units);
+        }
+      }
       setChefs((c || []) as Chef[]);
-      setDishes((d || []) as Dish[]);
+      setDishes(rankFeaturedDishes((d || []) as Dish[], unitsSoldByDishId));
       setLoading(false);
     })();
 
