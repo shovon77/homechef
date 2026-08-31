@@ -329,7 +329,7 @@ export default function ChefDetailView() {
   const deliveryChipLabel = useMemo(() => {
     const base = offersPickup ? 'Delivery' : 'Delivery only';
     const fee = Number((chef as any)?.delivery_flat_fee ?? 0);
-    return Number.isFinite(fee) && fee > 0 ? `${base} · ${formatCad(fee)} fee` : base;
+    return Number.isFinite(fee) && fee > 0 ? `${base} · ${formatCad(fee)}` : base;
   }, [chef, offersPickup]);
   const deliveryZoneNames = useMemo(() => {
     if (!offersDelivery) return [] as string[];
