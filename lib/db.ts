@@ -243,7 +243,7 @@ export async function getDishById(id: number): Promise<Dish | null> {
 
 /** Columns needed for dish detail + chef link; smaller payload than select * */
 const DISH_DETAIL_SELECT =
-  'id, name, chef, chef_id, price, category, image, description, portion, ingredients, thumbnail, featured, created_at, is_active, rating, rating_count, chefs ( id, name, slug, photo, email, user_id )';
+  'id, name, chef, chef_id, price, category, image, description, portion, ingredients, thumbnail, featured, created_at, is_active, rating, rating_count, chefs ( id, name, slug, photo, email, user_id, fulfillment_mode, delivery_flat_fee )';
 
 const DISH_WITH_CHEF_CACHE_MS = 20_000;
 const dishWithChefCache = new Map<number, { t: number; v: DishWithChef | null }>();
