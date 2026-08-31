@@ -13,6 +13,10 @@ import OptimizedImage from "../../components/OptimizedImage";
 import { formatCad } from "../../lib/money";
 import { optimizeDishDetailHeroUrl } from "../../lib/dishImageUrl";
 import { Ionicons } from "@expo/vector-icons";
+import {
+  chefFulfillmentIncludesDelivery,
+  chefFulfillmentIncludesPickup,
+} from "../../lib/chef-fulfillment";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -65,6 +69,45 @@ function splitDescriptionAndPortion(
   if (!looksLikePortionTail) return { descriptionToShow: raw, portionToShow: null };
   const body = lines.slice(0, end - 1).join('\n').trim();
   return { descriptionToShow: body, portionToShow: lastLine };
+}
+
+/** Pickup / delivery chips reflecting the chef's fulfillment settings. */
+function FulfillmentChips({ chef }: { chef: any }) {
+  if (!chef || chef.fulfillment_mode == null) return null;
+  const offersPickup = chefFulfillmentIncludesPickup(chef.fulfillment_mode);
+  const offersDelivery = chefFulfillmentIncludesDelivery(chef.fulfillment_mode);
+  const fee = Number(chef.delivery_flat_fee ?? 0);
+  const deliveryBase = offersPickup ? 'Delivery' : 'Delivery only';
+  const deliveryLabel =
+    Number.isFinite(fee) && fee > 0
+      ? `${deliveryBase} · ${formatCad(fee)} fee`
+      : deliveryBase;
+  return (
+    <View style={styles.fulfillmentRow}>
+      {offersPickup ? (
+        <View style={styles.fulfillmentChip}>
+          <Image
+            source={require('../../assets/dinner.png')}
+            style={styles.fulfillmentChipIcon as any}
+            tintColor={PRIMARY_COLOR}
+            resizeMode="contain"
+          />
+          <Text style={styles.fulfillmentChipText}>{offersDelivery ? 'Pickup' : 'Pickup only'}</Text>
+        </View>
+      ) : null}
+      {offersDelivery ? (
+        <View style={styles.fulfillmentChip}>
+          <Image
+            source={require('../../assets/delivery.png')}
+            style={styles.fulfillmentChipIcon as any}
+            tintColor={PRIMARY_COLOR}
+            resizeMode="contain"
+          />
+          <Text style={styles.fulfillmentChipText}>{deliveryLabel}</Text>
+        </View>
+      ) : null}
+    </View>
+  );
 }
 
 export default function DishDetail() {
@@ -158,7 +201,7 @@ export default function DishDetail() {
         if (!chefData && dishData.chef_id) {
           const { data: fallbackChef } = await supabase
             .from('chefs')
-            .select('id, name, slug, photo, email, user_id')
+            .select('id, name, slug, photo, email, user_id, fulfillment_mode, delivery_flat_fee')
             .eq('id', Number(dishData.chef_id))
             .maybeSingle();
           chefData = fallbackChef;
@@ -469,6 +512,8 @@ export default function DishDetail() {
               </View>
             )}
 
+            <FulfillmentChips chef={chef} />
+
             <TouchableOpacity style={styles.ratingContainer} activeOpacity={0.7} onPress={scrollToReviews}>
               {renderStars(avgRating)}
               <Text style={styles.reviewCount} onPress={scrollToReviews}>
@@ -607,6 +652,8 @@ export default function DishDetail() {
                 <Text style={styles.chefLinkText}>{chefName}</Text>
               </View>
             )}
+
+            <FulfillmentChips chef={chef} />
 
             {/* Rating */}
             <TouchableOpacity style={styles.ratingContainer} activeOpacity={0.7} onPress={scrollToReviews}>
@@ -1040,6 +1087,31 @@ const styles = StyleSheet.create({
     marginTop: theme.spacing.md,
     // Reserve one line so late font/layout tweaks don’t shift rows (web CLS)
     minHeight: 22,
+  },
+  fulfillmentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+    marginTop: theme.spacing.sm,
+  },
+  fulfillmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  fulfillmentChipIcon: {
+    width: 16,
+    height: 16,
+  },
+  fulfillmentChipText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    color: TEXT_DARK,
   },
   starsContainer: {
     flexDirection: 'row',

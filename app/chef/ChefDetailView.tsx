@@ -12,6 +12,12 @@ import Screen from '../../components/Screen';
 import DishCard from '../components/DishCard';
 import { theme, elev } from '../../lib/theme';
 import { Ionicons } from '@expo/vector-icons';
+import { formatCad } from '../../lib/money';
+import {
+  chefFulfillmentIncludesDelivery,
+  chefFulfillmentIncludesPickup,
+} from '../../lib/chef-fulfillment';
+import { parseDeliveryAvailability } from '../../lib/delivery-zones';
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -316,6 +322,21 @@ export default function ChefDetailView() {
   const avatar = chef?.photo || chef?.avatar || '';
   const title = (chef as any)?.brand_name?.trim() || chef?.name?.trim() || (chefId ? `Chef #${chefId}` : 'Chef');
   const location = chef?.location || '';
+
+  // Fulfillment chips: what this chef offers (pickup / delivery), fee, and delivery zones.
+  const offersPickup = chef != null && (chef as any).fulfillment_mode != null && chefFulfillmentIncludesPickup((chef as any).fulfillment_mode);
+  const offersDelivery = chef != null && (chef as any).fulfillment_mode != null && chefFulfillmentIncludesDelivery((chef as any).fulfillment_mode);
+  const deliveryChipLabel = useMemo(() => {
+    const base = offersPickup ? 'Delivery' : 'Delivery only';
+    const fee = Number((chef as any)?.delivery_flat_fee ?? 0);
+    return Number.isFinite(fee) && fee > 0 ? `${base} · ${formatCad(fee)} fee` : base;
+  }, [chef, offersPickup]);
+  const deliveryZoneNames = useMemo(() => {
+    if (!offersDelivery) return [] as string[];
+    const config = parseDeliveryAvailability((chef as any)?.delivery_availability);
+    const names = (config?.zones ?? []).map((z) => (z.name || '').trim()).filter(Boolean);
+    return [...new Set(names)];
+  }, [chef, offersDelivery]);
   const bio = chef?.bio ?? chef?.description ?? '';
 
   /** Prefer denormalized `chefs.rating`; if missing/stale, derive from loaded reviews so the tab and header stay consistent. */
@@ -473,6 +494,39 @@ export default function ChefDetailView() {
                   </View>
                 </View>
               </View>
+              {(offersPickup || offersDelivery) ? (
+                <View style={styles.fulfillmentSection}>
+                  <View style={styles.fulfillmentRow}>
+                    {offersPickup ? (
+                      <View style={styles.fulfillmentChip}>
+                        <Image
+                          source={require('../../assets/dinner.png')}
+                          style={styles.fulfillmentChipIcon as any}
+                          tintColor={PRIMARY_COLOR}
+                          resizeMode="contain"
+                        />
+                        <Text style={styles.fulfillmentChipText}>{offersDelivery ? 'Pickup' : 'Pickup only'}</Text>
+                      </View>
+                    ) : null}
+                    {offersDelivery ? (
+                      <View style={styles.fulfillmentChip}>
+                        <Image
+                          source={require('../../assets/delivery.png')}
+                          style={styles.fulfillmentChipIcon as any}
+                          tintColor={PRIMARY_COLOR}
+                          resizeMode="contain"
+                        />
+                        <Text style={styles.fulfillmentChipText}>{deliveryChipLabel}</Text>
+                      </View>
+                    ) : null}
+                  </View>
+                  {deliveryZoneNames.length > 0 ? (
+                    <Text style={[styles.chefCardMetaText, isMobile && styles.chefCardMetaTextMobile, styles.fulfillmentZonesText]} numberOfLines={2}>
+                      Delivers to: {deliveryZoneNames.join(', ')}
+                    </Text>
+                  ) : null}
+                </View>
+              ) : null}
               {bio ? (
                 <View style={styles.chefCardBioWrap}>
                   {isMobile && !bioExpanded && bio.length > 96 ? (
@@ -853,6 +907,38 @@ const styles = StyleSheet.create({
     paddingTop: theme.spacing.sm,
     paddingBottom: 0,
     marginBottom: -theme.spacing.xs,
+  },
+  fulfillmentSection: {
+    width: '100%',
+    paddingTop: theme.spacing.sm,
+    gap: theme.spacing.xs,
+  },
+  fulfillmentRow: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    alignItems: 'center',
+    gap: theme.spacing.sm,
+  },
+  fulfillmentChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: BACKGROUND_LIGHT,
+    borderRadius: 999,
+    paddingVertical: 4,
+    paddingHorizontal: 12,
+  },
+  fulfillmentChipIcon: {
+    width: 16,
+    height: 16,
+  },
+  fulfillmentChipText: {
+    fontFamily: theme.typography.fontFamily.body,
+    fontSize: theme.typography.fontSize.sm,
+    color: BRAND_BLACK,
+  },
+  fulfillmentZonesText: {
+    marginTop: 2,
   },
   chefCardBioStack: {
     gap: theme.spacing.xs,
