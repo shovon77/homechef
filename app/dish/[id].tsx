@@ -80,7 +80,7 @@ function FulfillmentChips({ chef }: { chef: any }) {
   const deliveryBase = offersPickup ? 'Delivery' : 'Delivery only';
   const deliveryLabel =
     Number.isFinite(fee) && fee > 0
-      ? `${deliveryBase} · ${formatCad(fee)} fee`
+      ? `${deliveryBase} · ${formatCad(fee)}`
       : deliveryBase;
   return (
     <View style={styles.fulfillmentRow}>
