@@ -11,6 +11,7 @@ import { formatCad } from "../lib/money";
 import { useRouter } from "expo-router";
 import { useFocusEffect } from "@react-navigation/native";
 import { supabase } from "../lib/supabase";
+import { dishPath } from "../lib/dishPath";
 import { useRole } from "../hooks/useRole";
 import { useLocationModal } from "../context/LocationModalContext";
 import LocationPicker from "../components/LocationPicker";
@@ -622,7 +623,7 @@ export default function CartScreen() {
                     <View key={String(item.id)} style={styles.cartItem}>
                       <View style={styles.cartItemContent}>
                         <View style={styles.cartItemLeft}>
-                          <Link href={`/dish/${item.id}?quantity=${item.quantity}`} asChild>
+                          <Link href={`${dishPath(item)}?quantity=${item.quantity}`} asChild>
                             <TouchableOpacity>
                           <Image
                             source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}

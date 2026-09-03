@@ -17,6 +17,7 @@ import {
   chefFulfillmentIncludesDelivery,
   chefFulfillmentIncludesPickup,
 } from "../../lib/chef-fulfillment";
+import { dishPath, parseDishIdParam } from "../../lib/dishPath";
 
 // Colors from HTML design
 const PRIMARY_COLOR = '#FE734C';
@@ -125,13 +126,9 @@ export default function DishDetail() {
   const [tabsSectionY, setTabsSectionY] = useState(0);
   const tabsSectionYRef = useRef(0);
   const raw = String(Array.isArray(id) ? id[0] : id || '');
-  
-  const dishId = useMemo(() => {
-    const m = raw.match(/(\d+)/);
-    if (m) return Number(m[1]);
-    const tail = raw.replace(/[^0-9]+/g,'');
-    return tail ? Number(tail) : NaN;
-  }, [raw]);
+
+  // Accepts /dish/119 (legacy) and /dish/mejbani-beef-119 (canonical slug-id).
+  const dishId = useMemo(() => parseDishIdParam(raw), [raw]);
 
   // Parse quantity from URL params
   const initialQuantity = useMemo(() => {
@@ -240,6 +237,19 @@ export default function DishDetail() {
       mounted = false;
     };
   }, [dishId]);
+
+  // Web: normalize the address bar to the canonical slug-id URL (/dish/mejbani-beef-119)
+  // without a navigation, so legacy /dish/119 links and stale slugs self-correct.
+  useEffect(() => {
+    if (Platform.OS !== 'web' || typeof window === 'undefined') return;
+    if (!dish?.id || !dish?.name) return;
+    const canonical = dishPath({ id: dish.id, name: dish.name });
+    if (window.location.pathname !== canonical) {
+      try {
+        window.history.replaceState(window.history.state, '', canonical + window.location.search);
+      } catch {}
+    }
+  }, [dish?.id, dish?.name]);
 
   // 2. Fetch user-specific data - depends on dishId and user.id
   useEffect(() => {

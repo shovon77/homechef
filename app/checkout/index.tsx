@@ -22,6 +22,7 @@ import {
   type ChefFulfillmentMode,
 } from '../../lib/chef-fulfillment';
 import { isValidCanadianPhone, formatPhone } from '../../lib/formatPhone';
+import { dishPath } from '../../lib/dishPath';
 import {
   parseDeliveryAvailability,
   findMatchingDeliveryZone,
@@ -852,7 +853,7 @@ export default function CheckoutPage() {
             
             return (
               <View key={String(item.id)} style={styles.cartItem}>
-                <Link href={`/dish/${item.id}`} asChild>
+                <Link href={dishPath(item)} asChild>
                   <TouchableOpacity style={styles.cartItemImageLink}>
                     <Image
                       source={{ uri: (item.image as string) || "https://images.unsplash.com/photo-1551218808-94e220e084d2?w=600&q=60" }}
