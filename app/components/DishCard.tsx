@@ -7,6 +7,7 @@ import { useCart } from "../../context/CartContext";
 import { safeToFixed, toNumber } from "../../lib/number";
 import { formatCad } from "../../lib/money";
 import { optimizeDishCardImageUrl } from "../../lib/dishImageUrl";
+import { dishPath } from "../../lib/dishPath";
 import { prefetchDishWithChef } from "../../lib/db";
 import OptimizedImage from "../../components/OptimizedImage";
 
@@ -32,7 +33,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
 
   const cardImageUri = optimizeDishCardImageUrl(dish.image ?? null, 480);
   const imageEl = (
-    <Link href={`/dish/${dish.id}`} asChild>
+    <Link href={dishPath(dish)} asChild>
       <TouchableOpacity
         activeOpacity={0.8}
         style={variant === 'explore' ? styles.imageContainerExplore : styles.imageContainer}
@@ -193,7 +194,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
   );
 
   if (variant === 'explore') {
-    const dishHref = `/dish/${dish.id}`;
+    const dishHref = dishPath(dish);
     const prefetch = () => prefetchDishWithChef(Number(dish.id));
 
     const linkedImageLayer = (
