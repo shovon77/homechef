@@ -113,9 +113,13 @@ serve(async (req) => {
     // When user cancels, also set to 'cancelled'
     const status = 'cancelled';
 
+    // A refund of a captured payment is 'refunded' (money returned); a
+    // pre-capture user cancellation never charged the customer ('canceled').
+    const paymentStatus = reason === 'user_cancelled' ? 'canceled' : 'refunded';
+
     await adminClient
       .from('orders')
-      .update({ status, payment_status: 'canceled' })
+      .update({ status, payment_status: paymentStatus })
       .eq('id', order.id);
 
     return json(200, { ok: true });

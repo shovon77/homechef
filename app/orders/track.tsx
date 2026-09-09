@@ -923,16 +923,19 @@ export default function TrackOrderPage() {
       statusMessage = 'Your order status is being updated';
   }
 
-  // Payment never went through — don't show chef-confirmation states for these orders.
+  // Payment never went through (or was returned) — don't show
+  // chef-confirmation states for these orders.
   const paymentState = String(order.payment_status ?? '').toLowerCase();
-  if ((paymentState === 'failed' || paymentState === 'canceled') && visualStatus !== 'completed') {
+  if ((paymentState === 'failed' || paymentState === 'canceled' || paymentState === 'refunded') && visualStatus !== 'completed') {
     stepMeta = {
-      label: paymentState === 'failed' ? 'Payment failed' : 'Payment canceled',
+      label: paymentState === 'failed' ? 'Payment failed' : paymentState === 'refunded' ? 'Payment refunded' : 'Payment canceled',
       icon: '',
     };
     statusMessage = paymentState === 'failed'
       ? 'Your payment did not go through and you were not charged. The chef was not notified — please try ordering again.'
-      : 'This payment was canceled and you were not charged.';
+      : paymentState === 'refunded'
+        ? 'This order was cancelled and your payment has been refunded. Refunds usually appear on your statement within 5-10 business days.'
+        : 'This payment was canceled and you were not charged.';
   }
 
   const showReadyAction = order.status === 'ready' || order.status === 'completed';
@@ -960,6 +963,7 @@ export default function TrackOrderPage() {
       case 'reviewing': return 'Under review';
       case 'resolved': return 'Resolved';
       case 'dismissed': return 'Dismissed';
+      case 'refunded': return 'Refunded';
       default: return status || 'Pending';
     }
   };
@@ -970,6 +974,7 @@ export default function TrackOrderPage() {
       case 'reviewing': return '#3B82F6';
       case 'resolved': return '#22C55E';
       case 'dismissed': return '#6B7280';
+      case 'refunded': return '#22C55E';
       default: return PRIMARY;
     }
   };

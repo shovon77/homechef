@@ -90,6 +90,16 @@ export const handler = async (req: Request) => {
       return j(401, { error: 'Unauthorized' });
     }
 
+    // Deactivated (banned) accounts cannot place orders.
+    const { data: buyerProfile } = await adminClient
+      .from('profiles')
+      .select('role')
+      .eq('id', user.id)
+      .maybeSingle();
+    if (String(buyerProfile?.role ?? '').toLowerCase() === 'banned') {
+      return j(403, { error: 'Your account has been deactivated. Please contact support.' });
+    }
+
     const raw = await req.json().catch((e) => {
       console.error('[create-checkout] JSON parse error:', e);
       return null;
