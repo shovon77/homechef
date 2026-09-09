@@ -1,6 +1,7 @@
 'use client';
 import React, { useEffect, useState, useMemo } from 'react';
-import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, Alert, StyleSheet, Image, Platform, useWindowDimensions, Modal } from 'react-native';
+import { View, Text, TouchableOpacity, ScrollView, TextInput, ActivityIndicator, StyleSheet, Image, Platform, useWindowDimensions, Modal } from 'react-native';
+import { crossAlert } from '../../lib/crossAlert';
 import { useRouter, useLocalSearchParams, Link } from 'expo-router';
 import { supabase } from '../../lib/supabase';
 import { useRole } from '../../hooks/useRole';
@@ -33,6 +34,7 @@ const ITEMS_PER_PAGE = 25;
 const ISSUES_PER_PAGE = 10;
 const ORDERS_PER_PAGE = 10;
 const CHEFS_PER_PAGE = 10;
+const NOTIFICATIONS_PER_PAGE = 25;
 
 const palette = {
   background: '#F2F0EF',
@@ -99,7 +101,6 @@ export default function AdminPage() {
   const [chefs, setChefs] = useState<Chef[]>([]);
   const [orders, setOrders] = useState<OrderWithItems[]>([]);
   const [users, setUsers] = useState<Profile[]>([]);
-  const [, setApplications] = useState<any[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [userSearch, setUserSearch] = useState('');
@@ -112,13 +113,9 @@ export default function AdminPage() {
   const [orderSortDir, setOrderSortDir] = useState<'asc' | 'desc'>('desc');
   const [ordersWithChefs, setOrdersWithChefs] = useState<any[]>([]);
   const [chefsWithStats, setChefsWithStats] = useState<any[]>([]);
-  const [chefRequests, setChefRequests] = useState<any[]>([]);
-  const [chefReqSearch, setChefReqSearch] = useState('');
-  const [autoRejecting, setAutoRejecting] = useState(false);
   const [issues, setIssues] = useState<any[]>([]);
   const [issueSearch, setIssueSearch] = useState('');
   const [issuePage, setIssuePage] = useState(1);
-  const [expandedSections, setExpandedSections] = useState<{ [chefId: number]: { [section: string]: boolean } }>({});
   const [bannerUrl, setBannerUrl] = useState('');
   const [originalBannerUrl, setOriginalBannerUrl] = useState('');
   const [savingBanner, setSavingBanner] = useState(false);
@@ -139,7 +136,6 @@ export default function AdminPage() {
     mergeSocialUrlsWithDb([]),
   );
   const [savingSocialUrls, setSavingSocialUrls] = useState(false);
-  const [issueActions, setIssueActions] = useState<{ [issueId: number]: string }>({});
   const [pendingIssuesCount, setPendingIssuesCount] = useState(0);
   const [pendingChefApplicationsCount, setPendingChefApplicationsCount] = useState(0);
   const [dailyActiveUsers, setDailyActiveUsers] = useState(0);
@@ -159,18 +155,11 @@ export default function AdminPage() {
     message: string;
     created_at: string;
     user_name: string | null;
+    sms_sent?: boolean | null;
+    sms_sid?: string | null;
   }>>([]);
+  const [notificationPage, setNotificationPage] = useState(1);
 
-  // Persist issueActions to localStorage whenever it changes
-  useEffect(() => {
-    if (Platform.OS === 'web' && typeof window !== 'undefined') {
-      try {
-        localStorage.setItem('admin_issue_actions', JSON.stringify(issueActions));
-      } catch (e) {
-        console.warn('Failed to save issue actions to localStorage:', e);
-      }
-    }
-  }, [issueActions]);
   const [openActionDropdownIssueId, setOpenActionDropdownIssueId] = useState<number | null>(null);
   const [openActionDropdownOrderId, setOpenActionDropdownOrderId] = useState<number | null>(null);
   const [issueDetailModalId, setIssueDetailModalId] = useState<number | null>(null);
@@ -188,8 +177,14 @@ export default function AdminPage() {
     items: Array<{ id: number; dish_id: number | null; quantity: number; unit_price_cents: number; dish?: { id: number; name: string } | null }>;
     totalCents: number | null;
     platformFeeCents: number | null;
+    deliveryFeeCents: number;
+    fulfillmentMethod: string | null;
+    deliveryAddress: string | null;
+    deliveryAt: string | null;
+    status: string | null;
     chef: { id: number; name: string; photo?: string | null } | null;
   } | null>(null);
+  const [updatingOrderStatus, setUpdatingOrderStatus] = useState(false);
   const [loadingOrderDetails, setLoadingOrderDetails] = useState(false);
   const [isPickupAddressExpanded, setIsPickupAddressExpanded] = useState(false);
   const [isPickupDateTimeExpanded, setIsPickupDateTimeExpanded] = useState(false);
@@ -208,36 +203,26 @@ export default function AdminPage() {
     }
   }
 
-  function formatPickupDateTime(pickupAt: string | null): string {
-    if (!pickupAt) return 'Not available';
-    try {
-      const date = new Date(pickupAt);
-      if (Number.isNaN(date.getTime())) return 'Not available';
-      
-      const dateStr = date.toLocaleDateString('en-US', { 
-        month: 'long', 
-        day: 'numeric', 
-        year: 'numeric' 
-      });
-      
-      const hour = date.getHours();
-      const minute = date.getMinutes();
-      const hourStr = hour.toString().padStart(2, '0');
-      const minuteStr = minute.toString().padStart(2, '0');
-      const startTimeStr = `${hourStr}:${minuteStr}`;
-      
-      const endDate = new Date(date);
-      endDate.setHours(endDate.getHours() + 1);
-      const endHour = endDate.getHours();
-      const endHour12 = endHour === 0 ? 12 : endHour > 12 ? endHour - 12 : endHour;
-      const endAmpm = endHour >= 12 ? 'PM' : 'AM';
-      const endMinuteStr = endDate.getMinutes().toString().padStart(2, '0');
-      const endTimeStr = `${endHour12}:${endMinuteStr}${endAmpm}`;
-      
-      return `${dateStr} - ${startTimeStr} - ${endTimeStr}`;
-    } catch {
-      return 'Not available';
-    }
+  // Formats the scheduled slot as "Month D, YYYY - h:mm AM - h:mm PM" in EST
+  // (matching formatEst used elsewhere); slots are one-hour windows.
+  function formatScheduledSlot(scheduledAt: string | null): string {
+    if (!scheduledAt) return 'Not available';
+    const start = new Date(scheduledAt);
+    if (Number.isNaN(start.getTime())) return 'Not available';
+    const end = new Date(start.getTime() + 60 * 60 * 1000);
+    const dateStr = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      month: 'long',
+      day: 'numeric',
+      year: 'numeric',
+    }).format(start);
+    const timeFmt = new Intl.DateTimeFormat('en-US', {
+      timeZone: 'America/New_York',
+      hour: 'numeric',
+      minute: '2-digit',
+      hour12: true,
+    });
+    return `${dateStr} - ${timeFmt.format(start)} - ${timeFmt.format(end)}`;
   }
 
   async function fetchOrderDetails(orderId: number) {
@@ -245,12 +230,12 @@ export default function AdminPage() {
     try {
       const { data: order } = await supabase
         .from('orders')
-        .select('id, pickup_at, chef_id, total_cents, platform_fee_cents')
+        .select('id, pickup_at, chef_id, total_cents, platform_fee_cents, delivery_fee_cents, fulfillment_method, delivery_address, delivery_at, status')
         .eq('id', orderId)
         .maybeSingle();
       
       if (!order) {
-        Alert.alert('Error', 'Order not found');
+        crossAlert('Error', 'Order not found');
         setOrderDetailModalId(null);
         return;
       }
@@ -299,10 +284,15 @@ export default function AdminPage() {
         items,
         totalCents: order.total_cents,
         platformFeeCents: order.platform_fee_cents ?? null,
+        deliveryFeeCents: Number(order.delivery_fee_cents ?? 0) || 0,
+        fulfillmentMethod: order.fulfillment_method ?? null,
+        deliveryAddress: order.delivery_address ?? null,
+        deliveryAt: order.delivery_at ?? null,
+        status: order.status ?? null,
         chef,
       });
     } catch (e) {
-      Alert.alert('Error', 'Failed to load order details');
+      crossAlert('Error', 'Failed to load order details');
       setOrderDetailModalId(null);
     } finally {
       setLoadingOrderDetails(false);
@@ -320,76 +310,17 @@ export default function AdminPage() {
     }
   }, [orderDetailModalId]);
 
-  async function fetchChefRequests() {
-    // Fetch pending chefs that have a profile record (linked via user_id)
-    // First, get all pending chefs with user_id
-    const { data: pendingChefs, error: chefsError } = await supabase
-      .from('chefs')
-      .select('id, name, email, phone, location, bio, cuisine, status, created_at, user_id, pickup_availability')
-      .eq('status', 'pending')
-      .not('user_id', 'is', null)
-      .order('created_at', { ascending: false });
-    
-    if (chefsError) {
-      console.error('fetchChefRequests - chefs query', chefsError);
-      return [];
+  // Fetch every page so all-time metrics stay correct past 1000 rows.
+  async function fetchAllPages<T>(fetchPage: (limit: number, offset: number) => Promise<T[]>): Promise<T[]> {
+    const PAGE_SIZE = 1000;
+    const MAX_PAGES = 20;
+    const all: T[] = [];
+    for (let page = 0; page < MAX_PAGES; page++) {
+      const batch = await fetchPage(PAGE_SIZE, page * PAGE_SIZE);
+      all.push(...batch);
+      if (batch.length < PAGE_SIZE) break;
     }
-    
-    if (!pendingChefs || pendingChefs.length === 0) {
-      return [];
-    }
-    
-    // Get all user_ids from pending chefs
-    const userIds = pendingChefs.map(c => c.user_id).filter(Boolean) as string[];
-    
-    if (userIds.length === 0) {
-      return [];
-    }
-    
-    // Check which user_ids have profiles
-    const { data: profiles, error: profilesError } = await supabase
-      .from('profiles')
-      .select('id')
-      .in('id', userIds);
-    
-    if (profilesError) {
-      console.error('fetchChefRequests - profiles query', profilesError);
-      return [];
-    }
-    
-    // Create a set of user_ids that have profiles
-    const profileUserIds = new Set((profiles || []).map(p => p.id));
-    
-    // Filter chefs to only include those with profiles
-    const chefsWithProfiles = pendingChefs.filter(chef => chef.user_id && profileUserIds.has(chef.user_id));
-    
-    // Fetch dishes for each chef
-    const chefIds = chefsWithProfiles.map(c => c.id);
-    if (chefIds.length > 0) {
-      const { data: dishesData } = await supabase
-        .from('dishes')
-        .select('id, chef_id, name, price, portion, description, ingredients, image, thumbnail')
-        .in('chef_id', chefIds);
-      
-      // Group dishes by chef_id
-      const dishesByChef = new Map<number, any[]>();
-      (dishesData || []).forEach(dish => {
-        if (dish.chef_id) {
-          if (!dishesByChef.has(dish.chef_id)) {
-            dishesByChef.set(dish.chef_id, []);
-          }
-          dishesByChef.get(dish.chef_id)!.push(dish);
-        }
-      });
-      
-      // Add dishes to each chef
-      return chefsWithProfiles.map(chef => ({
-        ...chef,
-        dishes: dishesByChef.get(chef.id) || []
-      }));
-    }
-    
-    return chefsWithProfiles.map(chef => ({ ...chef, dishes: [] }));
+    return all;
   }
 
   async function loadAll() {
@@ -397,10 +328,10 @@ export default function AdminPage() {
     setErr(null);
     try {
       // Load chefs using db helper
-      const chefRows = await getChefsPaginated({ limit: 1000 });
+      const chefRows = await fetchAllPages((limit, offset) => getChefsPaginated({ limit, offset }));
       
       // Load orders using db helper (includes order_items and user_email)
-      const orderRows = await getOrders({ limit: 1000 });
+      const orderRows = await fetchAllPages((limit, offset) => getOrders({ limit, offset }));
       
       // Enhance orders with chef names
       const chefIds = [...new Set(orderRows.map(o => o.chef_id).filter((id): id is number => id !== null))];
@@ -427,13 +358,17 @@ export default function AdminPage() {
       const { data: userOrders } = userIds.length > 0
         ? await supabase
             .from('orders')
-            .select('user_id, total_cents, status')
+            .select('user_id, total_cents, status, payment_status')
             .in('user_id', userIds)
         : { data: [] };
       
-      // Calculate order count and total spend per user (spend only from completed orders)
+      // Calculate order count and total spend per user.
+      // Count only real (paid) orders - abandoned/failed checkouts are excluded.
+      // Spend only from completed orders.
+      const GHOST_PAYMENT_STATUSES = new Set(['awaiting_payment', 'failed', 'canceled']);
       const userStats = new Map();
       (userOrders || []).forEach((order: any) => {
+        if (GHOST_PAYMENT_STATUSES.has(String(order.payment_status ?? '').toLowerCase())) return;
         const userId = order.user_id;
         if (!userStats.has(userId)) {
           userStats.set(userId, { orderCount: 0, totalSpend: 0 });
@@ -453,12 +388,6 @@ export default function AdminPage() {
           totalSpend: stats.totalSpend,
         };
       });
-      
-      // Load chef applications
-      const { data: applicationRows } = await supabase
-        .from('chef_applications')
-        .select('*')
-        .order('created_at', { ascending: false });
       
       // Load banner setting
       const { data: bannerData } = await supabase
@@ -592,10 +521,11 @@ export default function AdminPage() {
       }
 
       // Enhance chefs with sales and complaints
-      // Calculate sales per chef from orders
+      // Sales per chef: completed orders only, consistent with the rest of the
+      // dashboard (unpaid/failed/rejected/cancelled orders must not inflate it).
       const chefSales = new Map();
       orderRows.forEach((order: any) => {
-        if (order.chef_id) {
+        if (order.chef_id && order.status === 'completed') {
           if (!chefSales.has(order.chef_id)) {
             chefSales.set(order.chef_id, 0);
           }
@@ -625,7 +555,6 @@ export default function AdminPage() {
       setOrders(orderRows);
       setOrdersWithChefs(ordersWithChefNames);
       setUsers(usersWithStats || []);
-      setApplications((applicationRows as any[]) || []);
       setIssues(issuesWithImages);
 
       // Load all notifications for admin log (requires admin RLS policy)
@@ -658,20 +587,20 @@ export default function AdminPage() {
       
       setPendingIssuesCount(pendingIssues || 0);
       
-      // Count pending chef applications (status is 'submitted' or 'pending')
-      // Also check chefs table for pending status
-      const { count: pendingApplications } = await supabase
-        .from('chef_applications')
-        .select('*', { count: 'exact', head: true })
-        .in('status', ['submitted', 'pending']);
-      
-      // Also count chefs with pending status that don't have applications
-      const { count: pendingChefs } = await supabase
-        .from('chefs')
-        .select('*', { count: 'exact', head: true })
-        .eq('status', 'pending');
-      
-      setPendingChefApplicationsCount((pendingApplications || 0) + (pendingChefs || 0));
+      // Count pending chef applicants. Signup creates BOTH a chef_applications
+      // row and a pending chefs row for the same person, so count distinct
+      // applicants (by user_id) across both tables instead of summing counts.
+      const [{ data: pendingAppRows }, { data: pendingChefRows }] = await Promise.all([
+        supabase.from('chef_applications').select('user_id').in('status', ['submitted', 'pending']),
+        supabase.from('chefs').select('user_id').eq('status', 'pending'),
+      ]);
+      const pendingApplicantIds = new Set<string>();
+      let pendingWithoutUserId = 0;
+      [...(pendingAppRows || []), ...(pendingChefRows || [])].forEach((row: any) => {
+        if (row?.user_id) pendingApplicantIds.add(String(row.user_id));
+        else pendingWithoutUserId += 1;
+      });
+      setPendingChefApplicationsCount(pendingApplicantIds.size + pendingWithoutUserId);
       
       // Fetch engagement metrics - unique active users based on login time
       // Use RPC function to access auth.users.last_sign_in_at
@@ -696,34 +625,6 @@ export default function AdminPage() {
         setMonthlyActiveUsers(0);
       }
       
-      // Restore persisted issue actions from localStorage, filtering for existing issues
-      if (Platform.OS === 'web' && typeof window !== 'undefined') {
-        try {
-          const saved = localStorage.getItem('admin_issue_actions');
-          if (saved) {
-            const parsed = JSON.parse(saved);
-            // Only restore actions for issues that still exist
-            const validActions: { [issueId: number]: string } = {};
-            issuesWithImages.forEach((issue: any) => {
-              if (parsed[issue.id]) {
-                validActions[issue.id] = parsed[issue.id];
-              }
-            });
-            // Merge with existing actions (don't overwrite if user made changes before issues loaded)
-            setIssueActions(prev => {
-              const merged = { ...prev };
-              Object.keys(validActions).forEach(issueId => {
-                if (!merged[Number(issueId)]) {
-                  merged[Number(issueId)] = validActions[Number(issueId)];
-                }
-              });
-              return merged;
-            });
-          }
-        } catch (e) {
-          console.warn('Failed to load issue actions from localStorage:', e);
-        }
-      }
     } catch (e: any) {
       setErr(e.message || String(e));
     } finally {
@@ -733,18 +634,7 @@ export default function AdminPage() {
 
   useEffect(() => { 
     loadAll();
-    fetchChefRequests().then(setChefRequests);
   }, []);
-
-  async function handleToggleChefActive(id: number, next: boolean) {
-    const result = await toggleChefActive(id, next);
-    if (result.ok) {
-      setChefs(cs => cs.map(c => c.id === id ? { ...c, status: next ? 'active' : 'pending' } : c));
-      setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: next ? 'active' : 'pending' } : c));
-    } else {
-      setErr(result.error || 'Failed to update chef');
-    }
-  }
 
   async function handleToggleChefFeatured(id: number, featured: boolean) {
     const result = await toggleChefFeatured(id, featured);
@@ -757,15 +647,29 @@ export default function AdminPage() {
   }
 
   async function handleSuspendChef(id: number) {
-    const result = await suspendChef(id);
-    if (result.ok) {
-      setChefs(cs => cs.map(c => c.id === id ? { ...c, status: 'suspended' } : c));
-      setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: 'suspended' } : c));
-      Alert.alert('Success', 'Chef has been suspended');
-    } else {
-      setErr(result.error || 'Failed to suspend chef');
-      Alert.alert('Error', result.error || 'Failed to suspend chef');
-    }
+    const chefName = chefsWithStats.find((c: any) => c.id === id)?.name || `Chef #${id}`;
+    crossAlert(
+      'Suspend chef',
+      `Suspend ${chefName}? Their dishes will be hidden and customers will not be able to order from them until they are reinstated.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Suspend',
+          style: 'destructive',
+          onPress: async () => {
+            const result = await suspendChef(id);
+            if (result.ok) {
+              setChefs(cs => cs.map(c => c.id === id ? { ...c, status: 'suspended' } : c));
+              setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: 'suspended' } : c));
+              crossAlert('Success', 'Chef has been suspended');
+            } else {
+              setErr(result.error || 'Failed to suspend chef');
+              crossAlert('Error', result.error || 'Failed to suspend chef');
+            }
+          },
+        },
+      ],
+    );
   }
 
   async function handleReinstateChef(id: number) {
@@ -773,10 +677,10 @@ export default function AdminPage() {
     if (result.ok) {
       setChefs(cs => cs.map(c => c.id === id ? { ...c, status: 'active' } : c));
       setChefsWithStats(cs => cs.map(c => c.id === id ? { ...c, status: 'active' } : c));
-      Alert.alert('Success', 'Chef has been reinstated');
+      crossAlert('Success', 'Chef has been reinstated');
     } else {
       setErr(result.error || 'Failed to reinstate chef');
-      Alert.alert('Error', result.error || 'Failed to reinstate chef');
+      crossAlert('Error', result.error || 'Failed to reinstate chef');
     }
   }
 
@@ -784,7 +688,7 @@ export default function AdminPage() {
     console.log('handleViewApplication called:', { chefId, userId });
     
     if (!userId) {
-      Alert.alert('Error', 'Chef user ID not found');
+      crossAlert('Error', 'Chef user ID not found');
       return;
     }
     
@@ -847,7 +751,7 @@ export default function AdminPage() {
           console.log('Setting application data:', applicationData);
           setChefApplicationData(applicationData);
         } else {
-          Alert.alert('Error', 'Chef not found');
+          crossAlert('Error', 'Chef not found');
           setChefApplicationModalId(null);
         }
       } else {
@@ -889,7 +793,7 @@ export default function AdminPage() {
       }
     } catch (error: any) {
       console.error('Error in handleViewApplication:', error);
-      Alert.alert('Error', error.message || 'Failed to load application');
+      crossAlert('Error', error.message || 'Failed to load application');
       setChefApplicationModalId(null);
     }
   }
@@ -914,7 +818,7 @@ export default function AdminPage() {
           setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'approved' } : null);
-          Alert.alert('Success', 'Chef application approved and activated');
+          crossAlert('Success', 'Chef application approved and activated');
           
           // Create notification for chef
           if (chefUserId) {
@@ -930,7 +834,7 @@ export default function AdminPage() {
             }
           }
         } else {
-          Alert.alert('Error', result.error || 'Failed to approve application');
+          crossAlert('Error', result.error || 'Failed to approve application');
           return;
         }
       } else {
@@ -949,7 +853,7 @@ export default function AdminPage() {
           setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'active' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'approved' } : null);
-          Alert.alert('Success', 'Chef approved and activated');
+          crossAlert('Success', 'Chef approved and activated');
           
           // Create notification for chef
           if (chefUserId) {
@@ -965,14 +869,14 @@ export default function AdminPage() {
             }
           }
         } else {
-          Alert.alert('Error', result.error || 'Failed to approve chef');
+          crossAlert('Error', result.error || 'Failed to approve chef');
           return;
         }
       }
       // Reload all data to ensure dishes are visible
       loadAll();
     } catch (error: any) {
-      Alert.alert('Error', error.message || 'Failed to approve application');
+      crossAlert('Error', error.message || 'Failed to approve application');
     }
   }
 
@@ -995,7 +899,7 @@ export default function AdminPage() {
           setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'rejected' } : null);
-          Alert.alert('Success', 'Chef application rejected');
+          crossAlert('Success', 'Chef application rejected');
           
           // Create notification for chef
           if (chefUserId) {
@@ -1011,7 +915,7 @@ export default function AdminPage() {
             }
           }
         } else {
-          Alert.alert('Error', result.error || 'Failed to reject application');
+          crossAlert('Error', result.error || 'Failed to reject application');
           return;
         }
       } else {
@@ -1031,13 +935,13 @@ export default function AdminPage() {
           .eq('id', chefId);
         
         if (error) {
-          Alert.alert('Error', error.message || 'Failed to reject chef');
+          crossAlert('Error', error.message || 'Failed to reject chef');
           return;
         } else {
           setChefs(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefsWithStats(cs => cs.map(c => c.id === chefId ? { ...c, status: 'rejected' } : c));
           setChefApplicationData((prev: any) => prev ? { ...prev, status: 'rejected' } : null);
-          Alert.alert('Success', 'Chef application rejected');
+          crossAlert('Success', 'Chef application rejected');
           
           // Create notification for chef
           if (chefUserId) {
@@ -1058,7 +962,7 @@ export default function AdminPage() {
       loadAll();
     } catch (error: any) {
       console.error('Error in handleRejectChefApplication:', error);
-      Alert.alert('Error', error.message || 'Failed to reject application');
+      crossAlert('Error', error.message || 'Failed to reject application');
     }
   }
 
@@ -1072,103 +976,41 @@ export default function AdminPage() {
     }
   }
 
-  async function handleApproveApplication(id: string) {
-    const result = await approveChefApplication(id);
-    if (result.ok) {
-      setApplications(apps => apps.filter(a => a.id !== id));
-      // Reload chefs to show newly approved chef
-      loadAll();
-    } else {
-      setErr(result.error || 'Failed to approve application');
-    }
-  }
-
-  async function handleRejectApplication(id: string) {
-    const result = await rejectChefApplication(id);
-    if (result.ok) {
-      setApplications(apps => apps.map(a => a.id === id ? { ...a, status: 'rejected' } : a));
-      setChefRequests(prev => prev.filter(r => r.id !== id));
-    } else {
-      setErr(result.error || 'Failed to reject application');
-    }
-  }
-
-  async function approveChefRequest(id: number) {
-    // Activate the chef (change status from 'pending' to 'active')
-    const result = await toggleChefActive(id, true);
-    if (result.ok) {
-      Alert.alert('Success', 'Chef activated');
-      setChefRequests(prev => prev.filter(r => r.id !== id));
-      loadAll(); // Reload to show updated chef
-    } else {
-      Alert.alert('Error', result.error || 'Failed to activate chef');
-    }
-  }
-
-  async function rejectChefRequest(id: number) {
-    Alert.alert(
-      'Reject Chef',
-      'Are you sure you want to reject this chef? This will remove them from the pending list.',
-      [
-        { text: 'Cancel', style: 'cancel' },
-        {
-          text: 'Reject',
-          style: 'destructive',
-          onPress: async () => {
-            // Delete the chef record or set status to rejected
-            const { error } = await supabase
-              .from('chefs')
-              .delete()
-              .eq('id', id);
-            
-            if (error) {
-              Alert.alert('Error', error.message || 'Failed to reject chef');
-            } else {
-              Alert.alert('Success', 'Chef rejected');
-      setChefRequests(prev => prev.filter(r => r.id !== id));
-              loadAll();
-            }
-          }
-        }
-      ]
-    );
-  }
-
   async function handleDeactivateUser(id: string) {
-    Alert.alert('Deactivate User', 'Are you sure you want to deactivate this user?', [
+    crossAlert('Deactivate User', 'Are you sure you want to deactivate this user? They will no longer be able to place orders.', [
       { text: 'Cancel', style: 'cancel' },
       { text: 'Deactivate', style: 'destructive', onPress: async () => {
         const result = await updateUserProfile(id, { role: 'banned' });
         if (result.ok) {
           setUsers(us => us.map(u => u.id === id ? { ...u, role: 'banned' } : u));
-          Alert.alert('Success', 'User deactivated');
-    } else {
+          crossAlert('Success', 'User deactivated');
+        } else {
           setErr(result.error || 'Failed to deactivate user');
-    }
+          crossAlert('Error', result.error || 'Failed to deactivate user');
+        }
       }}
     ]);
   }
 
-  async function runAutoReject() {
-    if (autoRejecting) return;
-    try {
-      setAutoRejecting(true);
-      const result = await callFn<{ checked?: number; rejected?: number }>('auto-reject-expired');
-      Alert.alert(
-        'Auto-reject executed',
-        `Checked ${result?.checked ?? 0} orders; rejected ${result?.rejected ?? 0}.`
-      );
-      await loadAll();
-    } catch (error: any) {
-      Alert.alert('Auto-reject failed', error?.message || 'Unable to run auto-reject.');
-    } finally {
-      setAutoRejecting(false);
-    }
+  async function handleReactivateUser(id: string) {
+    crossAlert('Reactivate User', 'Restore this user\'s access?', [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Reactivate', onPress: async () => {
+        const result = await updateUserProfile(id, { role: 'user' });
+        if (result.ok) {
+          setUsers(us => us.map(u => u.id === id ? { ...u, role: 'user' } : u));
+          crossAlert('Success', 'User reactivated');
+        } else {
+          setErr(result.error || 'Failed to reactivate user');
+          crossAlert('Error', result.error || 'Failed to reactivate user');
+        }
+      }}
+    ]);
   }
 
   async function updateBanner() {
     if (!bannerUrl.trim()) {
-      Alert.alert('Error', 'Please enter a valid URL');
+      crossAlert('Error', 'Please enter a valid URL');
       return;
     }
     setSavingBanner(true);
@@ -1179,9 +1021,9 @@ export default function AdminPage() {
       
       if (error) throw error;
       setOriginalBannerUrl(bannerUrl);
-      Alert.alert('Success', 'Banner updated successfully');
+      crossAlert('Success', 'Banner updated successfully');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update banner. Make sure app_settings table exists.');
+      crossAlert('Error', e.message || 'Failed to update banner. Make sure app_settings table exists.');
     } finally {
       setSavingBanner(false);
     }
@@ -1189,7 +1031,7 @@ export default function AdminPage() {
 
   async function updateAboutUsBanner() {
     if (!aboutUsBannerUrl.trim()) {
-      Alert.alert('Error', 'Please enter a valid URL');
+      crossAlert('Error', 'Please enter a valid URL');
       return;
     }
     setSavingAboutUsBanner(true);
@@ -1200,9 +1042,9 @@ export default function AdminPage() {
       
       if (error) throw error;
       setOriginalAboutUsBannerUrl(aboutUsBannerUrl);
-      Alert.alert('Success', 'About Us banner updated successfully');
+      crossAlert('Success', 'About Us banner updated successfully');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update About Us banner. Make sure app_settings table exists.');
+      crossAlert('Error', e.message || 'Failed to update About Us banner. Make sure app_settings table exists.');
     } finally {
       setSavingAboutUsBanner(false);
     }
@@ -1210,7 +1052,7 @@ export default function AdminPage() {
 
   async function updateChefOnboardingBanner() {
     if (!chefOnboardingBannerUrl.trim()) {
-      Alert.alert('Error', 'Please enter a valid URL');
+      crossAlert('Error', 'Please enter a valid URL');
       return;
     }
     setSavingChefOnboardingBanner(true);
@@ -1221,9 +1063,9 @@ export default function AdminPage() {
       
       if (error) throw error;
       setOriginalChefOnboardingBannerUrl(chefOnboardingBannerUrl);
-      Alert.alert('Success', 'Chef onboarding banner updated successfully');
+      crossAlert('Success', 'Chef onboarding banner updated successfully');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update chef onboarding banner. Make sure app_settings table exists.');
+      crossAlert('Error', e.message || 'Failed to update chef onboarding banner. Make sure app_settings table exists.');
     } finally {
       setSavingChefOnboardingBanner(false);
     }
@@ -1279,9 +1121,9 @@ export default function AdminPage() {
       console.error('Upload error details:', error);
       const msg = error.message || 'Unknown upload error';
       if (msg.includes('400') || msg.includes('row-level security')) {
-         Alert.alert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
+         crossAlert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
       } else {
-         Alert.alert('Upload Failed', `Could not upload file: ${msg}`);
+         crossAlert('Upload Failed', `Could not upload file: ${msg}`);
       }
     } finally {
       setUploading(false);
@@ -1338,9 +1180,9 @@ export default function AdminPage() {
       console.error('Upload error details:', error);
       const msg = error.message || 'Unknown upload error';
       if (msg.includes('400') || msg.includes('row-level security')) {
-         Alert.alert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
+         crossAlert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
       } else {
-         Alert.alert('Upload Failed', `Could not upload file: ${msg}`);
+         crossAlert('Upload Failed', `Could not upload file: ${msg}`);
       }
     } finally {
       setUploadingAboutUsBanner(false);
@@ -1397,9 +1239,9 @@ export default function AdminPage() {
       console.error('Upload error details:', error);
       const msg = error.message || 'Unknown upload error';
       if (msg.includes('400') || msg.includes('row-level security')) {
-         Alert.alert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
+         crossAlert('Upload Failed', `Storage Error (${msg}).\n\nPlease ensure a public storage bucket named 'public' exists in Supabase and has proper RLS policies allowing uploads.`);
       } else {
-         Alert.alert('Upload Failed', `Could not upload file: ${msg}`);
+         crossAlert('Upload Failed', `Could not upload file: ${msg}`);
       }
     } finally {
       setUploadingChefOnboardingBanner(false);
@@ -1508,21 +1350,6 @@ export default function AdminPage() {
 
   const totalChefPages = Math.ceil(filteredChefs.length / CHEFS_PER_PAGE);
 
-  const filteredChefRequests = useMemo(() => {
-    if (!Array.isArray(chefRequests)) return [];
-    const q = (chefReqSearch ?? '').toLowerCase().trim();
-    if (!q) return chefRequests;
-    return chefRequests.filter(r =>
-      (r.name ?? '').toLowerCase().includes(q) ||
-      (r.email ?? '').toLowerCase().includes(q) ||
-      (r.phone ?? '').toLowerCase().includes(q) ||
-      (r.location ?? '').toLowerCase().includes(q) ||
-      (r.bio ?? '').toLowerCase().includes(q) ||
-      (r.cuisine ?? '').toLowerCase().includes(q) ||
-      String(r.id).toLowerCase().includes(q)
-    );
-  }, [chefRequests, chefReqSearch]);
-
   const filteredIssues = useMemo(() => {
     if (!Array.isArray(issues)) return [];
     const q = (issueSearch ?? '').toLowerCase().trim();
@@ -1552,14 +1379,14 @@ export default function AdminPage() {
         const sb = (b.status ?? '').toLowerCase();
         cmp = sa.localeCompare(sb);
       } else if (issueSortBy === 'action') {
-        const aa = issueActions[a.id] ?? '';
-        const ab = issueActions[b.id] ?? '';
+        const aa = issueActionLabel(a) ?? '';
+        const ab = issueActionLabel(b) ?? '';
         cmp = aa.localeCompare(ab);
       }
       if (cmp !== 0) return dir * cmp;
       return idB - idA; // always secondary: issue id descending
     });
-  }, [filteredIssues, issueSortBy, issueSortDir, issueActions]);
+  }, [filteredIssues, issueSortBy, issueSortDir]);
 
   function toggleIssueSort(col: 'created' | 'status' | 'action') {
     if (issueSortBy === col) {
@@ -1581,6 +1408,13 @@ export default function AdminPage() {
   }, [sortedIssues, issuePage]);
 
   const totalIssuePages = Math.ceil(filteredIssues.length / ISSUES_PER_PAGE);
+
+  const paginatedNotifications = useMemo(() => {
+    const start = (notificationPage - 1) * NOTIFICATIONS_PER_PAGE;
+    return adminNotifications.slice(start, start + NOTIFICATIONS_PER_PAGE);
+  }, [adminNotifications, notificationPage]);
+
+  const totalNotificationPages = Math.ceil(adminNotifications.length / NOTIFICATIONS_PER_PAGE);
   const issuePageScrollRef = React.useRef<ScrollView>(null);
   const orderPageScrollRef = React.useRef<ScrollView>(null);
   const userPageScrollRef = React.useRef<ScrollView>(null);
@@ -1616,7 +1450,7 @@ export default function AdminPage() {
     
     if (error) {
       if (!silent) {
-        Alert.alert('Error', error.message || 'Failed to update issue status');
+        crossAlert('Error', error.message || 'Failed to update issue status');
       }
       throw error;
     } else {
@@ -1626,7 +1460,7 @@ export default function AdminPage() {
           : i
       ));
       if (!silent) {
-        Alert.alert('Success', 'Issue status updated');
+        crossAlert('Success', 'Issue status updated');
       }
 
       // Create notification for the user about the issue update
@@ -1655,6 +1489,22 @@ export default function AdminPage() {
     }
   }
 
+  // The Action column reflects the issue's status in the database, so every
+  // admin (and every device) sees the same thing. A pending issue that has
+  // never been reviewed shows "Select...".
+  function issueActionLabel(issue: any): string | null {
+    switch (String(issue?.status ?? '').toLowerCase()) {
+      case 'refunded': return 'Refund';
+      case 'resolved': return 'Resolve';
+      case 'reviewing': return 'Reviewing';
+      case 'dismissed': return 'Dismiss';
+      case 'pending': return issue?.reviewed_at ? 'Pending' : null;
+      default: return null;
+    }
+  }
+
+  const ISSUE_ACTION_OPTIONS = ['Resolve', 'Refund', 'Pending', 'Reviewing', 'Dismiss'] as const;
+
   async function handleIssueAction(issueId: number, action: string, issue?: any) {
     if (!action || action === '') return;
 
@@ -1664,7 +1514,7 @@ export default function AdminPage() {
       console.log('Refund clicked - issue:', issue, 'orderId:', orderId);
       if (!orderId || !Number.isFinite(orderId)) {
         console.error('Refund error: orderId not found', { issue, orderId });
-        Alert.alert('Error', 'Cannot refund: order not found for this issue.');
+        crossAlert('Error', 'Cannot refund: order not found for this issue.');
         setOpenActionDropdownIssueId(null);
         return;
       }
@@ -1679,14 +1529,19 @@ export default function AdminPage() {
     }
 
     setOpenActionDropdownIssueId(null);
-    setIssueActions(prev => ({ ...prev, [issueId]: action }));
 
-    if (action === 'Resolve') {
-      await handleUpdateIssueStatus(issueId, 'resolved');
-    } else if (action === 'Pending') {
-      await handleUpdateIssueStatus(issueId, 'pending');
-    } else if (action === 'Reviewing') {
-      await handleUpdateIssueStatus(issueId, 'reviewing');
+    const statusByAction: Record<string, string> = {
+      Resolve: 'resolved',
+      Pending: 'pending',
+      Reviewing: 'reviewing',
+      Dismiss: 'dismissed',
+    };
+    const newStatus = statusByAction[action];
+    if (!newStatus) return;
+    try {
+      await handleUpdateIssueStatus(issueId, newStatus);
+    } catch {
+      // handleUpdateIssueStatus already surfaced the error to the admin.
     }
   }
 
@@ -1755,524 +1610,123 @@ export default function AdminPage() {
     }
   };
 
-  const overviewStats = useMemo(() => {
-    const now = new Date();
-    const weekAgo = new Date(now);
-    weekAgo.setDate(now.getDate() - 7);
-    const monthAgo = new Date(now);
-    monthAgo.setDate(now.getDate() - 30);
-    
-    // Date filter setup (same as snapshotStats)
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-    const fifteenDaysAgo = new Date(now);
-    fifteenDaysAgo.setDate(now.getDate() - 15);
-    fifteenDaysAgo.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(now.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
-    const threeMonthsAgo = new Date(now);
-    threeMonthsAgo.setMonth(now.getMonth() - 3);
-    threeMonthsAgo.setHours(0, 0, 0, 0);
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setMonth(now.getMonth() - 6);
-    sixMonthsAgo.setHours(0, 0, 0, 0);
+  type DateFilterValue = 'today' | 'last7days' | 'last15days' | 'last30days' | 'last3months' | 'last6months' | 'alltime';
 
-    // Filter orders based on snapshot date filter
-    let filteredOrders = orders || [];
-    if (snapshotDateFilter === 'today') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= todayStart;
-      });
-    } else if (snapshotDateFilter === 'last7days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= sevenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last15days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= fifteenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last30days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= thirtyDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last3months') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= threeMonthsAgo;
-      });
-    } else if (snapshotDateFilter === 'last6months') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= sixMonthsAgo;
-      });
-    }
-    // 'alltime' uses all orders, no filtering needed
+  function getDateFilterCutoff(filter: DateFilterValue): Date | null {
+    if (filter === 'alltime') return null;
+    const cutoff = new Date();
+    if (filter === 'last7days') cutoff.setDate(cutoff.getDate() - 7);
+    else if (filter === 'last15days') cutoff.setDate(cutoff.getDate() - 15);
+    else if (filter === 'last30days') cutoff.setDate(cutoff.getDate() - 30);
+    else if (filter === 'last3months') cutoff.setMonth(cutoff.getMonth() - 3);
+    else if (filter === 'last6months') cutoff.setMonth(cutoff.getMonth() - 6);
+    cutoff.setHours(0, 0, 0, 0);
+    return cutoff;
+  }
 
-    let weeklyCents = 0;
-    let monthlyCents = 0;
-    let totalCents = 0;
-    let orderCount = 0;
+  const STRIPE_FEE_RATE = 0.029;
+  const STRIPE_FEE_FIXED_CENTS = 30;
+  const estimateStripeFeeCents = (totalCents: number) => Math.round(totalCents * STRIPE_FEE_RATE) + STRIPE_FEE_FIXED_CENTS;
+
+  /**
+   * Marketplace + platform financials for a date range.
+   * - Revenue and marketplace metrics count completed orders only.
+   * - Refunds are attributed to the refunded order's creation date (falling
+   *   back to the issue date when the order is unknown).
+   * - The platform's refund loss is only an expense when the refunded order's
+   *   revenue was actually recognized (i.e. it is in the completed set).
+   *   Refunded orders normally become 'cancelled', so their revenue was never
+   *   counted and subtracting the loss again would double-penalize net profit.
+   * - Stripe keeps its processing fee on refunded charges, so refunded orders
+   *   outside the completed set still contribute an (estimated) Stripe fee.
+   */
+  function computeFinancialStats(allOrders: any[], allIssues: any[], filter: DateFilterValue) {
+    const cutoff = getDateFilterCutoff(filter);
+    const inRange = (iso?: string | null) => {
+      if (!cutoff) return true;
+      if (!iso) return false;
+      const t = new Date(iso);
+      return !Number.isNaN(t.getTime()) && t >= cutoff;
+    };
+
+    const ordersById = new Map<number, any>((allOrders || []).map((o: any) => [o.id, o]));
+
     let grossSalesCents = 0;
+    let orderCount = 0;
     let totalPlatformFeesCents = 0;
     let totalPlatformCommissionCents = 0;
     let totalChefPayoutsCents = 0;
-    let totalStripeFeesCents = 0;
+    let stripeFeesCents = 0;
+    const completedOrderIds = new Set<number>();
     const uniqueCustomerIds = new Set<string>();
-
-    // total_cents = subtotal + platform_fee + delivery_fee. Commission = 10% of food only; delivery goes to chef.
-    // Marketplace metrics (gross sales, order count, active chefs/customers) use only completed orders.
-    filteredOrders.forEach((order) => {
-      if (!order || typeof order.total_cents !== 'number') return;
-      const isCompleted = (order as any).status === 'completed';
-      const createdAt = order.created_at ? new Date(order.created_at) : null;
-      const platformFee = (order as any).platform_fee_cents ?? 0;
-      const platformCommission = getChefPlatformCommissionCents(order as any);
-
-      totalCents += order.total_cents ?? 0;
-
-      // Marketplace and platform fees: only completed orders
-      if (isCompleted) {
-        orderCount += 1;
-        grossSalesCents += order.total_cents ?? 0;
-        if (order.user_id) uniqueCustomerIds.add(order.user_id);
-        totalPlatformFeesCents += platformFee;
-        totalPlatformCommissionCents += platformCommission;
-        totalChefPayoutsCents += getChefPayoutCents(order as any);
-        // Stripe fees: typically 2.9% + $0.30 per transaction
-        if (order.stripe_payment_intent_id) {
-          const stripeFee = Math.round((order.total_cents ?? 0) * 0.029) + 30; // 2.9% + $0.30
-          totalStripeFeesCents += stripeFee;
-        }
-        // Weekly/monthly platform fee counts
-        const hasTransfer = Boolean((order as any).stripe_transfer_id);
-        if (createdAt && hasTransfer && platformFee > 0) {
-          if (createdAt >= monthAgo) monthlyCents += platformFee;
-          if (createdAt >= weekAgo) weeklyCents += platformFee;
-        }
-      }
-    });
-
-    const totalUsers = Array.isArray(users) ? users.length : 0;
-    const totalChefs = Array.isArray(chefs) ? chefs.length : 0;
-    
-    // Active chefs: count unique chefs who have completed orders in the filtered date range
     const uniqueChefIds = new Set<string>();
-    filteredOrders.forEach((order) => {
-      if ((order as any).status === 'completed' && order.chef_id) {
-        uniqueChefIds.add(String(order.chef_id));
+
+    (allOrders || []).forEach((order: any) => {
+      if (!order || typeof order.total_cents !== 'number') return;
+      if (order.status !== 'completed') return;
+      if (!inRange(order.created_at)) return;
+      completedOrderIds.add(order.id);
+      orderCount += 1;
+      grossSalesCents += order.total_cents ?? 0;
+      if (order.user_id) uniqueCustomerIds.add(order.user_id);
+      if (order.chef_id) uniqueChefIds.add(String(order.chef_id));
+      totalPlatformFeesCents += order.platform_fee_cents ?? 0;
+      totalPlatformCommissionCents += getChefPlatformCommissionCents(order);
+      totalChefPayoutsCents += getChefPayoutCents(order);
+      if (order.stripe_payment_intent_id) {
+        stripeFeesCents += estimateStripeFeeCents(order.total_cents ?? 0);
       }
     });
-    const activeChefs = uniqueChefIds.size;
-    
-    // Active customers: count unique customers who have orders in the filtered date range
-    const activeCustomers = uniqueCustomerIds.size;
-    const averageOrderValue = orderCount > 0 ? grossSalesCents / orderCount : 0;
-    
-    // Filter issues based on date filter for refunds
-    let filteredIssues = issues || [];
-    if (snapshotDateFilter === 'today') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= todayStart;
-      });
-    } else if (snapshotDateFilter === 'last7days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= sevenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last15days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= fifteenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last30days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= thirtyDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last3months') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= threeMonthsAgo;
-      });
-    } else if (snapshotDateFilter === 'last6months') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= sixMonthsAgo;
-      });
-    }
-    
-    // Refunds: full amount refunded to customer. Platform's loss = platform_fee + platform_commission per refunded order.
-    let totalRefundsCents = 0;
-    let platformRefundsCents = 0;
-    const ordersById = new Map((orders || []).map((o: any) => [o.id, o]));
-    if (filteredIssues && Array.isArray(filteredIssues)) {
-      filteredIssues.forEach((issue: any) => {
-        if (issue.status !== 'refunded') return;
-        const orderId = issue.order_id ?? issue.orders?.id;
-        const order = orderId ? ordersById.get(orderId) : null;
-        const refundAmount = issue.orders?.total_cents ?? 0;
-        totalRefundsCents += refundAmount;
-        if (order) {
-          platformRefundsCents += getPlatformRevenueCents(order as any);
-        } else {
-          platformRefundsCents += refundAmount; // fallback if order not found
-        }
-      });
-    }
 
-    // Platform revenue = flat fee + 10% commission. Net profit = platform revenue - stripe fees - platform's refund share
+    let refundsCents = 0;
+    let platformRefundLossCents = 0;
+    const refundCountedOrderIds = new Set<number>();
+    (allIssues || []).forEach((issue: any) => {
+      if (issue?.status !== 'refunded') return;
+      const orderId = issue.order_id ?? issue.orders?.id ?? null;
+      if (orderId && refundCountedOrderIds.has(orderId)) return; // one refund per order
+      const order = orderId ? ordersById.get(orderId) : null;
+      if (!inRange(order?.created_at ?? issue.created_at)) return;
+      if (orderId) refundCountedOrderIds.add(orderId);
+      refundsCents += order?.total_cents ?? issue.orders?.total_cents ?? 0;
+      if (order && completedOrderIds.has(order.id)) {
+        platformRefundLossCents += getPlatformRevenueCents(order);
+      } else if (order && (order.stripe_payment_intent_id || order.payment_intent_id)) {
+        stripeFeesCents += estimateStripeFeeCents(order.total_cents ?? 0);
+      }
+    });
+
     const platformRevenueCents = totalPlatformFeesCents + totalPlatformCommissionCents;
-    const expensesCents = platformRefundsCents + totalStripeFeesCents;
+    const expensesCents = platformRefundLossCents + stripeFeesCents;
     const netProfitCents = platformRevenueCents - expensesCents;
 
     return {
-      weeklyCents,
-      monthlyCents,
-      totalCents,
-      orderCount,
-      totalUsers,
-      totalChefs,
-      grossSalesCents,
-      activeChefs,
-      activeCustomers,
-      averageOrderValue,
       revenueCents: grossSalesCents,
+      grossSalesCents,
+      orderCount,
+      activeChefs: uniqueChefIds.size,
+      activeCustomers: uniqueCustomerIds.size,
+      averageOrderValue: orderCount > 0 ? grossSalesCents / orderCount : 0,
       commissionsCents: totalChefPayoutsCents,
       platformFeesCents: totalPlatformFeesCents,
       platformCommissionCents: totalPlatformCommissionCents,
+      stripeFeesCents,
+      refundsCents,
       expensesCents,
-      stripeFeesCents: totalStripeFeesCents,
-      refundsCents: totalRefundsCents,
       netProfitCents,
     };
-  }, [orders, users, chefs, issues, snapshotDateFilter]);
+  }
 
-  // Snapshot stats with date filtering
-  const snapshotStats = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-    const fifteenDaysAgo = new Date(now);
-    fifteenDaysAgo.setDate(now.getDate() - 15);
-    fifteenDaysAgo.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(now.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
-    const threeMonthsAgo = new Date(now);
-    threeMonthsAgo.setMonth(now.getMonth() - 3);
-    threeMonthsAgo.setHours(0, 0, 0, 0);
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setMonth(now.getMonth() - 6);
-    sixMonthsAgo.setHours(0, 0, 0, 0);
+  const snapshotStats = useMemo(
+    () => computeFinancialStats(orders, issues, snapshotDateFilter),
+    [orders, issues, snapshotDateFilter],
+  );
 
-    // Filter orders based on date filter
-    let filteredOrders = orders || [];
-    if (snapshotDateFilter === 'today') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= todayStart;
-      });
-    } else if (snapshotDateFilter === 'last7days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= sevenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last15days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= fifteenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last30days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= thirtyDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last3months') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= threeMonthsAgo;
-      });
-    } else if (snapshotDateFilter === 'last6months') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= sixMonthsAgo;
-      });
-    }
-    // 'alltime' uses all orders, no filtering needed
+  const financeStats = useMemo(
+    () => computeFinancialStats(orders, issues, financeDateFilter),
+    [orders, issues, financeDateFilter],
+  );
 
-    // Filter issues based on date filter for refunds
-    let filteredIssues = issues || [];
-    if (snapshotDateFilter === 'today') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= todayStart;
-      });
-    } else if (snapshotDateFilter === 'last7days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= sevenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last15days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= fifteenDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last30days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= thirtyDaysAgo;
-      });
-    } else if (snapshotDateFilter === 'last3months') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= threeMonthsAgo;
-      });
-    } else if (snapshotDateFilter === 'last6months') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= sixMonthsAgo;
-      });
-    }
-
-    let grossSalesCents = 0;
-    let totalPlatformFeesCents = 0;
-    let totalPlatformCommissionCents = 0;
-    let totalChefPayoutsCents = 0;
-    let totalStripeFeesCents = 0;
-
-    filteredOrders.forEach((order) => {
-      if (!order || typeof order.total_cents !== 'number') return;
-      if ((order as any).status !== 'completed') return;
-      const platformFee = (order as any).platform_fee_cents ?? 0;
-      const platformCommission = getChefPlatformCommissionCents(order as any);
-
-      grossSalesCents += order.total_cents ?? 0;
-      totalPlatformFeesCents += platformFee;
-      totalPlatformCommissionCents += platformCommission;
-      totalChefPayoutsCents += getChefPayoutCents(order as any);
-      if (order.stripe_payment_intent_id) {
-        totalStripeFeesCents += Math.round((order.total_cents ?? 0) * 0.029) + 30;
-      }
-    });
-
-    let totalRefundsCents = 0;
-    let platformRefundsCents = 0;
-    const ordersById = new Map((orders || []).map((o: any) => [o.id, o]));
-    filteredIssues.forEach((issue: any) => {
-      if (issue.status !== 'refunded') return;
-      const orderId = issue.order_id ?? issue.orders?.id;
-      const order = orderId ? ordersById.get(orderId) : null;
-      const refundAmount = issue.orders?.total_cents ?? 0;
-      totalRefundsCents += refundAmount;
-      if (order) {
-        platformRefundsCents += getPlatformRevenueCents(order as any);
-      } else {
-        platformRefundsCents += refundAmount;
-      }
-    });
-
-    const platformRevenueCents = totalPlatformFeesCents + totalPlatformCommissionCents;
-    const expensesCents = platformRefundsCents + totalStripeFeesCents;
-    const netProfitCents = platformRevenueCents - expensesCents;
-
-    return {
-      revenueCents: grossSalesCents,
-      commissionsCents: totalChefPayoutsCents,
-      platformFeesCents: totalPlatformFeesCents,
-      expensesCents,
-      stripeFeesCents: totalStripeFeesCents,
-      refundsCents: totalRefundsCents,
-      netProfitCents,
-    };
-  }, [orders, issues, snapshotDateFilter]);
-
-  // Finance stats with date filtering
-  const financeStats = useMemo(() => {
-    const now = new Date();
-    const todayStart = new Date(now);
-    todayStart.setHours(0, 0, 0, 0);
-    const sevenDaysAgo = new Date(now);
-    sevenDaysAgo.setDate(now.getDate() - 7);
-    sevenDaysAgo.setHours(0, 0, 0, 0);
-    const fifteenDaysAgo = new Date(now);
-    fifteenDaysAgo.setDate(now.getDate() - 15);
-    fifteenDaysAgo.setHours(0, 0, 0, 0);
-    const thirtyDaysAgo = new Date(now);
-    thirtyDaysAgo.setDate(now.getDate() - 30);
-    thirtyDaysAgo.setHours(0, 0, 0, 0);
-    const threeMonthsAgo = new Date(now);
-    threeMonthsAgo.setMonth(now.getMonth() - 3);
-    threeMonthsAgo.setHours(0, 0, 0, 0);
-    const sixMonthsAgo = new Date(now);
-    sixMonthsAgo.setMonth(now.getMonth() - 6);
-    sixMonthsAgo.setHours(0, 0, 0, 0);
-
-    // Filter orders based on date filter
-    let filteredOrders = orders || [];
-    if (financeDateFilter === 'today') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= todayStart;
-      });
-    } else if (financeDateFilter === 'last7days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= sevenDaysAgo;
-      });
-    } else if (financeDateFilter === 'last15days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= fifteenDaysAgo;
-      });
-    } else if (financeDateFilter === 'last30days') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= thirtyDaysAgo;
-      });
-    } else if (financeDateFilter === 'last3months') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= threeMonthsAgo;
-      });
-    } else if (financeDateFilter === 'last6months') {
-      filteredOrders = filteredOrders.filter(order => {
-        if (!order.created_at) return false;
-        const createdAt = new Date(order.created_at);
-        return createdAt >= sixMonthsAgo;
-      });
-    }
-    // 'alltime' uses all orders, no filtering needed
-
-    // Filter issues based on date filter for refunds
-    let filteredIssues = issues || [];
-    if (financeDateFilter === 'today') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= todayStart;
-      });
-    } else if (financeDateFilter === 'last7days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= sevenDaysAgo;
-      });
-    } else if (financeDateFilter === 'last15days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= fifteenDaysAgo;
-      });
-    } else if (financeDateFilter === 'last30days') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= thirtyDaysAgo;
-      });
-    } else if (financeDateFilter === 'last3months') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= threeMonthsAgo;
-      });
-    } else if (financeDateFilter === 'last6months') {
-      filteredIssues = filteredIssues.filter(issue => {
-        if (!issue.created_at) return false;
-        const createdAt = new Date(issue.created_at);
-        return createdAt >= sixMonthsAgo;
-      });
-    }
-
-    let grossSalesCents = 0;
-    let totalPlatformFeesCents = 0;
-    let totalPlatformCommissionCents = 0;
-    let totalChefPayoutsCents = 0;
-    let totalStripeFeesCents = 0;
-
-    filteredOrders.forEach((order) => {
-      if (!order || typeof order.total_cents !== 'number') return;
-      if ((order as any).status !== 'completed') return;
-      const platformFee = (order as any).platform_fee_cents ?? 0;
-      const platformCommission = getChefPlatformCommissionCents(order as any);
-
-      grossSalesCents += order.total_cents ?? 0;
-      totalPlatformFeesCents += platformFee;
-      totalPlatformCommissionCents += platformCommission;
-      totalChefPayoutsCents += getChefPayoutCents(order as any);
-      if (order.stripe_payment_intent_id) {
-        totalStripeFeesCents += Math.round((order.total_cents ?? 0) * 0.029) + 30;
-      }
-    });
-
-    let totalRefundsCents = 0;
-    let platformRefundsCents = 0;
-    const ordersById = new Map((orders || []).map((o: any) => [o.id, o]));
-    filteredIssues.forEach((issue: any) => {
-      if (issue.status !== 'refunded') return;
-      const orderId = issue.order_id ?? issue.orders?.id;
-      const order = orderId ? ordersById.get(orderId) : null;
-      const refundAmount = issue.orders?.total_cents ?? 0;
-      totalRefundsCents += refundAmount;
-      if (order) {
-        platformRefundsCents += getPlatformRevenueCents(order as any);
-      } else {
-        platformRefundsCents += refundAmount;
-      }
-    });
-
-    const platformRevenueCents = totalPlatformFeesCents + totalPlatformCommissionCents;
-    const expensesCents = platformRefundsCents + totalStripeFeesCents;
-    const netProfitCents = platformRevenueCents - expensesCents;
-
-    return {
-      commissionsCents: totalChefPayoutsCents,
-      platformFeesCents: totalPlatformFeesCents,
-      stripeFeesCents: totalStripeFeesCents,
-      refundsCents: totalRefundsCents,
-      netProfitCents,
-    };
-  }, [orders, issues, financeDateFilter]);
 
   const formatCad = (value: number) => (value / 100).toLocaleString('en-CA', {
     style: 'currency',
@@ -2302,156 +1756,6 @@ export default function AdminPage() {
     { value: 'last6months', label: 'Last 6 months' },
     { value: 'alltime', label: 'All time' },
   ];
-
-  const ChefRequestsTab = (
-    <ScrollView contentContainerStyle={styles.tabScroll}>
-      <Text style={styles.sectionTitle}>Chef Requests ({filteredChefRequests.length} pending)</Text>
-      <View style={styles.searchWrapper}>
-        <TextInput
-          value={chefReqSearch}
-          onChangeText={setChefReqSearch}
-          placeholder="Search by name, email, phone, location, or ID..."
-          placeholderTextColor="#94a3b8"
-          style={styles.searchInput}
-        />
-      </View>
-
-      {loading && chefRequests.length === 0 ? (
-        <View style={styles.loadingState}><ActivityIndicator size="large" color={palette.primary} /></View>
-      ) : filteredChefRequests.length === 0 ? (
-        <View style={styles.emptyState}><Text style={styles.emptyText}>{chefReqSearch ? 'No requests found matching your search.' : 'No pending requests.'}</Text></View>
-      ) : (
-        filteredChefRequests.map((req) => {
-          const isExpanded = (section: string) => expandedSections[req.id]?.[section] ?? false;
-          const toggleSection = (section: string) => {
-            setExpandedSections(prev => ({
-              ...prev,
-              [req.id]: {
-                ...prev[req.id],
-                [section]: !isExpanded(section)
-              }
-            }));
-          };
-
-          // Group pickup slots by day for display
-          const slotsByDay: { [day: string]: string[] } = {};
-          if (req.pickup_availability && Array.isArray(req.pickup_availability)) {
-            req.pickup_availability.forEach((slot: any) => {
-              if (!slotsByDay[slot.day]) {
-                slotsByDay[slot.day] = [];
-              }
-              slotsByDay[slot.day].push(slot.timeWindow);
-            });
-          }
-
-          return (
-          <View key={req.id} style={styles.card}>
-            <View style={styles.cardHeader}>
-              <View style={{ flex: 1 }}>
-                <Text style={styles.cardTitle}>{req.name || 'Unnamed Request'}</Text>
-                {req.created_at ? (
-                  <Text style={styles.cardTimestamp}>Submitted: {new Date(req.created_at).toLocaleString()}</Text>
-                ) : null}
-                  <Text style={styles.cardId}>ID: {String(req.id)}</Text>
-              </View>
-              <View style={[styles.statusPill, styles.statusPending]}>
-                <Text style={[styles.statusPillText, styles.statusTextPending]}>Pending</Text>
-              </View>
-            </View>
-
-              {/* Chef profile basics - Collapsible */}
-              <View style={styles.reviewSection}>
-                <TouchableOpacity 
-                  style={styles.reviewSectionHeader}
-                  onPress={() => toggleSection('basics')}
-                >
-                  <Text style={styles.reviewSectionTitle}>Chef profile basics</Text>
-                  <Text style={styles.expandIcon}>{isExpanded('basics') ? '▼' : '▶'}</Text>
-                </TouchableOpacity>
-                {isExpanded('basics') && (
-                  <View style={styles.reviewSectionContent}>
-                    <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Email:</Text> {req.email || 'Not set'}</Text>
-                    {req.phone ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Phone:</Text> {req.phone}</Text> : null}
-                    {req.location ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Address:</Text> {req.location}</Text> : null}
-                    {req.bio ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Brief Description:</Text> {req.bio}</Text> : null}
-                    {req.cuisine ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Cuisine Type:</Text> {req.cuisine}</Text> : null}
-              </View>
-                )}
-              </View>
-
-              {/* Availability & pickup - Collapsible */}
-              {req.pickup_availability && Array.isArray(req.pickup_availability) && req.pickup_availability.length > 0 ? (
-                <View style={styles.reviewSection}>
-                  <TouchableOpacity 
-                    style={styles.reviewSectionHeader}
-                    onPress={() => toggleSection('availability')}
-                  >
-                    <Text style={styles.reviewSectionTitle}>Availability & pickup</Text>
-                    <Text style={styles.expandIcon}>{isExpanded('availability') ? '▼' : '▶'}</Text>
-                  </TouchableOpacity>
-                  {isExpanded('availability') && (
-                    <View style={styles.reviewSectionContent}>
-                      {Object.entries(slotsByDay).map(([day, timeWindows]) => (
-                        <Text key={day} style={styles.reviewItem}>
-                          <Text style={styles.reviewLabel}>{day}:</Text> {timeWindows.join(', ')}
-                        </Text>
-                      ))}
-                    </View>
-                  )}
-                </View>
-                ) : null}
-
-              {/* Dishes - Collapsible */}
-              {req.dishes && req.dishes.length > 0 ? (
-                <View style={styles.reviewSection}>
-                  <TouchableOpacity 
-                    style={styles.reviewSectionHeader}
-                    onPress={() => toggleSection('dishes')}
-                  >
-                    <Text style={styles.reviewSectionTitle}>Dishes ({req.dishes.length})</Text>
-                    <Text style={styles.expandIcon}>{isExpanded('dishes') ? '▼' : '▶'}</Text>
-                  </TouchableOpacity>
-                  {isExpanded('dishes') && (
-                    <View style={styles.reviewSectionContent}>
-                      {req.dishes.map((dish: any) => (
-                        <View key={dish.id} style={styles.dishItem}>
-                          <View style={{ flexDirection: 'row', gap: 12, marginBottom: 8 }}>
-                            {(dish.image || dish.thumbnail) && (
-                              <Image 
-                                source={{ uri: dish.image || dish.thumbnail }} 
-                                style={styles.dishImage}
-                                resizeMode="cover"
-                              />
-                            )}
-                            <View style={{ flex: 1 }}>
-                              <Text style={[styles.reviewItem, { fontWeight: '700', marginBottom: 4 }]}>{dish.name}</Text>
-                              <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Price:</Text> ${Number(dish.price).toFixed(2)}</Text>
-                              {dish.portion ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Portion:</Text> {dish.portion}</Text> : null}
-                            </View>
-                          </View>
-                          {dish.description ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Description:</Text> {dish.description}</Text> : null}
-                          {dish.ingredients ? <Text style={styles.reviewItem}><Text style={styles.reviewLabel}>Ingredients:</Text> {dish.ingredients}</Text> : null}
-                        </View>
-                      ))}
-                    </View>
-                  )}
-              </View>
-            ) : null}
-
-            <View style={styles.cardActionsRow}>
-              <TouchableOpacity style={[styles.chipButton, styles.approveButton]} onPress={() => approveChefRequest(req.id)}>
-                <Text style={[styles.chipButtonText, styles.approveButtonText]}>✓ Approve</Text>
-              </TouchableOpacity>
-              <TouchableOpacity style={[styles.chipButton, styles.rejectButton]} onPress={() => rejectChefRequest(req.id)}>
-                <Text style={[styles.chipButtonText, styles.rejectButtonText]}>✗ Reject</Text>
-              </TouchableOpacity>
-            </View>
-          </View>
-          );
-        })
-      )}
-    </ScrollView>
-  );
 
   const OverviewTab = (
     <ScrollView contentContainerStyle={styles.tabScroll}>
@@ -2592,11 +1896,11 @@ export default function AdminPage() {
         </View>
         <View style={styles.metricsList}>
           {[
-            { label: 'Gross sales', value: overviewStats.grossSalesCents / 100, formatted: formatCad(overviewStats.grossSalesCents), isCurrency: true },
-            { label: 'Total orders', value: overviewStats.orderCount, formatted: overviewStats.orderCount.toLocaleString(), isCurrency: false },
-            { label: 'Active chefs', value: overviewStats.activeChefs, formatted: overviewStats.activeChefs.toLocaleString(), isCurrency: false },
-            { label: 'Active customers', value: overviewStats.activeCustomers, formatted: overviewStats.activeCustomers.toLocaleString(), isCurrency: false },
-            { label: 'Average order value', value: overviewStats.averageOrderValue / 100, formatted: formatCad(Math.round(overviewStats.averageOrderValue)), isCurrency: true },
+            { label: 'Gross sales', value: snapshotStats.grossSalesCents / 100, formatted: formatCad(snapshotStats.grossSalesCents), isCurrency: true },
+            { label: 'Completed orders', value: snapshotStats.orderCount, formatted: snapshotStats.orderCount.toLocaleString(), isCurrency: false },
+            { label: 'Active chefs', value: snapshotStats.activeChefs, formatted: snapshotStats.activeChefs.toLocaleString(), isCurrency: false },
+            { label: 'Active customers', value: snapshotStats.activeCustomers, formatted: snapshotStats.activeCustomers.toLocaleString(), isCurrency: false },
+            { label: 'Average order value', value: snapshotStats.averageOrderValue / 100, formatted: formatCad(Math.round(snapshotStats.averageOrderValue)), isCurrency: true },
           ].map((metric) => {
             return (
               <View key={metric.label} style={styles.metricRow}>
@@ -2678,8 +1982,8 @@ export default function AdminPage() {
                 <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
                   <Text style={styles.tableHeaderCellText}>Name</Text>
                 </View>
-                <View style={[styles.tableHeaderCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
-                  <Text style={styles.tableHeaderCellText}>Brand</Text>
+                <View style={[styles.tableHeaderCell, isMobile ? { width: 180, minWidth: 180 } : { flex: 1.5 }]}>
+                  <Text style={styles.tableHeaderCellText}>Email</Text>
                 </View>
                 <View style={[styles.tableHeaderCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
                   <Text style={styles.tableHeaderCellText}>Status</Text>
@@ -2725,8 +2029,8 @@ export default function AdminPage() {
                         </View>
                       )}
                   </View>
-                    <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.5 }]}>
-                      <Text numberOfLines={1}>{c.name || '—'}</Text>
+                    <View style={[styles.tableCell, isMobile ? { width: 180, minWidth: 180 } : { flex: 1.5 }]}>
+                      <Text numberOfLines={1}>{c.email || '—'}</Text>
                     </View>
                     <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
                   <View style={statusStyles.container}>
@@ -2930,7 +2234,7 @@ export default function AdminPage() {
                     {u.email || 'No email'}
                   </Text>
                   <Text style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                    {u.is_admin ? 'Admin' : u.is_chef ? 'Chef' : (u.role === 'banned' ? 'Banned' : 'User')}
+                    {u.role === 'banned' ? 'Banned' : u.is_admin ? 'Admin' : u.is_chef ? 'Chef' : 'User'}
                   </Text>
                   <Text style={[styles.tableCell, isMobile ? { width: 70, minWidth: 70 } : { flex: 1 }]}>
                     {u.orderCount || 0}
@@ -2939,15 +2243,22 @@ export default function AdminPage() {
                     {cents(u.totalSpend || 0)}
                   </Text>
                   <View style={[styles.tableCell, isMobile ? { width: 100, minWidth: 100 } : { flex: 1 }]}>
-                    {u.role !== 'banned' ? (
+                    {u.role === 'banned' ? (
+                      <TouchableOpacity
+                        onPress={() => handleReactivateUser(u.id)}
+                        style={[styles.secondaryButton, { paddingVertical: 8, paddingHorizontal: 8 }]}
+                      >
+                        <Text style={[styles.secondaryButtonText, { fontSize: 12 }]}>Reactivate</Text>
+                      </TouchableOpacity>
+                    ) : u.is_admin || u.id === user?.id ? (
+                      <Text style={{ color: palette.muted, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>—</Text>
+                    ) : (
                       <TouchableOpacity
                         onPress={() => handleDeactivateUser(u.id)}
                         style={[styles.primaryButton, { paddingVertical: 8, paddingHorizontal: 8 }]}
                       >
                         <Text style={[styles.primaryButtonText, { fontSize: 12 }]}>Deactivate</Text>
                       </TouchableOpacity>
-                    ) : (
-                      <Text style={{ color: palette.muted, fontSize: 12, fontFamily: theme.typography.fontFamily.body }}>Banned</Text>
                     )}
                   </View>
             </View>
@@ -3228,7 +2539,7 @@ export default function AdminPage() {
 
   async function updateSearchPlaceholders() {
     if (searchPlaceholders.some(p => !p.trim())) {
-      Alert.alert('Error', 'All placeholder texts must be filled');
+      crossAlert('Error', 'All placeholder texts must be filled');
       return;
     }
     setSavingPlaceholders(true);
@@ -3239,9 +2550,9 @@ export default function AdminPage() {
       
       if (error) throw error;
       setOriginalSearchPlaceholders([...searchPlaceholders]);
-      Alert.alert('Success', 'Search placeholder texts updated successfully');
+      crossAlert('Success', 'Search placeholder texts updated successfully');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to update search placeholders');
+      crossAlert('Error', e.message || 'Failed to update search placeholders');
     } finally {
       setSavingPlaceholders(false);
     }
@@ -3250,25 +2561,33 @@ export default function AdminPage() {
   async function updateSocialUrls() {
     setSavingSocialUrls(true);
     try {
+      // Save in two batched requests (one upsert, one delete) instead of one
+      // round trip per link, so a mid-save failure can't leave half the links
+      // updated and half stale.
+      const rowsToUpsert: Array<{ key: string; value: string }> = [];
+      const keysToDelete: string[] = [];
       for (const logical of Object.keys(FOOTER_SOCIAL_SETTING_KEYS) as FooterSocialUrlKey[]) {
         const key = FOOTER_SOCIAL_SETTING_KEYS[logical];
         const v = footerSocialUrlForSave(socialUrls[logical]);
-        if (!v) {
-          const { error: delErr } = await supabase.from('app_settings').delete().eq('key', key);
-          if (delErr) throw delErr;
-        } else {
-          const { error: upErr } = await supabase.from('app_settings').upsert({ key, value: v }, { onConflict: 'key' });
-          if (upErr) throw upErr;
-        }
+        if (!v) keysToDelete.push(key);
+        else rowsToUpsert.push({ key, value: v });
+      }
+      if (rowsToUpsert.length > 0) {
+        const { error: upErr } = await supabase.from('app_settings').upsert(rowsToUpsert, { onConflict: 'key' });
+        if (upErr) throw upErr;
+      }
+      if (keysToDelete.length > 0) {
+        const { error: delErr } = await supabase.from('app_settings').delete().in('key', keysToDelete);
+        if (delErr) throw delErr;
       }
       const socialSettingKeys = Object.values(FOOTER_SOCIAL_SETTING_KEYS);
       const { data: refreshed } = await supabase.from('app_settings').select('key, value').in('key', socialSettingKeys);
       const merged = mergeSocialUrlsWithDb(refreshed ?? []);
       setSocialUrls(merged);
       setOriginalSocialUrls({ ...merged });
-      Alert.alert('Success', 'Footer social links updated. Cleared fields fall back to env after save.');
+      crossAlert('Success', 'Footer social links updated. Cleared fields fall back to env after save.');
     } catch (e: any) {
-      Alert.alert('Error', e.message || 'Failed to save footer social links. Ensure app_settings exists and you are an admin.');
+      crossAlert('Error', e.message || 'Failed to save footer social links. Ensure app_settings exists and you are an admin.');
     } finally {
       setSavingSocialUrls(false);
     }
@@ -3291,7 +2610,7 @@ export default function AdminPage() {
             <View style={styles.emptyState}><Text style={styles.emptyText}>No notifications sent yet.</Text></View>
           ) : (
             <View style={styles.tableContainer}>
-              <View style={[styles.tableHeader, !isMobile && { minWidth: 1100 }]}>
+              <View style={[styles.tableHeader, !isMobile && { minWidth: 1000 }]}>
                 <View style={[styles.tableHeaderCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]}>
                   <Text style={styles.tableHeaderCellText}>User name</Text>
                 </View>
@@ -3308,14 +2627,11 @@ export default function AdminPage() {
                   <Text style={styles.tableHeaderCellText}>Notification text in SMS</Text>
                 </View>
                 <View style={[styles.tableHeaderCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
-                  <Text style={styles.tableHeaderCellText}>Email sent</Text>
-                </View>
-                <View style={[styles.tableHeaderCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
                   <Text style={styles.tableHeaderCellText}>SMS sent</Text>
                 </View>
               </View>
-              {adminNotifications.map((n) => (
-                <View key={n.id} style={[styles.tableRow, !isMobile && { minWidth: 1100 }]}>
+              {paginatedNotifications.map((n) => (
+                <View key={n.id} style={[styles.tableRow, !isMobile && { minWidth: 1000 }]}>
                   <Text style={[styles.tableCell, isMobile ? { width: 120, minWidth: 120 } : { flex: 1.2 }]} numberOfLines={1}>
                     {n.user_name ?? 'Unknown'}
                   </Text>
@@ -3328,14 +2644,12 @@ export default function AdminPage() {
                   <Text style={[styles.tableCell, isMobile ? { width: 280, minWidth: 280 } : { flex: 2 }]}>
                     {n.title ? `${n.title}: ${n.message}` : n.message}
                   </Text>
-                  <Text style={[styles.tableCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }]}>
-                    {[n.title, n.message].filter(Boolean).join(' - ') || '—'}
-                  </Text>
-                  <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }, { color: palette.muted }]}>
-                    —
+                  <Text style={[styles.tableCell, isMobile ? { width: 160, minWidth: 160 } : { flex: 1.5 }, !(n.sms_sent || n.sms_sid) && { color: palette.muted }]}>
+                    {/* Only show SMS text when an SMS actually went out. */}
+                    {(n.sms_sent || n.sms_sid) ? ([n.title, n.message].filter(Boolean).join(' - ') || '—') : '—'}
                   </Text>
                   <Text style={[styles.tableCell, isMobile ? { width: 90, minWidth: 90 } : { flex: 0.8 }]}>
-                    {n.sms_sid ? 'Yes' : '—'}
+                    {(n.sms_sent || n.sms_sid) ? 'Yes' : '—'}
                   </Text>
                 </View>
               ))}
@@ -3343,6 +2657,76 @@ export default function AdminPage() {
           )}
         </View>
       </ScrollView>
+
+      {/* Pagination - Outside horizontal ScrollView */}
+      {totalNotificationPages > 0 && (
+        <View style={styles.issuesPaginationWrap}>
+          {isMobile && (
+            <View style={styles.issuesPaginationMobileInfo}>
+              <Text style={styles.paginationStatus}>
+                Page {notificationPage} of {totalNotificationPages}
+              </Text>
+              <Text style={styles.issuesTotalText}>{adminNotifications.length} total</Text>
+            </View>
+          )}
+          {totalNotificationPages > 1 && (
+            <View style={[styles.paginationControlsContainer, isMobile && styles.paginationControlsContainerMobile]}>
+              <TouchableOpacity
+                onPress={() => setNotificationPage((p) => Math.max(1, p - 1))}
+                disabled={notificationPage === 1}
+                style={[styles.paginationArrowButton, notificationPage === 1 && styles.paginationArrowButtonDisabled]}
+              >
+                <Text style={[styles.paginationArrowText, notificationPage === 1 && styles.paginationArrowTextDisabled]}>
+                  ←
+                </Text>
+              </TouchableOpacity>
+              <ScrollView
+                horizontal
+                showsHorizontalScrollIndicator={!isMobile}
+                contentContainerStyle={styles.issuesPageScrollContent}
+                style={[styles.issuesPageScroll, isMobile && styles.issuesPageScrollMobile]}
+                nestedScrollEnabled
+                scrollEnabled
+              >
+                {Array.from({ length: totalNotificationPages }, (_, i) => i + 1).map((p) => (
+                  <TouchableOpacity
+                    key={p}
+                    onPress={() => setNotificationPage(p)}
+                    activeOpacity={0.7}
+                    style={[styles.issuesPageButton, notificationPage === p && styles.issuesPageButtonActive]}
+                  >
+                    <Text style={[styles.issuesPageButtonText, notificationPage === p && styles.issuesPageButtonTextActive]}>
+                      {p}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <TouchableOpacity
+                onPress={() => setNotificationPage((p) => Math.min(totalNotificationPages, p + 1))}
+                disabled={notificationPage === totalNotificationPages}
+                style={[styles.paginationArrowButton, notificationPage === totalNotificationPages && styles.paginationArrowButtonDisabled]}
+              >
+                <Text style={[styles.paginationArrowText, notificationPage === totalNotificationPages && styles.paginationArrowTextDisabled]}>
+                  →
+                </Text>
+              </TouchableOpacity>
+            </View>
+          )}
+        </View>
+      )}
+
+      {shouldShowFixedElements && totalNotificationPages > 0 && (
+        <View style={styles.issuesPageNumberFixed}>
+          <Text style={styles.paginationStatus}>
+            Page {notificationPage} of {totalNotificationPages}
+          </Text>
+        </View>
+      )}
+      {shouldShowFixedElements && (
+        <View style={styles.issuesTotalFixed}>
+          <Text style={styles.issuesTotalText}>{adminNotifications.length} total</Text>
+        </View>
+      )}
     </View>
   );
 
@@ -4071,89 +3455,45 @@ export default function AdminPage() {
                   </Text>
                   <View style={[styles.tableCell, isMobile ? { width: 140, minWidth: 140 } : { flex: 1.2 }, styles.actionCellWrapper]}>
                     <View style={styles.actionDropdownWrapper}>
-                      {issue.status === 'refunded' || issueActions[issue.id] === 'Refund' ? (
-                        <View style={[styles.actionButton, styles.actionButtonReadOnly]}>
-                          <Text style={[styles.actionButtonText, styles.actionButtonTextReadOnly]}>Refund</Text>
-                        </View>
-                      ) : issueActions[issue.id] ? (
-                        <>
-                          <TouchableOpacity
-                            style={styles.actionButtonSelected}
-                            onPress={() => setOpenActionDropdownIssueId(prev => prev === issue.id ? null : issue.id)}
-                          >
-                            <Text style={styles.actionButtonTextSelected}>{issueActions[issue.id]}</Text>
-                            <Text style={styles.actionDropdownIcon}>▼</Text>
-                          </TouchableOpacity>
-                          {!isMobile && openActionDropdownIssueId === issue.id && (
-                            <View style={styles.actionDropdownMenu}>
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
-                              >
-                                <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Resolve' && styles.actionDropdownOptionTextSelected]}>Resolve</Text>
-                              </TouchableOpacity>
-                              {issueActions[issue.id] !== 'Refund' && (
-                                <TouchableOpacity
-                                  style={styles.actionDropdownOption}
-                                  onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
-                                >
-                                  <Text style={styles.actionDropdownOptionText}>Refund</Text>
-                                </TouchableOpacity>
-                              )}
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
-                              >
-                                <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Pending' && styles.actionDropdownOptionTextSelected]}>Pending</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
-                              >
-                                <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Reviewing' && styles.actionDropdownOptionTextSelected]}>Reviewing</Text>
-                              </TouchableOpacity>
+                      {(() => {
+                        const currentAction = issueActionLabel(issue);
+                        if (currentAction === 'Refund') {
+                          // Refunds are final — no further actions allowed.
+                          return (
+                            <View style={[styles.actionButton, styles.actionButtonReadOnly]}>
+                              <Text style={[styles.actionButtonText, styles.actionButtonTextReadOnly]}>Refund</Text>
                             </View>
-                          )}
-                        </>
-                      ) : (
-                        <>
-                          <TouchableOpacity
-                            style={styles.actionButton}
-                            onPress={() => setOpenActionDropdownIssueId(prev => prev === issue.id ? null : issue.id)}
-                          >
-                            <Text style={styles.actionButtonText}>Select...</Text>
-                            <Text style={styles.actionDropdownIcon}>▼</Text>
-                          </TouchableOpacity>
-                          {!isMobile && openActionDropdownIssueId === issue.id && (
-                            <View style={styles.actionDropdownMenu}>
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
-                              >
-                                <Text style={styles.actionDropdownOptionText}>Resolve</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
-                              >
-                                <Text style={styles.actionDropdownOptionText}>Refund</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
-                              >
-                                <Text style={styles.actionDropdownOptionText}>Pending</Text>
-                              </TouchableOpacity>
-                              <TouchableOpacity
-                                style={styles.actionDropdownOption}
-                                onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
-                              >
-                                <Text style={styles.actionDropdownOptionText}>Reviewing</Text>
-                              </TouchableOpacity>
-                            </View>
-                          )}
-                        </>
-                      )}
+                          );
+                        }
+                        return (
+                          <>
+                            <TouchableOpacity
+                              style={currentAction ? styles.actionButtonSelected : styles.actionButton}
+                              onPress={() => setOpenActionDropdownIssueId(prev => prev === issue.id ? null : issue.id)}
+                            >
+                              <Text style={currentAction ? styles.actionButtonTextSelected : styles.actionButtonText}>
+                                {currentAction ?? 'Select...'}
+                              </Text>
+                              <Text style={styles.actionDropdownIcon}>▼</Text>
+                            </TouchableOpacity>
+                            {!isMobile && openActionDropdownIssueId === issue.id && (
+                              <View style={styles.actionDropdownMenu}>
+                                {ISSUE_ACTION_OPTIONS.map((option) => (
+                                  <TouchableOpacity
+                                    key={option}
+                                    style={styles.actionDropdownOption}
+                                    onPress={() => handleIssueAction(issue.id, option, issue)}
+                                  >
+                                    <Text style={[styles.actionDropdownOptionText, currentAction === option && styles.actionDropdownOptionTextSelected]}>
+                                      {option}
+                                    </Text>
+                                  </TouchableOpacity>
+                                ))}
+                              </View>
+                            )}
+                          </>
+                        );
+                      })()}
                     </View>
                   </View>
                 </View>
@@ -4180,67 +3520,27 @@ export default function AdminPage() {
                       activeOpacity={1}
                       onPress={() => {}}
                     >
-                      {issueActions[issue.id] === 'Refund' ? (
-                        <View style={styles.actionDropdownOption}>
-                          <Text style={[styles.actionDropdownOptionText, styles.actionDropdownOptionTextReadOnly]}>Refund</Text>
-                        </View>
-                      ) : issueActions[issue.id] ? (
-                        <>
+                      {(() => {
+                        const currentAction = issueActionLabel(issue);
+                        if (currentAction === 'Refund') {
+                          return (
+                            <View style={styles.actionDropdownOption}>
+                              <Text style={[styles.actionDropdownOptionText, styles.actionDropdownOptionTextReadOnly]}>Refund</Text>
+                            </View>
+                          );
+                        }
+                        return ISSUE_ACTION_OPTIONS.map((option) => (
                           <TouchableOpacity
+                            key={option}
                             style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
+                            onPress={() => handleIssueAction(issue.id, option, issue)}
                           >
-                            <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Resolve' && styles.actionDropdownOptionTextSelected]}>Resolve</Text>
+                            <Text style={[styles.actionDropdownOptionText, currentAction === option && styles.actionDropdownOptionTextSelected]}>
+                              {option}
+                            </Text>
                           </TouchableOpacity>
-                          {issueActions[issue.id] !== 'Refund' && (
-                            <TouchableOpacity
-                              style={styles.actionDropdownOption}
-                              onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
-                            >
-                              <Text style={styles.actionDropdownOptionText}>Refund</Text>
-                            </TouchableOpacity>
-                          )}
-                          <TouchableOpacity
-                            style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
-                          >
-                            <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Pending' && styles.actionDropdownOptionTextSelected]}>Pending</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
-                          >
-                            <Text style={[styles.actionDropdownOptionText, issueActions[issue.id] === 'Reviewing' && styles.actionDropdownOptionTextSelected]}>Reviewing</Text>
-                          </TouchableOpacity>
-                        </>
-                      ) : (
-                        <>
-                          <TouchableOpacity
-                            style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Resolve', issue)}
-                          >
-                            <Text style={styles.actionDropdownOptionText}>Resolve</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Refund', issue)}
-                          >
-                            <Text style={styles.actionDropdownOptionText}>Refund</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Pending', issue)}
-                          >
-                            <Text style={styles.actionDropdownOptionText}>Pending</Text>
-                          </TouchableOpacity>
-                          <TouchableOpacity
-                            style={styles.actionDropdownOption}
-                            onPress={() => handleIssueAction(issue.id, 'Reviewing', issue)}
-                          >
-                            <Text style={styles.actionDropdownOptionText}>Reviewing</Text>
-                          </TouchableOpacity>
-                        </>
-                      )}
+                        ));
+                      })()}
                     </TouchableOpacity>
                   </TouchableOpacity>
                 </Modal>
@@ -4385,11 +3685,18 @@ export default function AdminPage() {
                             style={[styles.primaryButton, { flex: 1 }]}
                             onPress={async () => {
                               setShowRefundModal(false);
-                              setIssueActions(prev => ({ ...prev, [pendingRefund.issueId]: 'Refund' }));
                               try {
                                 await callFn('cancel-payment', { orderId: pendingRefund.orderId, reason: 'chef_rejected' });
                                 // Update issue status to refunded (silent mode to avoid duplicate alerts)
                                 await handleUpdateIssueStatus(pendingRefund.issueId, 'refunded', true);
+                                // Reflect the refund in local order state so the
+                                // Orders tab and finance stats update immediately.
+                                const applyRefund = (o: any) =>
+                                  o.id === pendingRefund.orderId
+                                    ? { ...o, status: 'cancelled', payment_status: 'refunded' }
+                                    : o;
+                                setOrders(prev => prev.map(applyRefund));
+                                setOrdersWithChefs(prev => prev.map(applyRefund));
                                 setRefundModalMessage('Refund has been initiated for the order.');
                                 setRefundModalType('success');
                                 setShowRefundModal(true);
@@ -4400,12 +3707,6 @@ export default function AdminPage() {
                                 setRefundModalType('error');
                                 setShowRefundModal(true);
                                 setPendingRefund(null);
-                                // Remove Refund from actions if it failed
-                                setIssueActions(prev => {
-                                  const next = { ...prev };
-                                  delete next[pendingRefund.issueId];
-                                  return next;
-                                });
                               }
                             }}
                           >
@@ -4520,69 +3821,6 @@ export default function AdminPage() {
     </View>
   );
 
-  function OrderCard({ order, onStatusUpdate }: { order: OrderWithItems; onStatusUpdate: (id: number, status: string) => void }) {
-    const statusOptions = ['pending', 'paid', 'completed', 'cancelled'];
-    const currentStatus = (order.status || '').toLowerCase();
-    const totalDollars = formatCad(order.total_cents || 0);
-    const badgeStyles = orderStatusStyles(order.status);
-
-    return (
-      <View style={styles.card}>
-        <View style={styles.cardHeader}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.cardTitle}>Order #{order.id}</Text>
-            <Text style={styles.cardMeta}>
-              User: {order.user_email || (order.user_id ? `${order.user_id.substring(0, 8)}…` : '—')}
-            </Text>
-            <Text style={styles.cardTotal}>{totalDollars}</Text>
-            {order.created_at ? <Text style={styles.cardTimestamp}>{new Date(order.created_at).toLocaleString()}</Text> : null}
-          </View>
-          <View style={badgeStyles.container}>
-            <Text style={[styles.statusPillText, badgeStyles.text]}>{orderStatusLabel(order.status)}</Text>
-          </View>
-        </View>
-
-        {order.order_items && order.order_items.length > 0 ? (
-          <View style={styles.dividerSection}>
-            <Text style={styles.sectionLabel}>Items</Text>
-            {order.order_items.map((item) => {
-              const itemTotal = formatCad(item.unit_price_cents * item.quantity);
-              return (
-                <View key={item.id} style={styles.itemRow}>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.itemTitle}>{item.dish_name || `Dish #${item.dish_id}`}</Text>
-                    <Text style={styles.itemMeta}>
-                      Qty: {item.quantity} × {formatCad(item.unit_price_cents || 0)}
-                    </Text>
-                  </View>
-                  <Text style={styles.itemPrice}>{itemTotal}</Text>
-                </View>
-              );
-            })}
-          </View>
-        ) : null}
-
-        <View style={styles.segmentRow}>
-          {statusOptions.map((status) => {
-            const active = currentStatus === status;
-            return (
-              <TouchableOpacity
-                key={status}
-                onPress={() => onStatusUpdate(order.id, status)}
-                disabled={active}
-                style={[styles.segmentButton, active && styles.segmentButtonActive]}
-              >
-                <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>
-                  {status.charAt(0).toUpperCase() + status.slice(1)}
-                </Text>
-              </TouchableOpacity>
-            );
-          })}
-        </View>
-      </View>
-    );
-  }
-
   // Gate admin access with timeout
   useEffect(() => {
     if (adminLoading) {
@@ -4675,9 +3913,17 @@ export default function AdminPage() {
           );
         }
         if (!orderDetails) return null;
+        const isDeliveryOrder = (orderDetails.fulfillmentMethod || '').toLowerCase() === 'delivery';
         const subtotalCents = orderDetails.items.reduce((sum, item) => sum + item.unit_price_cents * item.quantity, 0);
         const platformFeeCents = orderDetails.platformFeeCents !== null ? orderDetails.platformFeeCents : 0;
-        const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents;
+        const deliveryFeeCents = orderDetails.deliveryFeeCents || 0;
+        const totalCents = orderDetails.totalCents !== null ? orderDetails.totalCents : subtotalCents + platformFeeCents + deliveryFeeCents;
+        const addressLabel = isDeliveryOrder ? 'Delivery address' : 'Pickup address';
+        const addressValue = isDeliveryOrder ? orderDetails.deliveryAddress : orderDetails.chefLocation;
+        const scheduleLabel = isDeliveryOrder ? 'Delivery date & time' : 'Pickup date & time';
+        const scheduleValue = isDeliveryOrder ? (orderDetails.deliveryAt ?? orderDetails.pickupAt) : orderDetails.pickupAt;
+        const adminStatusOptions = ['requested', 'pending', 'ready', 'completed', 'cancelled'];
+        const currentOrderStatus = (orderDetails.status || '').toLowerCase();
         return (
           <Modal visible transparent animationType="fade" onRequestClose={() => setOrderDetailModalId(null)}>
             <TouchableOpacity style={styles.issueDetailOverlay} activeOpacity={1} onPress={() => setOrderDetailModalId(null)}>
@@ -4689,28 +3935,28 @@ export default function AdminPage() {
                   </TouchableOpacity>
                 </View>
                 <ScrollView style={styles.issueDetailBody} contentContainerStyle={styles.issueDetailBodyContent} showsVerticalScrollIndicator>
-                  {orderDetails.chefLocation && (
+                  {addressValue && (
                     <View style={styles.orderDetailSectionCard}>
                       <TouchableOpacity style={styles.orderDetailSectionHeader} onPress={() => setIsPickupAddressExpanded(!isPickupAddressExpanded)}>
-                        <Text style={styles.issueDetailLabel}>Pickup address</Text>
+                        <Text style={styles.issueDetailLabel}>{addressLabel}</Text>
                         <Text style={styles.expandIcon}>{isPickupAddressExpanded ? '−' : '+'}</Text>
                       </TouchableOpacity>
                       {isPickupAddressExpanded && (
                         <View style={styles.orderDetailSectionContent}>
-                          <Text style={styles.issueDetailValue}>{orderDetails.chefLocation}</Text>
+                          <Text style={styles.issueDetailValue}>{addressValue}</Text>
                         </View>
                       )}
                     </View>
                   )}
-                  {orderDetails.pickupAt && (
+                  {scheduleValue && (
                     <View style={styles.orderDetailSectionCard}>
                       <TouchableOpacity style={styles.orderDetailSectionHeader} onPress={() => setIsPickupDateTimeExpanded(!isPickupDateTimeExpanded)}>
-                        <Text style={styles.issueDetailLabel}>Pickup date & time</Text>
+                        <Text style={styles.issueDetailLabel}>{scheduleLabel}</Text>
                         <Text style={styles.expandIcon}>{isPickupDateTimeExpanded ? '−' : '+'}</Text>
                       </TouchableOpacity>
                       {isPickupDateTimeExpanded && (
                         <View style={styles.orderDetailSectionContent}>
-                          <Text style={styles.issueDetailValue}>{formatPickupDateTime(orderDetails.pickupAt)}</Text>
+                          <Text style={styles.issueDetailValue}>{formatScheduledSlot(scheduleValue)}</Text>
                         </View>
                       )}
                     </View>
@@ -4741,6 +3987,12 @@ export default function AdminPage() {
                             <Text style={styles.summaryLabel}>Subtotal</Text>
                             <Text style={styles.summaryValue}>{cents(subtotalCents)}</Text>
                           </View>
+                          {deliveryFeeCents > 0 && (
+                            <View style={styles.summaryRow}>
+                              <Text style={styles.summaryLabel}>Delivery fee</Text>
+                              <Text style={styles.summaryValue}>{cents(deliveryFeeCents)}</Text>
+                            </View>
+                          )}
                           {platformFeeCents > 0 && (
                             <View style={styles.summaryRow}>
                               <Text style={styles.summaryLabel}>Platform service fee</Text>
@@ -4755,6 +4007,48 @@ export default function AdminPage() {
                       )}
                     </View>
                   )}
+                  <View style={styles.orderDetailSectionCard}>
+                    <View style={styles.orderDetailSectionHeader}>
+                      <Text style={styles.issueDetailLabel}>Order status</Text>
+                    </View>
+                    <View style={[styles.orderDetailSectionContent, { flexDirection: 'row', flexWrap: 'wrap', gap: 8 }]}>
+                      {adminStatusOptions.map((status) => {
+                        const active = currentOrderStatus === status;
+                        return (
+                          <TouchableOpacity
+                            key={status}
+                            disabled={active || updatingOrderStatus}
+                            onPress={() => {
+                              crossAlert(
+                                'Change order status',
+                                `Set order #${orderDetailModalId} to "${status}"? This does not charge, capture, or refund any payment.`,
+                                [
+                                  { text: 'Cancel', style: 'cancel' },
+                                  {
+                                    text: 'Change',
+                                    onPress: async () => {
+                                      setUpdatingOrderStatus(true);
+                                      try {
+                                        await handleUpdateOrderStatus(orderDetailModalId, status);
+                                        setOrderDetails((prev) => (prev ? { ...prev, status } : prev));
+                                      } finally {
+                                        setUpdatingOrderStatus(false);
+                                      }
+                                    },
+                                  },
+                                ],
+                              );
+                            }}
+                            style={[styles.segmentButton, active && styles.segmentButtonActive, updatingOrderStatus && !active && { opacity: 0.5 }]}
+                          >
+                            <Text style={[styles.segmentButtonText, active && styles.segmentButtonTextActive]}>
+                              {status.charAt(0).toUpperCase() + status.slice(1)}
+                            </Text>
+                          </TouchableOpacity>
+                        );
+                      })}
+                    </View>
+                  </View>
                 </ScrollView>
               </TouchableOpacity>
             </TouchableOpacity>

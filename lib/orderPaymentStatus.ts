@@ -18,6 +18,7 @@ export function getOrderPaymentStatusLabel(order: OrderPaymentFields, options?: 
   if (ps === 'awaiting_payment') return short ? 'Awaiting' : 'Awaiting payment';
   if (ps === 'failed') return short ? 'Failed' : 'Payment failed';
   if (ps === 'canceled') return short ? 'Canceled' : 'Payment canceled';
+  if (ps === 'refunded') return 'Refunded';
   return 'Unpaid';
 }
 
@@ -26,5 +27,6 @@ export function getOrderPaymentStatusColor(order: OrderPaymentFields): string {
   const ps = (order.payment_status || '').toLowerCase();
   if (ps === 'failed' || ps === 'canceled') return '#B91C1C';
   if (ps === 'awaiting_payment') return '#B45309';
+  if (ps === 'refunded') return '#475569';
   return '#667085';
 }

@@ -1,5 +1,5 @@
 import { supabase } from './supabase';
-import { Alert } from 'react-native';
+import { crossAlert } from './crossAlert';
 import { isAdmin as checkIsAdmin } from './db';
 import { isLocalAdmin } from './admin';
 
@@ -18,7 +18,7 @@ import { isLocalAdmin } from './admin';
 async function requireAdmin(): Promise<boolean> {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) {
-    Alert.alert('Admin only', 'You must be signed in to perform this action.');
+    crossAlert('Admin only', 'You must be signed in to perform this action.');
     return false;
   }
 
@@ -29,7 +29,7 @@ async function requireAdmin(): Promise<boolean> {
   const isAdminFromEmail = isLocalAdmin(user);
 
   if (!isAdminFromProfile && !isAdminFromEmail) {
-    Alert.alert('Admin only', 'This action requires admin privileges.');
+    crossAlert('Admin only', 'This action requires admin privileges.');
     return false;
   }
 
@@ -219,40 +219,47 @@ export async function approveChefApplication(
 
     if (profileError) throw profileError;
 
-    // Geocode chef location if available
-    let latitude: number | null = null;
-    let longitude: number | null = null;
-    if (application.location) {
-      const { geocodeAddress } = await import('./geocode');
-      const coords = await geocodeAddress(application.location);
-      if (coords) {
-        latitude = coords.lat;
-        longitude = coords.lon;
-      }
-    }
-
-    // Create or update chefs table entry
-    const { error: chefError } = await supabase
+    // Activate the chefs row. Signup already created the row (with user_id,
+    // fulfillment settings, availability, etc.), so activation must be keyed
+    // on user_id - matching by name can hit the wrong chef or none at all,
+    // and overwriting profile fields with application values is unnecessary.
+    const { data: existingChef, error: chefLookupError } = await supabase
       .from('chefs')
-      .upsert({
-        name: application.name,
-        email: application.email,
-        phone: application.phone,
-        location: application.location,
-        bio: application.short_bio,
-        cuisine: application.cuisine_specialty || null,
-        status: 'active',
-        latitude,
-        longitude,
-      }, {
-        onConflict: 'name',
-      });
+      .select('id')
+      .eq('user_id', application.user_id)
+      .maybeSingle();
 
-    if (chefError) {
-      // If chef already exists, just update it
-      const { error: updateChefError } = await supabase
+    if (chefLookupError) throw chefLookupError;
+
+    if (existingChef?.id) {
+      const { error: activateError } = await supabase
         .from('chefs')
-        .update({
+        .update({ status: 'active' })
+        .eq('id', existingChef.id);
+      if (activateError) throw activateError;
+    } else {
+      // Legacy application without a chefs row: create one from the application.
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+      if (application.location) {
+        const { geocodeAddress } = await import('./geocode');
+        const coords = await geocodeAddress(application.location);
+        if (coords) {
+          latitude = coords.lat;
+          longitude = coords.lon;
+        }
+      }
+
+      const slugBase = String(application.name || 'chef')
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, '-')
+        .replace(/^-+|-+$/g, '') || 'chef';
+
+      const { error: chefInsertError } = await supabase
+        .from('chefs')
+        .insert({
+          name: application.name,
+          slug: `${slugBase}-${Date.now()}`,
           email: application.email,
           phone: application.phone,
           location: application.location,
@@ -261,10 +268,9 @@ export async function approveChefApplication(
           status: 'active',
           latitude,
           longitude,
-        })
-        .eq('name', application.name);
-
-      if (updateChefError) throw updateChefError;
+          user_id: application.user_id,
+        });
+      if (chefInsertError) throw chefInsertError;
     }
 
     return { ok: true };
