@@ -118,6 +118,32 @@ const SECTION_4: StepData[] = [
   },
 ];
 
+const SECTION_5: StepData[] = [
+  {
+    title: 'Get your Ontario Food Handler Certification',
+    body: 'In Ontario, food handler certification shows you know how to prepare food safely, and public health rules require certified food handlers in food businesses. You can get certified through your local public health unit (such as Toronto Public Health) or any provider approved by the Ontario Ministry of Health \u2014 many offer the course and exam fully online. The course covers safe cooking temperatures, storage, cleaning, and hygiene, and your certificate is valid for 5 years anywhere in Ontario.',
+    tipText: 'Courses typically cost $15\u2013$60 through public health units and take a few hours to complete. Keep a copy of your certificate \u2014 customers trust chefs who take food safety seriously.',
+    iconSource: require('../../assets/file.png'),
+  },
+  {
+    title: 'Know the priority allergens',
+    body: 'Health Canada identifies these priority allergens: peanuts, tree nuts, milk, eggs, fish, crustaceans and molluscs (shellfish), sesame, soy, wheat and triticale (gluten sources), mustard, and added sulphites. Even a small trace can cause a serious reaction for someone with an allergy, so know exactly what goes into every dish you make \u2014 including sauces, marinades, oils, and garnishes.',
+    tipText: 'List all priority allergens in your dish descriptions. Customers with allergies will thank you \u2014 and it protects you too.',
+    iconSource: require('../../assets/error.png'),
+  },
+  {
+    title: 'Prevent cross-contamination',
+    body: 'Use separate cutting boards and utensils for allergen-containing ingredients, wash your hands and surfaces thoroughly between dishes, and store allergens like nuts and flour in sealed containers away from other ingredients. Cross-contact can happen through shared fryer oil, cooking water, or even a dusting of flour in the air.',
+    iconSource: require('../../assets/dinner.png'),
+  },
+  {
+    title: 'Communicate with customers',
+    body: 'Always read the chef notes on incoming orders \u2014 customers often mention allergies or dietary restrictions there. If you can\u2019t safely accommodate a request (for example, your kitchen regularly handles peanuts), message the customer honestly before accepting. Never guess: when it comes to allergies, \u201Cprobably fine\u201D isn\u2019t good enough.',
+    tipText: 'It\u2019s always better to decline an order than to risk a customer\u2019s health.',
+    iconSource: require('../../assets/chat.png'),
+  },
+];
+
 const TIPS = [
   'Respond to new orders quickly \u2014 customers appreciate fast confirmation',
   'Keep your menu updated with accurate descriptions and photos',
@@ -268,9 +294,20 @@ export default function ChefGuide() {
 
           <CollapsibleSection
             sectionId={5}
-            title="Tips for success"
+            title="Food safety & allergens"
             expanded={expandedSection === 5}
             onToggle={() => toggleSection(5)}
+          >
+            {SECTION_5.map((s, i) => (
+              <StepCard key={`s5-${i}`} step={s} />
+            ))}
+          </CollapsibleSection>
+
+          <CollapsibleSection
+            sectionId={6}
+            title="Tips for success"
+            expanded={expandedSection === 6}
+            onToggle={() => toggleSection(6)}
           >
             <View style={stepStyles.card}>
               {TIPS.map((tip, i) => (
