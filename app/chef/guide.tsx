@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState } from 'react';
-import { View, Text, Image, TouchableOpacity, StyleSheet, useWindowDimensions } from 'react-native';
+import { View, Text, Image, TouchableOpacity, StyleSheet, useWindowDimensions, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { Link } from 'expo-router';
 import { theme } from '../../lib/theme';
@@ -26,6 +26,7 @@ type StepData = {
   body: string;
   tipText?: string;
   iconSource: any;
+  link?: { label: string; url: string };
 };
 
 const SECTION_1: StepData[] = [
@@ -120,26 +121,34 @@ const SECTION_4: StepData[] = [
 
 const SECTION_5: StepData[] = [
   {
-    title: 'Get your Ontario Food Handler Certification',
-    body: 'In Ontario, food handler certification shows you know how to prepare food safely, and public health rules require certified food handlers in food businesses. You can get certified through your local public health unit (such as Toronto Public Health) or any provider approved by the Ontario Ministry of Health \u2014 many offer the course and exam fully online. The course covers safe cooking temperatures, storage, cleaning, and hygiene, and your certificate is valid for 5 years anywhere in Ontario.',
-    tipText: 'Courses typically cost $15\u2013$60 through public health units and take a few hours to complete. Keep a copy of your certificate \u2014 customers trust chefs who take food safety seriously.',
+    title: 'Get your Ontario Food Handler Certificate',
+    body: 'Good news \u2014 getting certified is easier than you might think! Ontario offers food handler courses through your local public health unit and Ministry of Health\u2013approved providers, and many of them are fully online. You\u2019ll learn the essentials of safe cooking temperatures, storage, cleaning, and hygiene, and your certificate is valid for 5 years anywhere in Ontario.',
+    tipText: 'Most courses cost between $15 and $60 and only take a few hours to complete. Keep a copy of your certificate handy \u2014 customers love knowing their chef takes food safety seriously!',
     iconSource: require('../../assets/file.png'),
+    link: {
+      label: 'Find a course on Ontario.ca',
+      url: 'https://www.ontario.ca/page/food-handler-training-and-certification',
+    },
   },
   {
-    title: 'Know the priority allergens',
-    body: 'Health Canada identifies these priority allergens: peanuts, tree nuts, milk, eggs, fish, crustaceans and molluscs (shellfish), sesame, soy, wheat and triticale (gluten sources), mustard, and added sulphites. Even a small trace can cause a serious reaction for someone with an allergy, so know exactly what goes into every dish you make \u2014 including sauces, marinades, oils, and garnishes.',
-    tipText: 'List all priority allergens in your dish descriptions. Customers with allergies will thank you \u2014 and it protects you too.',
+    title: 'Get to know the priority allergens',
+    body: 'Health Canada lists these priority allergens: peanuts, tree nuts, milk, eggs, fish, crustaceans and molluscs (shellfish), sesame, soy, wheat and triticale (gluten sources), mustard, and added sulphites. For someone with an allergy, even a tiny trace can be serious \u2014 so it really helps to know exactly what goes into every dish you make, right down to the sauces, marinades, oils, and garnishes.',
+    tipText: 'Mention any priority allergens in your dish descriptions \u2014 customers with allergies will really appreciate it, and it protects you too.',
     iconSource: require('../../assets/error.png'),
+    link: {
+      label: 'See the full allergen list on Canada.ca',
+      url: 'https://www.canada.ca/en/health-canada/services/food-nutrition/food-safety/food-allergies-intolerances/food-allergies.html',
+    },
   },
   {
-    title: 'Prevent cross-contamination',
-    body: 'Use separate cutting boards and utensils for allergen-containing ingredients, wash your hands and surfaces thoroughly between dishes, and store allergens like nuts and flour in sealed containers away from other ingredients. Cross-contact can happen through shared fryer oil, cooking water, or even a dusting of flour in the air.',
+    title: 'Keep allergens from mixing',
+    body: 'A few simple kitchen habits go a long way! Use separate cutting boards and utensils for allergen ingredients, wash your hands and surfaces between dishes, and store things like nuts and flour in sealed containers. Watch out for sneaky cross-contact spots too \u2014 shared fryer oil, cooking water, or even a little flour dust in the air can carry allergens between dishes.',
     iconSource: require('../../assets/dinner.png'),
   },
   {
-    title: 'Communicate with customers',
-    body: 'Always read the chef notes on incoming orders \u2014 customers often mention allergies or dietary restrictions there. If you can\u2019t safely accommodate a request (for example, your kitchen regularly handles peanuts), message the customer honestly before accepting. Never guess: when it comes to allergies, \u201Cprobably fine\u201D isn\u2019t good enough.',
-    tipText: 'It\u2019s always better to decline an order than to risk a customer\u2019s health.',
+    title: 'Chat with your customers',
+    body: 'Always take a peek at the chef notes on incoming orders \u2014 customers often mention allergies or dietary needs there. If you can\u2019t safely accommodate a request (say, your kitchen regularly handles peanuts), just message the customer honestly before accepting. When it comes to allergies, being upfront beats guessing every time.',
+    tipText: 'It\u2019s always okay to decline an order rather than take a chance with someone\u2019s health \u2014 customers respect that.',
     iconSource: require('../../assets/chat.png'),
   },
 ];
@@ -166,6 +175,17 @@ function StepCard({ step }: { step: StepData }) {
         <Text style={stepStyles.title}>{step.title}</Text>
       </View>
       <Text style={stepStyles.body}>{step.body}</Text>
+      {step.link && (
+        <TouchableOpacity
+          style={stepStyles.linkBtn}
+          onPress={() => Linking.openURL(step.link!.url)}
+          accessibilityRole="link"
+          accessibilityLabel={step.link.label}
+        >
+          <Text style={stepStyles.linkText}>{step.link.label}</Text>
+          <Ionicons name="open-outline" size={15} color={PRIMARY_COLOR} />
+        </TouchableOpacity>
+      )}
       {step.tipText && (
         <View style={stepStyles.tipBox}>
           <Text style={stepStyles.tipText}>{step.tipText}</Text>
@@ -441,6 +461,21 @@ const stepStyles = StyleSheet.create({
     fontSize: 15,
     fontFamily: theme.typography.fontFamily.body,
     lineHeight: 22,
+  },
+  linkBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    alignSelf: 'flex-start',
+    gap: 5,
+    marginTop: 10,
+  },
+  linkText: {
+    color: PRIMARY_COLOR,
+    fontSize: 15,
+    fontWeight: '600' as const,
+    fontFamily: theme.typography.fontFamily.body,
+    lineHeight: 22,
+    textDecorationLine: 'underline',
   },
   tipBox: {
     backgroundColor: TIP_BG,
