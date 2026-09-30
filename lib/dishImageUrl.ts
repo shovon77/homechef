@@ -2,7 +2,7 @@
  * Dish / chef image URL tuned for max width (fewer bytes on mobile).
  *
  * Supabase Storage: replaces `/object/` with `/render/image/` and appends
- * `?width=W&quality=75&resize=cover` so the CDN serves a resized JPEG/WebP.
+ * `?width=W&height=W&resize=contain&quality=75` so the CDN serves a resized JPEG/WebP.
  * Requires Pro Plan image transformations to be enabled; degrades gracefully
  * (returns original image) if not.
  *
@@ -23,7 +23,8 @@ export function optimizeDishImageUrl(uri: string | null | undefined, maxW: numbe
       '/storage/v1/render/image/'
     );
     const sep = transformed.includes('?') ? '&' : '?';
-    return `${transformed}${sep}width=${w}&quality=75&resize=cover`;
+    // Width alone keeps the original height, so the CDN crops a narrow strip; bound both edges instead.
+    return `${transformed}${sep}width=${w}&height=${w}&resize=contain&quality=75`;
   }
 
   // Unsplash
