@@ -758,9 +758,15 @@ export default function HomePage() {
               >
                 Featured this week
               </Text>
-              <View style={styles.homeSectionHeaderArrowCircle}>
-                <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-              </View>
+              <Link href="/browse?tab=dishes" asChild>
+                <TouchableOpacity
+                  style={styles.homeSectionHeaderArrowCircle}
+                  accessibilityRole="link"
+                  accessibilityLabel="View all dishes"
+                >
+                  <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+                </TouchableOpacity>
+              </Link>
             </View>
             <ScrollView 
               ref={featuredScrollRef}
@@ -848,9 +854,15 @@ export default function HomePage() {
               >
                 Popular near you
               </Text>
-              <View style={styles.homeSectionHeaderArrowCircle}>
-                <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-              </View>
+              <Link href="/browse?tab=chefs" asChild>
+                <TouchableOpacity
+                  style={styles.homeSectionHeaderArrowCircle}
+                  accessibilityRole="link"
+                  accessibilityLabel="View all chefs"
+                >
+                  <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
+                </TouchableOpacity>
+              </Link>
             </View>
             {isMobile ? (
               <ScrollView 
