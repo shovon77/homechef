@@ -3,6 +3,7 @@ import { View, Text, Image, StyleSheet, Pressable, StyleProp, ViewStyle, Platfor
 import { Link } from "expo-router";
 import { theme } from "../../lib/theme";
 import { toNumber, safeToFixed } from "../../lib/number";
+import { optimizeImageUrl } from "../../lib/dishImageUrl";
 
 // Helper function to format cuisine type
 const formatCuisine = (cuisine: any): string => {
@@ -89,11 +90,22 @@ type Props = {
 
 export default function ChefCard({ chef, style, nameColor, ratingColor, distanceKm, hideBio, metaVariant = 'default', compact = false }: Props) {
   const avatarUri = (chef?.photo || chef?.avatar || "").trim();
+  // Avatars render at most 140px; 320px covers 2x screens at a fraction of the original upload size.
+  const resizedAvatarUri = avatarUri ? optimizeImageUrl(avatarUri, 320) : "";
+  const [useOriginalAvatar, setUseOriginalAvatar] = useState(false);
   const [imageError, setImageError] = useState(false);
 
   useEffect(() => {
     setImageError(false);
+    setUseOriginalAvatar(false);
   }, [avatarUri, chef?.id]);
+
+  const displayAvatarUri = useOriginalAvatar ? avatarUri : resizedAvatarUri;
+  const handleAvatarError = () => {
+    // If the resized variant fails, retry the original before showing initials.
+    if (!useOriginalAvatar && resizedAvatarUri !== avatarUri) setUseOriginalAvatar(true);
+    else setImageError(true);
+  };
 
   const ratingVal = toNumber(chef?.rating, 0);
   const starTint = ratingColor ?? ACCENT_COLOR;
@@ -119,10 +131,10 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
         <Pressable style={pressableStyle} activeOpacity={0.9}>
           {avatarUri && !imageError ? (
             <Image
-              source={{ uri: avatarUri }}
+              source={{ uri: displayAvatarUri }}
               style={avatarStyle}
               resizeMode="cover"
-              onError={() => setImageError(true)}
+              onError={handleAvatarError}
               {...(Platform.OS === 'web' ? { loading: 'lazy', decoding: 'async' } as any : {})}
             />
           ) : (

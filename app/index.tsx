@@ -1,5 +1,5 @@
-import React, { useEffect, useState, useMemo, startTransition, useCallback, useRef, lazy, Suspense } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
+import React, { useEffect, useLayoutEffect, useState, useMemo, startTransition, useCallback, useRef, lazy, Suspense } from "react";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, InteractionManager, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -36,6 +36,7 @@ const FEATURED_DISH_CANDIDATES = 100;
 const FEATURED_MAX_PER_CHEF = 3;
 const FEATURED_SALES_WINDOW_DAYS = 90;
 const FEATURED_NEW_DISH_WINDOW_MS = 21 * 24 * 60 * 60 * 1000;
+const AUTO_SCROLL_START_DELAY_MS = 1500;
 
 /**
  * Rank carousel dishes by demand instead of price:
@@ -111,6 +112,28 @@ const formatCuisine = (cuisine: any): string => {
   return 'Chef';
 };
 
+const DEFAULT_BANNER_URL = "https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000";
+const BANNER_CACHE_KEY = "home_banner_v1";
+
+type CachedBanner = { raw: string; webp: string | null; avif: string | null };
+
+function readCachedBanner(): CachedBanner | null {
+  if (Platform.OS !== "web" || typeof window === "undefined") return null;
+  try {
+    const parsed = JSON.parse(window.localStorage.getItem(BANNER_CACHE_KEY) || "null");
+    return parsed && typeof parsed.raw === "string" && parsed.raw ? parsed : null;
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedBanner(banner: CachedBanner) {
+  if (Platform.OS !== "web" || typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(BANNER_CACHE_KEY, JSON.stringify(banner));
+  } catch {}
+}
+
 // Primary color from design: #2C4E4B
 const PRIMARY_COLOR = '#2C4E4B';
 const ACCENT_COLOR = '#FFA500';
@@ -167,12 +190,23 @@ export default function HomePage() {
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
   const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
-  const [bannerUrlRaw, setBannerUrlRaw] = useState("https://lh3.googleusercontent.com/aida-public/AB6AXuCvaMIyS8SnO_Cv8rsakKzzeevi_5ZMvJ-s-7_Ex52zv-wcN7sP-9pra9fhdBPSOgbcpv6OhmyP5atDXUERJXJ41g-zpV8yzvkLGWU6HC3CKyhdMfsrrPDYZjPW03dbcH6-h7mYXuOZId16eciMoAyZ6dJGG-S1amRb23hQCz7zUeEXiDxiZoGWheTe6UPP-VdMm1tAIZJxTvtqXmVBu8l6hp3-W6REKdmdaZl16sSMuOw7Vw7k82QwbHVZalpFexATBa4dyvn3UXhT=s3000");
+  // Start from the last banner seen on this device (or nothing) so the hero never
+  // downloads a placeholder image and then the real one.
+  const [bannerUrlRaw, setBannerUrlRaw] = useState<string | null>(null);
   const [bannerUrlWebpOpt, setBannerUrlWebpOpt] = useState<string | null>(null);
   const [bannerUrlAvifOpt, setBannerUrlAvifOpt] = useState<string | null>(null);
+  const bannerSettingsLoadedRef = useRef(false);
+  // Applied after hydration (the static HTML has no banner) but before first paint.
+  useLayoutEffect(() => {
+    const cached = readCachedBanner();
+    if (!cached || bannerSettingsLoadedRef.current) return;
+    setBannerUrlRaw(cached.raw);
+    setBannerUrlWebpOpt(cached.webp);
+    setBannerUrlAvifOpt(cached.avif);
+  }, []);
   const bannerSources = useMemo(
     () =>
-      getBannerPictureSources(bannerUrlRaw, width, {
+      getBannerPictureSources(bannerUrlRaw ?? "", width, {
         explicitWebp: bannerUrlWebpOpt,
         explicitAvif: bannerUrlAvifOpt,
       }),
@@ -252,6 +286,8 @@ export default function HomePage() {
   // Track last location used for distance calc to skip redundant work
   const lastDistanceLocationRef = React.useRef<string | null>(null);
   const browseGridRef = React.useRef<HomeBrowseGridSectionHandle | null>(null);
+  const browseGridAnchorRef = React.useRef<View>(null);
+  const [showBrowseGrid, setShowBrowseGrid] = useState(false);
 
   // Animated placeholder logic
   const [placeholderIndex, setPlaceholderIndex] = useState(0);
@@ -400,17 +436,19 @@ export default function HomePage() {
     autoScrollRafRef.current = requestAnimationFrame(tick);
   }, [dishes.length, displayDishes.length, TOTAL_ITEM_WIDTH, width, stopAutoScroll]);
 
-  // Auto-scroll effect for featured dishes - start on mount
+  // Auto-scroll effect for featured dishes. Start shortly after the dishes arrive so the
+  // per-frame scrolling doesn't compete with images and the rest of the page loading.
   useEffect(() => {
-    startAutoScroll();
-    
+    const startTimer = dishes.length > 0 ? setTimeout(startAutoScroll, AUTO_SCROLL_START_DELAY_MS) : null;
+
     return () => {
+      if (startTimer) clearTimeout(startTimer);
       stopAutoScroll();
       if (resumeTimeoutRef.current) {
         clearTimeout(resumeTimeoutRef.current);
       }
     };
-  }, [startAutoScroll, stopAutoScroll]);
+  }, [dishes.length, startAutoScroll, stopAutoScroll]);
   
 
   useEffect(() => {
@@ -421,13 +459,19 @@ export default function HomePage() {
 
       // Single query for all app_settings (banner + placeholders) — saves one round-trip
       supabase.from('app_settings').select('key, value').in('key', ['banner_url', 'banner_url_webp', 'banner_url_avif', 'search_placeholders'])
-        .then(({ data }) => {
-          if (!mounted || !data) return;
+        .then(({ data, error }) => {
+          if (!mounted) return;
+          bannerSettingsLoadedRef.current = true;
+          if (error || !data) {
+            setBannerUrlRaw((prev) => prev ?? DEFAULT_BANNER_URL);
+            return;
+          }
+          let nextRaw: string = DEFAULT_BANNER_URL;
           let nextWebp: string | null = null;
           let nextAvif: string | null = null;
           for (const row of data) {
             if (row.key === 'banner_url' && row.value) {
-              setBannerUrlRaw(row.value);
+              nextRaw = String(row.value).trim() || DEFAULT_BANNER_URL;
             } else if (row.key === 'banner_url_webp' && row.value) {
               nextWebp = String(row.value).trim();
             } else if (row.key === 'banner_url_avif' && row.value) {
@@ -441,10 +485,15 @@ export default function HomePage() {
               } catch {}
             }
           }
+          setBannerUrlRaw(nextRaw);
           setBannerUrlWebpOpt(nextWebp);
           setBannerUrlAvifOpt(nextAvif);
-        })
-        .catch(() => {});
+          writeCachedBanner({ raw: nextRaw, webp: nextWebp, avif: nextAvif });
+        }, () => {
+          if (!mounted) return;
+          bannerSettingsLoadedRef.current = true;
+          setBannerUrlRaw((prev) => prev ?? DEFAULT_BANNER_URL);
+        });
 
       const [{ data: c }, { data: d }, salesRes] = await Promise.all([
         supabase.from("chefs").select("id, name, slug, photo, bio, location, rating, cuisine, latitude, longitude, user_id").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
@@ -482,6 +531,28 @@ export default function HomePage() {
   const handleHomeScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
     browseGridRef.current?.onParentScroll(event);
   }, []);
+
+  // Wait until the featured rows have loaded (while they're skeletons the page is short
+  // and the grid would look "near" the viewport), then mount the grid when it's close.
+  useEffect(() => {
+    if (loading || showBrowseGrid) return;
+    const node = browseGridAnchorRef.current as any;
+    if (Platform.OS === 'web' && typeof IntersectionObserver !== 'undefined' && node) {
+      const observer = new IntersectionObserver(
+        ([entry]) => {
+          if (entry.isIntersecting) {
+            observer.disconnect();
+            setShowBrowseGrid(true);
+          }
+        },
+        { rootMargin: '800px 0px' }
+      );
+      observer.observe(node);
+      return () => observer.disconnect();
+    }
+    const task = InteractionManager.runAfterInteractions(() => setShowBrowseGrid(true));
+    return () => task.cancel();
+  }, [loading, showBrowseGrid]);
 
   // Distance calculation — deferred; geocode + Nominatim live in a separate chunk.
   useEffect(() => {
@@ -659,34 +730,29 @@ export default function HomePage() {
     }
   };
 
-  if (loading) {
-    return (
-      <Screen style={{ backgroundColor: '#F2F0EF' }} contentPadding={0}>
-        <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
-          {/* Skeleton hero — same aspect ratio as the real hero to prevent CLS */}
-          <View style={[styles.hero, isMobile && styles.heroMobile, !isMobile && styles.heroDesktop]} />
-          {/* Skeleton section: featured dishes */}
-          <View style={styles.section}>
-            <View style={{ width: '40%', height: 22, borderRadius: 8, backgroundColor: '#E6E4E1', marginBottom: 12 }} />
-            <View style={{ flexDirection: 'row', gap: GAP, paddingHorizontal: GAP / 2 }}>
-              {[0,1,2].map(i => (
-                <View key={i} style={{ width: isMobile ? 200 : 240, aspectRatio: 0.85, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
-              ))}
-            </View>
-          </View>
-          {/* Skeleton section: popular chefs */}
-          <View style={styles.section}>
-            <View style={{ width: '35%', height: 22, borderRadius: 8, backgroundColor: '#E6E4E1', marginBottom: 12 }} />
-            <View style={{ flexDirection: 'row', gap: 16 }}>
-              {[0,1,2].map(i => (
-                <View key={i} style={{ width: isMobile ? 220 : 260, height: 140, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
-              ))}
-            </View>
-          </View>
-        </View>
-      </Screen>
-    );
-  }
+  // The page shell (hero, headers, How it works, CTA) renders immediately; only the
+  // data-driven rows show placeholders until the featured queries return.
+  const featuredDishesSkeleton = (
+    <View style={{ flexDirection: 'row', gap: GAP, paddingHorizontal: GAP / 2 }}>
+      {[0, 1, 2].map(i => (
+        <View key={i} style={{ width: CARD_WIDTH, aspectRatio: 0.85, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
+      ))}
+    </View>
+  );
+  const browseGridPlaceholder = (
+    <View style={[styles.section, styles.homeBrowseGridSection]}>
+      <View style={styles.homeBrowseGridSuspenseFallback}>
+        <ActivityIndicator size="large" color="#FE734C" />
+      </View>
+    </View>
+  );
+  const popularChefsSkeleton = (
+    <View style={{ flexDirection: 'row', gap: 16 }}>
+      {[0, 1, 2].map(i => (
+        <View key={i} style={{ width: isMobile ? 220 : 260, height: 140, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
+      ))}
+    </View>
+  );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
@@ -708,7 +774,7 @@ export default function HomePage() {
               style={StyleSheet.flatten([styles.hero, isMobile && styles.heroMobile, !isMobile && styles.heroDesktop])}
               onLayout={(e) => Platform.OS !== 'web' && setHeroLayout({ width: e.nativeEvent.layout.width, height: e.nativeEvent.layout.height })}
             >
-              {Platform.OS === 'web' ? (
+              {!bannerUrl ? null : Platform.OS === 'web' ? (
                 <HomeHeroBannerWeb
                   fallbackSrc={bannerSources.fallback}
                   webpSrc={bannerSources.webp}
@@ -768,6 +834,7 @@ export default function HomePage() {
                 </TouchableOpacity>
               </Link>
             </View>
+            {loading ? featuredDishesSkeleton : (
             <ScrollView 
               ref={featuredScrollRef}
               horizontal 
@@ -831,6 +898,7 @@ export default function HomePage() {
                 </View>
               ))}
             </ScrollView>
+            )}
           </View>
 
           {/* Featured Chefs section - matches HTML design */}
@@ -864,7 +932,7 @@ export default function HomePage() {
                 </TouchableOpacity>
               </Link>
             </View>
-            {isMobile ? (
+            {loading ? popularChefsSkeleton : isMobile ? (
               <ScrollView 
                 horizontal 
                 showsHorizontalScrollIndicator={false}
@@ -1039,18 +1107,14 @@ export default function HomePage() {
             </View>
           )}
 
-          {/* Explore-style dish grid — lazy-loaded chunk (DishCard + grid fetch) */}
-          <Suspense
-            fallback={
-              <View style={[styles.section, styles.homeBrowseGridSection]}>
-                <View style={styles.homeBrowseGridSuspenseFallback}>
-                  <ActivityIndicator size="large" color="#FE734C" />
-                </View>
-              </View>
-            }
-          >
-            <HomeBrowseGridSectionLazy ref={browseGridRef} dishGridColumns={dishGridColumns} />
-          </Suspense>
+          {/* Explore-style dish grid — lazy-loaded chunk (DishCard + grid fetch), mounted once near the viewport */}
+          {showBrowseGrid ? (
+            <Suspense fallback={browseGridPlaceholder}>
+              <HomeBrowseGridSectionLazy ref={browseGridRef} dishGridColumns={dishGridColumns} />
+            </Suspense>
+          ) : (
+            <View ref={browseGridAnchorRef}>{browseGridPlaceholder}</View>
+          )}
         </View>
       </Screen>
 
