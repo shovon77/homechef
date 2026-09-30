@@ -168,7 +168,7 @@ export default function LocationPicker({ value, onChange, onPlaceSelect, placeho
   };
 
   return (
-    <View style={[styles.container, showSuggestions && predictions.length > 0 && styles.containerWithSuggestions, style]} pointerEvents="box-none">
+    <View style={[{ pointerEvents: 'box-none' }, styles.container, showSuggestions && predictions.length > 0 && styles.containerWithSuggestions, style]}>
       <View style={styles.inputContainer}>
         <TextInput
           style={[styles.input, inputStyle]}

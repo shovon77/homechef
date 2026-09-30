@@ -103,7 +103,8 @@ export default function Footer() {
               >
                 <Image
                   source={def.source}
-                  style={[styles.socialIcon, { width: iconW, height: iconH }]}
+                  style={{ width: iconW, height: iconH }}
+                  tintColor={theme.colors.primary}
                   resizeMode="contain"
                   accessibilityIgnoresInvertColors
                 />
@@ -198,9 +199,6 @@ const styles = StyleSheet.create({
   },
   socialButton: {
     padding: 4,
-  },
-  socialIcon: {
-    tintColor: theme.colors.primary,
   },
   socialButtonDisabled: {
     opacity: 0.38,

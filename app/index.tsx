@@ -4,7 +4,7 @@ import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../lib/supabase";
-import { theme, elev } from "../lib/theme";
+import { theme } from "../lib/theme";
 import Screen from "../components/Screen";
 import ChefCard from "./components/ChefCard";
 import DishCard from "./components/DishCard";
@@ -950,6 +950,7 @@ export default function HomePage() {
                     <ChefCard
                       chef={{
                         ...chef,
+                        name: chef.name,
                         id: normalizeId(chef.id),
                         rating: toFiniteNumberOrNull(chef.rating),
                       }}
@@ -972,6 +973,7 @@ export default function HomePage() {
                     <ChefCard
                       chef={{
                         ...chef,
+                        name: chef.name,
                         id: normalizeId(chef.id),
                         rating: toFiniteNumberOrNull(chef.rating),
                       }}
@@ -1296,10 +1298,9 @@ const styles = StyleSheet.create({
     }),
     borderRadius: 9999, // rounded-full
     backgroundColor: 'rgba(255, 255, 255, 0.85)',
-    ...elev('xl'),
     overflow: "hidden",
     width: "100%",
-    maxWidth: Platform.select({
+    maxWidth: Platform.select<number | `${number}%`>({
       web: 580,
       default: '100%',
     }),
@@ -1397,7 +1398,6 @@ const styles = StyleSheet.create({
   },
   searchButtonText: {
     color: '#FFFFFF',
-    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
@@ -1599,7 +1599,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   sectionTitle: {
-    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: Platform.select({
       web: 30,
@@ -1648,7 +1647,6 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   dishName: {
-    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: theme.typography.fontSize.lg,
     fontFamily: theme.typography.fontFamily.display,
@@ -1667,9 +1665,7 @@ const styles = StyleSheet.create({
     borderRadius: 12,
   },
   dishChefName: {
-    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
-    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.normal,
@@ -1697,9 +1693,7 @@ const styles = StyleSheet.create({
     color: ACCENT_COLOR,
   },
   ratingText: {
-    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
-    fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,
     fontFamily: theme.typography.fontFamily.body,
     fontWeight: theme.typography.fontWeight.medium,
@@ -1812,14 +1806,12 @@ const styles = StyleSheet.create({
     borderRadius: 48,
   },
   featuredChefName: {
-    fontFamily: theme.typography.fontFamily.body,
     color: '#333333',
     fontSize: theme.typography.fontSize.base,
     fontFamily: theme.typography.fontFamily.display,
     fontWeight: theme.typography.fontWeight.bold,
   },
   featuredChefCuisine: {
-    fontFamily: theme.typography.fontFamily.body,
     color: '#555555',
     fontFamily: theme.typography.fontFamily.body,
     fontSize: theme.typography.fontSize.sm,

@@ -212,8 +212,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
           </Pressable>
         </Link>
         <View
-          pointerEvents="box-none"
-          style={[styles.quantityOverlayOnImage, cartQty === 0 && styles.quantityOverlayInitial]}
+          style={[{ pointerEvents: 'box-none' }, styles.quantityOverlayOnImage, cartQty === 0 && styles.quantityOverlayInitial]}
         >
           {cartQty === 0 ? (
             <TouchableOpacity

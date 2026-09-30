@@ -177,7 +177,7 @@ export const theme = {
       bold: '700',
       extrabold: '800',
       black: '900',
-    },
+    } as const,
     lineHeight: {
       tight: 1.2,
       normal: 1.5,
