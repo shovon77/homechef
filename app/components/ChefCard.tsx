@@ -128,7 +128,7 @@ export default function ChefCard({ chef, style, nameColor, ratingColor, distance
   return (
     <View style={cardStyle}>
       <Link href={`/chef/${chef.slug ?? chef.id}`} asChild>
-        <Pressable style={pressableStyle} activeOpacity={0.9}>
+        <Pressable style={pressableStyle}>
           {avatarUri && !imageError ? (
             <Image
               source={{ uri: displayAvatarUri }}
