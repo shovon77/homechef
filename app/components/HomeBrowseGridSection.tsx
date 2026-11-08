@@ -211,6 +211,7 @@ function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number })
                         variant="explore"
                         inlinePriceRating
                         quantityOnImage
+                        hideChefName
                         style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
                       />
                     </View>

@@ -22,9 +22,11 @@ type DishCardProps = {
   inlinePriceRating?: boolean;
   /** When true (e.g. on chef detail page), show quantity controls overlayed on bottom of image */
   quantityOnImage?: boolean;
+  /** When true (e.g. under a chef header), omit the chef name line */
+  hideChefName?: boolean;
 };
 
-export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false }: DishCardProps) {
+export default function DishCard({ dish, style, variant = 'default', inlinePriceRating = false, quantityOnImage = false, hideChefName = false }: DishCardProps) {
   const avg = toNumber(dish.rating, 0);
   const showRating = avg > 0;
   const { addToCart, setQuantity: setCartQuantity, getQty } = useCart();
@@ -45,7 +47,7 @@ export default function DishCard({ dish, style, variant = 'default', inlinePrice
   );
 
   const nameEl = <Text style={styles.name} numberOfLines={1}>{dish.name}</Text>;
-  const chefDisplayName = dish.chefs?.name || dish.chef || null;
+  const chefDisplayName = hideChefName ? null : dish.chefs?.name || dish.chef || null;
   const chefNameEl = chefDisplayName ? (
     <Text style={styles.chefName} numberOfLines={1}>
       {chefDisplayName}
