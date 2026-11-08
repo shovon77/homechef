@@ -1,5 +1,5 @@
 import React, { useEffect, useLayoutEffect, useState, useMemo, startTransition, useCallback, useRef, lazy, Suspense } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, InteractionManager, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, InteractionManager, type ImageSourcePropType } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
@@ -12,7 +12,6 @@ import { toFiniteNumberOrNull } from "../lib/number";
 import { getBannerPictureSources } from "../lib/bannerSources";
 import { HomeHeroBannerWeb } from "../components/HomeHeroBannerWeb";
 import { useRole } from "../hooks/useRole";
-import type { HomeBrowseGridSectionHandle } from "./components/HomeBrowseGridSection";
 
 const HomeBrowseGridSectionLazy = lazy(() => import("./components/HomeBrowseGridSection"));
 
@@ -285,7 +284,6 @@ export default function HomePage() {
 
   // Track last location used for distance calc to skip redundant work
   const lastDistanceLocationRef = React.useRef<string | null>(null);
-  const browseGridRef = React.useRef<HomeBrowseGridSectionHandle | null>(null);
   const browseGridAnchorRef = React.useRef<View>(null);
   const [showBrowseGrid, setShowBrowseGrid] = useState(false);
 
@@ -528,10 +526,6 @@ export default function HomePage() {
     return () => { mounted = false; };
   }, []);
 
-  const handleHomeScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    browseGridRef.current?.onParentScroll(event);
-  }, []);
-
   // Wait until the featured rows have loaded (while they're skeletons the page is short
   // and the grid would look "near" the viewport), then mount the grid when it's close.
   useEffect(() => {
@@ -763,8 +757,6 @@ export default function HomePage() {
         web: 100,
         default: 80,
       })}
-      onScroll={handleHomeScroll}
-      scrollEventThrottle={16}
     >
         <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
           {/* Hero section - matches HTML design */}
@@ -1109,10 +1101,10 @@ export default function HomePage() {
             </View>
           )}
 
-          {/* Explore-style dish grid — lazy-loaded chunk (DishCard + grid fetch), mounted once near the viewport */}
+          {/* Featured kitchens dish grid — lazy-loaded chunk, mounted once near the viewport */}
           {showBrowseGrid ? (
             <Suspense fallback={browseGridPlaceholder}>
-              <HomeBrowseGridSectionLazy ref={browseGridRef} dishGridColumns={dishGridColumns} />
+              <HomeBrowseGridSectionLazy dishGridColumns={dishGridColumns} />
             </Suspense>
           ) : (
             <View ref={browseGridAnchorRef}>{browseGridPlaceholder}</View>
