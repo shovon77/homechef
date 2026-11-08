@@ -8,6 +8,7 @@ import {
   StyleSheet,
   Platform,
   useWindowDimensions,
+  type ViewStyle,
 } from 'react-native'
 import { Link } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
@@ -168,7 +169,10 @@ function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number })
             .join(' · ')
           return (
             <View key={chef.id} style={[styles.kitchen, index > 0 && styles.kitchenDivider]}>
-              <View style={styles.kitchenHeader}>
+              <View
+                testID={`kitchen-header-${chef.id}`}
+                style={[styles.kitchenHeader, Platform.OS === 'web' && stickyKitchenHeader]}
+              >
                 <Link href={chefHref} asChild>
                   <TouchableOpacity
                     style={styles.kitchenIdentity}
@@ -233,6 +237,17 @@ function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number })
 }
 
 export default HomeBrowseGridSection
+
+// Sticks within its kitchen block, so the next kitchen's header pushes it off-screen.
+// RN types don't include 'sticky'; react-native-web passes it through.
+const stickyKitchenHeader = {
+  position: 'sticky',
+  top: 0,
+  zIndex: 2,
+  backgroundColor: '#F2F0EF',
+  paddingVertical: 10,
+  marginBottom: theme.spacing.md - 10,
+} as unknown as ViewStyle
 
 const styles = StyleSheet.create({
   section: {
