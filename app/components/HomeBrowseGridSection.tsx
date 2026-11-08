@@ -30,6 +30,24 @@ export type HomeBrowseGridSectionHandle = {
 
 type BrowseGridDish = Record<string, any>
 
+// Homepage grid shows featured chefs only, grouped by chef name; /browse keeps the full catalogue.
+// The id tiebreaker keeps range() paging stable.
+function fetchBrowseGridPage(from: number, to: number) {
+  return supabase
+    .from('dishes')
+    .select(
+      'id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, featured, name, location, cuisine, latitude, longitude)'
+    )
+    .eq('chefs.status', 'active')
+    .eq('chefs.stripe_connect_completed', true)
+    .eq('chefs.featured', true)
+    .or('is_active.eq.true,is_active.is.null')
+    .order('chefs(name)', { ascending: true })
+    .order('created_at', { ascending: false })
+    .order('id', { ascending: true })
+    .range(from, to)
+}
+
 const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGridColumns: number }>(
   function HomeBrowseGridSection({ dishGridColumns }, ref) {
     const { width } = useWindowDimensions()
@@ -46,16 +64,7 @@ const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGrid
       ;(async () => {
         setLoadingBrowseGridInitial(true)
         try {
-          const { data, error } = await supabase
-            .from('dishes')
-            .select(
-              'id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)'
-            )
-            .eq('chefs.status', 'active')
-            .eq('chefs.stripe_connect_completed', true)
-            .or('is_active.eq.true,is_active.is.null')
-            .order('created_at', { ascending: false })
-            .range(0, BROWSE_GRID_DISHES_PER_PAGE - 1)
+          const { data, error } = await fetchBrowseGridPage(0, BROWSE_GRID_DISHES_PER_PAGE - 1)
           if (cancelled) return
           if (error) throw error
           const rows = (data ?? []) as BrowseGridDish[]
@@ -84,16 +93,7 @@ const HomeBrowseGridSection = forwardRef<HomeBrowseGridSectionHandle, { dishGrid
       const to = from + BROWSE_GRID_DISHES_PER_PAGE - 1
       setLoadingMoreBrowseGrid(true)
       try {
-        const { data, error } = await supabase
-          .from('dishes')
-          .select(
-            'id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)'
-          )
-          .eq('chefs.status', 'active')
-          .eq('chefs.stripe_connect_completed', true)
-          .or('is_active.eq.true,is_active.is.null')
-          .order('created_at', { ascending: false })
-          .range(from, to)
+        const { data, error } = await fetchBrowseGridPage(from, to)
         if (error) throw error
         const newDishes = (data ?? []) as BrowseGridDish[]
         setBrowseGridDishes((prev) => [...prev, ...newDishes])
