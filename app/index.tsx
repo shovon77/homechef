@@ -1,22 +1,18 @@
-import React, { useEffect, useLayoutEffect, useState, useMemo, startTransition, useCallback, useRef, lazy, Suspense } from "react";
-import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, InteractionManager, type ImageSourcePropType, type NativeSyntheticEvent, type NativeScrollEvent } from "react-native";
+import React, { useEffect, useLayoutEffect, useState, useMemo, useCallback, useRef, lazy, Suspense } from "react";
+import { View, Text, TouchableOpacity, Image, ActivityIndicator, ScrollView, StyleSheet, TextInput, Platform, useWindowDimensions, Animated, Easing, InteractionManager, type ImageSourcePropType } from "react-native";
 import { Link, useRouter } from "expo-router";
 import { Ionicons } from "@expo/vector-icons";
 
 import { supabase } from "../lib/supabase";
 import { theme } from "../lib/theme";
 import Screen from "../components/Screen";
-import ChefCard from "./components/ChefCard";
 import DishCard from "./components/DishCard";
-import { toFiniteNumberOrNull } from "../lib/number";
 import { getBannerPictureSources } from "../lib/bannerSources";
 import { HomeHeroBannerWeb } from "../components/HomeHeroBannerWeb";
 import { useRole } from "../hooks/useRole";
-import type { HomeBrowseGridSectionHandle } from "./components/HomeBrowseGridSection";
 
 const HomeBrowseGridSectionLazy = lazy(() => import("./components/HomeBrowseGridSection"));
 
-type Chef = Record<string, any>;
 type Dish = {
   id: number;
   name: string;
@@ -29,8 +25,6 @@ type Dish = {
   created_at?: string | null;
 };
 
-const normalizeId = (id: any) => String(typeof id === "string" ? id.replace(/^s_/, "") : id);
-const FEATURED_CHEFS_LIMIT = 30;
 const FEATURED_DISHES_LIMIT = 15;
 const FEATURED_DISH_CANDIDATES = 100;
 const FEATURED_MAX_PER_CHEF = 3;
@@ -185,11 +179,9 @@ export default function HomePage() {
   const isTablet = width >= 768 && width < 1024;
   const isDesktop = width >= 1024;
   const dishGridColumns = isMobile ? 2 : isTablet ? 3 : 4;
-  const { isChef, isAdmin, profile } = useRole();
-  const [chefs, setChefs] = useState<Chef[]>([]);
+  const { isChef, isAdmin } = useRole();
   const [dishes, setDishes] = useState<Dish[]>([]);
   const [loading, setLoading] = useState(true);
-  const [chefDistances, setChefDistances] = useState<Map<string, number>>(new Map());
   // Start from the last banner seen on this device (or nothing) so the hero never
   // downloads a placeholder image and then the real one.
   const [bannerUrlRaw, setBannerUrlRaw] = useState<string | null>(null);
@@ -283,9 +275,6 @@ export default function HomePage() {
   const lastAutoScrollTsRef = React.useRef<number>(0);
   const resumeTimeoutRef = React.useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  // Track last location used for distance calc to skip redundant work
-  const lastDistanceLocationRef = React.useRef<string | null>(null);
-  const browseGridRef = React.useRef<HomeBrowseGridSectionHandle | null>(null);
   const browseGridAnchorRef = React.useRef<View>(null);
   const [showBrowseGrid, setShowBrowseGrid] = useState(false);
 
@@ -495,8 +484,7 @@ export default function HomePage() {
           setBannerUrlRaw((prev) => prev ?? DEFAULT_BANNER_URL);
         });
 
-      const [{ data: c }, { data: d }, salesRes] = await Promise.all([
-        supabase.from("chefs").select("id, name, slug, photo, bio, location, rating, cuisine, latitude, longitude, user_id").eq("featured", true).eq("status", "active").eq("stripe_connect_completed", true).order("rating", { ascending: false }).limit(FEATURED_CHEFS_LIMIT),
+      const [{ data: d }, salesRes] = await Promise.all([
         supabase.from("dishes")
           .select("id,name,image,price,chef_id,chef,rating,rating_count,created_at, chefs!inner(featured, status, stripe_connect_completed, name)")
           .eq("chefs.featured", true)
@@ -520,16 +508,11 @@ export default function HomePage() {
           if (Number.isFinite(id) && Number.isFinite(units)) unitsSoldByDishId.set(id, units);
         }
       }
-      setChefs((c || []) as Chef[]);
       setDishes(rankFeaturedDishes((d || []) as Dish[], unitsSoldByDishId));
       setLoading(false);
     })();
 
     return () => { mounted = false; };
-  }, []);
-
-  const handleHomeScroll = useCallback((event: NativeSyntheticEvent<NativeScrollEvent>) => {
-    browseGridRef.current?.onParentScroll(event);
   }, []);
 
   // Wait until the featured rows have loaded (while they're skeletons the page is short
@@ -553,153 +536,6 @@ export default function HomePage() {
     const task = InteractionManager.runAfterInteractions(() => setShowBrowseGrid(true));
     return () => task.cancel();
   }, [loading, showBrowseGrid]);
-
-  // Distance calculation — deferred; geocode + Nominatim live in a separate chunk.
-  useEffect(() => {
-    if (chefs.length === 0) return;
-
-    const profileLat = toFiniteNumberOrNull((profile as any)?.latitude);
-    const profileLon = toFiniteNumberOrNull((profile as any)?.longitude);
-    const hasProfileCoords = profileLat !== null && profileLon !== null;
-    const locationStr = String((profile as any)?.location ?? "").trim();
-    const hasUserLocation = hasProfileCoords || locationStr.length > 0;
-
-    if (!hasUserLocation) {
-      lastDistanceLocationRef.current = null;
-      startTransition(() => setChefDistances(new Map()));
-      return;
-    }
-
-    let mounted = true;
-    const timerRef: { id?: ReturnType<typeof setTimeout> } = {};
-
-    void (async () => {
-      const geo = await import('../lib/homepageGeocode');
-      if (!mounted || chefs.length === 0) return;
-
-      const locKey =
-        geo.normalizeLocationKey((profile as any)?.location) || `${profileLat},${profileLon}`;
-      if (chefDistances.size > 0 && lastDistanceLocationRef.current === locKey) return;
-      lastDistanceLocationRef.current = locKey;
-
-      const {
-        geocodeAddress,
-        calculateDistanceFromCoords,
-        chefProfileCoordCache,
-        asyncPool,
-        CHEF_ADDRESS_GEOCODE_POOL,
-      } = geo;
-
-      timerRef.id = setTimeout(async () => {
-        if (!mounted) return;
-        let userCoords: { lat: number; lon: number } | null = null;
-        if (hasProfileCoords) {
-          userCoords = { lat: profileLat!, lon: profileLon! };
-        } else if (locationStr.length > 0) {
-          userCoords = await geocodeAddress(locationStr);
-        }
-        if (!mounted || !userCoords) return;
-
-        const userLocationKey = geo.normalizeLocationKey((profile as any)?.location);
-        const next = new Map<string, number>();
-
-        let allHaveCoords = true;
-        for (const chef of chefs) {
-          const chefId = normalizeId((chef as any)?.id);
-          const chefLat = toFiniteNumberOrNull((chef as any)?.latitude);
-          const chefLon = toFiniteNumberOrNull((chef as any)?.longitude);
-          const chefLocationKey = geo.normalizeLocationKey((chef as any)?.location);
-
-          if (userLocationKey && chefLocationKey && userLocationKey === chefLocationKey) {
-            next.set(chefId, 0);
-          } else if (chefLat !== null && chefLon !== null) {
-            const d = calculateDistanceFromCoords(userCoords, { lat: chefLat, lon: chefLon });
-            if (Number.isFinite(d)) next.set(chefId, d);
-          } else {
-            allHaveCoords = false;
-          }
-        }
-
-        if (allHaveCoords) {
-          if (mounted) startTransition(() => setChefDistances(next));
-          return;
-        }
-
-        try {
-          const missingChefs = chefs.filter((c) => {
-            const lat = toFiniteNumberOrNull((c as any)?.latitude);
-            const lon = toFiniteNumberOrNull((c as any)?.longitude);
-            return lat === null || lon === null;
-          });
-
-          const missingUserIds = [...new Set(missingChefs.map((c) => String((c as any)?.user_id || '')).filter(Boolean))]
-            .filter((uid) => !chefProfileCoordCache.has(uid));
-
-          if (missingUserIds.length > 0) {
-            const { data: rows, error } = await supabase
-              .from('profiles')
-              .select('id, latitude, longitude')
-              .in('id', missingUserIds);
-            if (!error && Array.isArray(rows)) {
-              missingUserIds.forEach((uid) => chefProfileCoordCache.set(uid, null));
-              rows.forEach((r: any) => {
-                const lat = toFiniteNumberOrNull(r?.latitude);
-                const lon = toFiniteNumberOrNull(r?.longitude);
-                if (lat !== null && lon !== null) chefProfileCoordCache.set(String(r.id), { lat, lon });
-              });
-            }
-          }
-
-          const addressToChefIds = new Map<string, string[]>();
-
-          for (const chef of missingChefs) {
-            if (!mounted) return;
-            const chefId = normalizeId((chef as any)?.id);
-            if (next.has(chefId)) continue;
-
-            const chefUserId = String((chef as any)?.user_id || '');
-            const profCoords = chefUserId ? chefProfileCoordCache.get(chefUserId) : null;
-            if (profCoords) {
-              const d = calculateDistanceFromCoords(userCoords, profCoords);
-              if (Number.isFinite(d)) next.set(chefId, d);
-              continue;
-            }
-
-            const chefLoc = (chef as any)?.location;
-            if (!chefLoc) continue;
-            const addrKey = String(chefLoc).trim();
-            if (!addrKey) continue;
-            const ids = addressToChefIds.get(addrKey) ?? [];
-            ids.push(chefId);
-            addressToChefIds.set(addrKey, ids);
-          }
-
-          const uniqueAddresses = [...addressToChefIds.keys()];
-          await asyncPool(CHEF_ADDRESS_GEOCODE_POOL, uniqueAddresses, async (addr) => {
-            if (!mounted) return;
-            const coords = await geocodeAddress(addr);
-            if (!mounted || !coords) return;
-            const chefIds = addressToChefIds.get(addr);
-            if (!chefIds) return;
-            const d = calculateDistanceFromCoords(userCoords, coords);
-            if (!Number.isFinite(d)) return;
-            for (const chefId of chefIds) {
-              next.set(chefId, d);
-            }
-          });
-        } catch {
-          // non-critical
-        }
-
-        if (mounted) startTransition(() => setChefDistances(next));
-      }, 0);
-    })();
-
-    return () => {
-      mounted = false;
-      if (timerRef.id !== undefined) clearTimeout(timerRef.id);
-    };
-  }, [profile, chefs]);
 
   const handleSearch = () => {
     if (searchQuery.trim()) {
@@ -746,13 +582,6 @@ export default function HomePage() {
       </View>
     </View>
   );
-  const popularChefsSkeleton = (
-    <View style={{ flexDirection: 'row', gap: 16 }}>
-      {[0, 1, 2].map(i => (
-        <View key={i} style={{ width: isMobile ? 220 : 260, height: 140, borderRadius: theme.radius.xl, backgroundColor: '#E6E4E1' }} />
-      ))}
-    </View>
-  );
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F2F0EF' }}>
@@ -763,8 +592,6 @@ export default function HomePage() {
         web: 100,
         default: 80,
       })}
-      onScroll={handleHomeScroll}
-      scrollEventThrottle={16}
     >
         <View style={[styles.container, isMobile && styles.containerMobile, !isMobile && styles.containerDesktop]}>
           {/* Hero section - matches HTML design */}
@@ -844,7 +671,7 @@ export default function HomePage() {
                 flexDirection: 'row',
                 gap: GAP,
                 paddingHorizontal: GAP / 2,
-                // Space below dish cards inside this section (not section margin, which only pushes Popular down).
+                // Space below dish cards inside this section (not section margin, which only pushes the kitchens section down).
                 paddingBottom: 0,
               }}
               decelerationRate="fast"
@@ -901,93 +728,14 @@ export default function HomePage() {
             )}
           </View>
 
-          {/* Featured Chefs section - matches HTML design */}
-          <View style={[styles.section, styles.popularChefsSection]}>
-            <View
-              style={[
-                styles.homeSectionHeaderPill,
-                styles.popularSectionHeaderPill,
-                isMobile && styles.homeSectionHeaderPillMobile,
-                styles.homeSectionHeaderPlain,
-              ]}
-            >
-              <Text
-                style={[
-                  styles.homeSectionHeaderTitle,
-                  styles.homeSectionHeaderTitleOrange,
-                  styles.homeSectionTitleSmaller,
-                  isMobile && styles.homeSectionTitleSmallerMobile,
-                ]}
-                numberOfLines={1}
-              >
-                Popular near you
-              </Text>
-              <Link href="/browse?tab=chefs" asChild>
-                <TouchableOpacity
-                  style={styles.homeSectionHeaderArrowCircle}
-                  accessibilityRole="link"
-                  accessibilityLabel="View all chefs"
-                >
-                  <Ionicons name="arrow-forward" size={14} color="#FFFFFF" />
-                </TouchableOpacity>
-              </Link>
-            </View>
-            {loading ? popularChefsSkeleton : isMobile ? (
-              <ScrollView 
-                horizontal 
-                showsHorizontalScrollIndicator={false}
-                nestedScrollEnabled
-                contentContainerStyle={styles.horizontalScrollContent}
-              >
-                {chefs.map((chef, i) => (
-                  <View
-                    key={`${normalizeId(chef.id)}-${i}`}
-                    style={[
-                      styles.homepageChefCardWrapper,
-                      isMobile && styles.homepageChefCardWrapperMobile,
-                    ]}
-                  >
-                    <ChefCard
-                      chef={{
-                        ...chef,
-                        name: chef.name,
-                        id: normalizeId(chef.id),
-                        rating: toFiniteNumberOrNull(chef.rating),
-                      }}
-                      style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
-                      ratingColor="#FE734C"
-                      distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
-                      hideBio
-                      metaVariant="homepage"
-                    />
-                  </View>
-                ))}
-              </ScrollView>
-            ) : (
-              <View style={styles.chefsGridDesktop}>
-                {chefs.map((chef, i) => (
-                  <View
-                    key={`${normalizeId(chef.id)}-${i}`}
-                    style={styles.homepageChefCardWrapperDesktop}
-                  >
-                    <ChefCard
-                      chef={{
-                        ...chef,
-                        name: chef.name,
-                        id: normalizeId(chef.id),
-                        rating: toFiniteNumberOrNull(chef.rating),
-                      }}
-                      style={{ backgroundColor: "#FFFFFF", borderWidth: 1, borderColor: "transparent" }}
-                      ratingColor="#FE734C"
-                      distanceKm={chefDistances.get(normalizeId(chef.id)) ?? null}
-                      hideBio
-                      metaVariant="homepage"
-                    />
-                  </View>
-                ))}
-              </View>
-            )}
-          </View>
+          {/* Featured kitchens dish grid — lazy-loaded chunk, mounted once near the viewport */}
+          {showBrowseGrid ? (
+            <Suspense fallback={browseGridPlaceholder}>
+              <HomeBrowseGridSectionLazy dishGridColumns={dishGridColumns} />
+            </Suspense>
+          ) : (
+            <View ref={browseGridAnchorRef}>{browseGridPlaceholder}</View>
+          )}
 
           {/* How It Works section */}
           <View style={[styles.section, styles.howItWorksSection]}>
@@ -1107,15 +855,6 @@ export default function HomePage() {
                 <Text style={styles.bulletPointText}>Manage & process orders</Text>
               </View>
             </View>
-          )}
-
-          {/* Explore-style dish grid — lazy-loaded chunk (DishCard + grid fetch), mounted once near the viewport */}
-          {showBrowseGrid ? (
-            <Suspense fallback={browseGridPlaceholder}>
-              <HomeBrowseGridSectionLazy ref={browseGridRef} dishGridColumns={dishGridColumns} />
-            </Suspense>
-          ) : (
-            <View ref={browseGridAnchorRef}>{browseGridPlaceholder}</View>
           )}
         </View>
       </Screen>
@@ -1410,29 +1149,24 @@ const styles = StyleSheet.create({
   },
   featuredDishesSection: {
     marginTop: theme.spacing.xl,
-    // Gap above Popular header matches gap below Featured header pill.
+    // Gap above the featured kitchens header matches gap below Featured header pill.
     marginBottom: theme.spacing.xl,
   },
   /** Gap below Featured header pill matches featuredDishesSection marginTop above it. */
   featuredSectionHeaderPill: {
     marginBottom: theme.spacing.xl,
   },
-  popularChefsSection: {
-    // Gap above How it works header matches gap below Popular header pill.
-    marginBottom: theme.spacing.xl,
-  },
-  /** Gap below Popular header pill matches gap above it (featuredDishesSection marginBottom). */
-  popularSectionHeaderPill: {
-    marginBottom: theme.spacing.xl,
-  },
   howItWorksSection: {
     paddingBottom: 0,
-    // Gap above Explore dishes header matches gap below How it works header pill.
+    marginTop: theme.spacing.lg,
+    paddingTop: theme.spacing.xl,
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(51, 57, 58, 0.08)',
     marginBottom: theme.spacing.xl,
   },
   howItWorksHeaderPill: {
     flexWrap: 'nowrap',
-    // Gap below header pill matches gap above it (popularChefsSection marginBottom).
+    // Gap below header pill matches the padding above it.
     marginBottom: theme.spacing.xl,
   },
   howItWorksHeaderTitle: {
@@ -1483,7 +1217,7 @@ const styles = StyleSheet.create({
     padding: 0,
     margin: 0,
   },
-  /** Transparent header for Featured / Popular / Explore (not How it works). */
+  /** Transparent header for homepage section titles (not How it works). */
   homeSectionHeaderPlain: {
     backgroundColor: 'transparent',
     borderRadius: 0,
@@ -1563,7 +1297,6 @@ const styles = StyleSheet.create({
     paddingTop: 0,
     paddingBottom: theme.spacing.md,
     marginTop: 0,
-    // Same gap before Explore dishes header as below How it works header pill.
     marginBottom: theme.spacing.xl,
     gap: theme.spacing.sm,
   },
@@ -1612,11 +1345,6 @@ const styles = StyleSheet.create({
     paddingBottom: theme.spacing.md,
   },
   // Featured Dishes
-  horizontalScrollContent: {
-    paddingHorizontal: theme.spacing.md,
-    paddingBottom: 0,
-    gap: theme.spacing.lg,
-  },
   dishCardWrapper: {
     width: 288, // w-72
     flexShrink: 0,
@@ -1763,24 +1491,6 @@ const styles = StyleSheet.create({
   },
   featuredChefCardWrapperMobile: {
     width: 200,
-  },
-  homepageChefCardWrapper: {
-    width: 420,
-    flexShrink: 0,
-  },
-  homepageChefCardWrapperMobile: {
-    width: 360,
-  },
-  chefsGridDesktop: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: theme.spacing.lg,
-    paddingHorizontal: theme.spacing.sm,
-    paddingBottom: 0,
-  },
-  homepageChefCardWrapperDesktop: {
-    flex: 1,
-    minWidth: 320,
   },
   featuredChefCardMobile: {
     padding: theme.spacing.md,
