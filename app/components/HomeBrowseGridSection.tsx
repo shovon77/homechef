@@ -233,6 +233,15 @@ function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number })
           )
         })
       )}
+
+      {!loading && groups.length > 0 && (
+        <Link href="/browse?tab=chefs" asChild>
+          <TouchableOpacity style={styles.browseChefsLink} accessibilityRole="link">
+            <Text style={styles.browseChefsText}>Browse all chefs</Text>
+            <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
+          </TouchableOpacity>
+        </Link>
+      )}
     </View>
   )
 }
@@ -402,6 +411,23 @@ const styles = StyleSheet.create({
     backgroundColor: '#FFFFFF',
     borderWidth: 1,
     borderColor: 'rgba(254, 115, 76, 0.35)',
+  },
+  browseChefsLink: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 6,
+    alignSelf: 'center',
+    marginTop: theme.spacing.sm,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+  },
+  browseChefsText: {
+    color: theme.colors.primary,
+    fontFamily: 'OpenSans_600SemiBold',
+    fontWeight: '600',
+    fontSize: 14,
+    textDecorationLine: 'underline',
   },
   seeAllText: {
     flexShrink: 1,
