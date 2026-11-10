@@ -2,34 +2,20 @@ import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
-  Image,
   TouchableOpacity,
   ActivityIndicator,
   StyleSheet,
   Platform,
   useWindowDimensions,
-  type ViewStyle,
 } from 'react-native'
 import { Link } from 'expo-router'
 import { Ionicons } from '@expo/vector-icons'
 import { supabase } from '../../lib/supabase'
 import { theme } from '../../lib/theme'
-import { optimizeImageUrl } from '../../lib/dishImageUrl'
-import { formatLocationAddress } from '../../lib/formatAddress'
-import { chefFulfillmentLabel } from '../../lib/chef-fulfillment'
 import DishCard from './DishCard'
+import KitchenHeader, { kitchenHref, type KitchenChef } from './KitchenHeader'
 
 const DISHES_PER_KITCHEN_FETCH = 8
-
-type KitchenChef = {
-  id: number
-  name: string
-  slug: string | null
-  photo: string | null
-  location: string | null
-  cuisine: string | null
-  fulfillment_mode: string | null
-}
 
 type KitchenGroup = {
   chef: KitchenChef
@@ -67,43 +53,6 @@ async function fetchFeaturedKitchens(): Promise<KitchenGroup[]> {
     })
   )
   return groups.filter((g) => g.dishes.length > 0)
-}
-
-function kitchenCity(location: string | null): string {
-  if (!location?.trim()) return ''
-  const { city } = formatLocationAddress(location)
-  return city || (location.includes(',') ? '' : location.trim())
-}
-
-function chefInitials(name: string): string {
-  return (name.trim() || 'Chef')
-    .split(/\s+/)
-    .map((n) => n[0])
-    .join('')
-    .toUpperCase()
-    .slice(0, 2)
-}
-
-function KitchenAvatar({ chef, size }: { chef: KitchenChef; size: number }) {
-  const [failed, setFailed] = useState(false)
-  const uri = chef.photo?.trim() ? optimizeImageUrl(chef.photo.trim(), size * 3) : ''
-  const box = { width: size, height: size, borderRadius: size / 2 }
-  if (!uri || failed) {
-    return (
-      <View style={[styles.avatarFallback, box]}>
-        <Text style={styles.avatarInitials}>{chefInitials(chef.name)}</Text>
-      </View>
-    )
-  }
-  return (
-    <Image
-      source={{ uri }}
-      style={[styles.avatar, box]}
-      resizeMode="cover"
-      onError={() => setFailed(true)}
-      accessibilityIgnoresInvertColors
-    />
-  )
 }
 
 function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number }) {
@@ -161,46 +110,11 @@ function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number })
         <Text style={styles.empty}>No dishes available right now.</Text>
       ) : (
         groups.map(({ chef, dishes, total }, index) => {
-          const chefHref = `/chef/${chef.slug ?? chef.id}`
+          const chefHref = kitchenHref(chef)
           const shown = dishes.slice(0, visiblePerKitchen)
-          const city = kitchenCity(chef.location)
-          const meta = [chef.cuisine?.trim(), city, chefFulfillmentLabel(chef.fulfillment_mode ?? '')]
-            .filter(Boolean)
-            .join(' · ')
           return (
             <View key={chef.id} style={[styles.kitchen, index > 0 && styles.kitchenDivider]}>
-              <View
-                testID={`kitchen-header-${chef.id}`}
-                style={[styles.kitchenHeader, Platform.OS === 'web' && stickyKitchenHeader]}
-              >
-                <Link href={chefHref} asChild>
-                  <TouchableOpacity
-                    style={styles.kitchenIdentity}
-                    accessibilityRole="link"
-                    accessibilityLabel={`Visit ${chef.name}`}
-                  >
-                    <KitchenAvatar chef={chef} size={isMobile ? 44 : 52} />
-                    <View style={styles.kitchenText}>
-                      <Text style={[styles.kitchenName, isMobile && styles.kitchenNameMobile]} numberOfLines={1}>
-                        {chef.name}
-                      </Text>
-                      {!!meta && (
-                        <Text style={styles.kitchenMeta} numberOfLines={1}>
-                          {meta}
-                        </Text>
-                      )}
-                    </View>
-                  </TouchableOpacity>
-                </Link>
-                {!isMobile && (
-                  <Link href={chefHref} asChild>
-                    <TouchableOpacity style={styles.viewKitchenButton} accessibilityRole="link">
-                      <Text style={styles.viewKitchenText}>View kitchen</Text>
-                      <Ionicons name="arrow-forward" size={14} color={theme.colors.primary} />
-                    </TouchableOpacity>
-                  </Link>
-                )}
-              </View>
+              <KitchenHeader chef={chef} isMobile={isMobile} style={styles.kitchenHeaderInset} />
 
               <View style={styles.gridOuter}>
                 <View style={styles.grid}>
@@ -247,17 +161,6 @@ function HomeBrowseGridSection({ dishGridColumns }: { dishGridColumns: number })
 }
 
 export default HomeBrowseGridSection
-
-// Sticks within its kitchen block, so the next kitchen's header pushes it off-screen.
-// RN types don't include 'sticky'; react-native-web passes it through.
-const stickyKitchenHeader = {
-  position: 'sticky',
-  top: 0,
-  zIndex: 2,
-  backgroundColor: '#F2F0EF',
-  paddingVertical: 10,
-  marginBottom: theme.spacing.md - 10,
-} as unknown as ViewStyle
 
 const styles = StyleSheet.create({
   section: {
@@ -314,75 +217,8 @@ const styles = StyleSheet.create({
     borderTopColor: 'rgba(51, 57, 58, 0.08)',
     paddingTop: theme.spacing.xl,
   },
-  kitchenHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: theme.spacing.md,
+  kitchenHeaderInset: {
     paddingHorizontal: theme.spacing.md,
-    marginBottom: theme.spacing.md,
-  },
-  kitchenIdentity: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 12,
-    flex: 1,
-    minWidth: 0,
-  },
-  avatar: {
-    backgroundColor: '#FFFFFF',
-    borderWidth: 2,
-    borderColor: '#FFFFFF',
-  },
-  avatarFallback: {
-    backgroundColor: theme.colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  avatarInitials: {
-    color: '#FFFFFF',
-    fontFamily: 'OpenSans_600SemiBold',
-    fontWeight: '600',
-    fontSize: 16,
-  },
-  kitchenText: {
-    flex: 1,
-    minWidth: 0,
-  },
-  kitchenName: {
-    color: '#33393A',
-    fontFamily: 'OpenSans_600SemiBold',
-    fontWeight: '600',
-    fontSize: 19,
-    lineHeight: 24,
-  },
-  kitchenNameMobile: {
-    fontSize: 17,
-    lineHeight: 22,
-  },
-  kitchenMeta: {
-    marginTop: 2,
-    color: '#6B7070',
-    fontFamily: theme.typography.fontFamily.body,
-    fontSize: 13,
-    lineHeight: 18,
-  },
-  viewKitchenButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingVertical: 8,
-    paddingHorizontal: 14,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: theme.colors.primary,
-    flexShrink: 0,
-  },
-  viewKitchenText: {
-    color: theme.colors.primary,
-    fontFamily: 'OpenSans_600SemiBold',
-    fontWeight: '600',
-    fontSize: 14,
   },
   gridOuter: {
     paddingHorizontal: theme.spacing.md,

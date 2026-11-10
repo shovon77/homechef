@@ -7,6 +7,7 @@ import { useAuth } from '../../context/AuthContext';
 import { toFiniteNumberOrNull } from '../../lib/number';
 import DishCard from '../components/DishCard';
 import ChefCard from '../components/ChefCard';
+import KitchenHeader, { type KitchenChef } from '../components/KitchenHeader';
 import { theme, elev } from '../../lib/theme';
 import { useLocationModal } from '../../context/LocationModalContext';
 
@@ -87,7 +88,7 @@ type Dish = {
   image: string | null;
   chef_id: number | null;
   rating?: number | null;
-  chefs?: { name: string | null } | null;
+  chefs?: (Partial<KitchenChef> & { name: string | null }) | null;
 };
 
 type Chef = {
@@ -410,7 +411,7 @@ export default function BrowsePage() {
         if (tab === 'dishes') {
           let request = supabase
             .from('dishes')
-            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)', { count: 'exact' })
+            .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(id, slug, photo, fulfillment_mode, status, stripe_connect_completed, name, location, cuisine, latitude, longitude)', { count: 'exact' })
             .eq('chefs.status', 'active')
             .eq('chefs.stripe_connect_completed', true)
             .or('is_active.eq.true,is_active.is.null');
@@ -449,6 +450,10 @@ export default function BrowsePage() {
             effectiveSort = 'none';
           }
           
+          // Grouped by chef on screen, so chef name leads every sort; nearest is re-sorted client-side.
+          if (effectiveSort !== 'nearest') {
+            request = request.order('chefs(name)', { ascending: true });
+          }
           if (effectiveSort === 'price_asc') {
             request = request.order('price', { ascending: true });
           } else if (effectiveSort === 'price_desc') {
@@ -466,7 +471,7 @@ export default function BrowsePage() {
             request = request.order('created_at', { ascending: false });
           }
 
-          // Dishes tab: fetch all in one page (no pagination)
+          request = request.order('id', { ascending: true });
           request = request.range(from, to);
 
           if (maxPrice) {
@@ -797,7 +802,7 @@ export default function BrowsePage() {
     try {
       let request = supabase
         .from('dishes')
-        .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(status, stripe_connect_completed, name, location, cuisine, latitude, longitude)', { count: 'exact' })
+        .select('id,name,description,price,image,rating,chef_id,created_at, chefs!inner(id, slug, photo, fulfillment_mode, status, stripe_connect_completed, name, location, cuisine, latitude, longitude)', { count: 'exact' })
         .eq('chefs.status', 'active')
         .eq('chefs.stripe_connect_completed', true)
         .or('is_active.eq.true,is_active.is.null');
@@ -807,12 +812,13 @@ export default function BrowsePage() {
       }
 
       const effectiveSort = sortBy && sortBy !== 'none' ? sortBy : 'newest';
+      request = request.order('chefs(name)', { ascending: true });
       if (effectiveSort === 'price_asc') request = request.order('price', { ascending: true });
       else if (effectiveSort === 'price_desc') request = request.order('price', { ascending: false });
       else if (effectiveSort === 'popular') request = request.order('rating', { ascending: false });
       else request = request.order('created_at', { ascending: false });
 
-      request = request.range(from, to);
+      request = request.order('id', { ascending: true }).range(from, to);
 
       if (debouncedQuery.trim()) {
         const safeTerm = cleanSearchQuery(debouncedQuery.trim()).replace(/,/g, ' ');
@@ -887,6 +893,23 @@ export default function BrowsePage() {
   );
 
   const list = tab === 'dishes' ? dishes : tab === 'chefs' ? chefs : cuisines;
+
+  // Chef order follows the fetched order (chef name first, or distance for "nearest").
+  const dishGroups = useMemo(() => {
+    const groups: { chef: KitchenChef; dishes: Dish[] }[] = [];
+    const byChef = new Map<number, { chef: KitchenChef; dishes: Dish[] }>();
+    for (const dish of dishes.slice(0, visibleDishCount)) {
+      const chefId = Number(dish.chefs?.id ?? dish.chef_id);
+      let group = byChef.get(chefId);
+      if (!group) {
+        group = { chef: { ...dish.chefs, id: chefId, name: dish.chefs?.name?.trim() || 'Home chef' }, dishes: [] };
+        byChef.set(chefId, group);
+        groups.push(group);
+      }
+      group.dishes.push(dish);
+    }
+    return groups;
+  }, [dishes, visibleDishCount]);
 
   const handleSearch = useCallback(async () => {
     setPage(1);
@@ -1148,19 +1171,25 @@ export default function BrowsePage() {
           )
         ) : tab === 'dishes' ? (
           <>
-            <View style={styles.grid}>
-              {dishes.slice(0, visibleDishCount).map((dish) => (
-                <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
-                  <DishCard
-                    dish={dish}
-                    variant="explore"
-                    inlinePriceRating
-                    quantityOnImage
-                    style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
-                  />
+            {dishGroups.map(({ chef, dishes: chefDishes }, index) => (
+              <View key={chef.id} style={[styles.kitchen, index > 0 && styles.kitchenDivider]}>
+                <KitchenHeader chef={chef} isMobile={isMobile} />
+                <View style={styles.grid}>
+                  {chefDishes.map((dish) => (
+                    <View key={dish.id} style={[styles.cardWrapper, { width: `${100 / dishGridColumns}%` }]}>
+                      <DishCard
+                        dish={dish}
+                        variant="explore"
+                        inlinePriceRating
+                        quantityOnImage
+                        hideChefName
+                        style={{ backgroundColor: '#FFFFFF', borderWidth: 1, borderColor: 'transparent' }}
+                      />
+                    </View>
+                  ))}
                 </View>
-              ))}
-            </View>
+              </View>
+            ))}
             {loadingMore && (
               <View style={{ paddingVertical: 24, alignItems: 'center' }}>
                 <ActivityIndicator size="small" color={PRIMARY_COLOR} />
@@ -1396,6 +1425,14 @@ const styles = StyleSheet.create({
   cardWrapper: {
     paddingHorizontal: 6,
     marginBottom: 16,
+  },
+  kitchen: {
+    paddingBottom: theme.spacing.sm,
+  },
+  kitchenDivider: {
+    borderTopWidth: 1,
+    borderTopColor: 'rgba(51, 57, 58, 0.08)',
+    paddingTop: theme.spacing.lg,
   },
   pager: {
     flexDirection: 'row',
